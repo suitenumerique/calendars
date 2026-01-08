@@ -1,0 +1,371 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: lasuite-docs\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-19 15:10+0000\n"
+"PO-Revision-Date: 2025-01-27 09:27\n"
+"Last-Translator: \n"
+"Language-Team: French\n"
+"Language: fr_FR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"X-Crowdin-Project: lasuite-docs\n"
+"X-Crowdin-Project-ID: 754523\n"
+"X-Crowdin-Language: fr\n"
+"X-Crowdin-File: backend-calendars.pot\n"
+"X-Crowdin-File-ID: 18\n"
+
+#: core/admin.py:26
+msgid "Personal info"
+msgstr "Infos Personnelles"
+
+#: core/admin.py:39 core/admin.py:119
+msgid "Permissions"
+msgstr ""
+
+#: core/admin.py:51
+msgid "Important dates"
+msgstr "Dates importantes"
+
+#: core/admin.py:129
+msgid "Tree structure"
+msgstr ""
+
+#: core/api/filters.py:16
+msgid "Title"
+msgstr ""
+
+#: core/api/filters.py:28
+msgid "Creator is me"
+msgstr ""
+
+#: core/api/filters.py:31
+msgid "Favorite"
+msgstr ""
+
+#: core/api/serializers.py:304
+msgid "An item with this title already exists in the current path."
+msgstr ""
+
+#: core/api/serializers.py:397
+msgid "This field is required for files."
+msgstr ""
+
+#: core/api/serializers.py:409
+msgid "This field is required for folders."
+msgstr ""
+
+#: core/models.py:53 core/models.py:60
+msgid "Reader"
+msgstr "Lecteur"
+
+#: core/models.py:54 core/models.py:61
+msgid "Editor"
+msgstr "Éditeur"
+
+#: core/models.py:62
+msgid "Administrator"
+msgstr "Administrateur"
+
+#: core/models.py:63
+msgid "Owner"
+msgstr "Propriétaire"
+
+#: core/models.py:74
+msgid "Restricted"
+msgstr "Restreint"
+
+#: core/models.py:78
+msgid "Authenticated"
+msgstr "Authentifié"
+
+#: core/models.py:80
+msgid "Public"
+msgstr ""
+
+#: core/models.py:86
+msgid "Folder"
+msgstr ""
+
+#: core/models.py:87
+msgid "File"
+msgstr ""
+
+#: core/models.py:93
+msgid "Pending"
+msgstr ""
+
+#: core/models.py:94
+msgid "Uploaded"
+msgstr ""
+
+#: core/models.py:116
+msgid "id"
+msgstr ""
+
+#: core/models.py:117
+msgid "primary key for the record as UUID"
+msgstr ""
+
+#: core/models.py:123
+msgid "created on"
+msgstr ""
+
+#: core/models.py:124
+msgid "date and time at which a record was created"
+msgstr ""
+
+#: core/models.py:129
+msgid "updated on"
+msgstr ""
+
+#: core/models.py:130
+msgid "date and time at which a record was last updated"
+msgstr ""
+
+#: core/models.py:166
+msgid ""
+"We couldn't find a user with this sub but the email is already associated "
+"with a registered user."
+msgstr ""
+
+#: core/models.py:179
+msgid ""
+"Enter a valid sub. This value may contain only letters, numbers, and @/./+/-/"
+"_/: characters."
+msgstr ""
+
+#: core/models.py:185
+msgid "sub"
+msgstr ""
+
+#: core/models.py:187
+msgid ""
+"Required. 255 characters or fewer. Letters, numbers, and @/./+/-/_/: "
+"characters only."
+msgstr ""
+
+#: core/models.py:196
+msgid "full name"
+msgstr ""
+
+#: core/models.py:197
+msgid "short name"
+msgstr ""
+
+#: core/models.py:199
+msgid "identity email address"
+msgstr ""
+
+#: core/models.py:204
+msgid "admin email address"
+msgstr ""
+
+#: core/models.py:211
+msgid "language"
+msgstr ""
+
+#: core/models.py:212
+msgid "The language in which the user wants to see the interface."
+msgstr ""
+
+#: core/models.py:218
+msgid "The timezone in which the user wants to see times."
+msgstr ""
+
+#: core/models.py:221
+msgid "device"
+msgstr ""
+
+#: core/models.py:223
+msgid "Whether the user is a device or a real user."
+msgstr ""
+
+#: core/models.py:226
+msgid "staff status"
+msgstr ""
+
+#: core/models.py:228
+msgid "Whether the user can log into this admin site."
+msgstr ""
+
+#: core/models.py:231
+msgid "active"
+msgstr ""
+
+#: core/models.py:234
+msgid ""
+"Whether this user should be treated as active. Unselect this instead of "
+"deleting accounts."
+msgstr ""
+
+#: core/models.py:246
+msgid "user"
+msgstr ""
+
+#: core/models.py:247
+msgid "users"
+msgstr ""
+
+#: core/models.py:269
+msgid "Workspace"
+msgstr ""
+
+#: core/models.py:457
+msgid "Only folders can have children."
+msgstr ""
+
+#: core/models.py:470
+msgid "title already exists in this folder."
+msgstr ""
+
+#: core/models.py:504
+msgid "title"
+msgstr ""
+
+#: core/models.py:549
+msgid "Item"
+msgstr ""
+
+#: core/models.py:550
+msgid "Items"
+msgstr ""
+
+#: core/models.py:815
+#, python-brace-format
+msgid "{name} shared an item with you!"
+msgstr "{name} a partagé un item avec vous!"
+
+#: core/models.py:817
+#, python-brace-format
+msgid "{name} invited you with the role \"{role}\" on the following item:"
+msgstr "{name} vous a invité avec le rôle \"{role}\" sur le item suivant:"
+
+#: core/models.py:820
+#, python-brace-format
+#| msgid "{name} shared an item with you: {title}"
+msgid "{name} shared an item with you: {title}"
+msgstr "{name} a partagé un item avec vous: {title}"
+
+#: core/models.py:872
+msgid "This item is already hard deleted."
+msgstr ""
+
+#: core/models.py:882
+msgid "To hard delete an item, it must first be soft deleted."
+msgstr ""
+
+#: core/models.py:902
+msgid "This item is not deleted."
+msgstr ""
+
+#: core/models.py:918
+msgid "This item was permanently deleted and cannot be restored."
+msgstr ""
+
+#: core/models.py:968
+msgid "Only folders can be targeted when moving an item"
+msgstr ""
+
+#: core/models.py:1021
+msgid "Item/user link trace"
+msgstr ""
+
+#: core/models.py:1022
+msgid "Item/user link traces"
+msgstr ""
+
+#: core/models.py:1028
+msgid "A link trace already exists for this item/user."
+msgstr ""
+
+#: core/models.py:1051
+msgid "Item favorite"
+msgstr ""
+
+#: core/models.py:1052
+msgid "Item favorites"
+msgstr ""
+
+#: core/models.py:1058
+msgid ""
+"This item is already targeted by a favorite relation instance for the same "
+"user."
+msgstr ""
+
+#: core/models.py:1080
+msgid "Item/user relation"
+msgstr ""
+
+#: core/models.py:1081
+msgid "Item/user relations"
+msgstr ""
+
+#: core/models.py:1087
+msgid "This user is already in this item."
+msgstr ""
+
+#: core/models.py:1093
+msgid "This team is already in this item."
+msgstr ""
+
+#: core/models.py:1099
+msgid "Either user or team must be set, not both."
+msgstr ""
+
+#: core/models.py:1126
+msgid "email address"
+msgstr ""
+
+#: core/models.py:1145
+msgid "Item invitation"
+msgstr ""
+
+#: core/models.py:1146
+msgid "Item invitations"
+msgstr ""
+
+#: core/templates/mail/html/invitation.html:162
+#: core/templates/mail/text/invitation.txt:3
+msgid "Logo email"
+msgstr ""
+
+#: core/templates/mail/html/invitation.html:209
+#: core/templates/mail/text/invitation.txt:10
+msgid "Open"
+msgstr "Ouvrir"
+
+#: core/templates/mail/html/invitation.html:226
+#: core/templates/mail/text/invitation.txt:14
+msgid ""
+" Calendars, your new essential tool for organizing, sharing and collaborating as "
+"a team. "
+msgstr ""
+"Fichiers, votre outil essentiel pour organiser, partager et collaborer en "
+"équipe."
+
+#: core/templates/mail/html/invitation.html:233
+#: core/templates/mail/text/invitation.txt:16
+#, python-format
+msgid " Brought to you by %(brandname)s "
+msgstr " Proposé par %(brandname)s "
+
+#: calendars/settings.py:250
+msgid "English"
+msgstr ""
+
+#: calendars/settings.py:251
+msgid "French"
+msgstr ""
+
+#: calendars/settings.py:252
+msgid "German"
+msgstr ""
+
+#~ msgid "A new item was created on your behalf!"
+#~ msgstr "Un nouveau item a été créé pour vous !"
+
+#~ msgid "You have been granted ownership of a new item:"
+#~ msgstr "Vous avez été déclaré propriétaire d'un nouveau item :"

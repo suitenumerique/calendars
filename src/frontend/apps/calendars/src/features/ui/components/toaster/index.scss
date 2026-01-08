@@ -1,0 +1,46 @@
+@mixin toaster-theme($color) {
+  background-color: var(
+    --c--contextuals--background--semantic--#{$color}--tertiary
+  );
+  border: 1px solid var(--c--contextuals--border--semantic--#{$color}--tertiary);
+  color: var(--c--contextuals--content--semantic--#{$color}--primary);
+  --toastify-color-progress-light: var(
+    --c--contextuals--content--semantic--#{$color}--tertiary
+  );
+}
+
+.suite__toaster {
+  &__wrapper {
+    width: auto;
+    min-height: 0;
+    padding: 0;
+  }
+
+  &__item {
+    padding: 12px;
+    border-radius: 4px;
+    min-width: 400px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0px 6px 18px 0px #0000910d;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: var(--c--globals--font--families--base);
+
+    &__content {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-grow: 1;
+    }
+
+    &--info {
+      @include toaster-theme("brand");
+    }
+
+    &--error {
+      @include toaster-theme("info");
+    }
+  }
+}

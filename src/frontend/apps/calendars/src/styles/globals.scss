@@ -1,0 +1,83 @@
+@use "@gouvfr-lasuite/ui-kit/sass/fonts";
+@use "@gouvfr-lasuite/ui-kit/style";
+@use "./cunningham-tokens.css";
+@use "./../features/layouts/components/global/GlobalLayout.scss";
+@use "./../features/feedback/Feedback.scss";
+@use "./../features/layouts/components/header/index.scss";
+@use "./../features/ui/components/breadcrumbs";
+@use "./../features/ui/components/toaster";
+@use "./../features/ui/components/generic-disclaimer/GenericDisclaimer.scss";
+@use "./../features/ui/components/info/InfoRow.scss";
+@use "./../features/ui/components/responsive";
+@use "./../features/ui/components/spinner/SpinnerPage.scss";
+@use "./../features/ui/components/infinite-scroll/InfiniteScroll.scss";
+@use "./../features/layouts/components/left-panel/LeftPanelMobile.scss";
+@use "./../features/calendar/components/MiniCalendar.scss";
+@use "./../features/calendar/components/CalendarList.scss";
+@use "./../features/calendar/components/LeftPanel.scss";
+@use "./../features/calendar/components/CalendarView.scss";
+@use "./../features/calendar/components/EventModal.scss";
+@use "./../features/calendar/components/RecurrenceEditor.scss";
+@use "./../pages/index.scss" as *;
+@use "./../pages/calendar.scss" as *;
+html,
+body {
+  margin: 0;
+  background-color: var(--c--contextuals--background--surface--primary);
+  color: var(--c--contextuals--content--semantic--neutral--primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+// Related to @viselect/react
+.selection-area {
+  background: rgba(46, 115, 252, 0.11);
+  border: 2px solid rgba(98, 155, 255, 0.81);
+  border-radius: 0.1em;
+
+  &__container {
+    user-select: none;
+  }
+}
+
+.p-2xs {
+  padding: var(--c--globals--spacings--2xs);
+}
+
+.p-xs {
+  padding: var(--c--globals--spacings--xs);
+}
+
+.p-sm {
+  padding: var(--c--globals--spacings--sm);
+}
+
+.p-md {
+  padding: var(--c--globals--spacings--md);
+}
+
+.p-base {
+  padding: var(--c--globals--spacings--base);
+}
+
+.lasuite-gaufre-btn--vanilla:before {
+  background-color: var(
+    --c--contextuals--background--semantic--brand--primary
+  ) !important;
+}
+
+.c__left-panel {
+  border-right: none;
+}
+.c__modal__backdrop {
+  z-index: 1000;
+}
+
+.c__datagrid--empty,
+.c__datagrid thead {
+  transition:
+    background-color 0.3s ease,
+    box-shadow 0.3s ease;
+}

@@ -1,0 +1,70 @@
+# Django
+DJANGO_ALLOWED_HOSTS=*
+DJANGO_SECRET_KEY=ThisIsAnExampleKeyForDevPurposeOnly
+DJANGO_SETTINGS_MODULE=calendars.settings
+DJANGO_SUPERUSER_PASSWORD=admin
+
+# Logging
+# Set to DEBUG level for dev only
+LOGGING_LEVEL_HANDLERS_CONSOLE=INFO
+LOGGING_LEVEL_LOGGERS_ROOT=INFO
+LOGGING_LEVEL_LOGGERS_APP=INFO
+
+# Python
+PYTHONPATH=/app
+
+# Calendar settings
+
+# Media
+STORAGES_STATICFILES_BACKEND=django.contrib.staticfiles.storage.StaticFilesStorage
+MEDIA_BASE_URL=http://localhost:8923
+
+# OIDC - Keycloak on dedicated port 8925
+OIDC_OP_JWKS_ENDPOINT=http://keycloak:8080/realms/calendars/protocol/openid-connect/certs
+OIDC_OP_AUTHORIZATION_ENDPOINT=http://localhost:8925/realms/calendars/protocol/openid-connect/auth
+OIDC_OP_TOKEN_ENDPOINT=http://keycloak:8080/realms/calendars/protocol/openid-connect/token
+OIDC_OP_USER_ENDPOINT=http://keycloak:8080/realms/calendars/protocol/openid-connect/userinfo
+
+OIDC_RP_CLIENT_ID=calendars
+OIDC_RP_CLIENT_SECRET=ThisIsAnExampleKeyForDevPurposeOnly
+OIDC_RP_SIGN_ALGO=RS256
+OIDC_RP_SCOPES="openid email"
+
+LOGIN_REDIRECT_URL=http://localhost:8920
+LOGIN_REDIRECT_URL_FAILURE=http://localhost:8920
+LOGOUT_REDIRECT_URL=http://localhost:8920
+
+OIDC_REDIRECT_ALLOWED_HOSTS="http://localhost:8923,http://localhost:8920"
+OIDC_AUTH_REQUEST_EXTRA_PARAMS={"acr_values": "eidas1"}
+
+# Resource Server Backend
+OIDC_OP_URL=http://localhost:8925/realms/calendars
+OIDC_OP_INTROSPECTION_ENDPOINT=http://keycloak:8080/realms/calendars/protocol/openid-connect/token/introspect
+OIDC_RESOURCE_SERVER_ENABLED=False
+OIDC_RS_CLIENT_ID=calendars
+OIDC_RS_CLIENT_SECRET=ThisIsAnExampleKeyForDevPurposeOnly
+OIDC_RS_AUDIENCE_CLAIM="client_id"
+OIDC_RS_ALLOWED_AUDIENCES=""
+
+# DAViCal CalDAV Server
+DAVICAL_URL=http://davical:80
+
+# Frontend
+FRONTEND_THEME=default
+FRONTEND_MORE_LINK=https://suiteterritoriale.anct.gouv.fr/
+FRONTEND_FEEDBACK_BUTTON_SHOW=True
+FRONTEND_FEEDBACK_BUTTON_IDLE=False
+FRONTEND_FEEDBACK_ITEMS={}
+FRONTEND_FEEDBACK_MESSAGES_WIDGET_ENABLED=False
+FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL=
+FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL=
+FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH=
+
+# Indexer
+
+# Store OIDC tokens in the session
+# OIDC_STORE_ACCESS_TOKEN = True
+# OIDC_STORE_REFRESH_TOKEN = True # Store the encrypted refresh token in the session.
+# Must be a valid Fernet key (32 url-safe base64-encoded bytes)
+# To create one, use the bin/fernetkey command.
+# OIDC_STORE_REFRESH_TOKEN_KEY="your-32-byte-encryption-key=="

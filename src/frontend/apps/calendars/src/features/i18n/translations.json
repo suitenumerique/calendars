@@ -1,0 +1,634 @@
+{
+  "en": {
+    "translation": {
+      "401": {
+        "title": "You need to be logged in to access this application.",
+        "button": "Login"
+      },
+      "403": {
+        "title": "You don't have the necessary permissions to access this page.",
+        "button": "Home"
+      },
+      "common": {
+        "cancel": "Cancel"
+      },
+      "clipboard": {
+        "success": "Copied to clipboard",
+        "error": "Failed to copy to clipboard"
+      },
+      "app_title": "Calendars",
+      "app_description": "Calendars application",
+      "welcome": "Welcome",
+      "logout": "Logout",
+      "login": "Login",
+      "my_account": "My Account",
+      "api": {
+        "error": {
+          "unexpected": "An unexpected error occurred."
+        }
+      },
+      "home": {
+        "title": "Easy storage and sharing",
+        "subtitle": "A modern calendar application built for French public teams. Sovereign hosting in France, strong security, and seamless sync with all LaSuite apps.",
+        "main_button": "Sign in",
+        "more": "Learn more"
+      },
+      "feedback": {
+        "button": "Give feedback",
+        "modal": {
+          "title": "New feedback",
+          "description": "Calendars is under development: your feedback matters! Choose how to share your ideas:",
+          "buttons": {
+            "form": {
+              "title": "Give quick feedback",
+              "description": "30 sec to tell us what you think or report a bug"
+            },
+            "tchap": {
+              "title": "Write on Tchap",
+              "description": "Direct exchange with our team"
+            },
+            "visio": {
+              "title": "Talk on video",
+              "description": "20 min for an in-depth discussion"
+            }
+          }
+        }
+      },
+      "feedback_widget": {
+        "shortTitle": "Feedback?",
+        "title": "Do you have any feedback?",
+        "placeholder": "Share your feedback here...",
+        "email_placeholder": "Your email...",
+        "submit_text": "Send Feedback",
+        "success_text": "Thank you for your feedback!",
+        "success_text2": "In case of questions, we'll get back to you soon."
+      },
+      "authentication": {
+        "error": {
+          "alpha": "This application is in alpha and its access is restricted.",
+          "user_cannot_access_app": "You do not have the necessary permissions to access this application. Contact your administrator."
+        }
+      },
+      "roles": {
+        "administrator": "Administrator",
+        "editor": "Editor",
+        "reader": "Reader",
+        "owner": "Owner"
+      },
+      "time": {
+        "years_ago_one": "{{count}} year ago",
+        "years_ago_other": "{{count}} years ago",
+        "months_ago_one": "{{count}} month ago",
+        "months_ago_other": "{{count}} months ago",
+        "weeks_ago_one": "{{count}} week ago",
+        "weeks_ago_other": "{{count}} weeks ago",
+        "days_ago_one": "{{count}} day ago",
+        "days_ago_other": "{{count}} days ago",
+        "hours_ago_one": "{{count}} hour ago",
+        "hours_ago_other": "{{count}} hours ago",
+        "minutes_ago_one": "{{count}} minute ago",
+        "minutes_ago_other": "{{count}} minutes ago",
+        "seconds_ago": "few seconds ago"
+      }
+    }
+  },
+  "fr": {
+    "translation": {
+      "entitlements": {
+        "can_upload": {
+          "cannot_upload": "Vous n'avez pas les droits nécessaires pour transférer des fichiers."
+        }
+      },
+      "401": {
+        "title": "Connectez-vous pour accéder aux documents.",
+        "button": "Se connecter"
+      },
+      "403": {
+        "title": "Vous n'avez pas les permissions nécessaires pour accéder à cette page.",
+        "button": "Accueil"
+      },
+      "file_download_modal": {
+        "error": {
+          "no_url_or_title": "Ce fichier n'a pas d'URL ou de titre. "
+        },
+        "suspicious": {
+          "title": "Ce fichier est suspect"
+        },
+        "file_too_large_to_analyze": {
+          "title": "Ce fichier est trop volumineux pour être analysé"
+        },
+        "analyzing": {
+          "title": "Ce fichier est en cours d'analyse"
+        },
+        "description": "Êtes-vous sûr de vouloir télécharger ce fichier ?",
+        "download": "Télécharger quand même",
+        "cancel": "Annuler"
+      },
+      "file_preview": {
+        "suspicious": {
+          "title": "Fichier suspect",
+          "description": "Ce fichier semble suspect. Il n'est visible que pour vous.",
+          "download": "Télécharger le fichier"
+        },
+        "error": {
+          "title": "Une erreur est survenue lors du chargement du document.",
+          "description": "Veuillez réessayer plus tard."
+        },
+        "unsupported": {
+          "title": "Type de fichier non supporté pour la prévisualisation",
+          "description": "Pour visualiser le fichier, téléchargez-le sur votre appareil.",
+          "download": "Télécharger le fichier",
+          "heic_title": "Les fichiers HEIC ne sont pas encore supportés pour la prévisualisation."
+        }
+      },
+      "common": {
+        "cancel": "Annuler"
+      },
+      "clipboard": {
+        "success": "Copié dans le presse-papiers",
+        "error": "Échec de la copie dans le presse-papiers"
+      },
+      "app_title": "Calendriers",
+      "app_description": "Application de calendriers",
+      "welcome": "Bienvenue",
+      "logout": "Déconnexion",
+      "login": "Connexion",
+      "my_account": "Mon Compte",
+      "api": {
+        "error": {
+          "unexpected": "Une erreur inattendue est survenue."
+        }
+      },
+      "home": {
+        "title": "Stocker et partager facilement",
+        "subtitle": "Une application de calendrier moderne pour les équipes publiques françaises. Hébergement en France, sécurité renforcée, et synchronisation fluide avec toutes les applications LaSuite.",
+        "main_button": "Se connecter",
+        "more": "En savoir plus"
+      },
+      "feedback": {
+        "button": "Faire un retour",
+        "modal": {
+          "title": "Nouveau retour",
+          "description": "Calendrier est en cours de développement : vos retours comptent ! Choisissez comment partager vos idées :",
+          "buttons": {
+            "form": {
+              "title": "Donner un avis rapide",
+              "description": "30 sec pour nous dire ce que vous pensez ou signaler un bug"
+            },
+            "tchap": {
+              "title": "Écrire sur Tchap",
+              "description": "Échange direct avec notre équipe"
+            },
+            "visio": {
+              "title": "Parler en visio",
+              "description": "20 min pour aller en profondeur"
+            }
+          }
+        }
+      },
+      "feedback_widget": {
+        "shortTitle": "Faire un retour",
+        "title": "Partager un retour ou une question",
+        "placeholder": "Saisir votre message...",
+        "email_placeholder": "Renseigner votre email...",
+        "submit_text": "Envoyer le message",
+        "success_text": "Merci pour votre message.",
+        "success_text2": "En cas de questions, nous vous répondrons dans les meilleurs délais sur l'email renseigné."
+      },
+      "authentication": {
+        "error": {
+          "alpha": "Cette application est en version alpha et son accès est restreint.",
+          "user_cannot_access_app": "Vous n'avez pas les permissions nécessaires pour accéder à cette application. Contactez votre administrateur."
+        }
+      },
+      "mime": {
+        "calc": "Tableur",
+        "doc": "Document",
+        "image": "Image",
+        "other": "Autre",
+        "pdf": "PDF",
+        "powerpoint": "Présentation",
+        "audio": "Audio",
+        "video": "Vidéo",
+        "archive": "Archive"
+      },
+      "roles": {
+        "administrator": "Administrateur",
+        "editor": "Éditeur",
+        "reader": "Lecteur",
+        "owner": "Propriétaire"
+      },
+      "time": {
+        "breadcrumbs": {
+          "spaces": "Espaces"
+        },
+        "modal": {
+          "move": {
+            "title": "Déplacer",
+            "move_button": "Déplacer ici",
+            "description_one_item": "Choisissez le nouvel emplacement pour <strong>{{name}}</strong>",
+            "description_multiple_items": "Choisissez le nouvel emplacement pour les <strong>{{count}}</strong> éléments sélectionnés"
+          }
+        },
+        "rightPanel": {
+          "suspicious": {
+            "text": "Ce fichier semble suspect. Il n'est visible que pour vous."
+          },
+          "file_too_large_to_analyze": {
+            "text": "Ce fichier est trop volumineux pour être analysé. Il peut être dangereux de le télécharger."
+          },
+          "multipleSelection": {
+            "text": "Plusieurs fichiers sélectionnés",
+            "alt": "Image de plusieurs fichiers sélectionnés"
+          },
+          "empty": {
+            "text": "Aucun fichier sélectionné",
+            "alt": "Image d'un fichier sélectionné"
+          },
+          "sharing": "Partage",
+          "share": "Partager",
+          "format": "Format",
+          "updated_at": "Modification",
+          "created_at": "Création",
+          "size": "Poids",
+          "created_by": "Créé par",
+          "description": "Description"
+        },
+        "grid": {
+          "name": "Nom",
+          "last_update": "Dernière modification",
+          "empty": {
+            "default": "Aucun dossier trouvé dans le dossier sélectionné",
+            "caption": "Déposez vos fichiers ici",
+            "caption_no_create": "Vous n'avez pas les droits pour ajouter des fichiers",
+            "cta": "Ou cliquez sur \"Créer\"",
+            "cta_no_create": "Les lecteurs ne peuvent pas ajouter de fichiers ou créer de dossiers"
+          },
+          "no_url": "Cette ressource n'a pas d'URL",
+          "actions": {
+            "button_aria_label": "Plus d'actions pour {{name}}",
+            "info": "Informations",
+            "share": "Partager",
+            "download": "Télécharger",
+            "rename": "Renommer",
+            "move": "Déplacer",
+            "duplicate": "Dupliquer",
+            "delete": "Supprimer",
+            "restore": "Restaurer",
+            "hard_delete": "Supprimer définitivement"
+          }
+        },
+        "filters": {
+          "scopes": {
+            "label": "Emplacement",
+            "options": {
+              "all": "Calendars",
+              "trash": "Corbeille"
+            }
+          },
+          "type": {
+            "label": "Type",
+            "options": {
+              "all": "Tous",
+              "file": "Fichier",
+              "folder": "Dossier",
+              "reset": "Réinitialiser"
+            }
+          },
+          "workspace": {
+            "label": "Espace"
+          }
+        },
+        "tree": {
+          "trash": "Corbeille",
+          "createFolder": "Créer",
+          "personalSpace": "Espace personnel",
+          "shared_space": "Espace partagé",
+          "public_space": "Espace public",
+          "search": "Rechercher",
+          "import": {
+            "label": "Importer",
+            "files": "Importer des fichiers",
+            "folders": "Importer des dossiers"
+          },
+          "create": {
+            "label": "Créer",
+            "folder": "Nouveau dossier",
+            "workspace": "Nouvel espace"
+          },
+          "workspace": {
+            "options": {
+              "info": "Informations",
+              "settings_workspace": "Paramètre de l'espace",
+              "settings_folder": "Paramètres du dossier",
+              "delete_workspace": "Supprimer l'espace",
+              "delete_folder": "Supprimer le dossier",
+              "share": "Partager",
+              "share_view": "Voir les accès"
+            },
+            "move": {
+              "confirmation_modal": {
+                "title": "Transfert de droits",
+                "description": "Vous êtes sur le point de déplacer l'élément <strong>{{sourceItem}}</strong> vers le dossier <strong>{{targetItem}}</strong>, votre document héritera du partage du dossier cible.",
+                "description_multiple": "Vous êtes sur le point de déplacer <strong>{{count}}</strong> éléments vers le dossier <strong>{{targetItem}}</strong>, vos documents hériteront du partage du dossier cible.",
+                "confirm_button": "Déplacer quand même",
+                "cancel_button": "Annuler"
+              }
+            }
+          }
+        },
+        "trash": {
+          "title": "Corbeille",
+          "description": "Suppression automatique après 30 jours",
+          "navigate": {
+            "modal": {
+              "title": "Ce dossier est dans la corbeille",
+              "description": "Pour afficher ce dossier, vous devez d'abord le restaurer."
+            }
+          },
+          "hard_delete": {
+            "title": "Supprimer définitivement",
+            "content_one": "Êtes-vous sûr de vouloir supprimer cet élément définitivement?",
+            "content_other": "Êtes-vous sûr de vouloir supprimer ces {{count}} éléments définitivement?",
+            "cancel": "Annuler",
+            "confirm": "Supprimer définitivement"
+          }
+        },
+        "search": {
+          "modal": {
+            "title": "Rechercher",
+            "description": "La fonction de recherche est en cours de développement et sera bientôt disponible.",
+            "placeholder": "Taper un mot clé ou le nom d'un fichier",
+            "results": "Sélectionnez un document",
+            "filters": {
+              "reset": "Réinitialiser"
+            }
+          }
+        },
+        "selectionBar": {
+          "caption_one": "1 élément sélectionné",
+          "caption_other": "{{count}} éléments sélectionnés",
+          "download": "Télécharger",
+          "move": "Déplacer",
+          "delete": "Supprimer",
+          "reset_selection": "Réinitialiser la sélection"
+        },
+        "folders": {
+          "edit": {
+            "title": "Modifier le dossier",
+            "description": "Modifier les informations du dossier",
+            "cancel": "Annuler",
+            "submit": "Mettre à jour"
+          },
+          "form": {
+            "title": "Nom du dossier",
+            "description": "Description",
+            "cancel": "Annuler",
+            "submit": "Mettre à jour"
+          }
+        },
+        "files": {
+          "not_found": {
+            "description": "Le fichier que vous recherchez n'existe pas."
+          }
+        },
+        "workspaces": {
+          "mainWorkspace": "Mon espace",
+          "form": {
+            "title": "Nom de l'espace",
+            "description": "Description",
+            "settings": "Paramètres de l'espace"
+          },
+          "create": {
+            "title": "Nouvel espace",
+            "description": "Un espace vous permet d'organiser vos fichiers en équipe.",
+            "cancel": "Annuler",
+            "submit": "Créer l'espace"
+          },
+          "edit": {
+            "title": "Modifier l'espace",
+            "description": "Modifier les informations de l'espace",
+            "cancel": "Annuler",
+            "submit": "Mettre à jour"
+          }
+        },
+        "actions": {
+          "createFolder": {
+            "modal": {
+              "title": "Créer un dossier",
+              "label": "Nom du dossier",
+              "placeholder": "Entrez le nom du dossier",
+              "cancel": "Annuler",
+              "submit": "Créer"
+            }
+          },
+          "upload": {
+            "toast": "Déposez vos fichiers ici pour les transférer dans {{title}}",
+            "toast_no_rights": "Vous n'avez pas les droits nécessaires pour transférer des fichiers dans {{title}}",
+            "steps": {
+              "preparing": "Préparation du transfert...",
+              "create_folders": "Création des dossiers en cours..."
+            },
+            "files": {
+              "description_one": "{{count}} fichier en cours de transfert",
+              "description_other": "{{count}} fichiers en cours de transfert",
+              "description_done_one": "{{count}} fichier transféré",
+              "description_done_other": "{{count}} fichiers transférés"
+            }
+          },
+          "delete": {
+            "toast_one": "Élément supprimé",
+            "toast_other": "{{count}} éléments supprimés",
+            "low_rights_toast": "Vous ne pouvez pas restaurer ces éléments car vous n'avez pas les droits nécessaires.",
+            "toast_error_one": "Une erreur est survenue lors de la suppression de l'élément.",
+            "toast_error_other": "Une erreur est survenue lors de la suppression des éléments."
+          },
+          "hard_delete": {
+            "toast_one": "Élément supprimé définitivement",
+            "toast_other": "{{count}} éléments supprimés définitivement"
+          },
+          "restore": {
+            "toast_one": "Élément restauré",
+            "toast_other": "{{count}} éléments restaurés"
+          },
+          "move": {
+            "toast_one": "{{count}} élément déplacé",
+            "toast_other": "{{count}} éléments déplacés"
+          },
+          "share": {
+            "modal": {
+              "title": "Partager l'espace"
+            }
+          },
+          "rename": {
+            "modal": {
+              "title": "Renommer",
+              "label": "Nouveau nom",
+              "placeholder": "Entrez le nouveau nom",
+              "cancel": "Annuler",
+              "submit": "Renommer"
+            }
+          }
+        }
+      },
+      "time": {
+        "years_ago_one": "il y a {{count}} an",
+        "years_ago_other": "il y a {{count}} ans",
+        "months_ago_one": "il y a {{count}} mois",
+        "months_ago_other": "il y a {{count}} mois",
+        "weeks_ago_one": "il y a {{count}} semaine",
+        "weeks_ago_other": "il y a {{count}} semaines",
+        "days_ago_one": "il y a {{count}} jour",
+        "days_ago_other": "il y a {{count}} jours",
+        "hours_ago_one": "il y a {{count}} heure",
+        "hours_ago_other": "il y a {{count}} heures",
+        "minutes_ago_one": "il y a {{count}} minute",
+        "minutes_ago_other": "il y a {{count}} minutes",
+        "seconds_ago": "il y a quelques secondes"
+      }
+    }
+  },
+  "nl": {
+    "translation": {
+      "entitlements": {
+        "can_upload": {
+          "cannot_upload": "U heeft niet de benodigde rechten om bestanden te uploaden."
+        }
+      },
+      "401": {
+        "title": "U moet ingelogd zijn om toegang te krijgen tot de bestanden.",
+        "button": "Login"
+      },
+      "403": {
+        "title": "U beschikt niet over de benodigde rechten om dit bestand te openen.",
+        "button": "Home"
+      },
+      "file_download_modal": {
+        "error": {
+          "no_url_or_title": "Dit bestand heeft geen URL of titel."
+        },
+        "suspicious": {
+          "title": "Dit bestand is verdacht"
+        },
+        "file_too_large_to_analyze": {
+          "title": "Dit bestand is te groot om te worden gescand"
+        },
+        "analyzing": {
+          "title": "Dit bestand wordt nog steeds gescand"
+        },
+        "description": "Weet u zeker dat u dit bestand wilt downloaden?",
+        "download": "Toch downloaden",
+        "cancel": "Annuleren"
+      },
+      "file_preview": {
+        "suspicious": {
+          "title": "Verdacht bestand",
+          "description": "Dit bestand is verdacht. Het is alleen voor jou zichtbaar.",
+          "download": "Bestand downloaden"
+        },
+        "error": {
+          "title": "Er is een fout opgetreden tijdens het laden van het document.",
+          "description": "Probeer het later opnieuw."
+        },
+        "unsupported": {
+          "title": "Bestandstype niet ondersteund voor voorbeeld",
+          "description": "Om het bestand te bekijken, downloadt u het naar uw apparaat.",
+          "download": "Bestand downloaden",
+          "heic_title": "HEIC bestanden worden nog niet ondersteund voor voorbeeld."
+        }
+      },
+      "common": {
+        "cancel": "Annuleren"
+      },
+      "clipboard": {
+        "success": "Gekopieërd naar klembord",
+        "error": "Kopiëren naar klembord mislukt"
+      },
+      "app_title": "Calendars",
+      "app_description": "Kalenderbeheer",
+      "welcome": "Welkom",
+      "logout": "Uitloggen",
+      "login": "Inloggen",
+      "my_account": "Mijn account",
+      "api": {
+        "error": {
+          "unexpected": "Er is een onverwachte fout opgetreden."
+        }
+      },
+      "home": {
+        "title": "Eenvoudige opslag en delen",
+        "subtitle": "Een moderne kalenderapplicatie ontworpen voor Franse publieke teams. Soevereine hosting in Frankrijk, sterke beveiliging en naadloze synchronisatie met alle LaSuite-apps.",
+        "main_button": "Inloggen",
+        "more": "Meer informatie"
+      },
+      "feedback": {
+        "button": "Geef feedback",
+        "modal": {
+          "title": "Nieuwe feedback",
+          "description": "Calendars is in ontwikkeling: uw feedback telt! Kies hoe u uw ideeën wilt delen:",
+          "buttons": {
+            "form": {
+              "title": "Geef snel feedback",
+              "description": "30 seconden om ons te vertellen wat u ervan vindt of een bug te melden"
+            },
+            "tchap": {
+              "title": "Schrijf op Tchap",
+              "description": "Directe uitwisseling met ons team"
+            },
+            "visio": {
+              "title": "Praten op Videogesprek",
+              "description": "20 min voor een diepgaand gesprek"
+            }
+          }
+        }
+      },
+      "feedback_widget": {
+        "shortTitle": "Feedback?",
+        "title": "Heeft u feedback?",
+        "placeholder": "Deel hier uw feedback...",
+        "email_placeholder": "Uw e-mailadres...",
+        "submit_text": "Feedback verzenden",
+        "success_text": "Bedankt voor uw feedback!",
+        "success_text2": "Indien u vragen heeft, nemen wij spoedig contact met u op."
+      },
+      "authentication": {
+        "error": {
+          "alpha": "Deze applicatie bevindt zich in de alfa-fase en de toegang ertoe is beperkt.",
+          "user_cannot_access_app": "U heeft niet de benodigde rechten om toegang te krijgen tot deze applicatie. Neem contact op met uw beheerder."
+        }
+      },
+      "mime": {
+        "calc": "Spreadsheet",
+        "doc": "Document",
+        "image": "Afbeelding",
+        "other": "overige",
+        "pdf": "PDF",
+        "powerpoint": "Presentatie",
+        "audio": "Audio",
+        "video": "Video",
+        "archive": "Archief"
+      },
+      "roles": {
+        "administrator": "Beheerder",
+        "editor": "Redacteur",
+        "reader": "Lezer",
+        "owner": "Eigenaar"
+      },
+      "time": {
+        "years_ago_one": "{{count}} jaar geleden",
+        "years_ago_other": "{{count}} jaren geleden",
+        "months_ago_one": "{{count}} maand geleden",
+        "months_ago_other": "{{count}} maanden geleden",
+        "weeks_ago_one": "{{count}} week geleden",
+        "weeks_ago_other": "{{count}} weken geleden",
+        "days_ago_one": "{{count}} dag geleden",
+        "days_ago_other": "{{count}} dagen geleden",
+        "hours_ago_one": "{{count}} uur geleden",
+        "hours_ago_other": "{{count}} uren geleden",
+        "minutes_ago_one": "{{count}} minuut geleden",
+        "minutes_ago_other": "{{count}} minuten geleden",
+        "seconds_ago": "een paar seconden geleden"
+      }
+    }
+  }
+}

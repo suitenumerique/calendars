@@ -1,0 +1,128 @@
+@use "sass:map";
+@use "@/styles/cunningham-tokens-sass" as *;
+$tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
+
+:root {
+  --header-height: 52px;
+}
+
+.calendars__home {
+  --header-height: 91px;
+
+  .c__header {
+    height: var(--header-height);
+    min-height: var(--header-height);
+    max-height: var(--header-height);
+    border: none;
+  }
+
+  .c__main-layout__content {
+    margin-top: var(--header-height);
+
+    .c__main-layout__content__center__children {
+      height: calc(100dvh - var(--header-height));
+    }
+
+    .c__right-panel {
+      height: calc(100dvh - var(--header-height));
+    }
+  }
+
+  .c__hero {
+    height: calc(100vh - var(--header-height));
+
+    &__display {
+      &__captions {
+        align-items: flex-start;
+        max-width: 600px;
+
+        > h2 {
+          text-align: left;
+          font-size: 48px;
+          line-height: 50px;
+        }
+
+        > span {
+          text-align: left;
+        }
+      }
+
+      > img {
+        @media (max-width: $tablet) {
+          display: none;
+        }
+      }
+    }
+
+    &__buttons {
+      display: flex;
+      gap: 1rem;
+      width: 100%;
+
+      @media (max-width: $tablet) {
+        flex-direction: column;
+      }
+    }
+  }
+
+  @media (max-width: $tablet) {
+    --header-height: 52px;
+
+    .c__header {
+      .calendars__header__left {
+        img:first-child {
+          display: none;
+        }
+      }
+
+      .c__header__right {
+        > * {
+          display: none !important;
+        }
+      }
+    }
+  }
+}
+
+.calendars__header__left {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.c__modal__content__text {
+  text-align: left;
+}
+
+@media (max-width: $tablet) {
+  .c__header {
+    .c__feedback__button {
+      display: none;
+    }
+  }
+}
+
+.global-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.calendars__header__logo {
+  background-image: var(--c--components--logo--src);
+  width: 142px;
+  height: 40px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.calendars__logo-icon {
+  background-image: var(--c--components--logo-icon--src);
+  width: 64px;
+  height: 64px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}

@@ -1,0 +1,23 @@
+.calendar-left-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--c--theme--colors--greyscale-000);
+  border-right: 1px solid var(--c--theme--colors--greyscale-200);
+  overflow-y: auto;
+
+  &__create {
+    padding: 1rem 0.75rem;
+
+    .c__button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
+  &__divider {
+    height: 1px;
+    background-color: var(--c--theme--colors--greyscale-200);
+    margin: 0.5rem 0.75rem;
+  }
+}

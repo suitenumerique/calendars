@@ -1,0 +1,24 @@
+{
+  "name": "main",
+  "version": "0.10.1",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0 <25.0.0",
+    "yarn": "1.22.22"
+  },
+  "scripts": {
+    "dev": "yarn workspace calendars run dev",
+    "build": "yarn workspace calendars run build",
+    "lint": "yarn workspace calendars run lint",
+    "build-theme": "yarn workspace calendars build-theme"
+  },
+  "resolutions": {},
+  "devDependencies": {
+    "turbo": "2.6.1"
+  },
+  "packageManager": "yarn@1.22.22"
+}

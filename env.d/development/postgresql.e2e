@@ -1,0 +1,11 @@
+# Postgresql db container configuration
+POSTGRES_DB=calendar_e2e
+POSTGRES_USER=pgroot
+POSTGRES_PASSWORD=pass
+
+# App database configuration
+DB_HOST=postgresql
+DB_NAME=calendar_e2e
+DB_USER=pgroot
+DB_PASSWORD=pass
+DB_PORT=5432

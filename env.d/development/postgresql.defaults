@@ -1,0 +1,4 @@
+# Postgresql db container configuration
+POSTGRES_DB=calendars
+POSTGRES_USER=pgroot
+POSTGRES_PASSWORD=pass

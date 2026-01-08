@@ -1,0 +1,25 @@
+{
+    "extends": ["github>numerique-gouv/renovate-configuration"],
+    "dependencyDashboard": true,
+    "labels": ["dependencies", "noChangeLog"],
+    "packageRules": [
+        {
+            "groupName": "allowed redis versions",
+            "matchManagers": ["pep621"],
+            "matchPackageNames": ["redis"],
+            "allowedVersions": "<6.0.0"
+        },
+        {
+            "groupName": "allowed pylint versions",
+            "matchManagers": ["pep621"],
+            "matchPackageNames": ["pylint"],
+            "allowedVersions": "<4.0.0"
+        },
+        {
+            "description": "Disable requires-python updates - managed manually",
+            "matchManagers": ["pep621"],
+            "matchPackageNames": ["python"],
+            "enabled": false
+        }
+    ]
+}

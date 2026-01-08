@@ -1,0 +1,145 @@
+#
+# calendar package
+#
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "calendars"
+version = "0.10.1"
+authors = [{ "name" = "anct", "email" = "contact@suite.anct.gouv.fr" }]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: Django",
+    "Framework :: Django :: 5",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
+description = "A calendar application."
+keywords = ["Django", "Contacts", "Templates", "RBAC"]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = "~=3.13.0"
+dependencies = [
+    "Brotli==1.2.0",
+    "dj-database-url==3.0.1",
+    "caldav==2.2.3",
+    "celery[redis]==5.6.0",
+    "django==5.2.9",
+    "django-celery-beat==2.8.1",
+    "django-configurations==2.5.1",
+    "django-cors-headers==4.9.0",
+    "django-countries==8.2.0",
+    "django-filter==25.2",
+    "django-lasuite[all]==0.0.21",
+    "django-parler==2.3",
+    "django-redis==6.0.0",
+    "django-timezone-field>=5.1",
+    "djangorestframework==3.16.1",
+    "djangorestframework-api-key==3.1.0",
+    "drf_spectacular==0.29.0",
+    "drf-standardized-errors==0.15.0",
+    "factory_boy==3.3.3",
+    "gunicorn==23.0.0",
+    "jsonschema==4.25.1",
+    "mozilla-django-oidc==4.0.1",
+    "nested-multipart-parser==1.6.0",
+    "pillow>=10.0",
+    "psycopg[binary]==3.3.1",
+    "PyJWT==2.10.1",
+    "redis<6.0.0",
+    "requests==2.32.5",
+    "sentry-sdk==2.46.0",
+    "url-normalize==2.2.1",
+    "whitenoise==6.11.0",
+]
+
+[project.urls]
+"Bug Tracker" = "https://github.com/suitenumerique/calendars/issues/new"
+"Changelog" = "https://github.com/suitenumerique/calendars/blob/main/CHANGELOG.md"
+"Homepage" = "https://github.com/suitenumerique/calendars"
+"Repository" = "https://github.com/suitenumerique/calendars"
+
+[project.optional-dependencies]
+dev = [
+    "django-debug-toolbar==6.1.0",
+    "django-extensions==4.1",
+    "drf-spectacular-sidecar==2025.12.1",
+    "freezegun==1.5.5",
+    "ipdb==0.13.13",
+    "ipython==9.7.0",
+    "pyfakefs==5.10.2",
+    "pylint-django==2.6.1",
+    "pylint<4.0.0",
+    "pytest-cov==7.0.0",
+    "pytest-django==4.11.1",
+    "pytest==9.0.1",
+    "pytest-icdiff==0.9",
+    "pytest-xdist==3.8.0",
+    "responses==0.25.8",
+    "ruff==0.14.7",
+    "types-requests==2.32.4.20250913",
+]
+
+[tool.setuptools]
+packages = { find = { where = ["."], exclude = ["tests"] } }
+zip-safe = true
+
+[tool.distutils.bdist_wheel]
+universal = true
+
+[tool.ruff]
+exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "venv",
+    "__pycache__",
+    "*/migrations/*",
+]
+line-length = 88
+
+
+[tool.ruff.lint]
+ignore = ["DJ001", "PLR2004"]
+select = [
+    "B", # flake8-bugbear
+    "BLE", # flake8-blind-except
+    "C4", # flake8-comprehensions
+    "DJ", # flake8-django
+    "I", # isort
+    "PLC", # pylint-convention
+    "PLE", # pylint-error
+    "PLR", # pylint-refactoring
+    "PLW", # pylint-warning
+    "RUF100", # Ruff unused-noqa
+    "RUF200", # Ruff check pyproject.toml
+    "S", # flake8-bandit
+    "SLF", # flake8-self
+    "T20", # flake8-print
+]
+
+[tool.ruff.lint.isort]
+section-order = ["future","standard-library","django","third-party","calendars","first-party","local-folder"]
+sections = { calendars=["core", "caldav"], django=["django"] }
+extra-standard-library = ["tomllib"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*" = ["S", "SLF"]
+
+[tool.pytest.ini_options]
+addopts = [
+    "-v",
+    "--cov-report",
+    "term-missing",
+    # Allow test files to have the same name in different directories.
+    "--import-mode=importlib",
+]
+python_files = [
+    "test_*.py",
+    "tests.py",
+]

@@ -1,0 +1,103 @@
+.mini-calendar {
+  padding: 0.75rem;
+  user-select: none;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  &__month-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: capitalize;
+    color: var(--c--theme--colors--greyscale-800);
+  }
+
+  &__nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--c--theme--colors--greyscale-600);
+    transition: background-color 0.15s;
+
+    &:hover {
+      background-color: var(--c--theme--colors--greyscale-100);
+    }
+
+    .material-icons {
+      font-size: 1.25rem;
+    }
+  }
+
+  &__weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0;
+    margin-bottom: 0.25rem;
+  }
+
+  &__weekday {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.5rem;
+    font-size: 0.625rem;
+    font-weight: 500;
+    color: var(--c--theme--colors--greyscale-500);
+    text-transform: uppercase;
+  }
+
+  &__days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+  }
+
+  &__day {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 1;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--c--theme--colors--greyscale-800);
+    transition: background-color 0.15s;
+
+    &:hover {
+      background-color: var(--c--theme--colors--greyscale-100);
+    }
+
+    &--outside {
+      color: var(--c--theme--colors--greyscale-400);
+    }
+
+    &--today {
+      background-color: var(--c--theme--colors--primary-100);
+      color: var(--c--theme--colors--primary-600);
+      font-weight: 600;
+    }
+
+    &--selected {
+      background-color: var(--c--theme--colors--primary-500);
+      color: white;
+      font-weight: 600;
+
+      &:hover {
+        background-color: var(--c--theme--colors--primary-600);
+      }
+    }
+  }
+}

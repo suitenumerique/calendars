@@ -1,0 +1,13 @@
+PGHOST=postgresql
+PGPORT=5432
+PGDATABASE=calendars
+PGUSER=pgroot
+PGPASSWORD=pass
+ROOT_PGUSER=pgroot
+ROOT_PGPASSWORD=pass
+DBA_PGUSER=pgroot
+DBA_PGPASSWORD=pass
+DAVICAL_ADMIN_PASS=admin
+HOST_NAME=localhost
+ADMIN_EMAIL=admin@example.com
+TZ=UTC

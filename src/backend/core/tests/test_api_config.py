@@ -1,0 +1,161 @@
+"""
+Test config API endpoints in the calendars core app.
+"""
+
+import json
+
+from django.test import override_settings
+
+import pytest
+from rest_framework.status import (
+    HTTP_200_OK,
+)
+from rest_framework.test import APIClient
+
+from core import factories
+
+pytestmark = pytest.mark.django_db
+
+
+@override_settings(
+    FRONTEND_THEME="test-theme",
+    FRONTEND_MORE_LINK="https://test.com",
+    FRONTEND_FEEDBACK_BUTTON_SHOW=True,
+    FRONTEND_FEEDBACK_BUTTON_IDLE=False,
+    FRONTEND_FEEDBACK_ITEMS={"form": {"url": "https://test.com"}},
+    FRONTEND_FEEDBACK_MESSAGES_WIDGET_ENABLED=True,
+    FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL="https://test.com",
+    FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL="test",
+    FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH="https://test.com",
+    FRONTEND_HIDE_GAUFRE=True,
+    MEDIA_BASE_URL="http://testserver/",
+    SENTRY_DSN="https://sentry.test/123",
+    THEME_CUSTOMIZATION_FILE_PATH="",
+)
+@pytest.mark.parametrize("is_authenticated", [False, True])
+def test_api_config(is_authenticated):
+    """Anonymous users should be allowed to get the configuration."""
+    client = APIClient()
+
+    if is_authenticated:
+        user = factories.UserFactory()
+        client.force_login(user)
+
+    response = client.get("/api/v1.0/config/")
+    assert response.status_code == HTTP_200_OK
+    assert response.json() == {
+        "ENVIRONMENT": "test",
+        "FRONTEND_THEME": "test-theme",
+        "FRONTEND_MORE_LINK": "https://test.com",
+        "FRONTEND_FEEDBACK_BUTTON_SHOW": True,
+        "FRONTEND_FEEDBACK_BUTTON_IDLE": False,
+        "FRONTEND_FEEDBACK_ITEMS": {"form": {"url": "https://test.com"}},
+        "FRONTEND_FEEDBACK_MESSAGES_WIDGET_ENABLED": True,
+        "FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL": "https://test.com",
+        "FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL": "test",
+        "FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH": "https://test.com",
+        "FRONTEND_HIDE_GAUFRE": True,
+        "LANGUAGES": [
+            ["en-us", "English"],
+            ["fr-fr", "French"],
+            ["de-de", "German"],
+            ["nl-nl", "Dutch"],
+        ],
+        "LANGUAGE_CODE": "en-us",
+        "MEDIA_BASE_URL": "http://testserver/",
+        "SENTRY_DSN": "https://sentry.test/123",
+        "theme_customization": {},
+    }
+
+
+@override_settings(
+    THEME_CUSTOMIZATION_FILE_PATH="/not/existing/file.json",
+)
+@pytest.mark.parametrize("is_authenticated", [False, True])
+def test_api_config_with_invalid_theme_customization_file(is_authenticated):
+    """Anonymous users should be allowed to get the configuration."""
+    client = APIClient()
+
+    if is_authenticated:
+        user = factories.UserFactory()
+        client.force_login(user)
+
+    response = client.get("/api/v1.0/config/")
+    assert response.status_code == HTTP_200_OK
+    content = response.json()
+    assert content["theme_customization"] == {}
+
+
+@override_settings(
+    THEME_CUSTOMIZATION_FILE_PATH="/configuration/theme/invalid.json",
+)
+@pytest.mark.parametrize("is_authenticated", [False, True])
+def test_api_config_with_invalid_json_theme_customization_file(is_authenticated, fs):
+    """Anonymous users should be allowed to get the configuration."""
+    fs.create_file(
+        "/configuration/theme/invalid.json",
+        contents="invalid json",
+    )
+    client = APIClient()
+
+    if is_authenticated:
+        user = factories.UserFactory()
+        client.force_login(user)
+
+    response = client.get("/api/v1.0/config/")
+    assert response.status_code == HTTP_200_OK
+    content = response.json()
+    assert content["theme_customization"] == {}
+
+
+@override_settings(
+    THEME_CUSTOMIZATION_FILE_PATH="/configuration/theme/default.json",
+)
+@pytest.mark.parametrize("is_authenticated", [False, True])
+def test_api_config_with_theme_customization(is_authenticated, fs):
+    """Anonymous users should be allowed to get the configuration."""
+    fs.create_file(
+        "/configuration/theme/default.json",
+        contents=json.dumps(
+            {
+                "colors": {
+                    "primary": "#000000",
+                    "secondary": "#000000",
+                },
+            }
+        ),
+    )
+    client = APIClient()
+
+    if is_authenticated:
+        user = factories.UserFactory()
+        client.force_login(user)
+
+    response = client.get("/api/v1.0/config/")
+    assert response.status_code == HTTP_200_OK
+    content = response.json()
+    assert content["theme_customization"] == {
+        "colors": {
+            "primary": "#000000",
+            "secondary": "#000000",
+        },
+    }
+
+
+@pytest.mark.parametrize("is_authenticated", [False, True])
+def test_api_config_with_original_theme_customization(is_authenticated, settings):
+    """Anonymous users should be allowed to get the configuration."""
+    client = APIClient()
+
+    if is_authenticated:
+        user = factories.UserFactory()
+        client.force_login(user)
+
+    response = client.get("/api/v1.0/config/")
+    assert response.status_code == HTTP_200_OK
+    content = response.json()
+
+    with open(settings.THEME_CUSTOMIZATION_FILE_PATH, "r", encoding="utf-8") as f:
+        theme_customization = json.load(f)
+
+    assert content["theme_customization"] == theme_customization
