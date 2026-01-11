@@ -76,7 +76,7 @@ create-env-files: \
 	env.d/development/keycloak.local \
 	env.d/development/backend.local \
 	env.d/development/frontend.local \
-	env.d/development/davical.local
+	env.d/development/caldav.local
 .PHONY: create-env-files
 
 env.d/development/%.local:
@@ -98,7 +98,7 @@ bootstrap: \
 	build \
 	create-docker-network \
 	migrate \
-	migrate-davical \
+	migrate-caldav \
 	back-i18n-compile \
 	run
 .PHONY: bootstrap
@@ -114,6 +114,11 @@ build-backend: cache ?=
 build-backend: ## build the backend-dev container
 	@$(COMPOSE) build backend-dev $(cache)
 .PHONY: build-backend
+
+build-caldav: cache ?=
+build-caldav: ## build the caldav container
+	@$(COMPOSE) build caldav $(cache)
+.PHONY: build-caldav
 
 build-frontend: cache ?=
 build-frontend: ## build the frontend container
@@ -172,11 +177,11 @@ run:
 	@$(MAKE) run-backend
 	@$(COMPOSE) up --force-recreate -d frontend-dev
 
-migrate-davical: ## Initialize DAViCal database schema
-	@echo "$(BOLD)Initializing DAViCal database schema...$(RESET)"
-	@$(COMPOSE) run --rm davical run-migrations
-	@echo "$(GREEN)DAViCal initialized$(RESET)"
-.PHONY: migrate-davical
+migrate-caldav: ## Initialize CalDAV server database schema
+	@echo "$(BOLD)Initializing CalDAV server database schema...$(RESET)"
+	@$(COMPOSE) run --rm caldav /usr/local/bin/init-database.sh
+	@echo "$(GREEN)CalDAV server initialized$(RESET)"
+.PHONY: migrate-caldav
 
 status: ## an alias for "docker compose ps"
 	@$(COMPOSE) ps
@@ -224,7 +229,12 @@ test: ## run project tests
 	@$(MAKE) test-back-parallel
 .PHONY: test
 
-test-back: ## run back-end tests
+test-back: ## run back-end tests (rebuilds and recreates containers)
+	@echo "$(BOLD)Rebuilding containers (using Docker cache)...$(RESET)"
+	@$(MAKE) build-caldav
+	@echo "$(BOLD)Recreating containers...$(RESET)"
+	@$(COMPOSE) up -d --force-recreate postgresql caldav
+	@echo "$(BOLD)Running tests...$(RESET)"
 	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
 	bin/pytest $${args:-${1}}
 .PHONY: test-back

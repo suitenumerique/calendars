@@ -1,0 +1,6 @@
+PGHOST=postgresql
+PGPORT=5432
+PGDATABASE=calendars
+PGUSER=pgroot
+PGPASSWORD=pass
+CALENDARS_BASE_URI=/api/v1.0/caldav/

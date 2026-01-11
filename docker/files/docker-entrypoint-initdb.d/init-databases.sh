@@ -37,10 +37,4 @@ EOSQL
 # Create databases for all services
 # The main 'calendar' database is created by default via POSTGRES_DB
 
-# DAViCal database
-create_database "davical" "davical" "davical_pass"
-
-# Keycloak database  
-create_database "keycloak" "keycloak" "keycloak_pass"
-
 echo "All databases initialized successfully!"

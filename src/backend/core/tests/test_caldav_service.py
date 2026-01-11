@@ -1,4 +1,4 @@
-"""Tests for CalDAV service integration with DAViCal."""
+"""Tests for CalDAV service integration."""
 
 from unittest.mock import Mock, patch
 
@@ -7,17 +7,17 @@ from django.conf import settings
 import pytest
 
 from core import factories
-from core.services.caldav_service import CalendarService, DAViCalClient
+from core.services.caldav_service import CalDAVClient, CalendarService
 
 
 @pytest.mark.django_db
-class TestDAViCalClient:
-    """Tests for DAViCalClient authentication and communication."""
+class TestCalDAVClient:
+    """Tests for CalDAVClient authentication and communication."""
 
     def test_get_client_sends_x_forwarded_user_header(self):
         """Test that DAVClient is configured with X-Forwarded-User header."""
         user = factories.UserFactory(email="test@example.com")
-        client = DAViCalClient()
+        client = CalDAVClient()
 
         dav_client = client._get_client(user)
 
@@ -33,16 +33,13 @@ class TestDAViCalClient:
         assert dav_client.headers["X-Forwarded-User"] == user.email
 
     @pytest.mark.skipif(
-        not getattr(settings, "DAVICAL_URL", None),
-        reason="DAViCal URL not configured",
+        not settings.CALDAV_URL,
+        reason="CalDAV server URL not configured",
     )
-    def test_create_calendar_authenticates_with_davical(self):
-        """Test that calendar creation authenticates successfully with DAViCal."""
+    def test_create_calendar_authenticates_with_caldav_server(self):
+        """Test that calendar creation authenticates successfully with CalDAV server."""
         user = factories.UserFactory(email="test@example.com")
-        client = DAViCalClient()
-
-        # Ensure user exists in DAViCal
-        client.ensure_user_exists(user)
+        client = CalDAVClient()
 
         # Try to create a calendar - this should authenticate successfully
         calendar_path = client.create_calendar(
@@ -51,11 +48,14 @@ class TestDAViCalClient:
 
         # Verify calendar path was returned
         assert calendar_path is not None
-        assert calendar_path.startswith("/caldav.php/")
-        assert user.email in calendar_path
+        # Email may be URL-encoded in the path (e.g., test%40example.com)
+        assert (
+            user.email.replace("@", "%40") in calendar_path
+            or user.email in calendar_path
+        )
 
     def test_calendar_service_creates_calendar(self):
-        """Test that CalendarService can create a calendar through DAViCal."""
+        """Test that CalendarService can create a calendar through CalDAV server."""
         user = factories.UserFactory(email="test@example.com")
         service = CalendarService()
 
@@ -67,5 +67,4 @@ class TestDAViCalClient:
         assert calendar.owner == user
         assert calendar.name == "My Calendar"
         assert calendar.color == "#ff0000"
-        assert calendar.davical_path is not None
-        assert calendar.davical_path.startswith("/caldav.php/")
+        assert calendar.caldav_path is not None

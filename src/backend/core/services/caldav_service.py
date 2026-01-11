@@ -1,4 +1,4 @@
-"""Services for CalDAV integration with DAViCal."""
+"""Services for CalDAV integration."""
 
 import logging
 from datetime import date, datetime, timedelta
@@ -8,8 +8,6 @@ from uuid import uuid4
 from django.conf import settings
 from django.utils import timezone
 
-import psycopg
-
 from caldav import DAVClient
 from caldav.lib.error import NotFoundError
 from core.models import Calendar
@@ -17,131 +15,47 @@ from core.models import Calendar
 logger = logging.getLogger(__name__)
 
 
-class DAViCalClient:
+class CalDAVClient:
     """
-    Client for communicating with DAViCal CalDAV server using the caldav library.
+    Client for communicating with CalDAV server using the caldav library.
     """
 
     def __init__(self):
-        self.base_url = getattr(settings, "DAVICAL_URL", "http://davical:80")
+        self.base_url = settings.CALDAV_URL
+        # Set the base URI path as expected by the CalDAV server
+        self.base_uri_path = "/api/v1.0/caldav/"
         self.timeout = 30
 
     def _get_client(self, user) -> DAVClient:
         """
         Get a CalDAV client for the given user.
 
-        DAViCal uses X-Forwarded-User header for authentication. The caldav
-        library requires username/password for Basic Auth, but DAViCal users have
-        password '*' (external auth). We pass the X-Forwarded-User header directly
-        to the DAVClient constructor.
+        The CalDAV server uses Apache authentication backend which reads REMOTE_USER.
+        We pass the X-Forwarded-User header which the server converts to REMOTE_USER.
+        The caldav library requires username/password for Basic Auth, but we use
+        empty password since authentication is handled via headers.
         """
-        # DAViCal base URL - the caldav library will discover the principal
-        caldav_url = f"{self.base_url}/caldav.php/"
+        # CalDAV server base URL - include the base URI path that sabre/dav expects
+        # Remove trailing slash from base_url and base_uri_path to avoid double slashes
+        base_url_clean = self.base_url.rstrip("/")
+        base_uri_clean = self.base_uri_path.rstrip("/")
+        caldav_url = f"{base_url_clean}{base_uri_clean}/"
 
         return DAVClient(
             url=caldav_url,
             username=user.email,
-            password="",  # Empty password - DAViCal uses X-Forwarded-User header
+            password="",  # Empty password - server uses X-Forwarded-User header
             timeout=self.timeout,
             headers={
                 "X-Forwarded-User": user.email,
             },
         )
 
-    def ensure_user_exists(self, user) -> None:
-        """
-        Ensure the user exists in DAViCal's database.
-        Creates the user if they don't exist.
-        """
-        # Connect to shared calendars database (public schema)
-        default_db = settings.DATABASES["default"]
-        db_name = default_db.get("NAME", "calendars")
-
-        # Get password - handle SecretValue objects
-        password = default_db.get("PASSWORD", "pass")
-        if hasattr(password, "value"):
-            password = password.value
-
-        # Connect to calendars database
-        conn = psycopg.connect(
-            host=default_db.get("HOST", "localhost"),
-            port=default_db.get("PORT", 5432),
-            dbname=db_name,
-            user=default_db.get("USER", "pgroot"),
-            password=password,
-        )
-
-        try:
-            with conn.cursor() as cursor:
-                # Check if user exists (in public schema)
-                cursor.execute(
-                    "SELECT user_no FROM usr WHERE lower(username) = lower(%s)",
-                    [user.email],
-                )
-                if cursor.fetchone():
-                    # User already exists
-                    return
-
-                # Create user in DAViCal (public schema)
-                # Use email as username, password '*' means external auth
-                # Get user's full name or use email prefix
-                fullname = (
-                    getattr(user, "full_name", None)
-                    or getattr(user, "get_full_name", lambda: None)()
-                    or user.email.split("@")[0]
-                )
-
-                cursor.execute(
-                    """
-                    INSERT INTO usr (username, email, fullname, active, password)
-                    VALUES (%s, %s, %s, true, '*')
-                    ON CONFLICT (lower(username)) DO NOTHING
-                    RETURNING user_no
-                    """,
-                    [user.email, user.email, fullname],
-                )
-                result = cursor.fetchone()
-                if result:
-                    user_no = result[0]
-                    logger.info(
-                        "Created DAViCal user: %s (user_no: %s)", user.email, user_no
-                    )
-
-                    # Also create a principal record for the user (public schema)
-                    # DAViCal needs both usr and principal records
-                    # Principal type 1 is for users
-                    type_id = 1
-
-                    cursor.execute(
-                        """
-                        INSERT INTO principal (type_id, user_no, displayname)
-                        SELECT %s, %s, %s
-                        WHERE NOT EXISTS (SELECT 1 FROM principal WHERE user_no = %s)
-                        RETURNING principal_id
-                        """,
-                        [type_id, user_no, fullname, user_no],
-                    )
-                    principal_result = cursor.fetchone()
-                    if principal_result:
-                        logger.info(
-                            "Created DAViCal principal: %s (principal_id: %s)",
-                            user.email,
-                            principal_result[0],
-                        )
-                else:
-                    logger.warning("User %s already exists in DAViCal", user.email)
-                conn.commit()
-        finally:
-            conn.close()
-
     def create_calendar(self, user, calendar_name: str, calendar_id: str) -> str:
         """
-        Create a new calendar in DAViCal for the given user.
-        Returns the DAViCal path for the calendar.
+        Create a new calendar in CalDAV server for the given user.
+        Returns the CalDAV server path for the calendar.
         """
-        # Ensure user exists first
-        self.ensure_user_exists(user)
-
         client = self._get_client(user)
         principal = client.principal()
 
@@ -149,21 +63,23 @@ class DAViCalClient:
             # Create calendar using caldav library
             calendar = principal.make_calendar(name=calendar_name)
 
-            # DAViCal calendar path format: /caldav.php/{username}/{calendar_id}/
+            # CalDAV server calendar path format: /calendars/{username}/{calendar_id}/
             # The caldav library returns a URL object, convert to string and extract path
             calendar_url = str(calendar.url)
             # Extract path from full URL
             if calendar_url.startswith(self.base_url):
                 path = calendar_url[len(self.base_url) :]
             else:
-                # Fallback: construct path manually based on DAViCal's structure
-                # DAViCal creates calendars with a specific path structure
-                path = f"/caldav.php/{user.email}/{calendar_id}/"
+                # Fallback: construct path manually based on standard CalDAV structure
+                # CalDAV servers typically create calendars under /calendars/{principal}/
+                path = f"/calendars/{user.email}/{calendar_id}/"
 
-            logger.info("Created calendar in DAViCal: %s at %s", calendar_name, path)
+            logger.info(
+                "Created calendar in CalDAV server: %s at %s", calendar_name, path
+            )
             return path
         except Exception as e:
-            logger.error("Failed to create calendar in DAViCal: %s", str(e))
+            logger.error("Failed to create calendar in CalDAV server: %s", str(e))
             raise
 
     def get_events(
@@ -177,8 +93,6 @@ class DAViCalClient:
         Get events from a calendar within a time range.
         Returns list of event dictionaries with parsed data.
         """
-        # Ensure user exists first
-        self.ensure_user_exists(user)
 
         # Default to current month if no range specified
         if start is None:
@@ -217,16 +131,14 @@ class DAViCalClient:
             logger.warning("Calendar not found at path: %s", calendar_path)
             return []
         except Exception as e:
-            logger.error("Failed to get events from DAViCal: %s", str(e))
+            logger.error("Failed to get events from CalDAV server: %s", str(e))
             raise
 
     def create_event(self, user, calendar_path: str, event_data: dict) -> str:
         """
-        Create a new event in DAViCal.
+        Create a new event in CalDAV server.
         Returns the event UID.
         """
-        # Ensure user exists first
-        self.ensure_user_exists(user)
 
         client = self._get_client(user)
         calendar_url = f"{self.base_url}{calendar_path}"
@@ -260,18 +172,16 @@ class DAViCalClient:
             elif hasattr(event, "vobject_instance"):
                 event_uid = event.vobject_instance.vevent.uid.value
 
-            logger.info("Created event in DAViCal: %s", event_uid)
+            logger.info("Created event in CalDAV server: %s", event_uid)
             return event_uid
         except Exception as e:
-            logger.error("Failed to create event in DAViCal: %s", str(e))
+            logger.error("Failed to create event in CalDAV server: %s", str(e))
             raise
 
     def update_event(
         self, user, calendar_path: str, event_uid: str, event_data: dict
     ) -> None:
-        """Update an existing event in DAViCal."""
-        # Ensure user exists first
-        self.ensure_user_exists(user)
+        """Update an existing event in CalDAV server."""
 
         client = self._get_client(user)
         calendar_url = f"{self.base_url}{calendar_path}"
@@ -320,15 +230,13 @@ class DAViCalClient:
             # Save the updated event
             target_event.save()
 
-            logger.info("Updated event in DAViCal: %s", event_uid)
+            logger.info("Updated event in CalDAV server: %s", event_uid)
         except Exception as e:
-            logger.error("Failed to update event in DAViCal: %s", str(e))
+            logger.error("Failed to update event in CalDAV server: %s", str(e))
             raise
 
     def delete_event(self, user, calendar_path: str, event_uid: str) -> None:
-        """Delete an event from DAViCal."""
-        # Ensure user exists first
-        self.ensure_user_exists(user)
+        """Delete an event from CalDAV server."""
 
         client = self._get_client(user)
         calendar_url = f"{self.base_url}{calendar_path}"
@@ -356,9 +264,9 @@ class DAViCalClient:
             # Delete the event
             target_event.delete()
 
-            logger.info("Deleted event from DAViCal: %s", event_uid)
+            logger.info("Deleted event from CalDAV server: %s", event_uid)
         except Exception as e:
-            logger.error("Failed to delete event from DAViCal: %s", str(e))
+            logger.error("Failed to delete event from CalDAV server: %s", str(e))
             raise
 
     def _parse_event(self, event) -> Optional[dict]:
@@ -404,7 +312,7 @@ class CalendarService:
     """
 
     def __init__(self):
-        self.davical = DAViCalClient()
+        self.caldav = CalDAVClient()
 
     def create_default_calendar(self, user) -> Calendar:
         """
@@ -413,14 +321,14 @@ class CalendarService:
         calendar_id = str(uuid4())
         calendar_name = "Mon calendrier"
 
-        # Create calendar in DAViCal
-        davical_path = self.davical.create_calendar(user, calendar_name, calendar_id)
+        # Create calendar in CalDAV server
+        caldav_path = self.caldav.create_calendar(user, calendar_name, calendar_id)
 
         # Create local Calendar record
         calendar = Calendar.objects.create(
             owner=user,
             name=calendar_name,
-            davical_path=davical_path,
+            caldav_path=caldav_path,
             is_default=True,
             color="#3174ad",
         )
@@ -433,14 +341,14 @@ class CalendarService:
         """
         calendar_id = str(uuid4())
 
-        # Create calendar in DAViCal
-        davical_path = self.davical.create_calendar(user, name, calendar_id)
+        # Create calendar in CalDAV server
+        caldav_path = self.caldav.create_calendar(user, name, calendar_id)
 
         # Create local Calendar record
         calendar = Calendar.objects.create(
             owner=user,
             name=name,
-            davical_path=davical_path,
+            caldav_path=caldav_path,
             is_default=False,
             color=color,
         )
@@ -460,18 +368,18 @@ class CalendarService:
         Get events from a calendar.
         Returns parsed event data.
         """
-        return self.davical.get_events(user, calendar.davical_path, start, end)
+        return self.caldav.get_events(user, calendar.caldav_path, start, end)
 
     def create_event(self, user, calendar: Calendar, event_data: dict) -> str:
         """Create a new event."""
-        return self.davical.create_event(user, calendar.davical_path, event_data)
+        return self.caldav.create_event(user, calendar.caldav_path, event_data)
 
     def update_event(
         self, user, calendar: Calendar, event_uid: str, event_data: dict
     ) -> None:
         """Update an existing event."""
-        self.davical.update_event(user, calendar.davical_path, event_uid, event_data)
+        self.caldav.update_event(user, calendar.caldav_path, event_uid, event_data)
 
     def delete_event(self, user, calendar: Calendar, event_uid: str) -> None:
         """Delete an event."""
-        self.davical.delete_event(user, calendar.davical_path, event_uid)
+        self.caldav.delete_event(user, calendar.caldav_path, event_uid)

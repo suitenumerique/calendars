@@ -1,0 +1,16 @@
+{
+    "name": "calendars/sabredav-server",
+    "description": "sabre/dav CalDAV server for calendars",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "sabre/dav": "^4.5",
+        "ext-pdo": "*",
+        "ext-pdo_pgsql": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Calendars\\SabreDav\\": "src/"
+        }
+    }
+}

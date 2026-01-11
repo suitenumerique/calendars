@@ -1,6 +1,6 @@
 #!/bin/sh
 # Initialize shared calendars database for local development
-# All services (Django, DAViCal, Keycloak) use the same database in public schema
+# All services (Django, Caldav, Keycloak) use the same database in public schema
 # This script runs as POSTGRES_USER on first database initialization
 
 set -e

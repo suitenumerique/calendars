@@ -46,8 +46,8 @@ OIDC_RS_CLIENT_SECRET=ThisIsAnExampleKeyForDevPurposeOnly
 OIDC_RS_AUDIENCE_CLAIM="client_id"
 OIDC_RS_ALLOWED_AUDIENCES=""
 
-# DAViCal CalDAV Server
-DAVICAL_URL=http://davical:80
+# CalDAV Server
+CALDAV_URL=http://caldav:80
 
 # Frontend
 FRONTEND_THEME=default

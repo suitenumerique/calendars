@@ -19,23 +19,32 @@ VIA = [USER, TEAM]
 
 
 @pytest.fixture(autouse=True)
-def truncate_davical_tables(django_db_setup, django_db_blocker):
-    """Fixture to truncate DAViCal tables at the start of each test.
+def truncate_caldav_tables(django_db_setup, django_db_blocker):
+    """Fixture to truncate CalDAV server tables at the start of each test.
 
-    DAViCal tables are created by the DAViCal container migrations, not Django.
+    CalDAV server tables are created by the CalDAV server container migrations, not Django.
     We just truncate them to ensure clean state for each test.
     """
     with django_db_blocker.unblock():
         with connection.cursor() as cursor:
-            # Truncate DAViCal tables if they exist (created by DAViCal container)
+            # Truncate CalDAV server tables if they exist (created by CalDAV server container)
             cursor.execute("""
                 DO $$ 
                 BEGIN
-                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'principal') THEN
-                        TRUNCATE TABLE principal CASCADE;
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'principals') THEN
+                        TRUNCATE TABLE principals CASCADE;
                     END IF;
-                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'usr') THEN
-                        TRUNCATE TABLE usr CASCADE;
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users') THEN
+                        TRUNCATE TABLE users CASCADE;
+                    END IF;
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'calendars') THEN
+                        TRUNCATE TABLE calendars CASCADE;
+                    END IF;
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'calendarinstances') THEN
+                        TRUNCATE TABLE calendarinstances CASCADE;
+                    END IF;
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'calendarobjects') THEN
+                        TRUNCATE TABLE calendarobjects CASCADE;
                     END IF;
                 END $$;
             """)

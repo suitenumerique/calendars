@@ -27,8 +27,8 @@ def provision_default_calendar(sender, instance, created, **kwargs):
     if instance.calendars.filter(is_default=True).exists():
         return
 
-    # Skip calendar creation if DAViCal is not configured
-    if not getattr(settings, "DAVICAL_URL", None):
+    # Skip calendar creation if CalDAV server is not configured
+    if not settings.CALDAV_URL:
         return
 
     try:
@@ -36,7 +36,7 @@ def provision_default_calendar(sender, instance, created, **kwargs):
         service.create_default_calendar(instance)
         logger.info("Created default calendar for user %s", instance.email)
     except Exception as e:
-        # In tests, DAViCal tables don't exist, so fail silently
+        # In tests, CalDAV server may not be available, so fail silently
         # Check if it's a database error that suggests we're in tests
         error_str = str(e).lower()
         if "does not exist" in error_str or "relation" in error_str:

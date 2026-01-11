@@ -148,11 +148,14 @@ def test_api_users_list_throttling_authenticated(settings):
     assert response.status_code == 429
 
 
-def test_api_users_list_query_email():
+def test_api_users_list_query_email(settings):
     """
     Authenticated users should be able to list users and filter by email.
     Only exact email matches are returned (case-insensitive).
     """
+
+    settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["user_list_burst"] = "9999/minute"
+
     user = factories.UserFactory()
 
     client = APIClient()

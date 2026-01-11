@@ -1,7 +1,7 @@
 name: calendars
 
 services:
-  # Shared PostgreSQL for all services (calendar, davical, keycloak)
+  # Shared PostgreSQL for all services (calendar, caldav server, keycloak)
   postgresql:
     image: postgres:15
     ports:
@@ -36,7 +36,7 @@ services:
     environment:
       - PYLINTHOME=/app/.pylint.d
       - DJANGO_CONFIGURATION=Development
-      - DAVICAL_URL=http://davical:80
+      - CALDAV_URL=http://caldav:80
     env_file:
       - env.d/development/backend.defaults
       - env.d/development/backend.local
@@ -59,7 +59,7 @@ services:
         condition: service_started
       celery-dev:
         condition: service_started
-      davical:
+      caldav:
         condition: service_started
 
   celery-dev:
@@ -132,25 +132,26 @@ services:
     volumes:
       - ".:/app"
 
-  # DAViCal CalDAV Server
-  davical:
-    image: fintechstudios/davical:latest
-    platform: linux/amd64
+  # CalDAV Server
+  caldav:
+    build:
+      context: docker/sabredav
     ports:
       - "8922:80"
     env_file:
-      - env.d/development/davical.defaults
-      - env.d/development/davical.local
-    volumes:
-      # Mount our custom config.php if we need to override defaults
-      - ./docker/davical/config.php:/etc/davical/config.php:ro
-      - ./docker/davical/run-migrations:/usr/local/bin/run-migrations:ro
+      - env.d/development/caldav.defaults
+      - env.d/development/caldav.local
     networks:
       - default
       - lasuite
     depends_on:
       postgresql:
         condition: service_healthy
+    command: >
+      sh -c "
+        /usr/local/bin/init-database.sh || true &&
+        apache2-foreground
+      "
 
   # Keycloak - now using shared PostgreSQL
   keycloak:

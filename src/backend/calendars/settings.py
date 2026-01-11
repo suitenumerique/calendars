@@ -67,9 +67,9 @@ class Base(Configuration):
 
     API_VERSION = "v1.0"
 
-    # DAViCal CalDAV server URL
-    DAVICAL_URL = values.Value(
-        "http://davical:80", environ_name="DAVICAL_URL", environ_prefix=None
+    # CalDAV server URL
+    CALDAV_URL = values.Value(
+        "http://caldav:80", environ_name="CALDAV_URL", environ_prefix=None
     )
 
     # Security

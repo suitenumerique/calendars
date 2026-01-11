@@ -324,7 +324,7 @@ class BaseAccess(BaseModel):
 class Calendar(models.Model):
     """
     Represents a calendar owned by a user.
-    This model tracks calendars stored in DAViCal and links them to Django users.
+    This model tracks calendars stored in the CalDAV server and links them to Django users.
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -339,8 +339,8 @@ class Calendar(models.Model):
     is_default = models.BooleanField(default=False)
     is_visible = models.BooleanField(default=True)
 
-    # DAViCal reference - the calendar path in DAViCal
-    davical_path = models.CharField(max_length=512, unique=True)
+    # CalDAV server reference - the calendar path in the CalDAV server
+    caldav_path = models.CharField(max_length=512, unique=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
