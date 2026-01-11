@@ -36,7 +36,6 @@ services:
     environment:
       - PYLINTHOME=/app/.pylint.d
       - DJANGO_CONFIGURATION=Development
-      - CALDAV_URL=http://caldav:80
     env_file:
       - env.d/development/backend.defaults
       - env.d/development/backend.local

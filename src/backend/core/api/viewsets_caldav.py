@@ -1,6 +1,7 @@
 """CalDAV proxy views for forwarding requests to CalDAV server."""
 
 import logging
+import secrets
 
 from django.conf import settings
 from django.http import HttpResponse
@@ -61,7 +62,7 @@ class CalDAVProxyView(View):
             target_url = f"{caldav_url}{base_uri_path}/"
 
         # Prepare headers for CalDAV server
-        # CalDAV server Apache backend reads REMOTE_USER, which we set via X-Forwarded-User
+        # CalDAV server uses custom auth backend that requires X-Forwarded-User header and API key
         headers = {
             "Content-Type": request.content_type or "application/xml",
             "X-Forwarded-User": user_principal,
@@ -70,11 +71,18 @@ class CalDAVProxyView(View):
             "X-Forwarded-Proto": request.scheme,
         }
 
-        # CalDAV server authentication: Apache backend reads REMOTE_USER
-        # We send the username via X-Forwarded-User header
-        # For HTTP Basic Auth, we use the email as username with empty password
-        # CalDAV server converts X-Forwarded-User to REMOTE_USER
-        auth = (user_principal, "")
+        # API key is required for authentication
+        outbound_api_key = settings.CALDAV_OUTBOUND_API_KEY
+        if not outbound_api_key:
+            logger.error("CALDAV_OUTBOUND_API_KEY is not configured")
+            return HttpResponse(
+                status=500, content="CalDAV authentication not configured"
+            )
+
+        headers["X-Api-Key"] = outbound_api_key
+
+        # No Basic Auth - our custom backend uses X-Forwarded-User header and API key
+        auth = None
 
         # Copy relevant headers from the original request
         if "HTTP_DEPTH" in request.META:
@@ -91,8 +99,7 @@ class CalDAVProxyView(View):
 
         try:
             # Forward the request to CalDAV server
-            # Use HTTP Basic Auth with username (email) and empty password
-            # CalDAV server will authenticate based on X-Forwarded-User header (converted to REMOTE_USER)
+            # CalDAV server authenticates via X-Forwarded-User header and API key
             logger.debug(
                 "Forwarding %s request to CalDAV server: %s (user: %s)",
                 request.method,
@@ -169,7 +176,56 @@ class CalDAVDiscoveryView(View):
         # Clients need to discover the CalDAV URL before authenticating
 
         # Return redirect to CalDAV server base URL
-        caldav_base_url = f"/api/v1.0/caldav/"
+        caldav_base_url = f"/api/{settings.API_VERSION}/caldav/"
         response = HttpResponse(status=301)
         response["Location"] = caldav_base_url
         return response
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class CalDAVSchedulingCallbackView(View):
+    """
+    Endpoint for receiving CalDAV scheduling messages (iMip) from sabre/dav.
+
+    This endpoint receives scheduling messages (invites, responses, cancellations)
+    from the CalDAV server and processes them. Authentication is via API key.
+
+    See: https://sabre.io/dav/scheduling/
+    """
+
+    def dispatch(self, request, *args, **kwargs):
+        """Handle scheduling messages from CalDAV server."""
+        # Authenticate via API key
+        api_key = request.headers.get("X-Api-Key", "").strip()
+        expected_key = settings.CALDAV_INBOUND_API_KEY
+
+        if not expected_key or not secrets.compare_digest(api_key, expected_key):
+            logger.warning(
+                "CalDAV scheduling callback request with invalid API key. "
+                "Expected: %s..., Got: %s...",
+                expected_key[:10] if expected_key else "None",
+                api_key[:10] if api_key else "None",
+            )
+            return HttpResponse(status=401)
+
+        # Extract headers
+        sender = request.headers.get("X-CalDAV-Sender", "")
+        recipient = request.headers.get("X-CalDAV-Recipient", "")
+        method = request.headers.get("X-CalDAV-Method", "")
+
+        # For now, just log the scheduling message
+        logger.info(
+            "Received CalDAV scheduling callback: %s -> %s (method: %s)",
+            sender,
+            recipient,
+            method,
+        )
+
+        # Log message body (first 500 chars)
+        if request.body:
+            body_preview = request.body[:500].decode("utf-8", errors="ignore")
+            logger.info("Scheduling message body (first 500 chars): %s", body_preview)
+
+        # TODO: Process the scheduling message (send email, update calendar, etc.)
+        # For now, just return success
+        return HttpResponse(status=200, content_type="text/plain")

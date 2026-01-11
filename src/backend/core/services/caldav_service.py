@@ -30,10 +30,8 @@ class CalDAVClient:
         """
         Get a CalDAV client for the given user.
 
-        The CalDAV server uses Apache authentication backend which reads REMOTE_USER.
-        We pass the X-Forwarded-User header which the server converts to REMOTE_USER.
-        The caldav library requires username/password for Basic Auth, but we use
-        empty password since authentication is handled via headers.
+        The CalDAV server requires API key authentication via Authorization header
+        and X-Forwarded-User header for user identification.
         """
         # CalDAV server base URL - include the base URI path that sabre/dav expects
         # Remove trailing slash from base_url and base_uri_path to avoid double slashes
@@ -41,14 +39,26 @@ class CalDAVClient:
         base_uri_clean = self.base_uri_path.rstrip("/")
         caldav_url = f"{base_url_clean}{base_uri_clean}/"
 
+        # Prepare headers
+        # API key is required for authentication
+        headers = {
+            "X-Forwarded-User": user.email,
+        }
+
+        outbound_api_key = settings.CALDAV_OUTBOUND_API_KEY
+        if not outbound_api_key:
+            raise ValueError("CALDAV_OUTBOUND_API_KEY is not configured")
+
+        headers["X-Api-Key"] = outbound_api_key
+
+        # No username/password needed - authentication is via API key and X-Forwarded-User header
+        # Pass None to prevent the caldav library from trying Basic auth
         return DAVClient(
             url=caldav_url,
-            username=user.email,
-            password="",  # Empty password - server uses X-Forwarded-User header
+            username=None,
+            password=None,
             timeout=self.timeout,
-            headers={
-                "X-Forwarded-User": user.email,
-            },
+            headers=headers,
         )
 
     def create_calendar(self, user, calendar_name: str, calendar_id: str) -> str:

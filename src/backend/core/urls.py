@@ -7,7 +7,7 @@ from lasuite.oidc_login.urls import urlpatterns as oidc_urls
 from rest_framework.routers import DefaultRouter
 
 from core.api import viewsets
-from core.api.viewsets_caldav import CalDAVProxyView
+from core.api.viewsets_caldav import CalDAVProxyView, CalDAVSchedulingCallbackView
 from core.external_api import viewsets as external_api_viewsets
 
 # - Main endpoints
@@ -30,6 +30,12 @@ urlpatterns = [
                     r"^caldav/(?P<path>.+)$",
                     CalDAVProxyView.as_view(),
                     name="caldav-proxy",
+                ),
+                # CalDAV scheduling callback endpoint (separate from caldav proxy)
+                path(
+                    "caldav-scheduling-callback/",
+                    CalDAVSchedulingCallbackView.as_view(),
+                    name="caldav-scheduling-callback",
                 ),
             ]
         ),

@@ -48,6 +48,8 @@ OIDC_RS_ALLOWED_AUDIENCES=""
 
 # CalDAV Server
 CALDAV_URL=http://caldav:80
+CALDAV_OUTBOUND_API_KEY=changeme-outbound-in-production
+CALDAV_INBOUND_API_KEY=changeme-inbound-in-production
 
 # Frontend
 FRONTEND_THEME=default

@@ -22,9 +22,9 @@ class TestCalDAVClient:
         dav_client = client._get_client(user)
 
         # Verify the client is configured correctly
-        assert dav_client.username == user.email
-        # Password should be empty (None or empty string) for external auth
-        assert not dav_client.password or dav_client.password == ""
+        # Username and password should be None to prevent Basic auth
+        assert dav_client.username is None
+        assert dav_client.password is None
 
         # Verify the X-Forwarded-User header is set
         # The caldav library stores headers as a CaseInsensitiveDict

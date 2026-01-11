@@ -1,7 +1,7 @@
 <?php
 /**
  * sabre/dav CalDAV Server
- * Configured to use PostgreSQL backend and Apache authentication
+ * Configured to use PostgreSQL backend and custom header-based authentication
  */
 
 use Sabre\DAV\Auth;
@@ -10,15 +10,11 @@ use Sabre\CalDAV;
 use Sabre\CardDAV;
 use Sabre\DAV;
 use Calendars\SabreDav\AutoCreatePrincipalBackend;
+use Calendars\SabreDav\HttpCallbackIMipPlugin;
+use Calendars\SabreDav\ApiKeyAuthBackend;
 
 // Composer autoloader
 require_once __DIR__ . '/vendor/autoload.php';
-
-// Set REMOTE_USER from X-Forwarded-User header (set by Django proxy)
-// This allows sabre/dav Apache auth backend to work with proxied requests
-if (isset($_SERVER['HTTP_X_FORWARDED_USER']) && !isset($_SERVER['REMOTE_USER'])) {
-    $_SERVER['REMOTE_USER'] = $_SERVER['HTTP_X_FORWARDED_USER'];
-}
 
 // Get base URI from environment variable (set by compose.yaml)
 // This ensures sabre/dav generates URLs with the correct proxy path
@@ -42,8 +38,14 @@ $pdo = new PDO(
     ]
 );
 
-// Create backend
-$authBackend = new Auth\Backend\Apache();
+// Create custom authentication backend
+// Requires API key authentication and X-Forwarded-User header
+$apiKey = getenv('CALDAV_OUTBOUND_API_KEY');
+if (!$apiKey) {
+    error_log("[sabre/dav] CALDAV_OUTBOUND_API_KEY environment variable is required");
+    exit(1);
+}
+$authBackend = new ApiKeyAuthBackend($apiKey);
 
 // Create authentication plugin
 $authPlugin = new Auth\Plugin($authBackend);
@@ -74,6 +76,26 @@ $server->addPlugin(new CalDAV\Plugin());
 $server->addPlugin(new CardDAV\Plugin());
 $server->addPlugin(new DAVACL\Plugin());
 $server->addPlugin(new DAV\Browser\Plugin());
+
+// Add custom IMipPlugin that forwards scheduling messages via HTTP callback
+// This MUST be added BEFORE the Schedule\Plugin so that Schedule\Plugin finds it
+// The callback URL must be provided per-request via X-CalDAV-Callback-URL header
+$callbackApiKey = getenv('CALDAV_INBOUND_API_KEY');
+if (!$callbackApiKey) {
+    error_log("[sabre/dav] CALDAV_INBOUND_API_KEY environment variable is required for scheduling callback");
+    exit(1);
+}
+$imipPlugin = new HttpCallbackIMipPlugin($callbackApiKey);
+$server->addPlugin($imipPlugin);
+
+// Add CalDAV scheduling support
+// See https://sabre.io/dav/scheduling/
+// The Schedule\Plugin will automatically find and use the IMipPlugin we just added
+// It looks for plugins that implement CalDAV\Schedule\IMipPlugin interface
+$schedulePlugin = new CalDAV\Schedule\Plugin();
+$server->addPlugin($schedulePlugin);
+
+// error_log("[sabre/dav] Starting server");
 
 // Start server
 $server->start();

@@ -44,6 +44,15 @@ RUN a2enmod rewrite headers \
     && a2ensite sabredav \
     && chmod +x /usr/local/bin/init-database.sh
 
+# Configure PHP error logging to stderr for Docker logs
+# This ensures all error_log() calls and PHP errors are visible in docker logs
+# display_errors = Off prevents errors from appearing in HTTP responses (security/UX)
+# but errors are still logged to stderr (Docker logs) via log_errors = On
+RUN echo "log_errors = On" >> /usr/local/etc/php/conf.d/error-logging.ini \
+    && echo "error_log = /proc/self/fd/2" >> /usr/local/etc/php/conf.d/error-logging.ini \
+    && echo "display_errors = Off" >> /usr/local/etc/php/conf.d/error-logging.ini \
+    && echo "display_startup_errors = Off" >> /usr/local/etc/php/conf.d/error-logging.ini
+
 # Set permissions
 RUN chown -R www-data:www-data /var/www/sabredav \
     && chmod -R 755 /var/www/sabredav

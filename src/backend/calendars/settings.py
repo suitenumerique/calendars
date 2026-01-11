@@ -72,6 +72,16 @@ class Base(Configuration):
         "http://caldav:80", environ_name="CALDAV_URL", environ_prefix=None
     )
 
+    # CalDAV API keys for bidirectional authentication
+    # INBOUND: API key for authenticating requests FROM CalDAV server TO Django
+    CALDAV_INBOUND_API_KEY = values.Value(
+        None, environ_name="CALDAV_INBOUND_API_KEY", environ_prefix=None
+    )
+    # OUTBOUND: API key for authenticating requests FROM Django TO CalDAV server
+    CALDAV_OUTBOUND_API_KEY = values.Value(
+        None, environ_name="CALDAV_OUTBOUND_API_KEY", environ_prefix=None
+    )
+
     # Security
     ALLOWED_HOSTS = values.ListValue([])
     SECRET_KEY = SecretFileValue(None)
