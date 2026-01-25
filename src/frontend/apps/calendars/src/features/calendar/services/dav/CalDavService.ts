@@ -930,10 +930,13 @@ export class CalDavService {
 
     return {
       success: true,
-      responses: [{
-        recipient: event.organizer?.email || '',
-        status: 'delivered' as const,
-      }],
+      data: {
+        success: true,
+        responses: [{
+          recipient: event.organizer?.email || '',
+          status: 'delivered' as const,
+        }],
+      },
     }
   }
 
