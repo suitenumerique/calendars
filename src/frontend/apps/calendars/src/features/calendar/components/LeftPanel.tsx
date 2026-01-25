@@ -23,8 +23,7 @@ export const LeftPanel = ({
   onDateSelect,
   onCreateEvent,
 }: LeftPanelProps) => {
-  const { davCalendars } = useCalendarContext();
-  console.log("davCalendars LeftPanel", davCalendars);
+  useCalendarContext();
   return (
     <div className="calendar-left-panel">
       <div className="calendar-left-panel__create">

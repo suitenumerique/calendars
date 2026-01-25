@@ -17,9 +17,9 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
-import { fr } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import { useCalendarContext } from "../contexts";
+import { useCalendarLocale } from "../hooks/useCalendarLocale";
 
 interface MiniCalendarProps {
   selectedDate: Date;
@@ -41,6 +41,7 @@ export const MiniCalendar = ({
 }: MiniCalendarProps) => {
   const { t } = useTranslation();
   const { goToDate, currentDate } = useCalendarContext();
+  const { dateFnsLocale, firstDayOfWeek } = useCalendarLocale();
   const [viewDate, setViewDate] = useState(selectedDate);
 
   // Sync viewDate when main calendar navigates (via prev/next buttons)
@@ -57,16 +58,33 @@ export const MiniCalendar = ({
   const days = useMemo(() => {
     const monthStart = startOfMonth(viewDate);
     const monthEnd = endOfMonth(viewDate);
-    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+    const weekStartsOn = firstDayOfWeek as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn });
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn });
 
     return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-  }, [viewDate]);
+  }, [viewDate, firstDayOfWeek]);
 
   // Group days by weeks
   const weeks = useMemo(() => chunkArray(days, 7), [days]);
 
-  const weekDays = ["lu", "ma", "me", "je", "ve", "sa", "di"];
+  // Generate weekday labels based on locale and first day of week
+  const weekDays = useMemo(() => {
+    const days = [
+      t('calendar.recurrence.weekdays.mo'),
+      t('calendar.recurrence.weekdays.tu'),
+      t('calendar.recurrence.weekdays.we'),
+      t('calendar.recurrence.weekdays.th'),
+      t('calendar.recurrence.weekdays.fr'),
+      t('calendar.recurrence.weekdays.sa'),
+      t('calendar.recurrence.weekdays.su'),
+    ];
+    // Rotate array based on firstDayOfWeek (0 = Sunday, 1 = Monday)
+    if (firstDayOfWeek === 0) {
+      return [days[6], ...days.slice(0, 6)];
+    }
+    return days;
+  }, [t, firstDayOfWeek]);
 
   const handlePrevMonth = () => {
     setViewDate(subMonths(viewDate, 1));
@@ -85,7 +103,7 @@ export const MiniCalendar = ({
     <div className="mini-calendar">
       <div className="mini-calendar__header">
         <span className="mini-calendar__month-title">
-          {format(viewDate, "MMMM yyyy", { locale: fr })}
+          {format(viewDate, "MMMM yyyy", { locale: dateFnsLocale })}
         </span>
         <div className="mini-calendar__nav">
           <button
@@ -121,7 +139,8 @@ export const MiniCalendar = ({
         {/* Calendar body with weeks */}
         <div className="mini-calendar__body">
           {weeks.map((week, weekIndex) => {
-            const weekNumber = getWeek(week[0], { weekStartsOn: 1 });
+            const weekStartsOn = firstDayOfWeek as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+            const weekNumber = getWeek(week[0], { weekStartsOn });
             return (
               <div key={weekIndex} className="mini-calendar__week">
                 <div className="mini-calendar__week-number">{weekNumber}</div>

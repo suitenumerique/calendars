@@ -241,19 +241,23 @@ export const useSchedulerInit = ({
     calendarRef.current = ec as unknown as CalendarApi;
 
     return () => {
+      // @event-calendar/core is Svelte-based and uses $destroy
+      // Always call $destroy before clearing the container to avoid memory leaks
       if (calendarRef.current) {
-        // @event-calendar/core is Svelte-based and uses $destroy
         const calendar = calendarRef.current as CalendarApi;
         if (typeof calendar.$destroy === 'function') {
           calendar.$destroy();
         }
         calendarRef.current = null;
       }
-      // Also clear the container
+      // Clear the container only after calendar is destroyed
       if (containerRef.current) {
         containerRef.current.innerHTML = '';
       }
     };
+    // Note: refs (containerRef, calendarRef, visibleCalendarUrlsRef, davCalendarsRef) are excluded
+    // from dependencies as they are stable references that don't trigger re-renders
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isConnected,
     calendarUrl,
@@ -270,15 +274,12 @@ export const useSchedulerInit = ({
     setCurrentDate,
     t,
     i18n.language,
-    containerRef,
-    calendarRef,
-    visibleCalendarUrlsRef,
-    davCalendarsRef,
   ]);
 };
 
 /**
  * Hook to check scheduling capabilities on mount.
+ * Silently verifies CalDAV scheduling support without debug output.
  */
 export const useSchedulingCapabilitiesCheck = (
   isConnected: boolean,
@@ -291,68 +292,8 @@ export const useSchedulingCapabilitiesCheck = (
 
     hasCheckedRef.current = true;
 
-    const checkSchedulingCapabilities = async () => {
-      const result = await caldavService.getSchedulingCapabilities();
-
-      if (result.success && result.data) {
-        console.group('📅 CalDAV Scheduling Capabilities');
-        console.log(
-          'Scheduling Support:',
-          result.data.hasSchedulingSupport ? '✅ Enabled' : '❌ Disabled'
-        );
-        console.log(
-          'Schedule Outbox URL:',
-          result.data.scheduleOutboxUrl || '❌ Not found'
-        );
-        console.log(
-          'Schedule Inbox URL:',
-          result.data.scheduleInboxUrl || '❌ Not found'
-        );
-        console.log(
-          'Calendar User Addresses:',
-          result.data.calendarUserAddressSet.length > 0
-            ? result.data.calendarUserAddressSet
-            : '❌ None'
-        );
-        console.log('');
-        console.log('Raw server response:', result.data.rawResponse);
-
-        if (result.data.hasSchedulingSupport) {
-          console.log('');
-          console.log('✉️  Email Notifications Status:');
-          console.log('   The server supports CalDAV scheduling (RFC 6638).');
-          console.log(
-            '   However, this does NOT guarantee email notifications will be sent.'
-          );
-          console.log(
-            '   Email sending requires the IMip plugin to be configured on the server.'
-          );
-          console.log(
-            '   Contact your server administrator to verify IMip plugin configuration.'
-          );
-        } else {
-          console.warn('');
-          console.warn(
-            '⚠️  CalDAV scheduling properties not found on this server.'
-          );
-          console.warn('   This could mean:');
-          console.warn(
-            '   1. The scheduling plugin is not enabled in Sabre/DAV configuration'
-          );
-          console.warn(
-            '   2. The properties are located elsewhere (check raw response above)'
-          );
-          console.warn(
-            '   3. The server does not support CalDAV scheduling (RFC 6638)'
-          );
-        }
-
-        console.groupEnd();
-      } else {
-        console.error('Failed to check scheduling capabilities:', result.error);
-      }
-    };
-
-    checkSchedulingCapabilities();
+    // Silently check scheduling capabilities
+    // Debug logging removed for production
+    caldavService.getSchedulingCapabilities();
   }, [isConnected, caldavService]);
 };

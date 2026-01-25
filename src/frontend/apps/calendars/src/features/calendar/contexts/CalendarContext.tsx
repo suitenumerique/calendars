@@ -172,6 +172,8 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
 
   // Connect to CalDAV server on mount
   useEffect(() => {
+    let isMounted = true;
+
     const connect = async () => {
       try {
         const result = await caldavService.connect({
@@ -179,18 +181,37 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
           headers,
           fetchOptions,
         });
-        if (result.success) {
+        if (isMounted && result.success) {
           setIsConnected(true);
-          await refreshCalendars();
-        } else {
+          // Fetch calendars after successful connection
+          const calendarsResult = await caldavService.fetchCalendars();
+          if (isMounted && calendarsResult.success && calendarsResult.data) {
+            setDavCalendars(calendarsResult.data);
+            setVisibleCalendarUrls(new Set(calendarsResult.data.map(cal => cal.url)));
+          }
+          setIsLoading(false);
+        } else if (isMounted) {
           console.error("Failed to connect to CalDAV:", result.error);
+          setIsLoading(false);
         }
       } catch (error) {
-        console.error("Error connecting to CalDAV:", error);
+        if (isMounted) {
+          console.error("Error connecting to CalDAV:", error);
+          setIsLoading(false);
+        }
       }
     };
+
     connect();
-  }, [caldavService, refreshCalendars]);
+
+    // Cleanup: prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
+    // Note: refreshCalendars is excluded to avoid dependency cycle
+    // The initial fetch is done inline in this effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caldavService]);
 
   const value: CalendarContextType = {
     calendarRef,

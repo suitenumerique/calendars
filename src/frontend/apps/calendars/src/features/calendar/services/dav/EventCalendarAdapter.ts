@@ -327,7 +327,6 @@ export class EventCalendarAdapter {
       if (isAllDay && typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
         const [year, month, day] = dateValue.split('-').map(Number)
         const result = new Date(Date.UTC(year, month - 1, day))
-        console.log('[EventCalendarAdapter] Parsing all-day date:', dateValue, '→', result)
         return result
       }
 
@@ -335,14 +334,11 @@ export class EventCalendarAdapter {
     }
 
     const isAllDay = ecEvent.allDay ?? false
-    console.log('[EventCalendarAdapter] toIcsEvent - allDay:', isAllDay, 'start:', ecEvent.start, 'end:', ecEvent.end)
 
     const startDate = parseDate(ecEvent.start, isAllDay)
     const endDate = ecEvent.end
       ? parseDate(ecEvent.end, isAllDay)
       : startDate
-
-    console.log('[EventCalendarAdapter] Parsed dates - start:', startDate, 'end:', endDate)
 
     // Determine timezone
     const timezone = extProps.timezone ?? opts.defaultTimezone

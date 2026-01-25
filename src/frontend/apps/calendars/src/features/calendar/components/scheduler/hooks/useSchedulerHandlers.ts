@@ -68,18 +68,10 @@ export const useSchedulerHandlers = ({
         return;
       }
 
-      console.log('[EventDrop] Event:', info.event);
-      console.log('[EventDrop] allDay:', info.event.allDay);
-      console.log('[EventDrop] start:', info.event.start);
-      console.log('[EventDrop] end:', info.event.end);
-
       try {
         const icsEvent = adapter.toIcsEvent(info.event as EventCalendarEvent, {
           defaultTimezone: extProps.timezone || BROWSER_TIMEZONE,
         });
-
-        console.log('[EventDrop] IcsEvent start:', icsEvent.start);
-        console.log('[EventDrop] IcsEvent end:', icsEvent.end);
 
         const result = await caldavService.updateEvent({
           eventUrl: extProps.eventUrl,

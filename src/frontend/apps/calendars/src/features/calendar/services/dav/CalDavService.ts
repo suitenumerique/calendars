@@ -864,8 +864,6 @@ export class CalDavService {
         ? outboxUrl
         : `${this._account!.serverUrl}${outboxUrl.startsWith('/') ? outboxUrl.slice(1) : outboxUrl}`
 
-      console.log('[CalDAVService] Sending scheduling request to:', fullOutboxUrl)
-
       // Use fetch directly to avoid davRequest URL construction issues in dev mode
       const response = await fetch(fullOutboxUrl, {
         method: 'POST',
@@ -1208,8 +1206,6 @@ END:VCALENDAR`
     }
 
     return withErrorHandling(async () => {
-      console.log('[Scheduling Debug] Requesting from principal URL:', this._account!.principalUrl)
-
       const response = await propfind({
         url: this._account!.principalUrl!,
         props: {
@@ -1222,10 +1218,7 @@ END:VCALENDAR`
         depth: '0',
       })
 
-      console.log('[Scheduling Debug] Full PROPFIND response:', JSON.stringify(response, null, 2))
-
       const props = response[0]?.props ?? {}
-      console.log('[Scheduling Debug] Extracted props:', props)
 
       // Note: tsdav converts XML property names to camelCase
       // schedule-outbox-URL becomes scheduleOutboxURL
