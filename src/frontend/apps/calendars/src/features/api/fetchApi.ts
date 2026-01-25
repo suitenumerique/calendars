@@ -17,23 +17,11 @@ function getCSRFToken() {
 export const SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL =
   "redirect_after_login_url";
 
-const redirect = (url: string, saveRedirectAfterLoginUrl = true) => {
-  if (saveRedirectAfterLoginUrl) {
-    sessionStorage.setItem(
-      SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL,
-      window.location.href
-    );
-  }
-  window.location.href = url;
-};
-
-export interface fetchAPIOptions {
-}
+export type fetchAPIOptions = Record<string, never>;
 
 export const fetchAPI = async (
   input: string,
   init?: RequestInit & { params?: Record<string, string | number> },
-  options?: fetchAPIOptions
 ) => {
   const apiUrl = new URL(`${baseApiUrl("1.0")}${input}`);
   if (init?.params) {
