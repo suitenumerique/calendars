@@ -5,19 +5,18 @@ WORKDIR /home/frontend/
 COPY ./package.json ./package.json
 COPY ./yarn.lock ./yarn.lock
 COPY ./apps/calendars/package.json ./apps/calendars/package.json
-COPY ./packages/open-calendar/package.json ./packages/open-calendar/package.json
+
 
 RUN yarn install --frozen-lockfile
 
 COPY .dockerignore ./.dockerignore
 # COPY ./.prettierrc.js ./.prettierrc.js
 #COPY ./packages/eslint-config-calendars ./packages/eslint-config-calendars
-COPY ./packages/open-calendar ./packages/open-calendar
+
 COPY ./apps/calendars ./apps/calendars
 
 # Build open-calendar package
-WORKDIR /home/frontend/packages/open-calendar
-RUN yarn build
+
 WORKDIR /home/frontend
 
 ### ---- Front-end builder image ----
@@ -34,7 +33,7 @@ EXPOSE 3000
 RUN yarn build-theme
 
 # Build open-calendar package if dist doesn't exist, then start dev server
-CMD ["/bin/sh", "-c", "cd /home/frontend/packages/open-calendar && ([ -d dist ] || yarn build) && cd /home/frontend/apps/calendars && yarn dev"]
+CMD ["/bin/sh", "-c", "cd /home/frontend/apps/calendars && yarn dev"]
 
 # Tilt will rebuild calendars target so, we dissociate calendars and calendars-builder 
 # to avoid rebuilding the app at every changes.
@@ -61,8 +60,8 @@ ARG DOCKER_USER
 USER ${DOCKER_USER}
 
 COPY --from=calendars-builder \
-    /home/frontend/apps/calendars/out \
-    /usr/share/nginx/html
+  /home/frontend/apps/calendars/out \
+  /usr/share/nginx/html
 
 COPY ./apps/calendars/conf/default.conf /etc/nginx/conf.d
 COPY ./docker/files/usr/local/bin/entrypoint /usr/local/bin/entrypoint
