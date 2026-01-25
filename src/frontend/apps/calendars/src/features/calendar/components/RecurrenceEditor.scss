@@ -1,4 +1,10 @@
 .recurrence-editor {
+  &__label {
+    font-weight: 500;
+    color: #333;
+    font-size: 0.9375rem;
+  }
+
   &__weekday-button {
     width: 32px;
     height: 32px;
@@ -23,6 +29,20 @@
       }
     }
   }
+
+  &__warning {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    margin-top: 0.5rem;
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    color: #856404;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
 }
 
 // Utility classes for layout
@@ -36,6 +56,10 @@
 
   &--align-center {
     align-items: center;
+  }
+
+  &--flex-wrap {
+    flex-wrap: wrap;
   }
 
   &--gap-1rem {
