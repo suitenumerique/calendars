@@ -4,20 +4,17 @@
 @use "./../features/layouts/components/global/GlobalLayout.scss";
 @use "./../features/feedback/Feedback.scss";
 @use "./../features/layouts/components/header/index.scss";
-@use "./../features/ui/components/breadcrumbs";
 @use "./../features/ui/components/toaster";
 @use "./../features/ui/components/generic-disclaimer/GenericDisclaimer.scss";
-@use "./../features/ui/components/info/InfoRow.scss";
-@use "./../features/ui/components/responsive";
 @use "./../features/ui/components/spinner/SpinnerPage.scss";
-@use "./../features/ui/components/infinite-scroll/InfiniteScroll.scss";
 @use "./../features/layouts/components/left-panel/LeftPanelMobile.scss";
 @use "./../features/calendar/components/MiniCalendar.scss";
 @use "./../features/calendar/components/CalendarList.scss";
 @use "./../features/calendar/components/LeftPanel.scss";
-@use "./../features/calendar/components/CalendarView.scss";
 @use "./../features/calendar/components/EventModal.scss";
 @use "./../features/calendar/components/RecurrenceEditor.scss";
+@use "./../features/calendar/components/AttendeesInput.scss";
+@use "./../features/calendar/components/scheduler/Scheduler.scss";
 @use "./../pages/index.scss" as *;
 @use "./../pages/calendar.scss" as *;
 html,
@@ -77,7 +74,5 @@ body {
 
 .c__datagrid--empty,
 .c__datagrid thead {
-  transition:
-    background-color 0.3s ease,
-    box-shadow 0.3s ease;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }

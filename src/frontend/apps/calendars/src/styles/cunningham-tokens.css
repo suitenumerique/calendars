@@ -663,7 +663,7 @@
 	--c--components--gaufre--widgetpath: 'https://static.suite.anct.gouv.fr/widgets/lagaufre.js';
 	--c--components--gaufre--apiurl: 'https://lasuite.numerique.gouv.fr/api/services';
 	--c--components--favicon--src: '/assets/favicon.png';
-	--c--components--logo--src: url('/assets/logo_alpha.svg');
+	--c--components--logo--src: url('/assets/logo_beta.svg');
 	--c--components--logo-icon--src: url('/assets/logo-icon_beta.svg');
 }
 .cunningham-theme--dark{

@@ -2,53 +2,42 @@
  * Calendar page - Main calendar view with sidebar.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
 import Head from "next/head";
 import { useTranslation } from "next-i18next";
 
 import { login, useAuth } from "@/features/auth/Auth";
-import { CalendarView, LeftPanel } from "@/features/calendar/components";
-import { useCreateCalendarModal } from "@/features/calendar/components/CreateCalendarModal";
-import { useCreateEventModal } from "@/features/calendar/hooks/useCreateEventModal";
+import { LeftPanel } from "@/features/calendar/components";
 import { useCalendars } from "@/features/calendar/hooks/useCalendars";
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";
 import { HeaderRight } from "@/features/layouts/components/header/Header";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
+import { Scheduler } from "@/features/calendar/components/scheduler/Scheduler";
+import { CalendarContextProvider, useCalendarContext } from "@/features/calendar/contexts";
 
 export default function CalendarPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
 
-  // Calendar state
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  // Use selectedDate from context (the specific day user has clicked/selected)
+  // Note: currentDate (for view sync) is used directly by MiniCalendar
+  const { selectedDate, setSelectedDate } = useCalendarContext();
 
   // Fetch calendars for the sidebar
-  const { data: calendars = [], isLoading: isLoadingCalendars } = useCalendars();
+  const { data: calendars = [] } = useCalendars();
 
-  // Create calendar modal
-  const createCalendarModal = useCreateCalendarModal();
-
-  // Create event modal
-  const createEventModal = useCreateEventModal({ 
-    calendars: calendars || [], 
-    selectedDate 
-  });
 
   // Handlers
   const handleDateSelect = useCallback((date: Date) => {
     setSelectedDate(date);
-  }, []);
+  }, [setSelectedDate]);
 
   const handleCreateEvent = useCallback(() => {
-    createEventModal.open();
-  }, [createEventModal]);
-
-  const handleCreateCalendar = useCallback(() => {
-    createCalendarModal.open();
-  }, [createCalendarModal]);
+    console.log("handleCreateEvent");
+  }, []);
 
   // Redirect to login if not authenticated
   if (!user) {
@@ -67,26 +56,24 @@ export default function CalendarPage() {
         <link rel="icon" href="/favicon.png" />
       </Head>
 
-      <div className="calendar-page">
-        <div className="calendar-page__sidebar">
-          <LeftPanel
-            calendars={calendars}
-            selectedDate={selectedDate}
-            onDateSelect={handleDateSelect}
-            onCreateEvent={handleCreateEvent}
-            onCreateCalendar={handleCreateCalendar}
-          />
+      
+        <div className="calendar-page">
+          <div className="calendar-page__sidebar">
+            <LeftPanel
+              calendars={calendars}
+              selectedDate={selectedDate}
+              onDateSelect={handleDateSelect}
+              onCreateEvent={handleCreateEvent}
+            />
+          </div>
+          <div className="calendar-page__main">
+            <Scheduler />
+     
+          </div>
         </div>
-        <div className="calendar-page__main">
-          <CalendarView
-            selectedDate={selectedDate}
-            onSelectDate={handleDateSelect}
-          />
-        </div>
-      </div>
+      
 
-      {createCalendarModal.Modal}
-      {createEventModal.Modal}
+      
       <Toaster />
     </>
   );
@@ -94,6 +81,7 @@ export default function CalendarPage() {
 
 CalendarPage.getLayout = function getLayout(page: React.ReactElement) {
   return (
+    <CalendarContextProvider>
     <div className="calendars__calendar">
       <GlobalLayout>
         <MainLayout
@@ -111,5 +99,6 @@ CalendarPage.getLayout = function getLayout(page: React.ReactElement) {
         </MainLayout>
       </GlobalLayout>
     </div>
+    </CalendarContextProvider>
   );
 };
