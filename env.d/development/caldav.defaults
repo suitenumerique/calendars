@@ -6,3 +6,6 @@ PGPASSWORD=pass
 CALENDARS_BASE_URI=/api/v1.0/caldav/
 CALDAV_INBOUND_API_KEY=changeme-inbound-in-production
 CALDAV_OUTBOUND_API_KEY=changeme-outbound-in-production
+# Default callback URL for sending scheduling notifications (emails)
+# Used when clients (like Apple Calendar) don't provide X-CalDAV-Callback-URL header
+CALDAV_CALLBACK_URL=http://backend-dev:8000/api/v1.0/caldav-scheduling-callback

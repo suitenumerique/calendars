@@ -7,7 +7,7 @@ services:
     ports:
       - "8912:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 1s
       timeout: 2s
       retries: 300
@@ -47,7 +47,7 @@ services:
       - /app/.venv
     networks:
       - lasuite
-      - default      
+      - default
     depends_on:
       postgresql:
         condition: service_healthy
@@ -67,7 +67,7 @@ services:
     networks:
       - default
       - lasuite
-    command: ["celery", "-A", "calendars.celery_app", "worker", "-l", "DEBUG"]
+    command: [ "celery", "-A", "calendars.celery_app", "worker", "-l", "DEBUG" ]
     environment:
       - DJANGO_CONFIGURATION=Development
     env_file:
@@ -108,8 +108,6 @@ services:
       - ./src/frontend/:/home/frontend/
       - /home/frontend/node_modules
       - /home/frontend/apps/calendars/node_modules
-      - /home/frontend/packages/open-calendar/dist
-      - /home/frontend/packages/open-calendar/node_modules
     ports:
       - "8920:3000"
 
