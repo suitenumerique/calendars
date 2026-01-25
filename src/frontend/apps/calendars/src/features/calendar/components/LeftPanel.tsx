@@ -2,20 +2,19 @@
  * LeftPanel component - Calendar sidebar with mini calendar and calendar list.
  */
 
-import { useState } from "react";
 
-import { Button } from "@openfun/cunningham-react";
+import { Button } from "@gouvfr-lasuite/cunningham-react";
 
 import { Calendar } from "../api";
-import { CalendarList } from "./CalendarList";
+import { CalendarList } from "./calendar-list";
 import { MiniCalendar } from "./MiniCalendar";
+import { useCalendarContext } from "../contexts";
 
 interface LeftPanelProps {
   calendars: Calendar[];
   selectedDate: Date;
   onDateSelect: (date: Date) => void;
   onCreateEvent: () => void;
-  onCreateCalendar: () => void;
 }
 
 export const LeftPanel = ({
@@ -23,8 +22,9 @@ export const LeftPanel = ({
   selectedDate,
   onDateSelect,
   onCreateEvent,
-  onCreateCalendar,
 }: LeftPanelProps) => {
+  const { davCalendars } = useCalendarContext();
+  console.log("davCalendars LeftPanel", davCalendars);
   return (
     <div className="calendar-left-panel">
       <div className="calendar-left-panel__create">
@@ -37,7 +37,7 @@ export const LeftPanel = ({
 
       <div className="calendar-left-panel__divider" />
 
-      <CalendarList calendars={calendars} onCreateCalendar={onCreateCalendar} />
+      <CalendarList calendars={calendars} />
     </div>
   );
 };
