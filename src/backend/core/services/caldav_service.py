@@ -61,6 +61,48 @@ class CalDAVClient:
             headers=headers,
         )
 
+    def get_calendar_info(self, user, calendar_path: str) -> dict | None:
+        """
+        Get calendar information from CalDAV server.
+        Returns dict with name, color, description or None if not found.
+        """
+        client = self._get_client(user)
+        calendar_url = f"{self.base_url}{calendar_path}"
+
+        try:
+            calendar = client.calendar(url=calendar_url)
+            # Fetch properties
+            props = calendar.get_properties(
+                [
+                    "{DAV:}displayname",
+                    "{http://apple.com/ns/ical/}calendar-color",
+                    "{urn:ietf:params:xml:ns:caldav}calendar-description",
+                ]
+            )
+
+            name = props.get("{DAV:}displayname", "Calendar")
+            color = props.get("{http://apple.com/ns/ical/}calendar-color", "#3174ad")
+            description = props.get(
+                "{urn:ietf:params:xml:ns:caldav}calendar-description", ""
+            )
+
+            # Clean up color (CalDAV may return with alpha channel like #RRGGBBAA)
+            if color and len(color) == 9 and color.startswith("#"):
+                color = color[:7]
+
+            logger.info("Got calendar info from CalDAV: name=%s, color=%s", name, color)
+            return {
+                "name": name,
+                "color": color,
+                "description": description,
+            }
+        except NotFoundError:
+            logger.warning("Calendar not found at path: %s", calendar_path)
+            return None
+        except Exception as e:
+            logger.error("Failed to get calendar info from CalDAV: %s", str(e))
+            return None
+
     def create_calendar(self, user, calendar_name: str, calendar_id: str) -> str:
         """
         Create a new calendar in CalDAV server for the given user.
