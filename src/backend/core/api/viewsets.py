@@ -395,3 +395,146 @@ class CalendarViewSet(
             serializers.CalendarShareSerializer(share).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+class SubscriptionTokenViewSet(viewsets.GenericViewSet):
+    """
+    ViewSet for managing subscription tokens independently of Django Calendar model.
+
+    This viewset operates directly with CalDAV paths, without requiring a Django
+    Calendar record. The backend verifies that the user has access to the calendar
+    by checking that their email is in the CalDAV path.
+
+    Endpoints:
+    - POST /api/v1.0/subscription-tokens/ - Create or get existing token
+    - GET /api/v1.0/subscription-tokens/by-path/ - Get token by CalDAV path
+    - DELETE /api/v1.0/subscription-tokens/by-path/ - Delete token by CalDAV path
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = serializers.CalendarSubscriptionTokenSerializer
+
+    # Regex for CalDAV path validation
+    # Pattern: /calendars/<email>/<calendar-id>/
+    # Calendar ID: alphanumeric with hyphens only (prevents path traversal like ../)
+    # This blocks injection attacks while allowing UUIDs and test identifiers
+    CALDAV_PATH_PATTERN = re.compile(
+        r"^/calendars/[^/]+/[a-zA-Z0-9-]+/$",
+    )
+
+    def _verify_caldav_access(self, user, caldav_path):
+        """
+        Verify that the user has access to the CalDAV calendar.
+
+        We verify by checking:
+        1. The path matches the expected pattern (prevents path injection)
+        2. The user's email matches the email in the path
+
+        CalDAV paths follow the pattern: /calendars/<user_email>/<calendar_id>/
+        """
+        # Format validation to prevent path injection attacks (e.g., ../, query params)
+        if not self.CALDAV_PATH_PATTERN.match(caldav_path):
+            logger.warning(
+                "Invalid CalDAV path format rejected: %s",
+                caldav_path[:100],  # Truncate for logging
+            )
+            return False
+
+        # Extract and verify email from path
+        # Path format: /calendars/user@example.com/calendar-id/
+        parts = caldav_path.strip("/").split("/")
+        if len(parts) >= 2 and parts[0] == "calendars":
+            path_email = unquote(parts[1])
+            return path_email.lower() == user.email.lower()
+        return False
+
+    def _normalize_caldav_path(self, caldav_path):
+        """Normalize CalDAV path to consistent format."""
+        if not caldav_path.startswith("/"):
+            caldav_path = "/" + caldav_path
+        if not caldav_path.endswith("/"):
+            caldav_path = caldav_path + "/"
+        return caldav_path
+
+    def create(self, request):
+        """
+        Create or get existing subscription token.
+
+        POST body:
+        - caldav_path: The CalDAV path (e.g., /calendars/user@example.com/uuid/)
+        - calendar_name: Display name of the calendar (optional)
+        """
+        create_serializer = serializers.CalendarSubscriptionTokenCreateSerializer(
+            data=request.data
+        )
+        create_serializer.is_valid(raise_exception=True)
+
+        caldav_path = create_serializer.validated_data["caldav_path"]
+        calendar_name = create_serializer.validated_data.get("calendar_name", "")
+
+        # Verify user has access to this calendar
+        if not self._verify_caldav_access(request.user, caldav_path):
+            return drf_response.Response(
+                {"error": "You don't have access to this calendar"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Get or create token
+        token, created = models.CalendarSubscriptionToken.objects.get_or_create(
+            owner=request.user,
+            caldav_path=caldav_path,
+            defaults={"calendar_name": calendar_name},
+        )
+
+        # Update calendar_name if provided and different
+        if not created and calendar_name and token.calendar_name != calendar_name:
+            token.calendar_name = calendar_name
+            token.save(update_fields=["calendar_name"])
+
+        serializer = self.get_serializer(token, context={"request": request})
+        return drf_response.Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=["get", "delete"], url_path="by-path")
+    def by_path(self, request):
+        """
+        Get or delete subscription token by CalDAV path.
+
+        Query parameter:
+        - caldav_path: The CalDAV path (e.g., /calendars/user@example.com/uuid/)
+        """
+        caldav_path = request.query_params.get("caldav_path")
+        if not caldav_path:
+            return drf_response.Response(
+                {"error": "caldav_path query parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        caldav_path = self._normalize_caldav_path(caldav_path)
+
+        # Verify user has access to this calendar
+        if not self._verify_caldav_access(request.user, caldav_path):
+            return drf_response.Response(
+                {"error": "You don't have access to this calendar"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        try:
+            token = models.CalendarSubscriptionToken.objects.get(
+                owner=request.user,
+                caldav_path=caldav_path,
+            )
+        except models.CalendarSubscriptionToken.DoesNotExist:
+            return drf_response.Response(
+                {"error": "No subscription token exists for this calendar"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if request.method == "GET":
+            serializer = self.get_serializer(token, context={"request": request})
+            return drf_response.Response(serializer.data)
+        elif request.method == "DELETE":
+            token.delete()
+            return drf_response.Response(status=status.HTTP_204_NO_CONTENT)

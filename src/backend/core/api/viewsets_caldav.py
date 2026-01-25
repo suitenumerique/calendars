@@ -5,11 +5,14 @@ import secrets
 
 from django.conf import settings
 from django.http import HttpResponse
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 import requests
+
+from core.services.calendar_invitation_service import calendar_invitation_service
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +34,7 @@ class CalDAVProxyView(View):
         if request.method == "OPTIONS":
             response = HttpResponse(status=200)
             response["Access-Control-Allow-Methods"] = (
-                "GET, OPTIONS, PROPFIND, REPORT, MKCOL, MKCALENDAR, PUT, DELETE"
+                "GET, OPTIONS, PROPFIND, PROPPATCH, REPORT, MKCOL, MKCALENDAR, PUT, DELETE, POST"
             )
             response["Access-Control-Allow-Headers"] = (
                 "Content-Type, depth, authorization, if-match, if-none-match, prefer"
@@ -81,6 +84,21 @@ class CalDAVProxyView(View):
 
         headers["X-Api-Key"] = outbound_api_key
 
+        # Add callback URL for CalDAV scheduling (iTip/iMip)
+        # The CalDAV server will call this URL when it needs to send invitations
+        # Use CALDAV_CALLBACK_BASE_URL if configured (for Docker environments where
+        # the CalDAV container needs to reach Django via internal network)
+        callback_path = reverse("caldav-scheduling-callback")
+        callback_base_url = getattr(settings, "CALDAV_CALLBACK_BASE_URL", None)
+        if callback_base_url:
+            # Use configured internal URL (e.g., http://backend:8000)
+            headers["X-CalDAV-Callback-URL"] = (
+                f"{callback_base_url.rstrip('/')}{callback_path}"
+            )
+        else:
+            # Fall back to external URL (works when CalDAV can reach Django externally)
+            headers["X-CalDAV-Callback-URL"] = request.build_absolute_uri(callback_path)
+
         # No Basic Auth - our custom backend uses X-Forwarded-User header and API key
         auth = None
 
@@ -116,13 +134,12 @@ class CalDAVProxyView(View):
                 allow_redirects=False,
             )
 
-            # Log authentication failures for debugging
+            # Log authentication failures for debugging (without sensitive headers)
             if response.status_code == 401:
                 logger.warning(
-                    "CalDAV server returned 401 for user %s at %s. Headers sent: %s",
+                    "CalDAV server returned 401 for user %s at %s",
                     user_principal,
                     target_url,
-                    headers,
                 )
 
             # Build Django response
@@ -188,7 +205,13 @@ class CalDAVSchedulingCallbackView(View):
     Endpoint for receiving CalDAV scheduling messages (iMip) from sabre/dav.
 
     This endpoint receives scheduling messages (invites, responses, cancellations)
-    from the CalDAV server and processes them. Authentication is via API key.
+    from the CalDAV server and processes them by sending email notifications
+    with ICS attachments. Authentication is via API key.
+
+    Supported iTip methods (RFC 5546):
+    - REQUEST: New invitation or event update
+    - CANCEL: Event cancellation
+    - REPLY: Attendee response (accept/decline/tentative)
 
     See: https://sabre.io/dav/scheduling/
     """
@@ -211,21 +234,80 @@ class CalDAVSchedulingCallbackView(View):
         # Extract headers
         sender = request.headers.get("X-CalDAV-Sender", "")
         recipient = request.headers.get("X-CalDAV-Recipient", "")
-        method = request.headers.get("X-CalDAV-Method", "")
+        method = request.headers.get("X-CalDAV-Method", "").upper()
 
-        # For now, just log the scheduling message
+        # Validate required fields
+        if not sender or not recipient or not method:
+            logger.error(
+                "CalDAV scheduling callback missing required headers: "
+                "sender=%s, recipient=%s, method=%s",
+                sender,
+                recipient,
+                method,
+            )
+            return HttpResponse(
+                status=400,
+                content="Missing required headers: X-CalDAV-Sender, X-CalDAV-Recipient, X-CalDAV-Method",
+                content_type="text/plain",
+            )
+
+        # Get iCalendar data from request body
+        icalendar_data = (
+            request.body.decode("utf-8", errors="replace") if request.body else ""
+        )
+        if not icalendar_data:
+            logger.error("CalDAV scheduling callback received empty body")
+            return HttpResponse(
+                status=400,
+                content="Missing iCalendar data in request body",
+                content_type="text/plain",
+            )
+
         logger.info(
-            "Received CalDAV scheduling callback: %s -> %s (method: %s)",
+            "Processing CalDAV scheduling message: %s -> %s (method: %s)",
             sender,
             recipient,
             method,
         )
 
-        # Log message body (first 500 chars)
-        if request.body:
-            body_preview = request.body[:500].decode("utf-8", errors="ignore")
-            logger.info("Scheduling message body (first 500 chars): %s", body_preview)
+        # Send the invitation/notification email
+        try:
+            success = calendar_invitation_service.send_invitation(
+                sender_email=sender,
+                recipient_email=recipient,
+                method=method,
+                icalendar_data=icalendar_data,
+            )
 
-        # TODO: Process the scheduling message (send email, update calendar, etc.)
-        # For now, just return success
-        return HttpResponse(status=200, content_type="text/plain")
+            if success:
+                logger.info(
+                    "Successfully sent calendar %s email: %s -> %s",
+                    method,
+                    sender,
+                    recipient,
+                )
+                return HttpResponse(
+                    status=200,
+                    content="OK",
+                    content_type="text/plain",
+                )
+            else:
+                logger.error(
+                    "Failed to send calendar %s email: %s -> %s",
+                    method,
+                    sender,
+                    recipient,
+                )
+                return HttpResponse(
+                    status=500,
+                    content="Failed to send email",
+                    content_type="text/plain",
+                )
+
+        except Exception as e:
+            logger.exception("Error processing CalDAV scheduling callback: %s", e)
+            return HttpResponse(
+                status=500,
+                content=f"Internal error: {str(e)}",
+                content_type="text/plain",
+            )

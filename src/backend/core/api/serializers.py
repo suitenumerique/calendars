@@ -153,3 +153,63 @@ class CalendarShareSerializer(serializers.ModelSerializer):
         model = models.CalendarShare
         fields = ["id", "shared_with_email", "permission", "is_visible", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+
+class CalendarSubscriptionTokenSerializer(serializers.ModelSerializer):
+    """Serializer for CalendarSubscriptionToken model."""
+
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = models.CalendarSubscriptionToken
+        fields = [
+            "token",
+            "url",
+            "caldav_path",
+            "calendar_name",
+            "is_active",
+            "last_accessed_at",
+            "created_at",
+        ]
+        read_only_fields = [
+            "token",
+            "url",
+            "caldav_path",
+            "calendar_name",
+            "is_active",
+            "last_accessed_at",
+            "created_at",
+        ]
+
+    def get_url(self, obj) -> str:
+        """Build the full subscription URL, enforcing HTTPS in production."""
+        request = self.context.get("request")
+        if request:
+            url = request.build_absolute_uri(f"/ical/{obj.token}.ics")
+        else:
+            # Fallback to APP_URL if no request context
+            app_url = getattr(settings, "APP_URL", "")
+            url = f"{app_url.rstrip('/')}/ical/{obj.token}.ics"
+
+        # Force HTTPS in production to protect the token in transit
+        if not settings.DEBUG and url.startswith("http://"):
+            url = url.replace("http://", "https://", 1)
+
+        return url
+
+
+class CalendarSubscriptionTokenCreateSerializer(serializers.Serializer):
+    """Serializer for creating a CalendarSubscriptionToken."""
+
+    caldav_path = serializers.CharField(max_length=512)
+    calendar_name = serializers.CharField(max_length=255, required=False, default="")
+
+    def validate_caldav_path(self, value):
+        """Validate and normalize the caldav_path."""
+        # Normalize path to always have trailing slash
+        if not value.endswith("/"):
+            value = value + "/"
+        # Normalize path to always start with /
+        if not value.startswith("/"):
+            value = "/" + value
+        return value
