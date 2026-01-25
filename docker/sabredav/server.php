@@ -12,6 +12,7 @@ use Sabre\DAV;
 use Calendars\SabreDav\AutoCreatePrincipalBackend;
 use Calendars\SabreDav\HttpCallbackIMipPlugin;
 use Calendars\SabreDav\ApiKeyAuthBackend;
+use Calendars\SabreDav\AttendeeNormalizerPlugin;
 
 // Composer autoloader
 require_once __DIR__ . '/vendor/autoload.php';
@@ -77,15 +78,64 @@ $server->addPlugin(new CardDAV\Plugin());
 $server->addPlugin(new DAVACL\Plugin());
 $server->addPlugin(new DAV\Browser\Plugin());
 
+// Add ICS export plugin for iCal subscription URLs
+// Allows exporting calendars as .ics files via ?export query parameter
+// See https://sabre.io/dav/ics-export-plugin/
+$server->addPlugin(new CalDAV\ICSExportPlugin());
+
+// Add sharing support
+// See https://sabre.io/dav/caldav-sharing/
+// Note: Order matters! CalDAV\SharingPlugin must come after DAV\Sharing\Plugin
+$server->addPlugin(new DAV\Sharing\Plugin());
+$server->addPlugin(new CalDAV\SharingPlugin());
+
+// Debug logging for sharing requests
+$server->on('method:POST', function($request) {
+    $contentType = $request->getHeader('Content-Type');
+    $path = $request->getPath();
+    $body = $request->getBodyAsString();
+    error_log("[sabre/dav] POST request received:");
+    error_log("[sabre/dav] Path: " . $path);
+    error_log("[sabre/dav] Content-Type: " . $contentType);
+    error_log("[sabre/dav] Body: " . substr($body, 0, 1000));
+    // Reset body stream position
+    $request->setBody($body);
+}, 50); // Priority 50 to run early
+
+// Debug: Log when share plugin processes request
+$server->on('afterMethod:POST', function($request, $response) {
+    error_log("[sabre/dav] POST response status: " . $response->getStatus());
+    $body = $response->getBodyAsString();
+    if ($body) {
+        error_log("[sabre/dav] POST response body: " . substr($body, 0, 500));
+    }
+}, 50);
+
+// Debug: Log exceptions
+$server->on('exception', function($e) {
+    error_log("[sabre/dav] Exception: " . get_class($e) . " - " . $e->getMessage());
+    error_log("[sabre/dav] Exception trace: " . $e->getTraceAsString());
+}, 50);
+
+// Add attendee normalizer plugin to fix duplicate attendees issue
+// This plugin normalizes attendee emails (lowercase) and deduplicates them
+// when processing calendar objects, fixing issues with REPLY handling
+$server->addPlugin(new AttendeeNormalizerPlugin());
+
 // Add custom IMipPlugin that forwards scheduling messages via HTTP callback
 // This MUST be added BEFORE the Schedule\Plugin so that Schedule\Plugin finds it
-// The callback URL must be provided per-request via X-CalDAV-Callback-URL header
+// The callback URL can be provided per-request via X-CalDAV-Callback-URL header
+// or via CALDAV_CALLBACK_URL environment variable as fallback
 $callbackApiKey = getenv('CALDAV_INBOUND_API_KEY');
 if (!$callbackApiKey) {
     error_log("[sabre/dav] CALDAV_INBOUND_API_KEY environment variable is required for scheduling callback");
     exit(1);
 }
-$imipPlugin = new HttpCallbackIMipPlugin($callbackApiKey);
+$defaultCallbackUrl = getenv('CALDAV_CALLBACK_URL') ?: null;
+if ($defaultCallbackUrl) {
+    error_log("[sabre/dav] Using default callback URL for scheduling: {$defaultCallbackUrl}");
+}
+$imipPlugin = new HttpCallbackIMipPlugin($callbackApiKey, $defaultCallbackUrl);
 $server->addPlugin($imipPlugin);
 
 // Add CalDAV scheduling support

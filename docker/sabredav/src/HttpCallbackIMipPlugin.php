@@ -29,16 +29,24 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     private $server;
 
     /**
-     * Constructor
-     * 
-     * @param string $apiKey The API key for authenticating with the callback endpoint
+     * Default callback URL (fallback if header is not provided)
+     * @var string|null
      */
-    public function __construct($apiKey)
+    private $defaultCallbackUrl;
+
+    /**
+     * Constructor
+     *
+     * @param string $apiKey The API key for authenticating with the callback endpoint
+     * @param string|null $defaultCallbackUrl Optional default callback URL
+     */
+    public function __construct($apiKey, $defaultCallbackUrl = null)
     {
         // Call parent constructor with empty email (we won't use it)
         parent::__construct('');
-        
+
         $this->apiKey = $apiKey;
+        $this->defaultCallbackUrl = $defaultCallbackUrl;
     }
 
     /**
@@ -81,19 +89,24 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             return;
         }
 
-        // Get callback URL from the HTTP request header (required)
-        if (!$this->server || !$this->server->httpRequest) {
-            $iTipMessage->scheduleStatus = '5.4;No HTTP request available for callback URL';
-            return;
+        // Get callback URL from the HTTP request header or use default
+        $callbackUrl = null;
+        if ($this->server && $this->server->httpRequest) {
+            $callbackUrl = $this->server->httpRequest->getHeader('X-CalDAV-Callback-URL');
         }
-        
-        $callbackUrl = $this->server->httpRequest->getHeader('X-CalDAV-Callback-URL');
+
+        // Fall back to default callback URL if header is not provided
+        if (!$callbackUrl && $this->defaultCallbackUrl) {
+            $callbackUrl = $this->defaultCallbackUrl;
+            error_log("[HttpCallbackIMipPlugin] Using default callback URL: {$callbackUrl}");
+        }
+
         if (!$callbackUrl) {
-            error_log("[HttpCallbackIMipPlugin] ERROR: X-CalDAV-Callback-URL header is required");
-            $iTipMessage->scheduleStatus = '5.4;X-CalDAV-Callback-URL header is required';
+            error_log("[HttpCallbackIMipPlugin] ERROR: X-CalDAV-Callback-URL header or default URL is required");
+            $iTipMessage->scheduleStatus = '5.4;X-CalDAV-Callback-URL header or default URL is required';
             return;
         }
-        
+
         // Ensure URL ends with trailing slash for Django's APPEND_SLASH middleware
         $callbackUrl = rtrim($callbackUrl, '/') . '/';
 
