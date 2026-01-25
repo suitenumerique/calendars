@@ -2,7 +2,7 @@
  * CalendarList component - List of calendars with visibility toggles.
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { Calendar } from "../../types";
@@ -72,6 +72,8 @@ export const CalendarList = ({ calendars }: CalendarListProps) => {
 
       if (calendarsIndex === -1) {
         console.error("Invalid calendar URL format - 'calendars' segment not found:", davCalendar.url);
+        // Reset modal state to avoid stale data
+        setSubscriptionModal({ isOpen: false, calendarName: "", caldavPath: null });
         return;
       }
 
@@ -79,6 +81,8 @@ export const CalendarList = ({ calendars }: CalendarListProps) => {
       const remainingParts = pathParts.slice(calendarsIndex);
       if (remainingParts.length < 3) {
         console.error("Invalid calendar URL format - incomplete path:", davCalendar.url);
+        // Reset modal state to avoid stale data
+        setSubscriptionModal({ isOpen: false, calendarName: "", caldavPath: null });
         return;
       }
 
@@ -92,6 +96,8 @@ export const CalendarList = ({ calendars }: CalendarListProps) => {
       });
     } catch (error) {
       console.error("Failed to parse calendar URL:", error);
+      // Reset modal state on error
+      setSubscriptionModal({ isOpen: false, calendarName: "", caldavPath: null });
     }
   };
 
@@ -105,8 +111,10 @@ export const CalendarList = ({ calendars }: CalendarListProps) => {
   // Use translation key for shared marker
   const sharedMarker = t('calendar.list.shared');
 
-  const sharedCalendars = calendarsArray.filter((cal) =>
-    cal.name.includes(sharedMarker)
+  // Memoize filtered calendars to avoid recalculation on every render
+  const sharedCalendars = useMemo(
+    () => calendarsArray.filter((cal) => cal.name.includes(sharedMarker)),
+    [calendarsArray, sharedMarker]
   );
 
   return (

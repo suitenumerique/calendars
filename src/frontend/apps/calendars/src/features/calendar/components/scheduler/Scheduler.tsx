@@ -128,7 +128,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
       // Now trigger a re-evaluation of eventFilter by calling refetchEvents
       calendarRef.current.refetchEvents();
     }
-  }, [visibleCalendarUrls, davCalendars, calendarRef]);
+  }, [visibleCalendarUrls, davCalendars]);
 
   return (
     <>
