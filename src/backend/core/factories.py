@@ -26,3 +26,34 @@ class UserFactory(factory.django.DjangoModelFactory):
     short_name = factory.Faker("first_name")
     language = factory.fuzzy.FuzzyChoice([lang[0] for lang in settings.LANGUAGES])
     password = make_password("password")
+
+
+class CalendarFactory(factory.django.DjangoModelFactory):
+    """A factory to create calendars for testing purposes."""
+
+    class Meta:
+        model = models.Calendar
+
+    owner = factory.SubFactory(UserFactory)
+    name = factory.Faker("sentence", nb_words=3)
+    color = factory.Faker("hex_color")
+    description = factory.Faker("paragraph")
+    is_default = False
+    is_visible = True
+    caldav_path = factory.LazyAttribute(
+        lambda obj: f"/calendars/{obj.owner.email}/{fake.uuid4()}"
+    )
+
+
+class CalendarSubscriptionTokenFactory(factory.django.DjangoModelFactory):
+    """A factory to create calendar subscription tokens for testing purposes."""
+
+    class Meta:
+        model = models.CalendarSubscriptionToken
+
+    owner = factory.SubFactory(UserFactory)
+    caldav_path = factory.LazyAttribute(
+        lambda obj: f"/calendars/{obj.owner.email}/{fake.uuid4()}/"
+    )
+    calendar_name = factory.Faker("sentence", nb_words=3)
+    is_active = True
