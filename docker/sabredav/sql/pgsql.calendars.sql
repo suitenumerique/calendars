@@ -56,7 +56,10 @@ CREATE UNIQUE INDEX calendarinstances_principaluri_uri
 CREATE UNIQUE INDEX calendarinstances_principaluri_calendarid
     ON calendarinstances USING btree (principaluri, calendarid);
 
-CREATE UNIQUE INDEX calendarinstances_principaluri_share_href
+-- Note: The original SabreDAV schema has a unique index on (principaluri, share_href),
+-- but this prevents sharing multiple calendars with the same user.
+-- We use a non-unique index instead for query performance.
+CREATE INDEX calendarinstances_principaluri_share_href
     ON calendarinstances USING btree (principaluri, share_href);
 
 CREATE TABLE calendarsubscriptions (
