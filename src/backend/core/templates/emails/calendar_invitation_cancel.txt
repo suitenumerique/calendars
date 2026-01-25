@@ -1,0 +1,14 @@
+{{ organizer_display }} a annulé l'événement : {{ event.summary }}
+
+Détails de l'événement annulé
+=============================
+
+Titre : {{ event.summary }}
+Était prévu le : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
+{% if event.location %}Lieu : {{ event.location }}
+{% endif %}Organisateur : {{ organizer_display }} <{{ event.organizer_email }}>
+
+Cet événement a été annulé. Vous pouvez le supprimer de votre calendrier en ouvrant le fichier .ics en pièce jointe.
+
+---
+Cette notification a été envoyée via {{ app_name }}

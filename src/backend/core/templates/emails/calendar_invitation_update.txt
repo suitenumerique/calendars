@@ -1,0 +1,19 @@
+{{ organizer_display }} a modifié l'événement
+
+Détails de l'événement mis à jour
+=================================
+
+Titre : {{ event.summary }}
+Quand : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
+{% if event.location %}Lieu : {{ event.location }}
+{% endif %}Organisateur : {{ organizer_display }} <{{ event.organizer_email }}>
+
+{% if event.description %}
+Description :
+{{ event.description }}
+{% endif %}
+
+Cet événement a été modifié. Veuillez vérifier les changements et mettre à jour votre calendrier en conséquence.
+
+---
+Cette notification a été envoyée via {{ app_name }}

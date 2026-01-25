@@ -1,0 +1,14 @@
+{{ attendee_display }} a répondu à votre événement : {{ event.summary }}
+
+Détails de l'événement
+======================
+
+Titre : {{ event.summary }}
+Quand : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
+{% if event.location %}Lieu : {{ event.location }}
+{% endif %}
+
+La réponse du participant a été enregistrée dans le fichier .ics en pièce jointe.
+
+---
+Cette notification a été envoyée via {{ app_name }}
