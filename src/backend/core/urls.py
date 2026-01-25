@@ -8,12 +8,18 @@ from rest_framework.routers import DefaultRouter
 
 from core.api import viewsets
 from core.api.viewsets_caldav import CalDAVProxyView, CalDAVSchedulingCallbackView
+from core.api.viewsets_ical import ICalExportView
 from core.external_api import viewsets as external_api_viewsets
 
 # - Main endpoints
 router = DefaultRouter()
 router.register("users", viewsets.UserViewSet, basename="users")
 router.register("calendars", viewsets.CalendarViewSet, basename="calendars")
+router.register(
+    "subscription-tokens",
+    viewsets.SubscriptionTokenViewSet,
+    basename="subscription-tokens",
+)
 
 urlpatterns = [
     path(
@@ -41,6 +47,13 @@ urlpatterns = [
         ),
     ),
     path(f"api/{settings.API_VERSION}/config/", viewsets.ConfigView.as_view()),
+    # Public iCal export endpoint (no authentication required)
+    # Token in URL acts as authentication
+    path(
+        "ical/<uuid:token>.ics",
+        ICalExportView.as_view(),
+        name="ical-export",
+    ),
 ]
 
 

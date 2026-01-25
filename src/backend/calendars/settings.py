@@ -81,6 +81,44 @@ class Base(Configuration):
     CALDAV_OUTBOUND_API_KEY = values.Value(
         None, environ_name="CALDAV_OUTBOUND_API_KEY", environ_prefix=None
     )
+    # Base URL for CalDAV scheduling callbacks (must be accessible from CalDAV container)
+    # In Docker environments, use the internal Docker network URL (e.g., http://backend:8000)
+    CALDAV_CALLBACK_BASE_URL = values.Value(
+        None, environ_name="CALDAV_CALLBACK_BASE_URL", environ_prefix=None
+    )
+
+    # Email configuration
+    # Default settings - override in environment-specific classes
+    EMAIL_BACKEND = values.Value(
+        "django.core.mail.backends.smtp.EmailBackend",
+        environ_name="EMAIL_BACKEND",
+        environ_prefix=None,
+    )
+    EMAIL_HOST = values.Value(
+        "localhost", environ_name="EMAIL_HOST", environ_prefix=None
+    )
+    EMAIL_PORT = values.IntegerValue(25, environ_name="EMAIL_PORT", environ_prefix=None)
+    EMAIL_HOST_USER = values.Value(
+        "", environ_name="EMAIL_HOST_USER", environ_prefix=None
+    )
+    EMAIL_HOST_PASSWORD = SecretFileValue(
+        "", environ_name="EMAIL_HOST_PASSWORD", environ_prefix=None
+    )
+    EMAIL_USE_TLS = values.BooleanValue(
+        False, environ_name="EMAIL_USE_TLS", environ_prefix=None
+    )
+    EMAIL_USE_SSL = values.BooleanValue(
+        False, environ_name="EMAIL_USE_SSL", environ_prefix=None
+    )
+    DEFAULT_FROM_EMAIL = values.Value(
+        "noreply@example.com", environ_name="DEFAULT_FROM_EMAIL", environ_prefix=None
+    )
+    # Calendar-specific email settings
+    CALENDAR_INVITATION_FROM_EMAIL = values.Value(
+        None, environ_name="CALENDAR_INVITATION_FROM_EMAIL", environ_prefix=None
+    )
+    APP_NAME = values.Value("Calendrier", environ_name="APP_NAME", environ_prefix=None)
+    APP_URL = values.Value("", environ_name="APP_URL", environ_prefix=None)
 
     # Security
     ALLOWED_HOSTS = values.ListValue([])
@@ -354,7 +392,7 @@ class Base(Configuration):
     CORS_ALLOW_ALL_ORIGINS = values.BooleanValue(False)
     CORS_ALLOWED_ORIGINS = values.ListValue([])
     CORS_ALLOWED_ORIGIN_REGEXES = values.ListValue([])
-    # Allow CalDAV methods (PROPFIND, REPORT, etc.)
+    # Allow CalDAV methods (PROPFIND, PROPPATCH, REPORT, etc.)
     CORS_ALLOW_METHODS = [
         "DELETE",
         "GET",
@@ -363,6 +401,7 @@ class Base(Configuration):
         "POST",
         "PUT",
         "PROPFIND",
+        "PROPPATCH",
         "REPORT",
         "MKCOL",
         "MKCALENDAR",
@@ -801,6 +840,7 @@ class Development(Base):
     CORS_ALLOW_ALL_ORIGINS = True
     CSRF_TRUSTED_ORIGINS = [
         "http://localhost:8920",
+        "http://localhost:3000",
     ]
     DEBUG = True
     LOAD_E2E_URLS = True
@@ -808,6 +848,16 @@ class Development(Base):
     SESSION_COOKIE_NAME = "calendar_sessionid"
 
     USE_SWAGGER = True
+
+    # Email settings for development (mailcatcher)
+    EMAIL_HOST = "mailcatcher"
+    EMAIL_PORT = 1025
+    EMAIL_USE_TLS = False
+    EMAIL_USE_SSL = False
+    DEFAULT_FROM_EMAIL = "calendars@calendars.world"
+    CALENDAR_INVITATION_FROM_EMAIL = "calendars@calendars.world"
+    APP_NAME = "Calendrier (Dev)"
+    APP_URL = "http://localhost:8920"
 
     DEBUG_TOOLBAR_CONFIG = {
         "SHOW_TOOLBAR_CALLBACK": lambda request: True,
