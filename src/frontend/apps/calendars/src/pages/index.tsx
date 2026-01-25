@@ -11,7 +11,7 @@ import {
   Toaster,
   ToasterItem,
 } from "@/features/ui/components/toaster/Toaster";
-import { Button } from "@openfun/cunningham-react";
+import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { LeftPanelMobile } from "@/features/layouts/components/left-panel/LeftPanelMobile";
 import { SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL } from "@/features/api/fetchApi";
@@ -77,7 +77,7 @@ export default function HomePage() {
       <HomeGutter>
         <Hero
           logo={<div className="calendars__logo-icon" />}
-          /* banner={banner.src} */
+          banner={banner.src}
           title={t("home.title")}
           subtitle={t("home.subtitle")}
           mainButton={

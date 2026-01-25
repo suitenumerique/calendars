@@ -17,7 +17,6 @@ export const HeaderIcon = () => {
 };
 
 export const HeaderRight = () => {
-  const { user } = useAuth();
   const { isTablet } = useResponsive();
 
   return (

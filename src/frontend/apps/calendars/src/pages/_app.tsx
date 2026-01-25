@@ -1,15 +1,12 @@
 import {
   createContext,
-  useContext,
-  useMemo,
-  useState,
+  useContext, useState,
   type ReactElement,
-  type ReactNode,
+  type ReactNode
 } from "react";
 import type { NextPage } from "next";
 import type { AppProps } from "next/app";
 import { CunninghamProvider } from "@gouvfr-lasuite/ui-kit";
-import { ModalProvider } from "@openfun/cunningham-react";
 import {
   MutationCache,
   Query,
@@ -34,9 +31,7 @@ import {
   removeQuotes,
   useCunninghamTheme,
 } from "@/features/ui/cunningham/useCunninghamTheme";
-import { ResponsiveDivs } from "@/features/ui/components/responsive/ResponsiveDivs";
 import { FeedbackFooterMobile } from "@/features/feedback/Feedback";
-import { useRouter } from "next/router";
 
 export type NextPageWithLayout<P = object, IP = P> = NextPage<P, IP> & {
   getLayout?: (page: ReactElement) => ReactNode;
@@ -119,7 +114,6 @@ const MyAppInner = ({ Component, pageProps }: AppPropsWithLayout) => {
   const getLayout = Component.getLayout ?? ((page) => page);
   const { t, i18n } = useTranslation();
   const { theme } = useAppContext();
-  const router = useRouter();
   const themeTokens = useCunninghamTheme();
 
   return (
@@ -137,15 +131,14 @@ const MyAppInner = ({ Component, pageProps }: AppPropsWithLayout) => {
           currentLocale={capitalizeRegion(i18n.language)}
           theme={theme}
         >
-          <ModalProvider>
+          
             <ConfigProvider>
               <AnalyticsProvider>
                 {getLayout(<Component {...pageProps} />)}
-                <ResponsiveDivs />
                 <FeedbackFooterMobile />
               </AnalyticsProvider>
             </ConfigProvider>
-          </ModalProvider>
+          
         </CunninghamProvider>
       </QueryClientProvider>
     </>
