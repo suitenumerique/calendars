@@ -89,6 +89,175 @@
         "minutes_ago_one": "{{count}} minute ago",
         "minutes_ago_other": "{{count}} minutes ago",
         "seconds_ago": "few seconds ago"
+      },
+      "calendar": {
+        "views": {
+          "day": "Day",
+          "week": "Week",
+          "month": "Month",
+          "listDay": "Day list",
+          "listWeek": "Week list",
+          "listMonth": "Month list",
+          "listYear": "Year list",
+          "today": "Today"
+        },
+        "event": {
+          "createTitle": "Create event",
+          "editTitle": "Edit event",
+          "calendar": "Calendar",
+          "title": "Title",
+          "titlePlaceholder": "Event title",
+          "location": "Location",
+          "locationPlaceholder": "Location",
+          "description": "Description",
+          "descriptionPlaceholder": "Description",
+          "start": "Start",
+          "end": "End",
+          "allDay": "All day",
+          "organizer": "Organizer",
+          "attendees": "Attendees",
+          "deleteConfirm": "Delete event",
+          "deleteConfirmMessage": "Are you sure you want to delete this event?",
+          "deleteRecurringPrompt": "This is a recurring event. What would you like to delete?",
+          "deleteThisOccurrence": "Only this occurrence",
+          "deleteThisAndFuture": "This and future occurrences",
+          "deleteAllOccurrences": "All occurrences",
+          "enterChoice": "Enter your choice (1, 2, or 3):",
+          "invalidChoice": "Invalid choice. Please enter 1, 2, or 3.",
+          "delete": "Delete",
+          "cancel": "Cancel",
+          "save": "Save",
+          "create": "Create"
+        },
+        "list": {
+          "myCalendars": "My calendars",
+          "sharedCalendars": "Shared calendars",
+          "shared": "(shared)",
+          "showCalendar": "Show calendar",
+          "edit": "Edit",
+          "delete": "Delete",
+          "subscription": "Subscription URL"
+        },
+        "subscription": {
+          "title": "Calendar Subscription URL",
+          "description": "Use this URL to subscribe to \"{{name}}\" from external calendar applications (Apple Calendar, Google Calendar, Outlook, etc.).",
+          "loading": "Generating subscription URL...",
+          "copy": "Copy",
+          "copied": "Copied!",
+          "close": "Close",
+          "warning": "This URL contains a private token. Anyone with this link can view your calendar events.",
+          "regenerate": "Regenerate URL",
+          "regenerateConfirm": {
+            "title": "Regenerate subscription URL?",
+            "message": "This will invalidate the current URL. Any external calendars using the old URL will no longer sync.",
+            "confirm": "Regenerate"
+          },
+          "error": "Failed to generate subscription URL. Please try again.",
+          "errorPermission": "You don't have permission to access this calendar.",
+          "errorNetwork": "Network error. Please check your connection and try again.",
+          "errorServer": "Server error. Please try again later."
+        },
+        "leftPanel": {
+          "create": "Create"
+        },
+        "miniCalendar": {
+          "previousMonth": "Previous month",
+          "nextMonth": "Next month"
+        },
+        "recurrence": {
+          "label": "Repeat",
+          "none": "No",
+          "daily": "Daily",
+          "weekly": "Weekly",
+          "monthly": "Monthly",
+          "yearly": "Yearly",
+          "custom": "Custom...",
+          "everyLabel": "Repeat every",
+          "days": "days",
+          "weeks": "weeks",
+          "months": "months",
+          "years": "years",
+          "repeatOn": "Repeat on",
+          "repeatOnDay": "Repeat on day",
+          "repeatOnDate": "Repeat on date",
+          "dayOfMonth": "Day",
+          "endsLabel": "Ends",
+          "never": "Never",
+          "on": "On",
+          "after": "After",
+          "occurrences": "occurrences",
+          "weekdays": {
+            "mo": "M",
+            "tu": "T",
+            "we": "W",
+            "th": "T",
+            "fr": "F",
+            "sa": "S",
+            "su": "S"
+          },
+          "months": {
+            "january": "January",
+            "february": "February",
+            "march": "March",
+            "april": "April",
+            "may": "May",
+            "june": "June",
+            "july": "July",
+            "august": "August",
+            "september": "September",
+            "october": "October",
+            "november": "November",
+            "december": "December"
+          },
+          "warnings": {
+            "februaryMax": "February has at most 29 days",
+            "leapYear": "This date (Feb 29) only exists in leap years",
+            "monthMax30": "This month has at most 30 days",
+            "dayMax31": "Day must be between 1 and 31"
+          }
+        },
+        "createCalendar": {
+          "title": "Create a calendar",
+          "name": "Name",
+          "namePlaceholder": "Calendar name",
+          "nameRequired": "Name is required",
+          "color": "Color",
+          "description": "Description",
+          "descriptionPlaceholder": "Calendar description (optional)",
+          "cancel": "Cancel",
+          "create": "Create"
+        },
+        "editCalendar": {
+          "title": "Edit calendar",
+          "save": "Save"
+        },
+        "deleteCalendar": {
+          "title": "Delete calendar",
+          "message": "Are you sure you want to delete the calendar \"{{name}}\"? This action cannot be undone.",
+          "confirm": "Delete"
+        },
+        "shareCalendar": {
+          "title": "Share calendar",
+          "emailPlaceholder": "Enter email address",
+          "share": "Share",
+          "hint": "The person will have the same rights as you (read and write).",
+          "success": "Calendar shared with {{email}}",
+          "error": "Failed to share calendar",
+          "invalidEmail": "Please enter a valid email address"
+        },
+        "attendees": {
+          "label": "Invite attendees",
+          "placeholder": "Enter email address and press Enter",
+          "add": "Add",
+          "remove": "Remove attendee",
+          "invalidEmail": "Please enter a valid email address",
+          "alreadyAdded": "This email is already in the list",
+          "cannotAddOrganizer": "You cannot add yourself as an attendee",
+          "participants": "Participants",
+          "organizer": "Organizer",
+          "viewProfile": "View profile",
+          "cannotRemoveOrganizer": "Cannot remove organizer"
+        }
       }
     }
   },
@@ -485,6 +654,175 @@
         "minutes_ago_one": "il y a {{count}} minute",
         "minutes_ago_other": "il y a {{count}} minutes",
         "seconds_ago": "il y a quelques secondes"
+      },
+      "calendar": {
+        "views": {
+          "day": "Jour",
+          "week": "Semaine",
+          "month": "Mois",
+          "listDay": "Liste jour",
+          "listWeek": "Liste semaine",
+          "listMonth": "Liste mois",
+          "listYear": "Liste année",
+          "today": "Aujourd'hui"
+        },
+        "event": {
+          "createTitle": "Créer un événement",
+          "editTitle": "Modifier l'événement",
+          "calendar": "Calendrier",
+          "title": "Titre",
+          "titlePlaceholder": "Titre de l'événement",
+          "location": "Lieu",
+          "locationPlaceholder": "Lieu",
+          "description": "Description",
+          "descriptionPlaceholder": "Description",
+          "start": "Début",
+          "end": "Fin",
+          "allDay": "Toute la journée",
+          "organizer": "Organisateur",
+          "attendees": "Participants",
+          "deleteConfirm": "Supprimer l'événement",
+          "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cet événement ?",
+          "deleteRecurringPrompt": "Ceci est un événement récurrent. Que souhaitez-vous supprimer ?",
+          "deleteThisOccurrence": "Seulement cette occurrence",
+          "deleteThisAndFuture": "Cette occurrence et les suivantes",
+          "deleteAllOccurrences": "Toutes les occurrences",
+          "enterChoice": "Entrez votre choix (1, 2 ou 3) :",
+          "invalidChoice": "Choix invalide. Veuillez entrer 1, 2 ou 3.",
+          "delete": "Supprimer",
+          "cancel": "Annuler",
+          "save": "Enregistrer",
+          "create": "Créer"
+        },
+        "list": {
+          "myCalendars": "Mes agendas",
+          "sharedCalendars": "Agendas partagés",
+          "shared": "(partagé)",
+          "showCalendar": "Afficher le calendrier",
+          "edit": "Modifier",
+          "delete": "Supprimer",
+          "subscription": "URL d'abonnement"
+        },
+        "subscription": {
+          "title": "URL d'abonnement au calendrier",
+          "description": "Utilisez cette URL pour vous abonner à \"{{name}}\" depuis des applications de calendrier externes (Apple Calendar, Google Calendar, Outlook, etc.).",
+          "loading": "Génération de l'URL d'abonnement...",
+          "copy": "Copier",
+          "copied": "Copié !",
+          "close": "Fermer",
+          "warning": "Cette URL contient un jeton privé. Toute personne possédant ce lien peut voir les événements de votre calendrier.",
+          "regenerate": "Régénérer l'URL",
+          "regenerateConfirm": {
+            "title": "Régénérer l'URL d'abonnement ?",
+            "message": "Cela invalidera l'URL actuelle. Les calendriers externes utilisant l'ancienne URL ne se synchroniseront plus.",
+            "confirm": "Régénérer"
+          },
+          "error": "Échec de la génération de l'URL d'abonnement. Veuillez réessayer.",
+          "errorPermission": "Vous n'avez pas la permission d'accéder à ce calendrier.",
+          "errorNetwork": "Erreur réseau. Veuillez vérifier votre connexion et réessayer.",
+          "errorServer": "Erreur serveur. Veuillez réessayer plus tard."
+        },
+        "leftPanel": {
+          "create": "Créer"
+        },
+        "miniCalendar": {
+          "previousMonth": "Mois précédent",
+          "nextMonth": "Mois suivant"
+        },
+        "recurrence": {
+          "label": "Répéter",
+          "none": "Non",
+          "daily": "Tous les jours",
+          "weekly": "Toutes les semaines",
+          "monthly": "Tous les mois",
+          "yearly": "Tous les ans",
+          "custom": "Personnalisé...",
+          "everyLabel": "Répéter tous les",
+          "days": "jours",
+          "weeks": "semaines",
+          "months": "mois",
+          "years": "années",
+          "repeatOn": "Répéter le",
+          "repeatOnDay": "Répéter le jour",
+          "repeatOnDate": "Répéter à la date",
+          "dayOfMonth": "Jour",
+          "endsLabel": "Se termine",
+          "never": "Jamais",
+          "on": "Le",
+          "after": "Après",
+          "occurrences": "occurrences",
+          "weekdays": {
+            "mo": "L",
+            "tu": "M",
+            "we": "M",
+            "th": "J",
+            "fr": "V",
+            "sa": "S",
+            "su": "D"
+          },
+          "months": {
+            "january": "Janvier",
+            "february": "Février",
+            "march": "Mars",
+            "april": "Avril",
+            "may": "Mai",
+            "june": "Juin",
+            "july": "Juillet",
+            "august": "Août",
+            "september": "Septembre",
+            "october": "Octobre",
+            "november": "Novembre",
+            "december": "Décembre"
+          },
+          "warnings": {
+            "februaryMax": "Février a au maximum 29 jours",
+            "leapYear": "Cette date (29 février) n'existe que les années bissextiles",
+            "monthMax30": "Ce mois a au maximum 30 jours",
+            "dayMax31": "Le jour doit être entre 1 et 31"
+          }
+        },
+        "createCalendar": {
+          "title": "Créer un agenda",
+          "name": "Nom",
+          "namePlaceholder": "Nom de l'agenda",
+          "nameRequired": "Le nom est requis",
+          "color": "Couleur",
+          "description": "Description",
+          "descriptionPlaceholder": "Description de l'agenda (optionnel)",
+          "cancel": "Annuler",
+          "create": "Créer"
+        },
+        "editCalendar": {
+          "title": "Modifier l'agenda",
+          "save": "Enregistrer"
+        },
+        "deleteCalendar": {
+          "title": "Supprimer l'agenda",
+          "message": "Êtes-vous sûr de vouloir supprimer l'agenda \"{{name}}\" ? Cette action est irréversible.",
+          "confirm": "Supprimer"
+        },
+        "shareCalendar": {
+          "title": "Partager l'agenda",
+          "emailPlaceholder": "Entrez l'adresse email",
+          "share": "Partager",
+          "hint": "La personne aura les mêmes droits que vous (lecture et écriture).",
+          "success": "Agenda partagé avec {{email}}",
+          "error": "Échec du partage de l'agenda",
+          "invalidEmail": "Veuillez entrer une adresse email valide"
+        },
+        "attendees": {
+          "label": "Inviter des participants",
+          "placeholder": "Entrez l'adresse email et appuyez sur Entrée",
+          "add": "Ajouter",
+          "remove": "Retirer le participant",
+          "invalidEmail": "Veuillez entrer une adresse email valide",
+          "alreadyAdded": "Cette adresse est déjà dans la liste",
+          "cannotAddOrganizer": "Vous ne pouvez pas vous ajouter comme participant",
+          "participants": "Participants",
+          "organizer": "Organisateur",
+          "viewProfile": "Voir le profil",
+          "cannotRemoveOrganizer": "Impossible de retirer l'organisateur"
+        }
       }
     }
   },
@@ -628,6 +966,175 @@
         "minutes_ago_one": "{{count}} minuut geleden",
         "minutes_ago_other": "{{count}} minuten geleden",
         "seconds_ago": "een paar seconden geleden"
+      },
+      "calendar": {
+        "views": {
+          "day": "Dag",
+          "week": "Week",
+          "month": "Maand",
+          "listDay": "Dag lijst",
+          "listWeek": "Week lijst",
+          "listMonth": "Maand lijst",
+          "listYear": "Jaar lijst",
+          "today": "Vandaag"
+        },
+        "event": {
+          "createTitle": "Evenement aanmaken",
+          "editTitle": "Evenement bewerken",
+          "calendar": "Agenda",
+          "title": "Titel",
+          "titlePlaceholder": "Evenement titel",
+          "location": "Locatie",
+          "locationPlaceholder": "Locatie",
+          "description": "Beschrijving",
+          "descriptionPlaceholder": "Beschrijving",
+          "start": "Start",
+          "end": "Einde",
+          "allDay": "Hele dag",
+          "organizer": "Organisator",
+          "attendees": "Deelnemers",
+          "deleteConfirm": "Evenement verwijderen",
+          "deleteConfirmMessage": "Weet u zeker dat u dit evenement wilt verwijderen?",
+          "deleteRecurringPrompt": "Dit is een terugkerend evenement. Wat wilt u verwijderen?",
+          "deleteThisOccurrence": "Alleen deze gebeurtenis",
+          "deleteThisAndFuture": "Deze en toekomstige gebeurtenissen",
+          "deleteAllOccurrences": "Alle gebeurtenissen",
+          "enterChoice": "Voer uw keuze in (1, 2 of 3):",
+          "invalidChoice": "Ongeldige keuze. Voer 1, 2 of 3 in.",
+          "delete": "Verwijderen",
+          "cancel": "Annuleren",
+          "save": "Opslaan",
+          "create": "Aanmaken"
+        },
+        "list": {
+          "myCalendars": "Mijn agenda's",
+          "sharedCalendars": "Gedeelde agenda's",
+          "shared": "(gedeeld)",
+          "showCalendar": "Agenda tonen",
+          "edit": "Bewerken",
+          "delete": "Verwijderen",
+          "subscription": "Abonnements-URL"
+        },
+        "subscription": {
+          "title": "Agenda-abonnements-URL",
+          "description": "Gebruik deze URL om u te abonneren op \"{{name}}\" vanuit externe agendatoepassingen (Apple Calendar, Google Calendar, Outlook, etc.).",
+          "loading": "Abonnements-URL wordt gegenereerd...",
+          "copy": "Kopiëren",
+          "copied": "Gekopieerd!",
+          "close": "Sluiten",
+          "warning": "Deze URL bevat een privétoken. Iedereen met deze link kan uw agenda-evenementen bekijken.",
+          "regenerate": "URL regenereren",
+          "regenerateConfirm": {
+            "title": "Abonnements-URL regenereren?",
+            "message": "Dit maakt de huidige URL ongeldig. Externe agenda's die de oude URL gebruiken zullen niet meer synchroniseren.",
+            "confirm": "Regenereren"
+          },
+          "error": "Genereren van abonnements-URL mislukt. Probeer het opnieuw.",
+          "errorPermission": "U heeft geen toegang tot deze agenda.",
+          "errorNetwork": "Netwerkfout. Controleer uw verbinding en probeer het opnieuw.",
+          "errorServer": "Serverfout. Probeer het later opnieuw."
+        },
+        "leftPanel": {
+          "create": "Aanmaken"
+        },
+        "miniCalendar": {
+          "previousMonth": "Vorige maand",
+          "nextMonth": "Volgende maand"
+        },
+        "recurrence": {
+          "label": "Herhalen",
+          "none": "Nee",
+          "daily": "Dagelijks",
+          "weekly": "Wekelijks",
+          "monthly": "Maandelijks",
+          "yearly": "Jaarlijks",
+          "custom": "Aangepast...",
+          "everyLabel": "Herhaal elke",
+          "days": "dagen",
+          "weeks": "weken",
+          "months": "maanden",
+          "years": "jaren",
+          "repeatOn": "Herhaal op",
+          "repeatOnDay": "Herhaal op dag",
+          "repeatOnDate": "Herhaal op datum",
+          "dayOfMonth": "Dag",
+          "endsLabel": "Eindigt",
+          "never": "Nooit",
+          "on": "Op",
+          "after": "Na",
+          "occurrences": "keer",
+          "weekdays": {
+            "mo": "M",
+            "tu": "D",
+            "we": "W",
+            "th": "D",
+            "fr": "V",
+            "sa": "Z",
+            "su": "Z"
+          },
+          "months": {
+            "january": "Januari",
+            "february": "Februari",
+            "march": "Maart",
+            "april": "April",
+            "may": "Mei",
+            "june": "Juni",
+            "july": "Juli",
+            "august": "Augustus",
+            "september": "September",
+            "october": "Oktober",
+            "november": "November",
+            "december": "December"
+          },
+          "warnings": {
+            "februaryMax": "Februari heeft maximaal 29 dagen",
+            "leapYear": "Deze datum (29 februari) bestaat alleen in schrikkeljaren",
+            "monthMax30": "Deze maand heeft maximaal 30 dagen",
+            "dayMax31": "Dag moet tussen 1 en 31 zijn"
+          }
+        },
+        "createCalendar": {
+          "title": "Agenda aanmaken",
+          "name": "Naam",
+          "namePlaceholder": "Agenda naam",
+          "nameRequired": "Naam is verplicht",
+          "color": "Kleur",
+          "description": "Beschrijving",
+          "descriptionPlaceholder": "Agenda beschrijving (optioneel)",
+          "cancel": "Annuleren",
+          "create": "Aanmaken"
+        },
+        "editCalendar": {
+          "title": "Agenda bewerken",
+          "save": "Opslaan"
+        },
+        "deleteCalendar": {
+          "title": "Agenda verwijderen",
+          "message": "Weet u zeker dat u de agenda \"{{name}}\" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
+          "confirm": "Verwijderen"
+        },
+        "shareCalendar": {
+          "title": "Agenda delen",
+          "emailPlaceholder": "Voer e-mailadres in",
+          "share": "Delen",
+          "hint": "De persoon krijgt dezelfde rechten als u (lezen en schrijven).",
+          "success": "Agenda gedeeld met {{email}}",
+          "error": "Delen van agenda mislukt",
+          "invalidEmail": "Voer een geldig e-mailadres in"
+        },
+        "attendees": {
+          "label": "Deelnemers uitnodigen",
+          "placeholder": "Voer e-mailadres in en druk op Enter",
+          "add": "Toevoegen",
+          "remove": "Deelnemer verwijderen",
+          "invalidEmail": "Voer een geldig e-mailadres in",
+          "alreadyAdded": "Dit e-mailadres staat al in de lijst",
+          "cannotAddOrganizer": "U kunt uzelf niet als deelnemer toevoegen",
+          "participants": "Deelnemers",
+          "organizer": "Organisator",
+          "viewProfile": "Profiel bekijken",
+          "cannotRemoveOrganizer": "Kan organisator niet verwijderen"
+        }
       }
     }
   }
