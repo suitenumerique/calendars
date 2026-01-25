@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
   output: "export",
@@ -9,10 +8,7 @@ const nextConfig: NextConfig = {
     // Resolve workspace packages
     config.resolve.alias = {
       ...config.resolve.alias,
-      "open-dav-calendar": path.resolve(
-        __dirname,
-        "../../packages/open-calendar/dist/index.js"
-      ),
+      
     };
     return config;
   },
