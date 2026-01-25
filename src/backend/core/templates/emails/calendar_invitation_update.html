@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Événement modifié</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            border-bottom: 2px solid #ff9800;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #ff9800;
+            margin: 0;
+            font-size: 24px;
+        }
+        .update-badge {
+            display: inline-block;
+            background-color: #ff9800;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .event-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            margin: 15px 0;
+        }
+        .event-details {
+            background-color: #fff8e1;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .event-details table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .event-details td {
+            padding: 8px 0;
+            vertical-align: top;
+        }
+        .event-details td:first-child {
+            font-weight: bold;
+            color: #666;
+            width: 120px;
+        }
+        .description {
+            background-color: #fff;
+            border: 1px solid #eee;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .description h3 {
+            margin-top: 0;
+            color: #666;
+        }
+        .instructions {
+            background-color: #fff8e1;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .instructions p {
+            margin: 0;
+            color: #e65100;
+        }
+        .footer {
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Événement modifié</h1>
+        </div>
+
+        <span class="update-badge">MODIFIÉ</span>
+
+        <p>{{ organizer_display }} a modifié un événement auquel vous êtes invité(e)</p>
+
+        <div class="event-title">{{ event.summary }}</div>
+
+        <div class="event-details">
+            <table>
+                <tr>
+                    <td>Quand</td>
+                    <td>
+                        {{ start_date }}<br>
+                        <strong>{{ time_str }}</strong>
+                        {% if start_date != end_date %}<br>jusqu'au {{ end_date }}{% endif %}
+                    </td>
+                </tr>
+                {% if event.location %}
+                <tr>
+                    <td>Lieu</td>
+                    <td>{{ event.location }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td>Organisateur</td>
+                    <td>{{ organizer_display }} &lt;{{ event.organizer_email }}&gt;</td>
+                </tr>
+            </table>
+        </div>
+
+        {% if event.description %}
+        <div class="description">
+            <h3>Description</h3>
+            <p>{{ event.description|linebreaks }}</p>
+        </div>
+        {% endif %}
+
+        <div class="instructions">
+            <p>Cet événement a été modifié. Veuillez ouvrir le fichier .ics en pièce jointe pour mettre à jour votre calendrier.</p>
+        </div>
+
+        <div class="footer">
+            <p>Cette notification a été envoyée via {{ app_name }}</p>
+        </div>
+    </div>
+</body>
+</html>
