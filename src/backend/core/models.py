@@ -400,3 +400,72 @@ class CalendarShare(models.Model):
 
     def __str__(self):
         return f"{self.calendar.name} shared with {self.shared_with.email}"
+
+
+class CalendarSubscriptionToken(models.Model):
+    """
+    Stores subscription tokens for iCal export.
+    Each calendar can have one token that allows unauthenticated read-only access
+    via a public URL for use in external calendar applications.
+
+    This model is standalone and stores the CalDAV path directly,
+    without requiring a foreign key to the Calendar model.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # Owner of the calendar (for permission verification)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="subscription_tokens",
+    )
+
+    # CalDAV path stored directly (e.g., /calendars/user@example.com/uuid/)
+    caldav_path = models.CharField(
+        max_length=512,
+        help_text=_("CalDAV path of the calendar"),
+    )
+
+    # Calendar display name (for UI display)
+    calendar_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=_("Display name of the calendar"),
+    )
+
+    token = models.UUIDField(
+        unique=True,
+        db_index=True,
+        default=uuid.uuid4,
+        help_text=_("Secret token used in the subscription URL"),
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text=_("Whether this subscription token is active"),
+    )
+    last_accessed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Last time this subscription URL was accessed"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("calendar subscription token")
+        verbose_name_plural = _("calendar subscription tokens")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "caldav_path"],
+                name="unique_token_per_owner_calendar",
+            )
+        ]
+        indexes = [
+            # Composite index for the public iCal endpoint query:
+            # CalendarSubscriptionToken.objects.filter(token=..., is_active=True)
+            models.Index(fields=["token", "is_active"], name="token_active_idx"),
+        ]
+
+    def __str__(self):
+        return f"Subscription token for {self.calendar_name or self.caldav_path}"

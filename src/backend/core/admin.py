@@ -91,3 +91,32 @@ class UserAdmin(auth_admin.UserAdmin):
         "updated_at",
     )
     search_fields = ("id", "sub", "admin_email", "email", "full_name")
+
+
+@admin.register(models.Calendar)
+class CalendarAdmin(admin.ModelAdmin):
+    """Admin class for Calendar model."""
+
+    list_display = ("name", "owner", "is_default", "is_visible", "created_at")
+    list_filter = ("is_default", "is_visible")
+    search_fields = ("name", "owner__email", "caldav_path")
+    readonly_fields = ("id", "created_at", "updated_at")
+
+
+@admin.register(models.CalendarSubscriptionToken)
+class CalendarSubscriptionTokenAdmin(admin.ModelAdmin):
+    """Admin class for CalendarSubscriptionToken model."""
+
+    list_display = (
+        "calendar_name",
+        "owner",
+        "caldav_path",
+        "token",
+        "is_active",
+        "last_accessed_at",
+        "created_at",
+    )
+    list_filter = ("is_active",)
+    search_fields = ("calendar_name", "owner__email", "caldav_path", "token")
+    readonly_fields = ("id", "token", "created_at", "last_accessed_at")
+    raw_id_fields = ("owner",)
