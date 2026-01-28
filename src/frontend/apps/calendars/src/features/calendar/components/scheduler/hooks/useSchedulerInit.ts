@@ -39,7 +39,7 @@ interface UseSchedulerInitProps {
   adapter: EventCalendarAdapter;
   visibleCalendarUrlsRef: MutableRefObject<Set<string>>;
   davCalendarsRef: MutableRefObject<CalDavCalendar[]>;
-  setCurrentDate: (date: Date) => void;
+  setCurrentDate: (info: { start: Date; end: Date }) => void;
   handleEventClick: (info: unknown) => void;
   handleEventDrop: (info: unknown) => void;
   handleEventResize: (info: unknown) => void;
@@ -75,20 +75,8 @@ export const useSchedulerInit = ({
       {
         // View configuration
         view: "timeGridWeek",
-        headerToolbar: {
-          start: "prev,next today",
-          center: "title",
-          end: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
-        },
-
-        // Button text translations
-        buttonText: {
-          today: t('calendar.views.today'),
-          dayGridMonth: t('calendar.views.month'),
-          timeGridWeek: t('calendar.views.week'),
-          timeGridDay: t('calendar.views.day'),
-          listWeek: t('calendar.views.listWeek'),
-        },
+        // Native toolbar disabled - using custom React toolbar (SchedulerToolbar)
+        headerToolbar: false,
 
         // Locale & time settings
         locale: calendarLocale,
@@ -117,9 +105,7 @@ export const useSchedulerInit = ({
 
         // Sync current date with MiniCalendar when navigating
         datesSet: (info: { start: Date; end: Date }) => {
-          // Use the middle of the visible range as the "current" date
-          const midTime = (info.start.getTime() + info.end.getTime()) / 2;
-          setCurrentDate(new Date(midTime));
+          setCurrentDate(info);
         },
 
         // Event display

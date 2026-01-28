@@ -8,6 +8,7 @@
  * - Click to edit (eventClick)
  * - Click to create (dateClick)
  * - Select range to create (select)
+ * - Custom toolbar with navigation and view selection
  *
  * Next.js consideration: This component must be client-side only
  * due to DOM manipulation. Use dynamic import with ssr: false if needed.
@@ -15,30 +16,19 @@
 
 import "@event-calendar/core/index.css";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useCalendarContext } from "../../contexts/CalendarContext";
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
-import type { EventCalendarEvent } from "../../services/dav/types/event-calendar";
 
 import { EventModal } from "./EventModal";
+import { SchedulerToolbar } from "./SchedulerToolbar";
 import type { SchedulerProps, EventModalState } from "./types";
 import { useSchedulerHandlers } from "./hooks/useSchedulerHandlers";
 import {
   useSchedulerInit,
   useSchedulingCapabilitiesCheck,
 } from "./hooks/useSchedulerInit";
-
-type ECEvent = EventCalendarEvent;
-
-// Calendar API interface
-interface CalendarApi {
-  updateEvent: (event: ECEvent) => void;
-  addEvent: (event: ECEvent) => void;
-  unselect: () => void;
-  refetchEvents: () => void;
-  $destroy?: () => void;
-}
 
 export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
   const {
@@ -52,8 +42,12 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
   } = useCalendarContext();
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const calendarRef = contextCalendarRef as React.MutableRefObject<CalendarApi | null>;
+  const calendarRef = contextCalendarRef;
   const [calendarUrl, setCalendarUrl] = useState(defaultCalendarUrl || "");
+
+  // Toolbar state
+  const [currentView, setCurrentView] = useState("timeGridWeek");
+  const [viewTitle, setViewTitle] = useState("");
 
   // Modal state
   const [modalState, setModalState] = useState<EventModalState>({
@@ -102,6 +96,25 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     setModalState,
   });
 
+  // Callback to update toolbar state when calendar dates/view changes
+  const handleDatesSet = useCallback(
+    (info: { start: Date; end: Date; view?: { type: string; title: string } }) => {
+      // Update current date for MiniCalendar sync
+      const midTime = (info.start.getTime() + info.end.getTime()) / 2;
+      setCurrentDate(new Date(midTime));
+
+      // Update toolbar state
+      if (calendarRef.current) {
+        const view = calendarRef.current.getView();
+        if (view) {
+          setCurrentView(view.type);
+          setViewTitle(view.title);
+        }
+      }
+    },
+    [setCurrentDate, calendarRef]
+  );
+
   // Initialize calendar
   // Cast handlers to bypass library type differences between specific event types and unknown
   useSchedulerInit({
@@ -113,13 +126,24 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     adapter,
     visibleCalendarUrlsRef,
     davCalendarsRef,
-    setCurrentDate,
+    setCurrentDate: handleDatesSet,
     handleEventClick: handleEventClick as (info: unknown) => void,
     handleEventDrop: handleEventDrop as unknown as (info: unknown) => void,
     handleEventResize: handleEventResize as unknown as (info: unknown) => void,
     handleDateClick: handleDateClick as (info: unknown) => void,
     handleSelect: handleSelect as (info: unknown) => void,
   });
+
+  // Update toolbar title on initial render
+  useEffect(() => {
+    if (calendarRef.current) {
+      const view = calendarRef.current.getView();
+      if (view) {
+        setCurrentView(view.type);
+        setViewTitle(view.title);
+      }
+    }
+  }, [isConnected]);
 
   // Update eventFilter when visible calendars change
   useEffect(() => {
@@ -130,12 +154,24 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     }
   }, [visibleCalendarUrls, davCalendars]);
 
+  const handleViewChange = useCallback((view: string) => {
+    setCurrentView(view);
+  }, []);
+
   return (
-    <>
+    <div className="scheduler">
+      <SchedulerToolbar
+        calendarRef={calendarRef}
+        currentView={currentView}
+        viewTitle={viewTitle}
+        onViewChange={handleViewChange}
+      />
+
       <div
         ref={containerRef}
         id="event-calendar"
-        style={{ height: "calc(100vh - 100px)" }}
+        className="scheduler__calendar"
+        style={{ height: "calc(100vh - 160px)" }}
       />
 
       <EventModal
@@ -150,7 +186,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
         onRespondToInvitation={handleRespondToInvitation}
         onClose={handleModalClose}
       />
-    </>
+    </div>
   );
 };
 
