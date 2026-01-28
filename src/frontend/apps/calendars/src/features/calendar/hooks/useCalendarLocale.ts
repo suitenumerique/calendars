@@ -98,7 +98,7 @@ export function useCalendarLocale() {
     const dayOfWeek = date.toLocaleDateString(intlLocale, { weekday: 'short' });
     const dayOfMonth = date.toLocaleDateString(intlLocale, { day: 'numeric' });
     return {
-      html: `<div class="day-header"><span class="day-of-month">${dayOfMonth}</span> <span class="day-of-week">${dayOfWeek}</span></div>`,
+      html: `<div class="day-header"><span class="day-of-week">${dayOfWeek}</span> <span class="day-of-month">${dayOfMonth}</span> </div>`,
     };
   }, [intlLocale]);
 
