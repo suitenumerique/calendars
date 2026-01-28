@@ -18,17 +18,9 @@ import type { EventCalendarAdapter, CalDavExtendedProps } from "../../../service
 import type { CalDavService } from "../../../services/dav/CalDavService";
 import type { CalDavCalendar } from "../../../services/dav/types/caldav-service";
 import type { EventCalendarEvent, EventCalendarFetchInfo } from "../../../services/dav/types/event-calendar";
+import type { CalendarApi } from "../types";
 
 type ECEvent = EventCalendarEvent;
-
-// Calendar API interface
-interface CalendarApi {
-  updateEvent: (event: ECEvent) => void;
-  addEvent: (event: ECEvent) => void;
-  unselect: () => void;
-  refetchEvents: () => void;
-  $destroy?: () => void;
-}
 
 interface UseSchedulerInitProps {
   containerRef: MutableRefObject<HTMLDivElement | null>;
@@ -46,6 +38,12 @@ interface UseSchedulerInitProps {
   handleDateClick: (info: unknown) => void;
   handleSelect: (info: unknown) => void;
 }
+
+// Helper to get current time as HH:MM string
+const getCurrentTimeString = (): string => {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+};
 
 export const useSchedulerInit = ({
   containerRef,
@@ -66,6 +64,32 @@ export const useSchedulerInit = ({
   const { t, i18n } = useTranslation();
   const { calendarLocale, firstDayOfWeek, formatDayHeader } = useCalendarLocale();
 
+  // Capture initial scroll time only once on first render
+  const initialScrollTimeRef = useRef<string>(getCurrentTimeString());
+
+  // Store event handlers in refs for stable references (advanced-event-handler-refs pattern)
+  // This prevents calendar recreation when handlers change (e.g., when modalState changes)
+  const handlersRef = useRef({
+    handleEventClick,
+    handleEventDrop,
+    handleEventResize,
+    handleDateClick,
+    handleSelect,
+    setCurrentDate,
+  });
+
+  // Update refs when handlers change (no effect dependencies = no calendar recreation)
+  useEffect(() => {
+    handlersRef.current = {
+      handleEventClick,
+      handleEventDrop,
+      handleEventResize,
+      handleDateClick,
+      handleSelect,
+      setCurrentDate,
+    };
+  });
+
   useEffect(() => {
     if (!containerRef.current || calendarRef.current || !isConnected) return;
 
@@ -82,7 +106,7 @@ export const useSchedulerInit = ({
         locale: calendarLocale,
         firstDay: firstDayOfWeek,
         slotDuration: "00:30",
-        scrollTime: "08:00",
+        scrollTime: initialScrollTimeRef.current,
         displayEventEnd: true,
 
         // Interactive features
@@ -96,16 +120,16 @@ export const useSchedulerInit = ({
         selectBackgroundColor: '#ffcdd2', // Light red color for selection
 
         // Event handlers - ALL INTERACTIONS
-        // Cast handlers to bypass library type differences (DomEvent vs MouseEvent)
-        eventClick: handleEventClick as (info: unknown) => void,
-        eventDrop: handleEventDrop as (info: unknown) => void,
-        eventResize: handleEventResize as (info: unknown) => void,
-        dateClick: handleDateClick as (info: unknown) => void,
-        select: handleSelect as (info: unknown) => void,
+        // Use ref wrappers for stable references (prevents calendar recreation on handler changes)
+        eventClick: (info: unknown) => handlersRef.current.handleEventClick(info),
+        eventDrop: (info: unknown) => handlersRef.current.handleEventDrop(info),
+        eventResize: (info: unknown) => handlersRef.current.handleEventResize(info),
+        dateClick: (info: unknown) => handlersRef.current.handleDateClick(info),
+        select: (info: unknown) => handlersRef.current.handleSelect(info),
 
         // Sync current date with MiniCalendar when navigating
         datesSet: (info: { start: Date; end: Date }) => {
-          setCurrentDate(info);
+          handlersRef.current.setCurrentDate(info);
         },
 
         // Event display
@@ -133,29 +157,16 @@ export const useSchedulerInit = ({
               try {
                 // Fetch events from ALL calendars in parallel
                 const allEventsPromises = calendars.map(async (calendar) => {
-                  // Fetch source events (with recurrence rules) without expansion
-                  const sourceEventsResult = await caldavService.fetchEvents(
-                    calendar.url,
-                    {
-                      timeRange: {
-                        start: fetchInfo.start,
-                        end: fetchInfo.end,
-                      },
-                      expand: false,
-                    }
-                  );
+                  const timeRange = {
+                    start: fetchInfo.start,
+                    end: fetchInfo.end,
+                  };
 
-                  // Fetch expanded instances
-                  const expandedEventsResult = await caldavService.fetchEvents(
-                    calendar.url,
-                    {
-                      timeRange: {
-                        start: fetchInfo.start,
-                        end: fetchInfo.end,
-                      },
-                      expand: true,
-                    }
-                  );
+                  // Fetch source events and expanded instances in parallel
+                  const [sourceEventsResult, expandedEventsResult] = await Promise.all([
+                    caldavService.fetchEvents(calendar.url, { timeRange, expand: false }),
+                    caldavService.fetchEvents(calendar.url, { timeRange, expand: true }),
+                  ]);
 
                   if (!expandedEventsResult.success || !expandedEventsResult.data) {
                     console.error(
@@ -241,23 +252,17 @@ export const useSchedulerInit = ({
         containerRef.current.innerHTML = '';
       }
     };
-    // Note: refs (containerRef, calendarRef, visibleCalendarUrlsRef, davCalendarsRef) are excluded
-    // from dependencies as they are stable references that don't trigger re-renders
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Note: refs (containerRef, calendarRef, visibleCalendarUrlsRef, davCalendarsRef, initialScrollTimeRef, handlersRef)
+    // are excluded from dependencies as they are stable references that don't trigger re-renders.
+    // Event handlers are accessed via handlersRef to prevent calendar recreation on handler changes.
   }, [
     isConnected,
     calendarUrl,
     calendarLocale,
     firstDayOfWeek,
     formatDayHeader,
-    handleEventClick,
-    handleEventDrop,
-    handleEventResize,
-    handleDateClick,
-    handleSelect,
     caldavService,
     adapter,
-    setCurrentDate,
     t,
     i18n.language,
   ]);
