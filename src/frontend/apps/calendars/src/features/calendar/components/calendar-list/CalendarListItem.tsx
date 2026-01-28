@@ -7,7 +7,10 @@ import { useTranslation } from "react-i18next";
 import { Checkbox } from "@gouvfr-lasuite/cunningham-react";
 
 import { CalendarItemMenu } from "./CalendarItemMenu";
-import type { CalendarListItemProps, SharedCalendarListItemProps } from "./types";
+import type {
+  CalendarListItemProps,
+  SharedCalendarListItemProps,
+} from "./types";
 
 /**
  * CalendarListItem - Displays a user-owned calendar.
@@ -27,40 +30,35 @@ export const CalendarListItem = ({
 
   return (
     <div className="calendar-list__item">
-      <div className="calendar-list__item-checkbox">
+      <div
+        className="calendar-list__item-checkbox"
+        style={{ "--calendar-color": calendar.color } as React.CSSProperties}
+      >
         <Checkbox
           checked={isVisible}
           onChange={() => onToggleVisibility(calendar.url)}
           label=""
-          aria-label={`${t('calendar.list.showCalendar')} ${calendar.displayName || ''}`}
-        />
-        <span
-          className="calendar-list__color"
-          style={{ backgroundColor: calendar.color }}
+          aria-label={`${t("calendar.list.showCalendar")} ${calendar.displayName || ""}`}
         />
       </div>
       <span
         className="calendar-list__name"
         title={calendar.displayName || undefined}
       >
-        {calendar.displayName || 'Sans nom'}
+        {calendar.displayName || "Sans nom"}
       </span>
       <div className="calendar-list__item-actions">
-        <button
-          className="calendar-list__options-btn"
-          onClick={(e) => onMenuToggle(calendar.url, e)}
-          aria-label="Options"
-        >
-          <span className="material-icons">more_horiz</span>
-        </button>
-        {isMenuOpen && (
-          <CalendarItemMenu
-            onEdit={() => onEdit(calendar)}
-            onDelete={() => onDelete(calendar)}
-            onSubscription={onSubscription ? () => onSubscription(calendar) : undefined}
-            onClose={onCloseMenu}
-          />
-        )}
+        <CalendarItemMenu
+          isOpen={isMenuOpen}
+          onOpenChange={(open) =>
+            open ? onMenuToggle(calendar.url) : onCloseMenu()
+          }
+          onEdit={() => onEdit(calendar)}
+          onDelete={() => onDelete(calendar)}
+          onSubscription={
+            onSubscription ? () => onSubscription(calendar) : undefined
+          }
+        />
       </div>
     </div>
   );
@@ -78,12 +76,15 @@ export const SharedCalendarListItem = ({
 
   return (
     <div className="calendar-list__item">
-      <div className="calendar-list__item-checkbox">
+      <div
+        className="calendar-list__item-checkbox"
+        style={{ "--calendar-color": calendar.color } as React.CSSProperties}
+      >
         <Checkbox
           checked={isVisible}
           onChange={() => onToggleVisibility(String(calendar.id))}
           label=""
-          aria-label={`${t('calendar.list.showCalendar')} ${calendar.name}`}
+          aria-label={`${t("calendar.list.showCalendar")} ${calendar.name}`}
         />
         <span
           className="calendar-list__color"

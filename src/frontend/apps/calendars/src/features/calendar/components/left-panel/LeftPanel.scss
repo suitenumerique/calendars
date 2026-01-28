@@ -3,16 +3,22 @@
   flex-direction: column;
   height: 100%;
   background-color: var(--c--theme--colors--greyscale-000);
-  border-right: 1px solid
-    var(--c--contextuals--border--semantic--neutral--tertiary);
+
   overflow-y: auto;
 
   &__create {
-    padding: 1rem 0.75rem;
+    padding: 0.75rem 0.75rem;
 
     .c__button {
       width: 100%;
       justify-content: center;
     }
+  }
+
+  .mini-calendar {
+    width: 100%;
+    max-width: 280px;
+    align-self: center;
+    flex-shrink: 0;
   }
 }

@@ -21,8 +21,8 @@ import {
 } from "@gouvfr-lasuite/cunningham-react";
 
 import { useAuth } from "@/features/auth/Auth";
-import { AttendeesInput } from "../AttendeesInput";
-import { RecurrenceEditor } from "../RecurrenceEditor";
+import { AttendeesInput } from "./AttendeesInput";
+import { RecurrenceEditor } from "./RecurrenceEditor";
 import { DeleteEventModal } from "./DeleteEventModal";
 import type { EventModalProps, RecurringDeleteOption } from "./types";
 import {

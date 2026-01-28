@@ -147,8 +147,7 @@ export const useCalendarListState = ({
 
   // Menu handlers
   const handleMenuToggle = useCallback(
-    (calendarUrl: string, e: React.MouseEvent) => {
-      e.stopPropagation();
+    (calendarUrl: string) => {
       setOpenMenuUrl(openMenuUrl === calendarUrl ? null : calendarUrl);
     },
     [openMenuUrl]

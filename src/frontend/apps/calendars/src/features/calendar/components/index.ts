@@ -1,3 +1,2 @@
-export { LeftPanel } from "./LeftPanel";
-export { MiniCalendar } from "./MiniCalendar";
-export { AttendeesInput } from "./AttendeesInput";
+export { LeftPanel, MiniCalendar } from "./left-panel";
+export { AttendeesInput } from "./scheduler";

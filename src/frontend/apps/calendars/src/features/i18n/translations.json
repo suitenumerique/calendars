@@ -162,7 +162,7 @@
           "errorServer": "Server error. Please try again later."
         },
         "leftPanel": {
-          "create": "Create"
+          "newEvent": "New event"
         },
         "miniCalendar": {
           "previousMonth": "Previous month",
@@ -731,7 +731,7 @@
           "errorServer": "Erreur serveur. Veuillez réessayer plus tard."
         },
         "leftPanel": {
-          "create": "Créer"
+          "newEvent": "Nouvel événement"
         },
         "miniCalendar": {
           "previousMonth": "Mois précédent",
@@ -1047,7 +1047,7 @@
           "errorServer": "Serverfout. Probeer het later opnieuw."
         },
         "leftPanel": {
-          "create": "Aanmaken"
+          "newEvent": "Nieuw evenement"
         },
         "miniCalendar": {
           "previousMonth": "Vorige maand",

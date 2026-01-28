@@ -12,38 +12,15 @@
 
   &__month-title {
     font-size: 1rem;
-    font-weight: 500;
+    font-weight: 700;
     text-transform: capitalize;
-    color: var(--c--theme--colors--greyscale-800);
+    color: var(--c--contextuals--content--semantic--neutral--primary);
   }
 
   &__nav {
     display: flex;
     align-items: center;
     gap: 0.25rem;
-  }
-
-  &__nav-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.75rem;
-    height: 1.75rem;
-    border: none;
-    background: transparent;
-    border-radius: 50%;
-    cursor: pointer;
-    color: var(--c--theme--colors--greyscale-500);
-    transition: background-color 0.15s, color 0.15s;
-
-    &:hover {
-      background-color: var(--c--theme--colors--greyscale-100);
-      color: var(--c--theme--colors--greyscale-700);
-    }
-
-    .material-icons {
-      font-size: 1.25rem;
-    }
   }
 
   &__grid {
@@ -63,15 +40,15 @@
     align-items: center;
     justify-content: center;
     height: 1.5rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--c--theme--colors--greyscale-800);
+    font-size: var(--c--globals--font--sizes--s);
+    font-weight: 700;
+    color: var(--c--contextuals--content--semantic--neutral--primary);
     text-transform: lowercase;
 
     &--week-num {
-      color: var(--c--theme--colors--greyscale-500);
+      color: var(--c--contextuals--content--semantic--neutral--tertiary);
       font-weight: 500;
-      font-size: 0.7rem;
+      font-size: 0.6rem;
     }
   }
 
@@ -91,8 +68,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.75rem;
-    color: var(--c--theme--colors--greyscale-400);
+    font-size: 0.6rem;
+    color: var(--c--contextuals--content--semantic--neutral--tertiary);
     font-weight: 400;
   }
 
@@ -107,32 +84,53 @@
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.8rem;
-    color: var(--c--theme--colors--greyscale-800);
+    color: var(--c--contextuals--content--semantic--neutral--primary);
     font-weight: 500;
     transition: background-color 0.15s;
 
-    &:hover {
-      background-color: var(--c--theme--colors--greyscale-100);
-    }
-
     &--outside {
-      color: var(--c--theme--colors--greyscale-400);
+      color: var(--c--contextuals--content--semantic--neutral--tertiary);
       font-weight: 400;
+
+      &.mini-calendar__day--today {
+        color: var(--c--contextuals--content--semantic--neutral--primary);
+        font-weight: 700;
+      }
+
+      &.mini-calendar__day--selected {
+        color: white;
+        font-weight: 600;
+      }
     }
 
-    &--today {
-      color: var(--c--theme--colors--primary-600);
+    &--today:not(.mini-calendar__day--outside) {
+      color: var(--c--contextuals--content--semantic--brand--primary);
       font-weight: 600;
     }
 
+    // &:not(&--outside):--today {
+    //   color: var(--c--contextuals--content--semantic--neutral--primary);
+    //   font-weight: 600;
+    // }
+
+    &:hover {
+      background-color: var(
+        --c--contextuals--background--semantic--neutral--tertiary
+      );
+    }
+
     &--selected {
-      background-color: #8b4513;
+      background-color: var(
+        --c--contextuals--background--semantic--brand--primary
+      );
       color: white;
       font-weight: 600;
       border-radius: 4px;
 
       &:hover {
-        background-color: #7a3d11;
+        background-color: var(
+          --c--contextuals--background--semantic--brand--primary-hover
+        );
       }
     }
   }

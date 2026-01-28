@@ -57,7 +57,9 @@
     border-radius: 50%;
     cursor: pointer;
     color: var(--c--theme--colors--greyscale-600);
-    transition: background-color 0.15s, color 0.15s;
+    transition:
+      background-color 0.15s,
+      color 0.15s;
 
     &:hover {
       background-color: var(--c--theme--colors--greyscale-100);
@@ -72,14 +74,13 @@
   &__items {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
   }
 
   &__item {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.375rem 0.5rem;
+    padding: 0.1rem 0.375rem;
     border-radius: 4px;
     transition: background-color 0.15s;
 
@@ -106,6 +107,12 @@
     align-items: center;
     gap: 0.25rem;
     flex-shrink: 0;
+
+    // Override Cunningham checkbox colors with calendar color
+    input:checked {
+      background-color: var(--calendar-color) !important;
+      border-color: var(--calendar-color) !important;
+    }
   }
 
   &__color {
@@ -132,27 +139,11 @@
   }
 
   &__options-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
-    border: none;
-    background: transparent;
-    border-radius: 4px;
-    cursor: pointer;
-    color: var(--c--theme--colors--greyscale-500);
     opacity: 0;
-    transition: opacity 0.15s, background-color 0.15s, color 0.15s;
-
-    &:hover {
-      background-color: var(--c--theme--colors--greyscale-200);
-      color: var(--c--theme--colors--greyscale-700);
-    }
-
-    .material-icons {
-      font-size: 1.125rem;
-    }
+    transition:
+      opacity 0.15s,
+      background-color 0.15s,
+      color 0.15s;
   }
 
   &__menu {
@@ -272,7 +263,9 @@
     border: 3px solid transparent;
     border-radius: 50%;
     cursor: pointer;
-    transition: transform 0.15s, box-shadow 0.15s;
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
 
     &:hover {
       transform: scale(1.15);
@@ -280,7 +273,9 @@
 
     &--selected {
       border-color: #1f2937;
-      box-shadow: 0 0 0 2px white, 0 0 0 4px #9ca3af;
+      box-shadow:
+        0 0 0 2px white,
+        0 0 0 4px #9ca3af;
     }
   }
 

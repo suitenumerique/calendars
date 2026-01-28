@@ -18,8 +18,9 @@ import {
   subMonths,
 } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { useCalendarContext } from "../contexts";
-import { useCalendarLocale } from "../hooks/useCalendarLocale";
+import { useCalendarContext } from "../../contexts";
+import { useCalendarLocale } from "../../hooks/useCalendarLocale";
+import { Button } from "@gouvfr-lasuite/cunningham-react";
 
 interface MiniCalendarProps {
   selectedDate: Date;
@@ -71,13 +72,13 @@ export const MiniCalendar = ({
   // Generate weekday labels based on locale and first day of week
   const weekDays = useMemo(() => {
     const days = [
-      t('calendar.recurrence.weekdays.mo'),
-      t('calendar.recurrence.weekdays.tu'),
-      t('calendar.recurrence.weekdays.we'),
-      t('calendar.recurrence.weekdays.th'),
-      t('calendar.recurrence.weekdays.fr'),
-      t('calendar.recurrence.weekdays.sa'),
-      t('calendar.recurrence.weekdays.su'),
+      t("calendar.recurrence.weekdays.mo"),
+      t("calendar.recurrence.weekdays.tu"),
+      t("calendar.recurrence.weekdays.we"),
+      t("calendar.recurrence.weekdays.th"),
+      t("calendar.recurrence.weekdays.fr"),
+      t("calendar.recurrence.weekdays.sa"),
+      t("calendar.recurrence.weekdays.su"),
     ];
     // Rotate array based on firstDayOfWeek (0 = Sunday, 1 = Monday)
     if (firstDayOfWeek === 0) {
@@ -106,20 +107,23 @@ export const MiniCalendar = ({
           {format(viewDate, "MMMM yyyy", { locale: dateFnsLocale })}
         </span>
         <div className="mini-calendar__nav">
-          <button
-            className="mini-calendar__nav-btn"
+          <Button
+            variant="tertiary"
+            size="small"
+            color="neutral"
             onClick={handlePrevMonth}
+            icon={<span className="material-icons">chevron_left</span>}
             aria-label={t("calendar.miniCalendar.previousMonth")}
-          >
-            <span className="material-icons">chevron_left</span>
-          </button>
-          <button
-            className="mini-calendar__nav-btn"
+          />
+
+          <Button
+            variant="tertiary"
+            size="small"
+            color="neutral"
             onClick={handleNextMonth}
+            icon={<span className="material-icons">chevron_right</span>}
             aria-label={t("calendar.miniCalendar.nextMonth")}
-          >
-            <span className="material-icons">chevron_right</span>
-          </button>
+          />
         </div>
       </div>
 
@@ -155,7 +159,9 @@ export const MiniCalendar = ({
                       className={`mini-calendar__day ${
                         !isCurrentMonth ? "mini-calendar__day--outside" : ""
                       } ${isSelected ? "mini-calendar__day--selected" : ""} ${
-                        isToday && !isSelected ? "mini-calendar__day--today" : ""
+                        isToday && !isSelected
+                          ? "mini-calendar__day--today"
+                          : ""
                       }`}
                       onClick={() => handleDayClick(day)}
                     >
