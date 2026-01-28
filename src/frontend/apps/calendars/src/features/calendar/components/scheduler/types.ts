@@ -78,3 +78,29 @@ export interface EventFormState {
   showRecurrence: boolean;
   showAttendees: boolean;
 }
+
+/**
+ * Calendar API interface for toolbar interactions.
+ */
+export interface CalendarApi {
+  setOption: (name: string, value: unknown) => void;
+  getOption: (name: string) => unknown;
+  getView: () => { type: string; title: string; currentStart: Date; currentEnd: Date };
+  prev: () => void;
+  next: () => void;
+  updateEvent: (event: unknown) => void;
+  addEvent: (event: unknown) => void;
+  unselect: () => void;
+  refetchEvents: () => void;
+  $destroy?: () => void;
+}
+
+/**
+ * Props for the SchedulerToolbar component.
+ */
+export interface SchedulerToolbarProps {
+  calendarRef: React.RefObject<CalendarApi | null>;
+  currentView: string;
+  viewTitle: string;
+  onViewChange?: (view: string) => void;
+}
