@@ -1,0 +1,184 @@
+// =============================================================================
+// EventCalendar Theme Override
+// Aligns @event-calendar/core with La Suite design system (Cunningham)
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// 1. CSS Variables - Map --ec-* to Cunningham tokens
+// -----------------------------------------------------------------------------
+.ec {
+  // Base colors
+  --ec-bg-color: var(--c--globals--colors--gray-000);
+  --ec-day-bg-color: var(--c--contextuals--background--surface--secondary);
+  --ec-text-color: var(--c--globals--colors--gray-800);
+  --ec-border-color: var(--c--globals--colors--gray-100);
+
+  // Buttons (if any native buttons remain visible)
+  --ec-button-bg-color: var(--c--globals--colors--gray-000);
+  --ec-button-border-color: var(--c--globals--colors--gray-200);
+  --ec-button-text-color: var(--c--globals--colors--gray-800);
+  --ec-button-active-bg-color: var(--c--globals--colors--gray-100);
+  --ec-button-active-border-color: var(--c--globals--colors--gray-300);
+
+  // Today & highlight
+  --ec-today-bg-color: transparent;
+  --ec-highlight-color: var(--c--globals--colors--brand-050);
+
+  // Events
+  --ec-event-text-color: #fff;
+
+  // Now indicator
+  --ec-now-indicator-color: var(--c--globals--colors--brand-500);
+
+  border: none !important;
+}
+
+.ec-day {
+  &.ec-today {
+    --ec-day-bg-color: var(
+      --c--contextuals--background--surface--secondary
+    ) !important;
+  }
+}
+
+.ec-col-group,
+.ec-col-head {
+  &.ec-today {
+    background-color: var(
+      --c--contextuals--background--surface--secondary
+    ) !important;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 2. Hide native toolbar (using custom React toolbar)
+// -----------------------------------------------------------------------------
+.ec-toolbar {
+  display: none !important;
+}
+
+.ec-main {
+  border: none !important;
+}
+// -----------------------------------------------------------------------------
+// 3. Column headers - Unified header zone with bottom shadow
+// -----------------------------------------------------------------------------
+
+// Remove borders from col-head to create unified look
+.ec-col-head {
+  border: none !important;
+  background-color: transparent;
+  time {
+    .day-of-month {
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 3px 0px;
+      display: inline-block;
+    }
+  }
+
+  &.ec-today {
+    // Frame around the day number
+    time {
+      .day-of-month {
+        padding: 3px 5px;
+        border: 1px solid
+          var(--c--contextuals--border--semantic--neutral--secondary);
+      }
+    }
+  }
+}
+
+// Remove borders from all-day section
+.ec-all-day {
+  border: none !important;
+
+  // Target cells inside all-day
+  > * {
+    border: none !important;
+  }
+
+  // Remove right border from all days in all-day section
+  .ec-day {
+    border-inline-end: none !important;
+    border-right: none !important;
+  }
+}
+
+// Add shadow to the header section
+.ec-header {
+  // box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  z-index: 3;
+
+  // Sidebar in header: no border, no text
+  .ec-sidebar {
+    border: none !important;
+    font-size: 0;
+    color: transparent;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 4. Events styling - Rounded corners, no shadow, bold title
+// -----------------------------------------------------------------------------
+.ec-event {
+  border-radius: 6px;
+  box-shadow: none;
+  padding: 8px 10px;
+}
+
+.ec-event-title {
+  font-weight: 600;
+}
+
+.ec-event-time {
+  font-weight: 400;
+  opacity: 0.95;
+}
+
+// -----------------------------------------------------------------------------
+// 5. Now indicator - Color only (shape is already good in the lib)
+// -----------------------------------------------------------------------------
+// Color is set via --ec-now-indicator-color variable above
+
+// -----------------------------------------------------------------------------
+// 6. Sidebar (hours) - Smaller, discrete style
+// -----------------------------------------------------------------------------
+.ec-sidebar {
+  font-size: 0.75rem;
+  color: var(--c--globals--colors--gray-500);
+}
+
+// -----------------------------------------------------------------------------
+// 7. Grid lines - Remove intermediate lines, keep only hourly lines
+// -----------------------------------------------------------------------------
+.ec-day {
+  .ec-time-grid .ec-body & {
+    // Override to remove intermediate (30-min) lines
+    // Keep only: bottom mask, hourly lines, vertical line
+    background-image:
+      linear-gradient(to top, var(--ec-day-bg-color) 1px, transparent 1px),
+      linear-gradient(to top, var(--ec-border-color) 1px, transparent 1px),
+      linear-gradient(to right, var(--ec-day-bg-color) 1px, transparent 1px) !important;
+    background-size:
+      100% 100%,
+      100% calc(var(--ec-slot-height) * var(--ec-slot-label-periodicity)),
+      2px 100%;
+  }
+}
+
+.ec-sidebar {
+  .ec-time-grid .ec-body & {
+    background-image: none !important;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// 8. Grid in body - Add bottom border
+// -----------------------------------------------------------------------------
+.ec-body {
+  .ec-grid {
+    border-bottom: 1px solid var(--ec-border-color);
+    border-right: 1px solid var(--ec-border-color);
+  }
+}
