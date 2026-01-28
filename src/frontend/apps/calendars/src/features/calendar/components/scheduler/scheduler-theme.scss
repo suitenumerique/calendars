@@ -7,6 +7,9 @@
 // 1. CSS Variables - Map --ec-* to Cunningham tokens
 // -----------------------------------------------------------------------------
 .ec {
+  // Fill parent container to enable proper scrolling and sticky header
+  height: 100%;
+
   // Base colors
   --ec-bg-color: var(--c--globals--colors--gray-000);
   --ec-day-bg-color: var(--c--contextuals--background--surface--secondary);
