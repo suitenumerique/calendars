@@ -46,17 +46,17 @@ function deepMerge(target: any, source: any): any {
 const themesImages = {
   anct: {
     favicon: "/assets/anct_favicon.png",
-    logo: "/assets/anct_logo_beta.svg",
+    logo: "/assets/acal_full_logotype_vector.svg",
     "logo-icon": "/assets/anct_logo-icon.svg",
   },
   dark: {
     favicon: "/assets/favicon.png",
-    logo: "/assets/logo_beta.svg",
+    logo: "/assets/cal_full_logotype_vector.svg",
     "logo-icon": "/assets/logo-icon_beta.svg",
   },
   default: {
     favicon: "/assets/favicon.png",
-    logo: "/assets/logo_beta.svg",
+    logo: "/assets/cal_full_logotype_vector.svg",
     "logo-icon": "/assets/logo-icon_beta.svg",
   },
 };
