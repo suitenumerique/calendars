@@ -17,6 +17,7 @@ import { LeftPanelMobile } from "@/features/layouts/components/left-panel/LeftPa
 import { SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL } from "@/features/api/fetchApi";
 import { useThemeCustomization } from "@/hooks/useThemeCustomization";
 import { Feedback } from "@/features/feedback/Feedback";
+import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 export default function HomePage() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -76,7 +77,7 @@ export default function HomePage() {
 
       <HomeGutter>
         <Hero
-          logo={<div className="calendars__logo-icon" />}
+          logo={<DynamicCalendarLogo variant="icon" />}
           banner={banner.src}
           title={t("home.title")}
           subtitle={t("home.subtitle")}
@@ -117,7 +118,7 @@ HomePage.getLayout = function getLayout(page: React.ReactElement) {
           leftPanelContent={<LeftPanelMobile />}
           icon={
             <div className="calendars__header__left">
-              <div className="calendars__header__logo" />
+              <DynamicCalendarLogo variant="header" />
               <Feedback />
             </div>
           }
