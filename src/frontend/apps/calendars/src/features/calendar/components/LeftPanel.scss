@@ -3,7 +3,8 @@
   flex-direction: column;
   height: 100%;
   background-color: var(--c--theme--colors--greyscale-000);
-  border-right: 1px solid var(--c--theme--colors--greyscale-200);
+  border-right: 1px solid
+    var(--c--contextuals--border--semantic--neutral--tertiary);
   overflow-y: auto;
 
   &__create {
@@ -13,11 +14,5 @@
       width: 100%;
       justify-content: center;
     }
-  }
-
-  &__divider {
-    height: 1px;
-    background-color: var(--c--theme--colors--greyscale-200);
-    margin: 0.5rem 0.75rem;
   }
 }
