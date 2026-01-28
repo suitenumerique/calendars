@@ -1,0 +1,50 @@
+.calendars__dynamic-logo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+
+  &__img {
+    display: block;
+    height: 100%;
+    width: auto;
+  }
+
+  &__day {
+    position: absolute;
+    color: #f7f8f8;
+    font-weight: 700;
+    font-family:
+      system-ui,
+      -apple-system,
+      sans-serif;
+    text-align: center;
+    opacity: 0.95;
+    pointer-events: none;
+    font-size: 11px;
+
+    &--small {
+      font-size: 12px;
+    }
+  }
+
+  &--header {
+    height: 40px;
+
+    .calendars__dynamic-logo__day {
+      left: 20px;
+      top: 35%;
+      transform: translate(-50%, 15%);
+    }
+  }
+
+  &--icon {
+    height: 40px;
+    width: 40px;
+
+    .calendars__dynamic-logo__day {
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, 15%);
+    }
+  }
+}
