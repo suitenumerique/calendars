@@ -101,6 +101,10 @@
           "listYear": "Year list",
           "today": "Today"
         },
+        "navigation": {
+          "previous": "Previous",
+          "next": "Next"
+        },
         "event": {
           "createTitle": "Create event",
           "editTitle": "Edit event",
@@ -666,6 +670,10 @@
           "listYear": "Liste année",
           "today": "Aujourd'hui"
         },
+        "navigation": {
+          "previous": "Précédent",
+          "next": "Suivant"
+        },
         "event": {
           "createTitle": "Créer un événement",
           "editTitle": "Modifier l'événement",
@@ -977,6 +985,10 @@
           "listMonth": "Maand lijst",
           "listYear": "Jaar lijst",
           "today": "Vandaag"
+        },
+        "navigation": {
+          "previous": "Vorige",
+          "next": "Volgende"
         },
         "event": {
           "createTitle": "Evenement aanmaken",
