@@ -14,6 +14,7 @@ import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
 import { Scheduler } from "@/features/calendar/components/scheduler/Scheduler";
 import { CalendarContextProvider } from "@/features/calendar/contexts";
+import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 
 export default function CalendarPage() {
   const { t } = useTranslation();
@@ -57,7 +58,7 @@ CalendarPage.getLayout = function getLayout(page: React.ReactElement) {
             leftPanelContent={<LeftPanel />}
             icon={
               <div className="calendars__header__left">
-                <div className="calendars__header__logo" />
+                <DynamicCalendarLogo variant="header" />
               </div>
             }
             rightHeaderContent={<HeaderRight />}

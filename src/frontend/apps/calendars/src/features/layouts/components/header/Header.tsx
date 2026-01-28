@@ -5,12 +5,13 @@ import { useTranslation } from "react-i18next";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { Feedback } from "@/features/feedback/Feedback";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
+import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
 
 export const HeaderIcon = () => {
   return (
     <div className="calendars__header__left">
-      <div className="calendars__header__logo" />
+      <DynamicCalendarLogo variant="header" />
       <Feedback />
     </div>
   );
