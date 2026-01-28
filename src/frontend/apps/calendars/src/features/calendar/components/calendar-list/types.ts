@@ -21,10 +21,11 @@ export interface CalendarModalProps {
  * Props for the CalendarItemMenu component.
  */
 export interface CalendarItemMenuProps {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
   onSubscription?: () => void;
-  onClose: () => void;
 }
 
 /**
@@ -46,7 +47,7 @@ export interface CalendarListItemProps {
   isVisible: boolean;
   isMenuOpen: boolean;
   onToggleVisibility: (url: string) => void;
-  onMenuToggle: (url: string, e: React.MouseEvent) => void;
+  onMenuToggle: (url: string) => void;
   onEdit: (calendar: CalDavCalendar) => void;
   onDelete: (calendar: CalDavCalendar) => void;
   onSubscription?: (calendar: CalDavCalendar) => void;

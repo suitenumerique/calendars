@@ -98,7 +98,11 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
 
   // Callback to update toolbar state when calendar dates/view changes
   const handleDatesSet = useCallback(
-    (info: { start: Date; end: Date; view?: { type: string; title: string } }) => {
+    (info: {
+      start: Date;
+      end: Date;
+      view?: { type: string; title: string };
+    }) => {
       // Update current date for MiniCalendar sync
       const midTime = (info.start.getTime() + info.end.getTime()) / 2;
       setCurrentDate(new Date(midTime));
@@ -112,7 +116,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
         }
       }
     },
-    [setCurrentDate, calendarRef]
+    [setCurrentDate, calendarRef],
   );
 
   // Initialize calendar
@@ -171,7 +175,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
         ref={containerRef}
         id="event-calendar"
         className="scheduler__calendar"
-        style={{ height: "calc(100vh - 160px)" }}
+        style={{ height: "calc(100vh - 52px - 90px)" }}
       />
 
       <EventModal
