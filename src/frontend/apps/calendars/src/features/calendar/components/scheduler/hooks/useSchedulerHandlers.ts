@@ -17,7 +17,6 @@ import type {
 } from "../../../services/dav/types/event-calendar";
 import type { EventCalendarAdapter, CalDavExtendedProps } from "../../../services/dav/EventCalendarAdapter";
 import type { CalDavService } from "../../../services/dav/CalDavService";
-import type { CalDavCalendar } from "../../../services/dav/types/caldav-service";
 import type { EventModalState, RecurringDeleteOption } from "../types";
 
 // Get browser timezone
@@ -36,7 +35,6 @@ interface CalendarApi {
 interface UseSchedulerHandlersProps {
   adapter: EventCalendarAdapter;
   caldavService: CalDavService;
-  davCalendarsRef: MutableRefObject<CalDavCalendar[]>;
   calendarRef: MutableRefObject<CalendarApi | null>;
   calendarUrl: string;
   modalState: EventModalState;
@@ -46,7 +44,6 @@ interface UseSchedulerHandlersProps {
 export const useSchedulerHandlers = ({
   adapter,
   caldavService,
-  davCalendarsRef,
   calendarRef,
   calendarUrl,
   modalState,
@@ -257,23 +254,11 @@ export const useSchedulerHandlers = ({
           throw new Error(result.error || "Failed to create event");
         }
 
-        // Add to calendar UI
-        if (calendarRef.current && result.data) {
-          // For recurring events, refetch all events to ensure proper timezone conversion
-          if (event.recurrenceRule) {
-            calendarRef.current.refetchEvents();
-          } else {
-            // Non-recurring event, add normally
-            const calendarColors = adapter.createCalendarColorMap(
-              davCalendarsRef.current
-            );
-            const ecEvents = adapter.toEventCalendarEvents([result.data], {
-              calendarColors,
-            });
-            if (ecEvents.length > 0) {
-              calendarRef.current.addEvent(ecEvents[0] as ECEvent);
-            }
-          }
+        // Refetch events to ensure proper timezone conversion
+        // (optimistic add would use fake UTC dates from the modal,
+        // causing a +1h offset until refresh)
+        if (calendarRef.current) {
+          calendarRef.current.refetchEvents();
         }
       } else {
         // Update existing event
@@ -291,27 +276,15 @@ export const useSchedulerHandlers = ({
           throw new Error(result.error || "Failed to update event");
         }
 
-        // Update in calendar UI
-        if (calendarRef.current && result.data) {
-          // If this is a recurring event, refetch all events to update all instances
-          if (event.recurrenceRule) {
-            calendarRef.current.refetchEvents();
-          } else {
-            // Non-recurring event, update normally
-            const calendarColors = adapter.createCalendarColorMap(
-              davCalendarsRef.current
-            );
-            const ecEvents = adapter.toEventCalendarEvents([result.data], {
-              calendarColors,
-            });
-            if (ecEvents.length > 0) {
-              calendarRef.current.updateEvent(ecEvents[0] as ECEvent);
-            }
-          }
+        // Refetch events to ensure proper timezone conversion
+        // (optimistic update would use fake UTC dates from the modal,
+        // causing a +1h offset until refresh)
+        if (calendarRef.current) {
+          calendarRef.current.refetchEvents();
         }
       }
     },
-    [adapter, caldavService, calendarRef, davCalendarsRef, modalState]
+    [caldavService, calendarRef, modalState.mode, modalState.eventUrl, modalState.etag]
   );
 
   /**
@@ -422,7 +395,7 @@ export const useSchedulerHandlers = ({
         }
       }
     },
-    [caldavService, modalState, calendarRef]
+    [caldavService, calendarRef, modalState.eventUrl, modalState.etag]
   );
 
   /**

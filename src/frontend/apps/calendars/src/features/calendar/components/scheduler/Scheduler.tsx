@@ -89,7 +89,6 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
   } = useSchedulerHandlers({
     adapter,
     caldavService,
-    davCalendarsRef,
     calendarRef,
     calendarUrl,
     modalState,
