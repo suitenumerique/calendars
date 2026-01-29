@@ -512,14 +512,16 @@ describe('event-calendar-helper', () => {
   // ============================================================================
   describe('ICS Conversion Helpers', () => {
     describe('icsDateToJsDate', () => {
-      it('returns local date when present', () => {
+      it('returns true UTC date (icsDate.date) when local is present', () => {
+        const utcDate = new Date('2025-01-15T10:00:00.000Z')
         const localDate = new Date('2025-01-15T11:00:00.000Z')
         const icsDate: IcsDateObject = {
           type: 'DATE-TIME',
-          date: new Date('2025-01-15T10:00:00.000Z'),
+          date: utcDate,
           local: { date: localDate, timezone: 'Europe/Paris', tzoffset: '+0100' },
         }
-        expect(icsDateToJsDate(icsDate)).toBe(localDate)
+        expect(icsDateToJsDate(icsDate)).toBe(utcDate)
+        expect(icsDateToJsDate(icsDate)).not.toBe(localDate)
       })
 
       it('returns UTC date when no local', () => {
@@ -537,6 +539,8 @@ describe('event-calendar-helper', () => {
         const date = new Date('2025-01-15T00:00:00.000Z')
         const result = jsDateToIcsDate(date, true)
         expect(result.type).toBe('DATE')
+        expect(result.date.getUTCDate()).toBe(15)
+        expect(result.local).toBeUndefined()
       })
 
       it('creates DATE-TIME type with timezone', () => {
@@ -544,6 +548,46 @@ describe('event-calendar-helper', () => {
         const result = jsDateToIcsDate(date, false, 'Europe/Paris')
         expect(result.type).toBe('DATE-TIME')
         expect(result.local?.timezone).toBe('Europe/Paris')
+      })
+
+      it('produces correct fake UTC for Europe/Paris winter (CET, UTC+1)', () => {
+        const date = new Date('2026-01-29T14:00:00Z') // 14:00 UTC = 15:00 Paris
+        const result = jsDateToIcsDate(date, false, 'Europe/Paris')
+        expect(result.date.getUTCHours()).toBe(15)
+        expect(result.date.getUTCMinutes()).toBe(0)
+        expect(result.local?.timezone).toBe('Europe/Paris')
+        expect(result.local?.tzoffset).toBe('+0100')
+      })
+
+      it('produces correct fake UTC for America/New_York winter (EST, UTC-5)', () => {
+        const date = new Date('2026-01-29T15:00:00Z') // 15:00 UTC = 10:00 NY
+        const result = jsDateToIcsDate(date, false, 'America/New_York')
+        expect(result.date.getUTCHours()).toBe(10)
+        expect(result.local?.timezone).toBe('America/New_York')
+        expect(result.local?.tzoffset).toBe('-0500')
+      })
+
+      it('produces correct fake UTC for Europe/Paris summer (CEST, UTC+2)', () => {
+        const date = new Date('2026-07-15T13:00:00Z') // 13:00 UTC = 15:00 Paris CEST
+        const result = jsDateToIcsDate(date, false, 'Europe/Paris')
+        expect(result.date.getUTCHours()).toBe(15)
+        expect(result.local?.tzoffset).toBe('+0200')
+      })
+
+      it('preserves minutes and seconds in fake UTC', () => {
+        const date = new Date('2026-01-29T14:37:42Z')
+        const result = jsDateToIcsDate(date, false, 'Europe/Paris')
+        expect(result.date.getUTCHours()).toBe(15)
+        expect(result.date.getUTCMinutes()).toBe(37)
+        expect(result.date.getUTCSeconds()).toBe(42)
+      })
+
+      it('uses browser timezone when no timezone specified', () => {
+        const date = new Date('2026-01-29T14:00:00Z')
+        const result = jsDateToIcsDate(date, false)
+        expect(result.type).toBe('DATE-TIME')
+        expect(result.local?.timezone).toBeDefined()
+        expect(result.local?.tzoffset).toBeDefined()
       })
     })
 

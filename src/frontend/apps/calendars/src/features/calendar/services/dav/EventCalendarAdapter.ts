@@ -44,6 +44,24 @@ type ExtendedOrganizer = {
 }
 
 // ============================================================================
+// Timezone Conversion Types
+// ============================================================================
+
+/**
+ * Date components extracted from a Date in a specific timezone.
+ * Used by getDateComponentsInTimezone() to convert UTC instants
+ * to local time components in any IANA timezone.
+ */
+export type DateComponents = {
+  year: number
+  month: number   // 1-12 (not 0-11 like JS Date)
+  day: number
+  hours: number
+  minutes: number
+  seconds: number
+}
+
+// ============================================================================
 // Extended Types for conversion metadata
 // ============================================================================
 
@@ -104,6 +122,10 @@ export class EventCalendarAdapter {
     defaultTextColor: '#ffffff',
     includeRecurringInstances: true,
   }
+
+  private static readonly FORMATTER_CACHE_MAX_SIZE = 50
+  private dateComponentsFormatterCache = new Map<string, Intl.DateTimeFormat>()
+  private offsetFormatterCache = new Map<string, Intl.DateTimeFormat>()
 
   // ============================================================================
   // CalDAV -> EventCalendar Conversions
@@ -343,16 +365,15 @@ export class EventCalendarAdapter {
     // Determine timezone
     const timezone = extProps.timezone ?? opts.defaultTimezone
 
-    // If event has extProps.timezone, it came from the server and dates are already "fake UTC"
-    const isFakeUtc = !!extProps.timezone
-
     // Build IcsEvent
+    // jsDateToIcsDate uses Intl.DateTimeFormat to convert the date to the
+    // target timezone — no need for isFakeUtc flag anymore.
     // Note: EventCalendar already uses exclusive end dates for all-day events
     const icsEvent: IcsEvent = {
       uid,
       stamp: { date: new Date() },
-      start: this.jsDateToIcsDate(startDate, isAllDay, timezone, isFakeUtc),
-      end: this.jsDateToIcsDate(endDate, isAllDay, timezone, isFakeUtc),
+      start: this.jsDateToIcsDate(startDate, isAllDay, timezone),
+      end: this.jsDateToIcsDate(endDate, isAllDay, timezone),
       summary: typeof ecEvent.title === 'string' ? ecEvent.title : '',
       sequence: (extProps.sequence ?? 0) + 1,
     }
@@ -366,13 +387,13 @@ export class EventCalendarAdapter {
     if (extProps.categories) icsEvent.categories = extProps.categories
     if (extProps.priority != null) icsEvent.priority = String(extProps.priority)
     if (extProps.url) icsEvent.url = extProps.url
-    if (extProps.created) icsEvent.created = this.jsDateToIcsDate(extProps.created, false, timezone, isFakeUtc)
+    if (extProps.created) icsEvent.created = this.jsDateToIcsDate(extProps.created, false, timezone)
     if (extProps.recurrenceRule) icsEvent.recurrenceRule = extProps.recurrenceRule
 
     // Convert recurrence ID for recurring instances
     if (extProps.recurrenceId) {
       icsEvent.recurrenceId = {
-        value: this.jsDateToIcsDate(extProps.recurrenceId, ecEvent.allDay ?? false, timezone, isFakeUtc),
+        value: this.jsDateToIcsDate(extProps.recurrenceId, ecEvent.allDay ?? false, timezone),
       }
     }
 
@@ -727,41 +748,42 @@ export class EventCalendarAdapter {
   }
 
   /**
-   * Convert IcsDateObject to JavaScript Date
+   * Convert IcsDateObject to JavaScript Date.
+   *
+   * Always returns icsDate.date (true UTC) so that downstream code using
+   * getHours()/getMinutes() gets correct browser-local time automatically.
+   *
+   * Previously returned icsDate.local.date ("fake UTC" where UTC components
+   * encode local time), which caused a double timezone offset when combined
+   * with getHours() in dateToLocalISOString().
    */
   private icsDateToJsDate(icsDate: IcsDateObject): Date {
-    // Use local date if available, otherwise use UTC date
-    if (icsDate.local?.date) {
-      return icsDate.local.date
-    }
     return icsDate.date
   }
 
   /**
-   * Convert JavaScript Date to IcsDateObject
+   * Convert JavaScript Date to IcsDateObject.
    *
-   * IMPORTANT: EventCalendar returns dates in browser local time.
-   * ts-ics uses date.getUTCHours() etc. to generate ICS, so we need to
-   * create a "fake UTC" date where UTC components match the local time we want.
+   * For timed events, uses Intl.DateTimeFormat to extract the date/time
+   * components in the TARGET timezone, then creates a "fake UTC" Date
+   * where getUTCHours() etc. return those target-timezone components.
+   * This is required because ts-ics uses getUTCHours() to generate ICS output.
    *
-   * Example: User in Paris (UTC+1) drags event to 15:00 local
-   * - Input date: Date representing 15:00 local (14:00 UTC internally)
-   * - We want ICS: DTSTART:20260121T150000Z or DTSTART;TZID=Europe/Paris:20260121T150000
-   * - Solution: Create date where getUTCHours() = 15
+   * The fake UTC pattern is confined to this method — all other code
+   * works with real UTC dates and lets the browser handle local conversion.
    *
-   * @param date - The date to convert
+   * @param date - Any Date object (real UTC instant from icsDateToJsDate, or browser-local from EventCalendar)
    * @param allDay - Whether this is an all-day event
-   * @param timezone - The timezone to use
-   * @param isFakeUtc - If true, date is already "fake UTC" (use getUTC* methods)
+   * @param timezone - Target IANA timezone for the ICS output (e.g., "Europe/Paris")
    */
-  private jsDateToIcsDate(date: Date, allDay: boolean, timezone?: string, isFakeUtc = false): IcsDateObject {
+  private jsDateToIcsDate(date: Date, allDay: boolean, timezone?: string): IcsDateObject {
     if (allDay) {
       // For all-day events, use DATE type (no time component)
-      // Create a UTC date with the local date components
+      // Extract date components in browser local time
       const utcDate = new Date(Date.UTC(
-        isFakeUtc ? date.getUTCFullYear() : date.getFullYear(),
-        isFakeUtc ? date.getUTCMonth() : date.getMonth(),
-        isFakeUtc ? date.getUTCDate() : date.getDate()
+        date.getFullYear(),
+        date.getMonth(),
+        date.getDate()
       ))
       return {
         type: 'DATE',
@@ -769,27 +791,26 @@ export class EventCalendarAdapter {
       }
     }
 
-    // For timed events, create a "fake UTC" date where UTC components = local components
-    // This ensures ts-ics generates the correct time in the ICS output
-    const fakeUtcDate = isFakeUtc
-      ? date  // Already fake UTC, use as-is
-      : new Date(Date.UTC(
-          date.getFullYear(),
-          date.getMonth(),
-          date.getDate(),
-          date.getHours(),
-          date.getMinutes(),
-          date.getSeconds()
-        ))
-
+    // Resolve the target timezone
     const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
-    const tzOffset = this.getTimezoneOffset(isFakeUtc ? date : new Date(
-      date.getFullYear(),
-      date.getMonth(),
-      date.getDate(),
-      date.getHours(),
-      date.getMinutes()
-    ), tz)
+
+    // Extract date/time components in the target timezone using Intl API.
+    // This correctly handles cross-timezone events (e.g., NY event viewed from Paris)
+    // and DST transitions.
+    const components = this.getDateComponentsInTimezone(date, tz)
+
+    // Create a "fake UTC" date where UTC components = target timezone components.
+    // ts-ics uses getUTCHours() to generate ICS, so this ensures correct output.
+    const fakeUtcDate = new Date(Date.UTC(
+      components.year,
+      components.month - 1, // DateComponents uses 1-12, Date.UTC uses 0-11
+      components.day,
+      components.hours,
+      components.minutes,
+      components.seconds
+    ))
+
+    const tzOffset = this.getTimezoneOffset(date, tz)
 
     return {
       type: 'DATE-TIME',
@@ -803,16 +824,69 @@ export class EventCalendarAdapter {
   }
 
   /**
+   * Extract date/time components from a UTC instant in a specific timezone.
+   *
+   * Uses Intl.DateTimeFormat to correctly handle DST transitions and
+   * non-standard offsets (e.g., UTC+5:30 for India, UTC+5:45 for Nepal).
+   *
+   * @param date - Any Date object (interpreted as a UTC instant)
+   * @param timezone - IANA timezone identifier (e.g., "Europe/Paris", "America/New_York")
+   * @returns DateComponents with year, month (1-12), day, hours, minutes, seconds in the target timezone
+   */
+  public getDateComponentsInTimezone(date: Date, timezone: string): DateComponents {
+    let formatter = this.dateComponentsFormatterCache.get(timezone)
+    if (!formatter) {
+      if (this.dateComponentsFormatterCache.size >= EventCalendarAdapter.FORMATTER_CACHE_MAX_SIZE) {
+        const firstKey = this.dateComponentsFormatterCache.keys().next().value
+        this.dateComponentsFormatterCache.delete(firstKey as string)
+      }
+      formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      })
+      this.dateComponentsFormatterCache.set(timezone, formatter)
+    }
+    const parts = formatter.formatToParts(date)
+
+    const get = (type: Intl.DateTimeFormatPartTypes): number => {
+      const part = parts.find((p) => p.type === type)
+      return part ? parseInt(part.value, 10) : 0
+    }
+
+    return {
+      year: get('year'),
+      month: get('month'),
+      day: get('day'),
+      hours: get('hour') === 24 ? 0 : get('hour'), // Intl may return 24 for midnight
+      minutes: get('minute'),
+      seconds: get('second'),
+    }
+  }
+
+  /**
    * Get timezone offset string for a date and timezone
    * Returns format like "+0200" or "-0500"
    */
   public getTimezoneOffset(date: Date, timezone: string): string {
     try {
-      // Create formatter for the timezone
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: timezone,
-        timeZoneName: 'longOffset',
-      })
+      let formatter = this.offsetFormatterCache.get(timezone)
+      if (!formatter) {
+        if (this.offsetFormatterCache.size >= EventCalendarAdapter.FORMATTER_CACHE_MAX_SIZE) {
+          const firstKey = this.offsetFormatterCache.keys().next().value
+          this.offsetFormatterCache.delete(firstKey as string)
+        }
+        formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: timezone,
+          timeZoneName: 'longOffset',
+        })
+        this.offsetFormatterCache.set(timezone, formatter)
+      }
       const parts = formatter.formatToParts(date)
       const tzPart = parts.find((p) => p.type === 'timeZoneName')
 
@@ -847,30 +921,6 @@ export class EventCalendarAdapter {
     return result
   }
 
-  /**
-   * Add string duration to a date (ISO 8601 format)
-   */
-  private addDurationToDate(date: Date, duration: string): Date {
-    // Parse ISO 8601 duration (P1D, PT1H, etc.)
-    const result = new Date(date)
-
-    const regex = /P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?/
-    const match = duration.match(regex)
-
-    if (!match) return result
-
-    const [, years, months, weeks, days, hours, minutes, seconds] = match
-
-    if (years) result.setFullYear(result.getFullYear() + parseInt(years))
-    if (months) result.setMonth(result.getMonth() + parseInt(months))
-    if (weeks) result.setDate(result.getDate() + parseInt(weeks) * 7)
-    if (days) result.setDate(result.getDate() + parseInt(days))
-    if (hours) result.setHours(result.getHours() + parseInt(hours))
-    if (minutes) result.setMinutes(result.getMinutes() + parseInt(minutes))
-    if (seconds) result.setSeconds(result.getSeconds() + parseInt(seconds))
-
-    return result
-  }
 }
 
 // ============================================================================

@@ -8,6 +8,7 @@
  */
 
 import type { IcsEvent, IcsDateObject, IcsRecurrenceRule } from 'ts-ics'
+import { getEventCalendarAdapter } from '../EventCalendarAdapter'
 import type {
   EventCalendarEvent,
   EventCalendarEventInput,
@@ -441,40 +442,50 @@ export function getEventsForResource(
 // ============================================================================
 
 /**
- * Convert IcsDateObject to JavaScript Date
+ * Convert IcsDateObject to JavaScript Date.
+ *
+ * Always returns icsDate.date (true UTC) so that downstream code using
+ * getHours()/getMinutes() gets correct browser-local time automatically.
  */
 export function icsDateToJsDate(icsDate: IcsDateObject): Date {
-  if (icsDate.local?.date) {
-    return icsDate.local.date
-  }
   return icsDate.date
 }
 
 /**
- * Convert JavaScript Date to IcsDateObject
+ * Convert JavaScript Date to IcsDateObject.
+ *
+ * Uses the adapter's Intl-based timezone conversion to produce correct
+ * fake UTC dates (where getUTCHours() = local hours in the target timezone).
  */
 export function jsDateToIcsDate(date: Date, allDay: boolean = false, timezone?: string): IcsDateObject {
   if (allDay) {
+    const utcDate = new Date(Date.UTC(
+      date.getFullYear(), date.getMonth(), date.getDate()
+    ))
     return {
       type: 'DATE',
-      date,
+      date: utcDate,
     }
   }
 
-  const icsDate: IcsDateObject = {
+  const adapter = getEventCalendarAdapter()
+  const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+  const components = adapter.getDateComponentsInTimezone(date, tz)
+  const fakeUtcDate = new Date(Date.UTC(
+    components.year, components.month - 1, components.day,
+    components.hours, components.minutes, components.seconds
+  ))
+  const tzOffset = adapter.getTimezoneOffset(date, tz)
+
+  return {
     type: 'DATE-TIME',
-    date,
+    date: fakeUtcDate,
+    local: {
+      date: fakeUtcDate,
+      timezone: tz,
+      tzoffset: tzOffset,
+    },
   }
-
-  if (timezone) {
-    icsDate.local = {
-      date,
-      timezone,
-      tzoffset: '+0000', // Default, will be recalculated when needed
-    }
-  }
-
-  return icsDate
 }
 
 /**
