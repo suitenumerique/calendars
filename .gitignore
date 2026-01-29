@@ -82,3 +82,6 @@ db.sqlite3
 
 # Various
 .turbo
+
+# OpenSpec
+openspec/
