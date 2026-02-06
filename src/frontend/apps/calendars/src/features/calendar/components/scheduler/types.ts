@@ -2,7 +2,15 @@
  * Type definitions for Scheduler components.
  */
 
-import type { IcsEvent, IcsRecurrenceRule } from "ts-ics";
+import type {
+  IcsEvent,
+  IcsRecurrenceRule,
+  IcsAlarm,
+  IcsAttendee,
+  IcsClassType,
+  IcsEventStatusType,
+  IcsTimeTransparentType,
+} from "ts-ics";
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
 import type { EventCalendarAdapter } from "../../services/dav/EventCalendarAdapter";
 
@@ -64,6 +72,26 @@ export interface EventModalState {
 }
 
 /**
+ * Sections toggled via pills in the event modal.
+ */
+export type EventFormSectionId =
+  | "location"
+  | "description"
+  | "recurrence"
+  | "attendees"
+  | "videoConference";
+
+/**
+ * Attachment metadata (UI only, no actual file upload).
+ */
+export interface AttachmentMeta {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+}
+
+/**
  * Form state for the event modal.
  */
 export interface EventFormState {
@@ -74,9 +102,15 @@ export interface EventFormState {
   endDateTime: string;
   selectedCalendarUrl: string;
   isAllDay: boolean;
+  attendees: IcsAttendee[];
   recurrence: IcsRecurrenceRule | undefined;
-  showRecurrence: boolean;
-  showAttendees: boolean;
+  alarms: IcsAlarm[];
+  videoConferenceUrl: string;
+  attachments: AttachmentMeta[];
+  status: IcsEventStatusType;
+  visibility: IcsClassType;
+  availability: IcsTimeTransparentType;
+  expandedSections: Set<EventFormSectionId>;
 }
 
 /**

@@ -1,0 +1,36 @@
+.invitation-response {
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  &__label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #202124;
+  }
+
+  &__organizer {
+    font-size: 0.8125rem;
+    color: #5f6368;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  &__status {
+    font-size: 0.8125rem;
+    color: #5f6368;
+  }
+}
