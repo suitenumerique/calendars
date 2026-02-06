@@ -6,8 +6,8 @@ Détails de l'événement
 Titre : {{ event.summary }}
 Quand : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
 {% if event.location %}Lieu : {{ event.location }}
+{% endif %}{% if event.url %}Visio : {{ event.url }}
 {% endif %}
-
 La réponse du participant a été enregistrée dans le fichier .ics en pièce jointe.
 
 ---
