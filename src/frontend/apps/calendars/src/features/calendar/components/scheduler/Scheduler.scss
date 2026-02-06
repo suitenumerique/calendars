@@ -11,145 +11,145 @@
 // Event Modal Styles (for use with Cunningham Modal)
 // ============================================================================
 
-.event-modal {
-  &__content {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
+// .event-modal {
+//   &__content {
+//     display: flex;
+//     flex-direction: column;
+//     gap: 1rem;
+//   }
 
-  // Date/Time row with two columns
-  &__datetime-row {
-    display: flex;
-    gap: 1rem;
+//   // Date/Time row with two columns
+//   &__datetime-row {
+//     display: flex;
+//     gap: 1rem;
 
-    > * {
-      flex: 1;
-    }
-  }
+//     > * {
+//       flex: 1;
+//     }
+//   }
 
-  // Features section (buttons + inputs)
-  &__features {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-  }
+//   // Features section (buttons + inputs)
+//   &__features {
+//     display: flex;
+//     flex-wrap: wrap;
+//     gap: 0.5rem;
+//     margin-top: 0.5rem;
+//   }
 
-  &__attendees-input {
-    padding: 0.75rem;
-    background-color: #f8f9fa;
-    border-radius: 4px;
-    margin-top: 0.75rem;
-  }
+//   &__attendees-input {
+//     padding: 0.75rem;
+//     background-color: #f8f9fa;
+//     border-radius: 4px;
+//     margin-top: 0.75rem;
+//   }
 
-  &__recurrence-editor {
-    padding: 0.75rem;
-    background-color: #f8f9fa;
-    border-radius: 4px;
-    margin-top: 0.75rem;
-  }
+//   &__recurrence-editor {
+//     padding: 0.75rem;
+//     background-color: #f8f9fa;
+//     border-radius: 4px;
+//     margin-top: 0.75rem;
+//   }
 
-  // Checkbox for all-day
-  &__checkbox {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    user-select: none;
+//   // Checkbox for all-day
+//   &__checkbox {
+//     display: flex;
+//     align-items: center;
+//     gap: 0.5rem;
+//     cursor: pointer;
+//     user-select: none;
 
-    input[type="checkbox"] {
-      cursor: pointer;
-      width: 1.25rem;
-      height: 1.25rem;
-      margin: 0;
-    }
+//     input[type="checkbox"] {
+//       cursor: pointer;
+//       width: 1.25rem;
+//       height: 1.25rem;
+//       margin: 0;
+//     }
 
-    span {
-      font-size: 0.9375rem;
-      line-height: 1.5;
-      color: #212529;
-    }
-  }
+//     span {
+//       font-size: 0.9375rem;
+//       line-height: 1.5;
+//       color: #212529;
+//     }
+//   }
 
-  // Feature tag button
-  &__feature-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.375rem 0.75rem;
-    border: 1px solid #dee2e6;
-    border-radius: 1rem;
-    background-color: #fff;
-    color: #495057;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.15s ease-in-out;
+//   // Feature tag button
+//   &__feature-tag {
+//     display: inline-flex;
+//     align-items: center;
+//     gap: 0.375rem;
+//     padding: 0.375rem 0.75rem;
+//     border: 1px solid #dee2e6;
+//     border-radius: 1rem;
+//     background-color: #fff;
+//     color: #495057;
+//     font-size: 0.875rem;
+//     cursor: pointer;
+//     transition: all 0.15s ease-in-out;
 
-    &:hover {
-      background-color: #f8f9fa;
-      border-color: #adb5bd;
-    }
+//     &:hover {
+//       background-color: #f8f9fa;
+//       border-color: #adb5bd;
+//     }
 
-    &--active {
-      background-color: #e7f5ff;
-      border-color: #339af0;
-      color: #1971c2;
-    }
+//     &--active {
+//       background-color: #e7f5ff;
+//       border-color: #339af0;
+//       color: #1971c2;
+//     }
 
-    .material-icons {
-      font-size: 1.125rem;
-    }
-  }
+//     .material-icons {
+//       font-size: 1.125rem;
+//     }
+//   }
 
-  // Invitation section
-  &__invitation {
-    padding: 1rem;
-    background-color: #e7f5ff;
-    border: 1px solid #339af0;
-    border-radius: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
+//   // Invitation section
+//   &__invitation {
+//     padding: 1rem;
+//     background-color: #e7f5ff;
+//     border: 1px solid #339af0;
+//     border-radius: 0.5rem;
+//     display: flex;
+//     flex-direction: column;
+//     gap: 0.75rem;
+//   }
 
-  &__invitation-header {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
+//   &__invitation-header {
+//     display: flex;
+//     flex-direction: column;
+//     gap: 0.25rem;
+//   }
 
-  &__invitation-label {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #1971c2;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
+//   &__invitation-label {
+//     font-size: 0.875rem;
+//     font-weight: 600;
+//     color: #1971c2;
+//     text-transform: uppercase;
+//     letter-spacing: 0.05em;
+//   }
 
-  &__invitation-organizer {
-    font-size: 0.9375rem;
-    color: #495057;
-  }
+//   &__invitation-organizer {
+//     font-size: 0.9375rem;
+//     color: #495057;
+//   }
 
-  &__invitation-actions {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
+//   &__invitation-actions {
+//     display: flex;
+//     gap: 0.5rem;
+//     flex-wrap: wrap;
+//   }
 
-  &__invitation-status {
-    padding: 0.5rem 0.75rem;
-    background-color: #fff;
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
-    color: #495057;
+//   &__invitation-status {
+//     padding: 0.5rem 0.75rem;
+//     background-color: #fff;
+//     border-radius: 0.375rem;
+//     font-size: 0.875rem;
+//     color: #495057;
 
-    strong {
-      color: #1971c2;
-    }
-  }
-}
+//     strong {
+//       color: #1971c2;
+//     }
+//   }
+// }
 
 // ============================================================================
 // Delete Event Modal Styles

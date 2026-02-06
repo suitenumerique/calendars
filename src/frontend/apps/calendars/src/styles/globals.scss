@@ -18,6 +18,9 @@
 @use "./../features/calendar/components/scheduler/Scheduler.scss";
 @use "./../features/calendar/components/scheduler/scheduler-theme.scss";
 @use "./../features/calendar/components/scheduler/SchedulerToolbar.scss";
+@use "./../features/calendar/components/scheduler/event-modal-sections/SectionRow.scss";
+@use "./../features/calendar/components/scheduler/event-modal-sections/InvitationResponseSection.scss";
+@use "./../features/calendar/components/scheduler/event-modal-sections/SectionPill.scss";
 @use "./../pages/index.scss" as *;
 @use "./../pages/calendar.scss" as *;
 html,
@@ -77,5 +80,26 @@ body {
 
 .c__datagrid--empty,
 .c__datagrid thead {
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.c__modal__title {
+  text-align: left;
+  padding: 0;
+  font-size: 1.125rem;
+  margin-bottom: 1rem;
+}
+
+.c__modal__close button {
+  padding: 0;
+  font-size: 88px;
+  top: -5px !important;
+  width: 28px !important;
+  height: 28px;
+}
+
+.c__modal__scroller {
+  padding-top: 1rem;
 }
