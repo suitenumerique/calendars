@@ -50,6 +50,7 @@ class EventDetails:
     summary: str
     description: Optional[str]
     location: Optional[str]
+    url: Optional[str]
     dtstart: datetime
     dtend: Optional[datetime]
     organizer_email: str
@@ -95,17 +96,10 @@ class ICalendarParser:
         # Handle multi-line values (lines starting with space/tab are continuations)
         icalendar = re.sub(r"\r?\n[ \t]", "", icalendar)
 
-        pattern = rf"^{property_name}[;:](.+)$"
+        pattern = rf"^{property_name}(;[^:]*)?:(.+)$"
         match = re.search(pattern, icalendar, re.MULTILINE | re.IGNORECASE)
         if match:
-            value = match.group(1)
-            # Remove parameters (everything before the last colon if there are parameters)
-            if ";" in property_name or ":" not in value:
-                return value.strip()
-            # Handle properties with parameters like ORGANIZER;CN=Name:mailto:email
-            if ":" in value:
-                return value.split(":")[-1].strip()
-            return value.strip()
+            return match.group(2).strip()
         return None
 
     @staticmethod
@@ -205,6 +199,7 @@ class ICalendarParser:
             summary = cls.extract_property(vevent_block, "SUMMARY") or "(Sans titre)"
             description = cls.extract_property(vevent_block, "DESCRIPTION")
             location = cls.extract_property(vevent_block, "LOCATION")
+            url = cls.extract_property(vevent_block, "URL")
 
             # Parse dates with timezone support - from VEVENT block only
             dtstart_raw, dtstart_params = cls.extract_property_with_params(
@@ -265,6 +260,7 @@ class ICalendarParser:
                 summary=summary,
                 description=description,
                 location=location,
+                url=url,
                 dtstart=dtstart,
                 dtend=dtend,
                 organizer_email=organizer_email,

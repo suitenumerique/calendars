@@ -6,6 +6,7 @@ Détails de l'événement
 Titre : {{ event.summary }}
 Quand : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
 {% if event.location %}Lieu : {{ event.location }}
+{% endif %}{% if event.url %}Visio : {{ event.url }}
 {% endif %}Organisateur : {{ organizer_display }} <{{ event.organizer_email }}>
 
 {% if event.description %}

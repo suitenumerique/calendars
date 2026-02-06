@@ -119,13 +119,19 @@ export const EventModal = ({
     }
   };
 
+  const visioBaseUrl = process.env.NEXT_PUBLIC_VISIO_BASE_URL;
+
   const pills = useMemo(
     () => [
-      {
-        id: "videoConference" as const,
-        icon: "videocam",
-        label: t("calendar.event.sections.addVideoConference"),
-      },
+      ...(visioBaseUrl
+        ? [
+            {
+              id: "videoConference" as const,
+              icon: "videocam",
+              label: t("calendar.event.sections.addVideoConference"),
+            },
+          ]
+        : []),
       {
         id: "location" as const,
         icon: "place",
@@ -147,7 +153,7 @@ export const EventModal = ({
         label: t("calendar.event.attendees"),
       },
     ],
-    [t],
+    [t, visioBaseUrl],
   );
 
   return (
