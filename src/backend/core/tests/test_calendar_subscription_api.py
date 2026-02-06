@@ -233,7 +233,9 @@ class TestSubscriptionTokenViewSet:
         client.force_login(subscription.owner)
 
         base_by_path_url = reverse("subscription-tokens-by-path")
-        by_path_url = f"{base_by_path_url}?caldav_path={quote(subscription.caldav_path, safe='')}"
+        by_path_url = (
+            f"{base_by_path_url}?caldav_path={quote(subscription.caldav_path, safe='')}"
+        )
         create_url = reverse("subscription-tokens-list")
 
         # Delete old token
