@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
+import { generateVisioRoomId } from "./generateVisioRoomId";
 
 interface VideoConferenceSectionProps {
   url: string;
@@ -19,14 +19,12 @@ export const VideoConferenceSection = ({
   onToggle,
 }: VideoConferenceSectionProps) => {
   const { t } = useTranslation();
-  const [isCreating, setIsCreating] = useState(false);
 
   const handleCreateVisio = () => {
-    // Inert for now - will integrate with La Suite API in the future
-    setIsCreating(true);
-    setTimeout(() => {
-      setIsCreating(false);
-    }, 500);
+    const baseUrl = process.env.NEXT_PUBLIC_VISIO_BASE_URL;
+    if (!baseUrl) return;
+    const roomId = generateVisioRoomId();
+    onChange(`${baseUrl}/${roomId}`);
   };
 
   const handleRemove = () => {
@@ -42,15 +40,35 @@ export const VideoConferenceSection = ({
       isExpanded={isExpanded}
       onToggle={onToggle}
     >
-      <Button
-        size="small"
-        color="neutral"
-        variant="tertiary"
-        onClick={handleCreateVisio}
-        disabled={isCreating}
-      >
-        {t("calendar.event.sections.createVisio")}
-      </Button>
+      {url ? (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ wordBreak: "break-all" }}
+          >
+            {url}
+          </a>
+          <Button
+            size="small"
+            color="neutral"
+            variant="tertiary"
+            icon={<span className="material-icons">close</span>}
+            onClick={handleRemove}
+            aria-label={t("calendar.event.sections.removeVisio")}
+          />
+        </div>
+      ) : (
+        <Button
+          size="small"
+          color="neutral"
+          variant="tertiary"
+          onClick={handleCreateVisio}
+        >
+          {t("calendar.event.sections.createVisio")}
+        </Button>
+      )}
     </SectionRow>
   );
 };
