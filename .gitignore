@@ -85,3 +85,5 @@ db.sqlite3
 
 # OpenSpec
 openspec/
+.claude/skills/openspec-*/
+.claude/commands/opsx/

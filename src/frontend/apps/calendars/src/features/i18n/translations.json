@@ -131,7 +131,48 @@
           "delete": "Delete",
           "cancel": "Cancel",
           "save": "Save",
-          "create": "Create"
+          "create": "Create",
+          "sections": {
+            "addRecurrence": "Add recurrence",
+            "addLocation": "Add location",
+            "addVideoConference": "Visio",
+            "createVisio": "Add video conference",
+            "videoLink": "Video conference link",
+            "addAttendees": "Add participants",
+            "addDescription": "Add description",
+            "addReminder": "Add reminder",
+            "addAttachment": "Add attachment",
+            "moreOptions": "More options",
+            "reminder_one": "reminder",
+            "reminder_other": "reminders",
+            "attachment_one": "attachment",
+            "attachment_other": "attachments"
+          },
+          "reminders": {
+            "5min": "5 minutes before",
+            "15min": "15 minutes before",
+            "30min": "30 minutes before",
+            "1hour": "1 hour before",
+            "1day": "1 day before",
+            "1week": "1 week before"
+          },
+          "status": {
+            "label": "Status",
+            "confirmed": "Confirmed",
+            "tentative": "Tentative",
+            "cancelled": "Cancelled"
+          },
+          "visibility": {
+            "label": "Visibility",
+            "public": "Public",
+            "private": "Private",
+            "confidential": "Confidential"
+          },
+          "availability": {
+            "label": "Availability",
+            "busy": "Busy",
+            "free": "Free"
+          }
         },
         "list": {
           "myCalendars": "My calendars",
@@ -170,7 +211,7 @@
         },
         "recurrence": {
           "label": "Repeat",
-          "none": "No",
+          "none": "Does not repeat",
           "daily": "Daily",
           "weekly": "Weekly",
           "monthly": "Monthly",
@@ -700,7 +741,48 @@
           "delete": "Supprimer",
           "cancel": "Annuler",
           "save": "Enregistrer",
-          "create": "Créer"
+          "create": "Créer",
+          "sections": {
+            "addRecurrence": "Ajouter une récurrence",
+            "addLocation": "Ajouter un lieu",
+            "addVideoConference": "Visio",
+            "createVisio": "Ajouter une visioconférence",
+            "videoLink": "Lien de visioconférence",
+            "addAttendees": "Ajouter des participants",
+            "addDescription": "Ajouter une description",
+            "addReminder": "Ajouter un rappel",
+            "addAttachment": "Ajouter une pièce jointe",
+            "moreOptions": "Plus d'options",
+            "reminder_one": "rappel",
+            "reminder_other": "rappels",
+            "attachment_one": "pièce jointe",
+            "attachment_other": "pièces jointes"
+          },
+          "reminders": {
+            "5min": "5 minutes avant",
+            "15min": "15 minutes avant",
+            "30min": "30 minutes avant",
+            "1hour": "1 heure avant",
+            "1day": "1 jour avant",
+            "1week": "1 semaine avant"
+          },
+          "status": {
+            "label": "Statut",
+            "confirmed": "Confirmé",
+            "tentative": "Provisoire",
+            "cancelled": "Annulé"
+          },
+          "visibility": {
+            "label": "Visibilité",
+            "public": "Public",
+            "private": "Privé",
+            "confidential": "Confidentiel"
+          },
+          "availability": {
+            "label": "Disponibilité",
+            "busy": "Occupé",
+            "free": "Libre"
+          }
         },
         "list": {
           "myCalendars": "Mes agendas",
@@ -739,7 +821,7 @@
         },
         "recurrence": {
           "label": "Répéter",
-          "none": "Non",
+          "none": "Ne se répète pas",
           "daily": "Tous les jours",
           "weekly": "Toutes les semaines",
           "monthly": "Tous les mois",
@@ -1016,7 +1098,48 @@
           "delete": "Verwijderen",
           "cancel": "Annuleren",
           "save": "Opslaan",
-          "create": "Aanmaken"
+          "create": "Aanmaken",
+          "sections": {
+            "addRecurrence": "Herhaling toevoegen",
+            "addLocation": "Locatie toevoegen",
+            "addVideoConference": "Visio",
+            "createVisio": "Add video conference",
+            "videoLink": "Videoconferentie link",
+            "addAttendees": "Deelnemers toevoegen",
+            "addDescription": "Beschrijving toevoegen",
+            "addReminder": "Herinnering toevoegen",
+            "addAttachment": "Bijlage toevoegen",
+            "moreOptions": "Meer opties",
+            "reminder_one": "herinnering",
+            "reminder_other": "herinneringen",
+            "attachment_one": "bijlage",
+            "attachment_other": "bijlagen"
+          },
+          "reminders": {
+            "5min": "5 minuten voor",
+            "15min": "15 minuten voor",
+            "30min": "30 minuten voor",
+            "1hour": "1 uur voor",
+            "1day": "1 dag voor",
+            "1week": "1 week voor"
+          },
+          "status": {
+            "label": "Status",
+            "confirmed": "Bevestigd",
+            "tentative": "Voorlopig",
+            "cancelled": "Geannuleerd"
+          },
+          "visibility": {
+            "label": "Zichtbaarheid",
+            "public": "Openbaar",
+            "private": "Privé",
+            "confidential": "Vertrouwelijk"
+          },
+          "availability": {
+            "label": "Beschikbaarheid",
+            "busy": "Bezet",
+            "free": "Vrij"
+          }
         },
         "list": {
           "myCalendars": "Mijn agenda's",
@@ -1055,7 +1178,7 @@
         },
         "recurrence": {
           "label": "Herhalen",
-          "none": "Nee",
+          "none": "Niet herhalen",
           "daily": "Dagelijks",
           "weekly": "Wekelijks",
           "monthly": "Maandelijks",

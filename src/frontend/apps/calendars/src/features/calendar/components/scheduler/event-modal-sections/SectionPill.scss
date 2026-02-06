@@ -1,0 +1,46 @@
+.section-pill {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  height: 32px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  line-height: 1;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+  border: 1px solid var(--c--contextuals--border--surface--primary);
+  background-color: var(--c--contextuals--background--surface--primary);
+  color: var(--c--contextuals--content--semantic--neutral--primary);
+
+  &--active {
+    border: 1px solid
+      var(--c--contextuals--border--semantic--contextual--primary);
+    background-color: var(
+      --c--contextuals--background--semantic--neutral--tertiary
+    );
+    color: var(--c--contextuals--content--semantic--neutral--tertiary);
+  }
+
+  &__icon {
+    font-size: 16px;
+  }
+
+  &__label {
+    white-space: nowrap;
+  }
+}
+
+.section-pills {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 0.5rem;
+  padding-top: 1rem;
+  padding-bottom: 0.5rem;
+}
