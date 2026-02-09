@@ -13,7 +13,7 @@ import type { ImportEventsResult } from "../../api";
 
 interface ImportEventsModalProps {
   isOpen: boolean;
-  calendarId: string;
+  caldavPath: string;
   calendarName: string;
   onClose: () => void;
   onImportSuccess?: () => void;
@@ -21,7 +21,7 @@ interface ImportEventsModalProps {
 
 export const ImportEventsModal = ({
   isOpen,
-  calendarId,
+  caldavPath,
   calendarName,
   onClose,
   onImportSuccess,
@@ -42,7 +42,7 @@ export const ImportEventsModal = ({
     if (!selectedFile) return;
 
     const importResult = await importMutation.mutateAsync({
-      calendarId,
+      caldavPath,
       file: selectedFile,
     });
     setResult(importResult);

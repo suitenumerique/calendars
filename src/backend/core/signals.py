@@ -23,10 +23,6 @@ def provision_default_calendar(sender, instance, created, **kwargs):  # pylint: 
     if not created:
         return
 
-    # Check if user already has a default calendar
-    if instance.calendars.filter(is_default=True).exists():
-        return
-
     # Skip calendar creation if CalDAV server is not configured
     if not settings.CALDAV_URL:
         return

@@ -59,12 +59,10 @@ class TestCalDAVClient:
         user = factories.UserFactory(email="test@example.com")
         service = CalendarService()
 
-        # Create a calendar
-        calendar = service.create_calendar(user, name="My Calendar", color="#ff0000")
+        # Create a calendar — returns caldav_path string
+        caldav_path = service.create_calendar(user, name="My Calendar", color="#ff0000")
 
-        # Verify calendar was created
-        assert calendar is not None
-        assert calendar.owner == user
-        assert calendar.name == "My Calendar"
-        assert calendar.color == "#ff0000"
-        assert calendar.caldav_path is not None
+        # Verify caldav_path was returned
+        assert caldav_path is not None
+        assert isinstance(caldav_path, str)
+        assert "calendars/" in caldav_path

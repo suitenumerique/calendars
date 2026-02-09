@@ -10,7 +10,6 @@ from django.utils import timezone
 
 from caldav import DAVClient
 from caldav.lib.error import NotFoundError
-from core.models import Calendar
 
 logger = logging.getLogger(__name__)
 
@@ -385,72 +384,33 @@ class CalendarService:
     def __init__(self):
         self.caldav = CalDAVClient()
 
-    def create_default_calendar(self, user) -> Calendar:
-        """
-        Create a default calendar for a user.
-        """
+    def create_default_calendar(self, user) -> str:
+        """Create a default calendar for a user. Returns the caldav_path."""
         calendar_id = str(uuid4())
         calendar_name = "Mon calendrier"
+        return self.caldav.create_calendar(user, calendar_name, calendar_id)
 
-        # Create calendar in CalDAV server
-        caldav_path = self.caldav.create_calendar(user, calendar_name, calendar_id)
-
-        # Create local Calendar record
-        calendar = Calendar.objects.create(
-            owner=user,
-            name=calendar_name,
-            caldav_path=caldav_path,
-            is_default=True,
-            color="#3174ad",
-        )
-
-        return calendar
-
-    def create_calendar(self, user, name: str, color: str = "#3174ad") -> Calendar:
-        """
-        Create a new calendar for a user.
-        """
+    def create_calendar(  # pylint: disable=unused-argument
+        self, user, name: str, color: str = "#3174ad"
+    ) -> str:
+        """Create a new calendar for a user. Returns the caldav_path."""
         calendar_id = str(uuid4())
+        return self.caldav.create_calendar(user, name, calendar_id)
 
-        # Create calendar in CalDAV server
-        caldav_path = self.caldav.create_calendar(user, name, calendar_id)
+    def get_events(self, user, caldav_path: str, start=None, end=None) -> list:
+        """Get events from a calendar. Returns parsed event data."""
+        return self.caldav.get_events(user, caldav_path, start, end)
 
-        # Create local Calendar record
-        calendar = Calendar.objects.create(
-            owner=user,
-            name=name,
-            caldav_path=caldav_path,
-            is_default=False,
-            color=color,
-        )
-
-        return calendar
-
-    def get_user_calendars(self, user):
-        """
-        Get all calendars accessible by a user (owned + shared).
-        """
-        owned = Calendar.objects.filter(owner=user)
-        shared = Calendar.objects.filter(shares__shared_with=user)
-        return owned.union(shared)
-
-    def get_events(self, user, calendar: Calendar, start=None, end=None) -> list:
-        """
-        Get events from a calendar.
-        Returns parsed event data.
-        """
-        return self.caldav.get_events(user, calendar.caldav_path, start, end)
-
-    def create_event(self, user, calendar: Calendar, event_data: dict) -> str:
+    def create_event(self, user, caldav_path: str, event_data: dict) -> str:
         """Create a new event."""
-        return self.caldav.create_event(user, calendar.caldav_path, event_data)
+        return self.caldav.create_event(user, caldav_path, event_data)
 
     def update_event(
-        self, user, calendar: Calendar, event_uid: str, event_data: dict
+        self, user, caldav_path: str, event_uid: str, event_data: dict
     ) -> None:
         """Update an existing event."""
-        self.caldav.update_event(user, calendar.caldav_path, event_uid, event_data)
+        self.caldav.update_event(user, caldav_path, event_uid, event_data)
 
-    def delete_event(self, user, calendar: Calendar, event_uid: str) -> None:
+    def delete_event(self, user, caldav_path: str, event_uid: str) -> None:
         """Delete an event."""
-        self.caldav.delete_event(user, calendar.caldav_path, event_uid)
+        self.caldav.delete_event(user, caldav_path, event_uid)

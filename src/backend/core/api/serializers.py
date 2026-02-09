@@ -114,49 +114,12 @@ class UserMeSerializer(UserSerializer):
         read_only_fields = UserSerializer.Meta.read_only_fields
 
 
-# CalDAV serializers
-class CalendarSerializer(serializers.ModelSerializer):
-    """Serializer for Calendar model."""
+class CalendarCreateSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """Serializer for creating a Calendar (CalDAV only, no Django model)."""
 
-    class Meta:
-        model = models.Calendar
-        fields = [
-            "id",
-            "name",
-            "color",
-            "description",
-            "is_default",
-            "is_visible",
-            "caldav_path",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = [
-            "id",
-            "is_default",
-            "caldav_path",
-            "created_at",
-            "updated_at",
-        ]
-
-
-class CalendarCreateSerializer(serializers.ModelSerializer):
-    """Serializer for creating a Calendar."""
-
-    class Meta:
-        model = models.Calendar
-        fields = ["name", "color", "description"]
-
-
-class CalendarShareSerializer(serializers.ModelSerializer):
-    """Serializer for CalendarShare model."""
-
-    shared_with_email = serializers.EmailField(write_only=True)
-
-    class Meta:
-        model = models.CalendarShare
-        fields = ["id", "shared_with_email", "permission", "is_visible", "created_at"]
-        read_only_fields = ["id", "created_at"]
+    name = serializers.CharField(max_length=255)
+    color = serializers.CharField(max_length=7, required=False, default="#3174ad")
+    description = serializers.CharField(required=False, default="")
 
 
 class CalendarSubscriptionTokenSerializer(serializers.ModelSerializer):

@@ -38,18 +38,26 @@ class ICSImportService:
     def __init__(self):
         self.base_url = settings.CALDAV_URL.rstrip("/")
 
-    def import_events(self, user, calendar, ics_data: bytes) -> ImportResult:
+    def import_events(self, user, caldav_path: str, ics_data: bytes) -> ImportResult:
         """Import events from ICS data into a calendar.
 
         Sends the raw ICS bytes to SabreDAV's ?import endpoint which
         handles all ICS parsing, splitting by UID, VALARM repair, and
         per-event insertion.
+
+        Args:
+            user: The authenticated user performing the import.
+            caldav_path: CalDAV path of the calendar
+                (e.g. /calendars/user@example.com/uuid/).
+            ics_data: Raw ICS file content.
         """
         result = ImportResult()
 
-        # caldav_path already includes the base URI prefix
-        # e.g. /api/v1.0/caldav/calendars/user@example.com/uuid/
-        url = f"{self.base_url}{calendar.caldav_path}?import"
+        # Ensure caldav_path includes the base URI prefix that SabreDAV expects
+        base_uri = "/api/v1.0/caldav/"
+        if not caldav_path.startswith(base_uri):
+            caldav_path = base_uri.rstrip("/") + caldav_path
+        url = f"{self.base_url}{caldav_path}?import"
 
         outbound_api_key = settings.CALDAV_OUTBOUND_API_KEY
         if not outbound_api_key:

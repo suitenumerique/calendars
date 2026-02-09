@@ -1,6 +1,7 @@
 """Tests for the ICS import events feature."""  # pylint: disable=too-many-lines
 
 import json
+import uuid
 from datetime import datetime
 from datetime import timezone as dt_tz
 from unittest.mock import MagicMock, patch
@@ -244,6 +245,11 @@ END:VEVENT
 END:VCALENDAR"""
 
 
+def _make_caldav_path(user):
+    """Build a caldav_path string for a user (test helper)."""
+    return f"/calendars/{user.email}/{uuid.uuid4()}/"
+
+
 def _make_sabredav_response(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
     status_code=200,
     total_events=0,
@@ -278,10 +284,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_SINGLE_EVENT)
+        result = service.import_events(user, caldav_path, ICS_SINGLE_EVENT)
 
         assert result.total_events == 1
         assert result.imported_count == 1
@@ -301,10 +307,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_MULTIPLE_EVENTS)
+        result = service.import_events(user, caldav_path, ICS_MULTIPLE_EVENTS)
 
         assert result.total_events == 3
         assert result.imported_count == 3
@@ -321,10 +327,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_EMPTY)
+        result = service.import_events(user, caldav_path, ICS_EMPTY)
 
         assert result.total_events == 0
         assert result.imported_count == 0
@@ -340,10 +346,10 @@ class TestICSImportService:
         mock_post.return_value.text = '{"error": "Failed to parse ICS file"}'
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_INVALID)
+        result = service.import_events(user, caldav_path, ICS_INVALID)
 
         assert result.imported_count == 0
         assert len(result.errors) >= 1
@@ -356,10 +362,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_WITH_TIMEZONE)
+        result = service.import_events(user, caldav_path, ICS_WITH_TIMEZONE)
 
         assert result.total_events == 1
         assert result.imported_count == 1
@@ -386,10 +392,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_MULTIPLE_EVENTS)
+        result = service.import_events(user, caldav_path, ICS_MULTIPLE_EVENTS)
 
         assert result.total_events == 3
         assert result.imported_count == 2
@@ -406,10 +412,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_ALL_DAY_EVENT)
+        result = service.import_events(user, caldav_path, ICS_ALL_DAY_EVENT)
 
         assert result.total_events == 1
         assert result.imported_count == 1
@@ -422,10 +428,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_VALARM_NO_ACTION)
+        result = service.import_events(user, caldav_path, ICS_VALARM_NO_ACTION)
 
         assert result.total_events == 1
         assert result.imported_count == 1
@@ -438,10 +444,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_RECURRING_WITH_EXCEPTION)
+        result = service.import_events(user, caldav_path, ICS_RECURRING_WITH_EXCEPTION)
 
         # Two VEVENTs with same UID = one logical event
         assert result.total_events == 1
@@ -464,10 +470,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_NO_DTSTART)
+        result = service.import_events(user, caldav_path, ICS_NO_DTSTART)
 
         assert result.total_events == 1
         assert result.imported_count == 0
@@ -476,20 +482,20 @@ class TestICSImportService:
 
     @patch("core.services.import_service.requests.post")
     def test_import_passes_calendar_path(self, mock_post):
-        """The import URL should include the calendar's caldav_path."""
+        """The import URL should include the caldav_path."""
         mock_post.return_value = _make_sabredav_response(
             total_events=1, imported_count=1
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        service.import_events(user, calendar, ICS_SINGLE_EVENT)
+        service.import_events(user, caldav_path, ICS_SINGLE_EVENT)
 
         call_args = mock_post.call_args
         url = call_args.args[0] if call_args.args else call_args.kwargs.get("url", "")
-        assert calendar.caldav_path in url
+        assert caldav_path in url
         assert "?import" in url
 
     @patch("core.services.import_service.requests.post")
@@ -500,10 +506,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        service.import_events(user, calendar, ICS_SINGLE_EVENT)
+        service.import_events(user, caldav_path, ICS_SINGLE_EVENT)
 
         call_kwargs = mock_post.call_args.kwargs
         headers = call_kwargs["headers"]
@@ -524,10 +530,10 @@ class TestICSImportService:
         )
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_MULTIPLE_EVENTS)
+        result = service.import_events(user, caldav_path, ICS_MULTIPLE_EVENTS)
 
         assert result.total_events == 3
         assert result.imported_count == 1
@@ -541,10 +547,10 @@ class TestICSImportService:
         mock_post.side_effect = req.ConnectionError("Connection refused")
 
         user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        caldav_path = _make_caldav_path(user)
 
         service = ICSImportService()
-        result = service.import_events(user, calendar, ICS_SINGLE_EVENT)
+        result = service.import_events(user, caldav_path, ICS_SINGLE_EVENT)
 
         assert result.imported_count == 0
         assert len(result.errors) >= 1
@@ -553,23 +559,19 @@ class TestICSImportService:
 class TestImportEventsAPI:
     """API endpoint tests for the import_events action."""
 
-    def _get_url(self, calendar_id):
-        return f"/api/v1.0/calendars/{calendar_id}/import_events/"
+    IMPORT_URL = "/api/v1.0/calendars/import-events/"
 
     def test_import_events_requires_authentication(self):
         """Unauthenticated requests should be rejected."""
-        calendar = factories.CalendarFactory()
         client = APIClient()
-
-        response = client.post(self._get_url(calendar.id))
-
+        response = client.post(self.IMPORT_URL)
         assert response.status_code == 401
 
-    def test_import_events_forbidden_for_non_owner(self):
-        """Non-owners should not be able to access the calendar."""
-        owner = factories.UserFactory()
-        other_user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=owner)
+    def test_import_events_forbidden_for_wrong_user(self):
+        """Users cannot import to a calendar they don't own."""
+        owner = factories.UserFactory(email="owner@example.com")
+        other_user = factories.UserFactory(email="other@example.com")
+        caldav_path = f"/calendars/{owner.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(other_user)
@@ -578,29 +580,45 @@ class TestImportEventsAPI:
             "events.ics", ICS_SINGLE_EVENT, content_type="text/calendar"
         )
         response = client.post(
-            self._get_url(calendar.id), {"file": ics_file}, format="multipart"
+            self.IMPORT_URL,
+            {"file": ics_file, "caldav_path": caldav_path},
+            format="multipart",
         )
+        assert response.status_code == 403
 
-        # Calendar not in queryset for non-owner, so 404 (not 403)
-        assert response.status_code == 404
+    def test_import_events_missing_caldav_path(self):
+        """Request without caldav_path should return 400."""
+        user = factories.UserFactory()
+        client = APIClient()
+        client.force_login(user)
+
+        ics_file = SimpleUploadedFile(
+            "events.ics", ICS_SINGLE_EVENT, content_type="text/calendar"
+        )
+        response = client.post(self.IMPORT_URL, {"file": ics_file}, format="multipart")
+        assert response.status_code == 400
+        assert "caldav_path" in response.json()["error"]
 
     def test_import_events_missing_file(self):
         """Request without a file should return 400."""
-        user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        user = factories.UserFactory(email="nofile@example.com")
+        caldav_path = f"/calendars/{user.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(user)
 
-        response = client.post(self._get_url(calendar.id), format="multipart")
-
+        response = client.post(
+            self.IMPORT_URL,
+            {"caldav_path": caldav_path},
+            format="multipart",
+        )
         assert response.status_code == 400
         assert "No file provided" in response.json()["error"]
 
     def test_import_events_file_too_large(self):
         """Files exceeding MAX_FILE_SIZE should be rejected."""
-        user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        user = factories.UserFactory(email="largefile@example.com")
+        caldav_path = f"/calendars/{user.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(user)
@@ -611,9 +629,10 @@ class TestImportEventsAPI:
             content_type="text/calendar",
         )
         response = client.post(
-            self._get_url(calendar.id), {"file": large_file}, format="multipart"
+            self.IMPORT_URL,
+            {"file": large_file, "caldav_path": caldav_path},
+            format="multipart",
         )
-
         assert response.status_code == 400
         assert "too large" in response.json()["error"]
 
@@ -628,8 +647,8 @@ class TestImportEventsAPI:
             errors=[],
         )
 
-        user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        user = factories.UserFactory(email="success@example.com")
+        caldav_path = f"/calendars/{user.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(user)
@@ -638,7 +657,9 @@ class TestImportEventsAPI:
             "events.ics", ICS_MULTIPLE_EVENTS, content_type="text/calendar"
         )
         response = client.post(
-            self._get_url(calendar.id), {"file": ics_file}, format="multipart"
+            self.IMPORT_URL,
+            {"file": ics_file, "caldav_path": caldav_path},
+            format="multipart",
         )
 
         assert response.status_code == 200
@@ -659,8 +680,8 @@ class TestImportEventsAPI:
             errors=["Planning session"],
         )
 
-        user = factories.UserFactory()
-        calendar = factories.CalendarFactory(owner=user)
+        user = factories.UserFactory(email="partial@example.com")
+        caldav_path = f"/calendars/{user.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(user)
@@ -669,7 +690,9 @@ class TestImportEventsAPI:
             "events.ics", ICS_MULTIPLE_EVENTS, content_type="text/calendar"
         )
         response = client.post(
-            self._get_url(calendar.id), {"file": ics_file}, format="multipart"
+            self.IMPORT_URL,
+            {"file": ics_file, "caldav_path": caldav_path},
+            format="multipart",
         )
 
         assert response.status_code == 200
@@ -688,17 +711,17 @@ class TestImportEventsE2E:
     """End-to-end tests that import ICS events through the real SabreDAV server."""
 
     def _create_calendar(self, user):
-        """Create a real calendar in both Django and SabreDAV."""
+        """Create a real calendar in SabreDAV. Returns the caldav_path."""
         service = CalendarService()
         return service.create_calendar(user, name="Import Test", color="#3174ad")
 
     def test_import_single_event_e2e(self):
         """Import a single event and verify it exists in SabreDAV."""
         user = factories.UserFactory(email="import-single@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
-        result = import_service.import_events(user, calendar, ICS_SINGLE_EVENT)
+        result = import_service.import_events(user, caldav_path, ICS_SINGLE_EVENT)
 
         assert result.total_events == 1
         assert result.imported_count == 1
@@ -709,7 +732,7 @@ class TestImportEventsE2E:
         caldav = CalDAVClient()
         events = caldav.get_events(
             user,
-            calendar.caldav_path,
+            caldav_path,
             start=datetime(2026, 2, 10, tzinfo=dt_tz.utc),
             end=datetime(2026, 2, 11, tzinfo=dt_tz.utc),
         )
@@ -720,10 +743,10 @@ class TestImportEventsE2E:
     def test_import_multiple_events_e2e(self):
         """Import multiple events and verify they all exist in SabreDAV."""
         user = factories.UserFactory(email="import-multi@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
-        result = import_service.import_events(user, calendar, ICS_MULTIPLE_EVENTS)
+        result = import_service.import_events(user, caldav_path, ICS_MULTIPLE_EVENTS)
 
         assert result.total_events == 3
         assert result.imported_count == 3
@@ -733,7 +756,7 @@ class TestImportEventsE2E:
         caldav = CalDAVClient()
         events = caldav.get_events(
             user,
-            calendar.caldav_path,
+            caldav_path,
             start=datetime(2026, 2, 10, tzinfo=dt_tz.utc),
             end=datetime(2026, 2, 12, tzinfo=dt_tz.utc),
         )
@@ -744,10 +767,10 @@ class TestImportEventsE2E:
     def test_import_all_day_event_e2e(self):
         """Import an all-day event and verify it exists in SabreDAV."""
         user = factories.UserFactory(email="import-allday@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
-        result = import_service.import_events(user, calendar, ICS_ALL_DAY_EVENT)
+        result = import_service.import_events(user, caldav_path, ICS_ALL_DAY_EVENT)
 
         assert result.total_events == 1
         assert result.imported_count == 1
@@ -757,7 +780,7 @@ class TestImportEventsE2E:
         caldav = CalDAVClient()
         events = caldav.get_events(
             user,
-            calendar.caldav_path,
+            caldav_path,
             start=datetime(2026, 2, 14, tzinfo=dt_tz.utc),
             end=datetime(2026, 2, 17, tzinfo=dt_tz.utc),
         )
@@ -767,10 +790,10 @@ class TestImportEventsE2E:
     def test_import_with_timezone_e2e(self):
         """Import an event with timezone info and verify it in SabreDAV."""
         user = factories.UserFactory(email="import-tz@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
-        result = import_service.import_events(user, calendar, ICS_WITH_TIMEZONE)
+        result = import_service.import_events(user, caldav_path, ICS_WITH_TIMEZONE)
 
         assert result.total_events == 1
         assert result.imported_count == 1
@@ -780,7 +803,7 @@ class TestImportEventsE2E:
         caldav = CalDAVClient()
         events = caldav.get_events(
             user,
-            calendar.caldav_path,
+            caldav_path,
             start=datetime(2026, 2, 10, tzinfo=dt_tz.utc),
             end=datetime(2026, 2, 11, tzinfo=dt_tz.utc),
         )
@@ -790,7 +813,7 @@ class TestImportEventsE2E:
     def test_import_via_api_e2e(self):
         """Import events via the API endpoint hitting real SabreDAV."""
         user = factories.UserFactory(email="import-api@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         client = APIClient()
         client.force_login(user)
@@ -799,8 +822,8 @@ class TestImportEventsE2E:
             "events.ics", ICS_MULTIPLE_EVENTS, content_type="text/calendar"
         )
         response = client.post(
-            f"/api/v1.0/calendars/{calendar.id}/import_events/",
-            {"file": ics_file},
+            "/api/v1.0/calendars/import-events/",
+            {"file": ics_file, "caldav_path": caldav_path},
             format="multipart",
         )
 
@@ -814,7 +837,7 @@ class TestImportEventsE2E:
         caldav = CalDAVClient()
         events = caldav.get_events(
             user,
-            calendar.caldav_path,
+            caldav_path,
             start=datetime(2026, 2, 10, tzinfo=dt_tz.utc),
             end=datetime(2026, 2, 12, tzinfo=dt_tz.utc),
         )
@@ -828,11 +851,11 @@ class TestImportEventsE2E:
         plugin used the wrong callback signature for that event.
         """
         user = factories.UserFactory(email="import-attendee@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         # Import event with attendees
         import_service = ICSImportService()
-        result = import_service.import_events(user, calendar, ICS_WITH_ATTENDEES)
+        result = import_service.import_events(user, caldav_path, ICS_WITH_ATTENDEES)
 
         assert result.total_events == 1
         assert result.imported_count == 1
@@ -842,7 +865,7 @@ class TestImportEventsE2E:
         caldav = CalDAVClient()
         caldav.update_event(
             user,
-            calendar.caldav_path,
+            caldav_path,
             "attendee-event-1",
             {"title": "Updated review meeting"},
         )
@@ -850,7 +873,7 @@ class TestImportEventsE2E:
         # Verify update was applied
         events = caldav.get_events(
             user,
-            calendar.caldav_path,
+            caldav_path,
             start=datetime(2026, 2, 10, tzinfo=dt_tz.utc),
             end=datetime(2026, 2, 11, tzinfo=dt_tz.utc),
         )
@@ -865,11 +888,11 @@ class TestImportEventsE2E:
         binds values as PARAM_STR instead of PARAM_LOB.
         """
         user = factories.UserFactory(email="import-escapes@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
         result = import_service.import_events(
-            user, calendar, ICS_WITH_NEWLINES_IN_DESCRIPTION
+            user, caldav_path, ICS_WITH_NEWLINES_IN_DESCRIPTION
         )
 
         assert result.total_events == 1
@@ -880,7 +903,7 @@ class TestImportEventsE2E:
         caldav = CalDAVClient()
         events = caldav.get_events(
             user,
-            calendar.caldav_path,
+            caldav_path,
             start=datetime(2026, 2, 10, tzinfo=dt_tz.utc),
             end=datetime(2026, 2, 11, tzinfo=dt_tz.utc),
         )
@@ -890,17 +913,17 @@ class TestImportEventsE2E:
     def test_import_same_file_twice_no_duplicates_e2e(self):
         """Importing the same ICS file twice should not create duplicates."""
         user = factories.UserFactory(email="import-dedup@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
 
         # First import
-        result1 = import_service.import_events(user, calendar, ICS_MULTIPLE_EVENTS)
+        result1 = import_service.import_events(user, caldav_path, ICS_MULTIPLE_EVENTS)
         assert result1.imported_count == 3
         assert not result1.errors
 
         # Second import of the same file — all should be duplicates
-        result2 = import_service.import_events(user, calendar, ICS_MULTIPLE_EVENTS)
+        result2 = import_service.import_events(user, caldav_path, ICS_MULTIPLE_EVENTS)
         assert result2.duplicate_count == 3
         assert result2.imported_count == 0
         assert result2.skipped_count == 0
@@ -909,7 +932,7 @@ class TestImportEventsE2E:
         caldav = CalDAVClient()
         events = caldav.get_events(
             user,
-            calendar.caldav_path,
+            caldav_path,
             start=datetime(2026, 2, 10, tzinfo=dt_tz.utc),
             end=datetime(2026, 2, 12, tzinfo=dt_tz.utc),
         )
@@ -918,21 +941,21 @@ class TestImportEventsE2E:
     def test_import_dead_recurring_event_skipped_silently_e2e(self):
         """A recurring event whose EXDATE excludes all instances is skipped, not an error."""
         user = factories.UserFactory(email="import-dead-recur@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
-        result = import_service.import_events(user, calendar, ICS_DEAD_RECURRING)
+        result = import_service.import_events(user, caldav_path, ICS_DEAD_RECURRING)
 
         assert result.total_events == 1
         assert result.imported_count == 0
         assert result.skipped_count == 1
         assert not result.errors
 
-    def _get_raw_event(self, user, calendar, uid):
+    def _get_raw_event(self, user, caldav_path, uid):
         """Fetch the raw ICS data of a single event from SabreDAV by UID."""
         caldav_client = CalDAVClient()
         client = caldav_client._get_client(user)  # pylint: disable=protected-access
-        cal_url = f"{caldav_client.base_url}{calendar.caldav_path}"
+        cal_url = f"{caldav_client.base_url}{caldav_path}"
         cal = client.calendar(url=cal_url)
         event = cal.event_by_uid(uid)
         return event.data
@@ -940,11 +963,11 @@ class TestImportEventsE2E:
     def test_import_strips_binary_attachments_e2e(self):
         """Binary attachments should be stripped during import."""
         user = factories.UserFactory(email="import-strip-attach@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
         result = import_service.import_events(
-            user, calendar, ICS_WITH_BINARY_ATTACHMENT
+            user, caldav_path, ICS_WITH_BINARY_ATTACHMENT
         )
 
         assert result.total_events == 1
@@ -952,7 +975,7 @@ class TestImportEventsE2E:
         assert not result.errors
 
         # Verify event exists and binary attachment was stripped
-        raw = self._get_raw_event(user, calendar, "attach-binary-1")
+        raw = self._get_raw_event(user, caldav_path, "attach-binary-1")
         assert "Event with inline attachment" in raw
         assert "iVBORw0KGgo" not in raw
         assert "ATTACH" not in raw
@@ -960,28 +983,30 @@ class TestImportEventsE2E:
     def test_import_keeps_url_attachments_e2e(self):
         """URL-based attachments should NOT be stripped during import."""
         user = factories.UserFactory(email="import-keep-url-attach@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
-        result = import_service.import_events(user, calendar, ICS_WITH_URL_ATTACHMENT)
+        result = import_service.import_events(
+            user, caldav_path, ICS_WITH_URL_ATTACHMENT
+        )
 
         assert result.total_events == 1
         assert result.imported_count == 1
         assert not result.errors
 
         # Verify URL attachment is preserved in raw ICS
-        raw = self._get_raw_event(user, calendar, "attach-url-1")
+        raw = self._get_raw_event(user, caldav_path, "attach-url-1")
         assert "https://example.com/doc.pdf" in raw
         assert "ATTACH" in raw
 
     def test_import_truncates_large_description_e2e(self):
         """Descriptions exceeding IMPORT_MAX_DESCRIPTION_BYTES should be truncated."""
         user = factories.UserFactory(email="import-trunc-desc@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
         result = import_service.import_events(
-            user, calendar, ICS_WITH_LARGE_DESCRIPTION
+            user, caldav_path, ICS_WITH_LARGE_DESCRIPTION
         )
 
         assert result.total_events == 1
@@ -989,7 +1014,7 @@ class TestImportEventsE2E:
         assert not result.errors
 
         # Verify description was truncated (default 100KB limit, original 200KB)
-        raw = self._get_raw_event(user, calendar, "large-desc-1")
+        raw = self._get_raw_event(user, caldav_path, "large-desc-1")
         assert "Event with huge description" in raw
         # Raw ICS should be much smaller than the 200KB original
         assert len(raw) < 150000
@@ -1005,15 +1030,15 @@ class TestCalendarSanitizerE2E:
     """E2E tests for CalendarSanitizerPlugin on normal CalDAV PUT operations."""
 
     def _create_calendar(self, user):
-        """Create a real calendar in both Django and SabreDAV."""
+        """Create a real calendar in SabreDAV. Returns the caldav_path."""
         service = CalendarService()
         return service.create_calendar(user, name="Sanitizer Test", color="#3174ad")
 
-    def _get_raw_event(self, user, calendar, uid):
+    def _get_raw_event(self, user, caldav_path, uid):
         """Fetch the raw ICS data of a single event from SabreDAV by UID."""
         caldav_client = CalDAVClient()
         client = caldav_client._get_client(user)  # pylint: disable=protected-access
-        cal_url = f"{caldav_client.base_url}{calendar.caldav_path}"
+        cal_url = f"{caldav_client.base_url}{caldav_path}"
         cal = client.calendar(url=cal_url)
         event = cal.event_by_uid(uid)
         return event.data
@@ -1021,14 +1046,12 @@ class TestCalendarSanitizerE2E:
     def test_caldav_put_strips_binary_attachment_e2e(self):
         """A normal CalDAV PUT with binary attachment should be sanitized."""
         user = factories.UserFactory(email="sanitizer-put-attach@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         caldav = CalDAVClient()
-        caldav.create_event_raw(
-            user, calendar.caldav_path, ICS_WITH_BINARY_ATTACHMENT.decode()
-        )
+        caldav.create_event_raw(user, caldav_path, ICS_WITH_BINARY_ATTACHMENT.decode())
 
-        raw = self._get_raw_event(user, calendar, "attach-binary-1")
+        raw = self._get_raw_event(user, caldav_path, "attach-binary-1")
         assert "Event with inline attachment" in raw
         assert "iVBORw0KGgo" not in raw
         assert "ATTACH" not in raw
@@ -1036,28 +1059,24 @@ class TestCalendarSanitizerE2E:
     def test_caldav_put_keeps_url_attachment_e2e(self):
         """A normal CalDAV PUT with URL attachment should preserve it."""
         user = factories.UserFactory(email="sanitizer-put-url@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         caldav = CalDAVClient()
-        caldav.create_event_raw(
-            user, calendar.caldav_path, ICS_WITH_URL_ATTACHMENT.decode()
-        )
+        caldav.create_event_raw(user, caldav_path, ICS_WITH_URL_ATTACHMENT.decode())
 
-        raw = self._get_raw_event(user, calendar, "attach-url-1")
+        raw = self._get_raw_event(user, caldav_path, "attach-url-1")
         assert "https://example.com/doc.pdf" in raw
         assert "ATTACH" in raw
 
     def test_caldav_put_truncates_large_description_e2e(self):
         """A normal CalDAV PUT with oversized description should be truncated."""
         user = factories.UserFactory(email="sanitizer-put-desc@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         caldav = CalDAVClient()
-        caldav.create_event_raw(
-            user, calendar.caldav_path, ICS_WITH_LARGE_DESCRIPTION.decode()
-        )
+        caldav.create_event_raw(user, caldav_path, ICS_WITH_LARGE_DESCRIPTION.decode())
 
-        raw = self._get_raw_event(user, calendar, "large-desc-1")
+        raw = self._get_raw_event(user, caldav_path, "large-desc-1")
         assert "Event with huge description" in raw
         assert len(raw) < 150000
         assert "..." in raw
@@ -1065,23 +1084,21 @@ class TestCalendarSanitizerE2E:
     def test_caldav_put_rejects_oversized_event_e2e(self):
         """A CalDAV PUT exceeding max-resource-size should be rejected (HTTP 507)."""
         user = factories.UserFactory(email="sanitizer-put-oversize@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         caldav = CalDAVClient()
         with pytest.raises(Exception) as exc_info:
-            caldav.create_event_raw(
-                user, calendar.caldav_path, ICS_OVERSIZED_EVENT.decode()
-            )
+            caldav.create_event_raw(user, caldav_path, ICS_OVERSIZED_EVENT.decode())
         # SabreDAV returns 507 Insufficient Storage
         assert "507" in str(exc_info.value) or "Insufficient" in str(exc_info.value)
 
     def test_import_rejects_oversized_event_e2e(self):
         """Import of an event exceeding max-resource-size should skip it."""
         user = factories.UserFactory(email="sanitizer-import-oversize@example.com")
-        calendar = self._create_calendar(user)
+        caldav_path = self._create_calendar(user)
 
         import_service = ICSImportService()
-        result = import_service.import_events(user, calendar, ICS_OVERSIZED_EVENT)
+        result = import_service.import_events(user, caldav_path, ICS_OVERSIZED_EVENT)
 
         assert result.total_events == 1
         assert result.imported_count == 0

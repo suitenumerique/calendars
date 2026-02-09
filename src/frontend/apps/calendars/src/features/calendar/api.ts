@@ -4,84 +4,17 @@
 
 import { fetchAPI, fetchAPIFormData } from "@/features/api/fetchApi";
 
-export interface Calendar {
-  id: string;
-  name: string;
-  color: string;
-  description: string;
-  is_default: boolean;
-  is_visible: boolean;
-  caldav_path: string;
-  owner: string;
-}
-
-
 /**
- * Paginated API response.
- */
-interface PaginatedResponse<T> {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: T[];
-}
-
-/**
- * Fetch all calendars accessible by the current user.
- */
-export const getCalendars = async (): Promise<Calendar[]> => {
-  const response = await fetchAPI("calendars/");
-  const data: PaginatedResponse<Calendar> = await response.json();
-  return data.results;
-};
-
-/**
- * Create a new calendar via Django API.
- * This creates both the CalDAV calendar and the Django record.
+ * Create a new calendar via Django API (CalDAV only).
  */
 export const createCalendarApi = async (data: {
   name: string;
   color?: string;
   description?: string;
-}): Promise<Calendar> => {
+}): Promise<{ caldav_path: string }> => {
   const response = await fetchAPI("calendars/", {
     method: "POST",
     body: JSON.stringify(data),
-  });
-  return response.json();
-};
-
-/**
- * Update an existing calendar via Django API.
- */
-export const updateCalendarApi = async (
-  calendarId: string,
-  data: { name?: string; color?: string; description?: string }
-): Promise<Calendar> => {
-  const response = await fetchAPI(`calendars/${calendarId}/`, {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  });
-  return response.json();
-};
-
-/**
- * Delete a calendar via Django API.
- */
-export const deleteCalendarApi = async (calendarId: string): Promise<void> => {
-  await fetchAPI(`calendars/${calendarId}/`, {
-    method: "DELETE",
-  });
-};
-
-/**
- * Toggle calendar visibility.
- */
-export const toggleCalendarVisibility = async (
-  calendarId: string
-): Promise<{ is_visible: boolean }> => {
-  const response = await fetchAPI(`calendars/${calendarId}/toggle_visibility/`, {
-    method: "PATCH",
   });
   return response.json();
 };
@@ -220,14 +153,15 @@ export interface ImportEventsResult {
  * Import events from an ICS file into a calendar.
  */
 export const importEventsApi = async (
-  calendarId: string,
+  caldavPath: string,
   file: File,
 ): Promise<ImportEventsResult> => {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("caldav_path", caldavPath);
 
   const response = await fetchAPIFormData(
-    `calendars/${calendarId}/import_events/`,
+    "calendars/import-events/",
     {
       method: "POST",
       body: formData,
@@ -235,4 +169,3 @@ export const importEventsApi = async (
   );
   return response.json();
 };
-

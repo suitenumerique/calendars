@@ -18,6 +18,31 @@ import type {
 import type { CalendarApi } from "../components/scheduler/types";
 import { createCalendarApi } from "../api";
 
+const HIDDEN_CALENDARS_KEY = "calendar-hidden-urls";
+
+const loadHiddenUrls = (): Set<string> => {
+  try {
+    const stored = localStorage.getItem(HIDDEN_CALENDARS_KEY);
+    if (stored) {
+      return new Set(JSON.parse(stored) as string[]);
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return new Set();
+};
+
+const saveHiddenUrls = (hiddenUrls: Set<string>) => {
+  try {
+    localStorage.setItem(
+      HIDDEN_CALENDARS_KEY,
+      JSON.stringify([...hiddenUrls]),
+    );
+  } catch {
+    // Ignore storage errors
+  }
+};
+
 export interface CalendarContextType {
   calendarRef: React.RefObject<CalendarApi | null>;
   caldavService: CalDavService;
@@ -88,8 +113,11 @@ export const CalendarContextProvider = ({
       const result = await caldavService.fetchCalendars();
       if (result.success && result.data) {
         setDavCalendars(result.data);
-        // Initialize all calendars as visible
-        setVisibleCalendarUrls(new Set(result.data.map((cal) => cal.url)));
+        // Compute visible = all minus hidden (new calendars default to visible)
+        const hidden = loadHiddenUrls();
+        setVisibleCalendarUrls(
+          new Set(result.data.map((cal) => cal.url).filter((url) => !hidden.has(url))),
+        );
       } else {
         console.error("Error fetching calendars:", result.error);
         setDavCalendars([]);
@@ -106,22 +134,26 @@ export const CalendarContextProvider = ({
 
   const toggleCalendarVisibility = useCallback((calendarUrl: string) => {
     setVisibleCalendarUrls((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(calendarUrl)) {
-        newSet.delete(calendarUrl);
+      const newVisible = new Set(prev);
+      if (newVisible.has(calendarUrl)) {
+        newVisible.delete(calendarUrl);
       } else {
-        newSet.add(calendarUrl);
+        newVisible.add(calendarUrl);
       }
-      return newSet;
+      // Persist: store the hidden set (all known URLs minus visible)
+      const allUrls = davCalendars.map((cal) => cal.url);
+      const newHidden = new Set(allUrls.filter((url) => !newVisible.has(url)));
+      saveHiddenUrls(newHidden);
+      return newVisible;
     });
-  }, []);
+  }, [davCalendars]);
 
   const createCalendar = useCallback(
     async (
       params: CalDavCalendarCreate,
     ): Promise<{ success: boolean; error?: string }> => {
       try {
-        // Use Django API to create calendar (creates both CalDAV and Django records)
+        // Use Django API to create calendar (CalDAV only)
         await createCalendarApi({
           name: params.displayName,
           color: params.color,
@@ -256,8 +288,13 @@ export const CalendarContextProvider = ({
           const calendarsResult = await caldavService.fetchCalendars();
           if (isMounted && calendarsResult.success && calendarsResult.data) {
             setDavCalendars(calendarsResult.data);
+            const hidden = loadHiddenUrls();
             setVisibleCalendarUrls(
-              new Set(calendarsResult.data.map((cal) => cal.url)),
+              new Set(
+                calendarsResult.data
+                  .map((cal) => cal.url)
+                  .filter((url) => !hidden.has(url)),
+              ),
             );
           }
           setIsLoading(false);

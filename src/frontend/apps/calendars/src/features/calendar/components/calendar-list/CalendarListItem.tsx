@@ -7,10 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Checkbox } from "@gouvfr-lasuite/cunningham-react";
 
 import { CalendarItemMenu } from "./CalendarItemMenu";
-import type {
-  CalendarListItemProps,
-  SharedCalendarListItemProps,
-} from "./types";
+import type { CalendarListItemProps } from "./types";
 
 /**
  * CalendarListItem - Displays a user-owned calendar.
@@ -68,36 +65,3 @@ export const CalendarListItem = ({
   );
 };
 
-/**
- * SharedCalendarListItem - Displays a shared calendar.
- */
-export const SharedCalendarListItem = ({
-  calendar,
-  isVisible,
-  onToggleVisibility,
-}: SharedCalendarListItemProps) => {
-  const { t } = useTranslation();
-
-  return (
-    <div className="calendar-list__item">
-      <div
-        className="calendar-list__item-checkbox"
-        style={{ "--calendar-color": calendar.color } as React.CSSProperties}
-      >
-        <Checkbox
-          checked={isVisible}
-          onChange={() => onToggleVisibility(String(calendar.id))}
-          label=""
-          aria-label={`${t("calendar.list.showCalendar")} ${calendar.name}`}
-        />
-        <span
-          className="calendar-list__color"
-          style={{ backgroundColor: calendar.color }}
-        />
-      </div>
-      <span className="calendar-list__name" title={calendar.name}>
-        {calendar.name}
-      </span>
-    </div>
-  );
-};

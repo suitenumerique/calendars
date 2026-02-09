@@ -1,27 +1,16 @@
 """
 Declare and configure the models for the calendars core application
 """
-# pylint: disable=too-many-lines
 
 import uuid
-from datetime import timedelta
 from logging import getLogger
 
 from django.conf import settings
 from django.contrib.auth import models as auth_models
 from django.contrib.auth.base_user import AbstractBaseUser
-from django.contrib.postgres.indexes import GistIndex
-from django.contrib.sites.models import Site
 from django.core import mail, validators
-from django.core.cache import cache
-from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
-from django.db import models, transaction
-from django.db.models.expressions import RawSQL
-from django.template.loader import render_to_string
-from django.utils import timezone
+from django.db import models
 from django.utils.functional import cached_property
-from django.utils.translation import get_language, override
 from django.utils.translation import gettext_lazy as _
 
 from timezone_field import TimeZoneField
@@ -225,14 +214,6 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
     def __str__(self):
         return self.email or self.admin_email or str(self.id)
 
-    def save(self, *args, **kwargs):
-        """
-        If it's a new user, give its user access to the items to which s.he was invited.
-        """
-        is_adding = self._state.adding
-
-        super().save(*args, **kwargs)
-
     def email_user(self, subject, message, from_email=None, **kwargs):
         """Email this user."""
         if not self.email:
@@ -319,87 +300,6 @@ class BaseAccess(BaseModel):
             "retrieve": bool(roles),
             "set_role_to": set_role_to,
         }
-
-
-class Calendar(models.Model):
-    """
-    Represents a calendar owned by a user.
-    This model tracks calendars stored in the CalDAV server and links them to Django users.
-    """
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    owner = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="calendars",
-    )
-    name = models.CharField(max_length=255)
-    color = models.CharField(max_length=7, default="#3174ad")  # Hex color
-    description = models.TextField(blank=True, default="")
-    is_default = models.BooleanField(default=False)
-    is_visible = models.BooleanField(default=True)
-
-    # CalDAV server reference - the calendar path in the CalDAV server
-    caldav_path = models.CharField(max_length=512, unique=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        """Meta options for Calendar model."""
-
-        ordering = ["-is_default", "name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["owner"],
-                condition=models.Q(is_default=True),
-                name="unique_default_calendar_per_user",
-            )
-        ]
-
-    def __str__(self):
-        return f"{self.name} ({self.owner.email})"
-
-
-class CalendarShare(models.Model):
-    """
-    Represents a calendar shared with another user.
-    """
-
-    PERMISSION_READ = "read"
-    PERMISSION_WRITE = "write"
-    PERMISSION_CHOICES = [
-        (PERMISSION_READ, "Read only"),
-        (PERMISSION_WRITE, "Read and write"),
-    ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    calendar = models.ForeignKey(
-        Calendar,
-        on_delete=models.CASCADE,
-        related_name="shares",
-    )
-    shared_with = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="shared_calendars",
-    )
-    permission = models.CharField(
-        max_length=10,
-        choices=PERMISSION_CHOICES,
-        default=PERMISSION_READ,
-    )
-    is_visible = models.BooleanField(default=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        """Meta options for CalendarShare model."""
-
-        unique_together = ["calendar", "shared_with"]
-
-    def __str__(self):
-        return f"{self.calendar.name} shared with {self.shared_with.email}"
 
 
 class CalendarSubscriptionToken(models.Model):

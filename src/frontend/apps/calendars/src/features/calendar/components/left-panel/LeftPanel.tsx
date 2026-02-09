@@ -11,7 +11,6 @@ import { CalendarList } from "../calendar-list";
 import { MiniCalendar } from "./MiniCalendar";
 import { EventModal } from "../scheduler/EventModal";
 import { useCalendarContext } from "../../contexts";
-import { useCalendars } from "../../hooks/useCalendars";
 
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -43,8 +42,6 @@ export const LeftPanel = () => {
     adapter,
     calendarRef,
   } = useCalendarContext();
-
-  const { data: calendars = [] } = useCalendars();
 
   // Get default calendar URL
   const defaultCalendarUrl = davCalendars[0]?.url || "";
@@ -140,7 +137,7 @@ export const LeftPanel = () => {
 
         <div className="calendar-left-panel__divider" />
 
-        <CalendarList calendars={calendars} />
+        <CalendarList />
       </div>
 
       {modal.isOpen && (

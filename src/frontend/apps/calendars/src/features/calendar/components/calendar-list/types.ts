@@ -3,7 +3,6 @@
  */
 
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
-import type { Calendar } from "../../types";
 
 /**
  * Props for the CalendarModal component.
@@ -54,22 +53,6 @@ export interface CalendarListItemProps {
   onImport?: (calendar: CalDavCalendar) => void;
   onSubscription?: (calendar: CalDavCalendar) => void;
   onCloseMenu: () => void;
-}
-
-/**
- * Props for the SharedCalendarListItem component.
- */
-export interface SharedCalendarListItemProps {
-  calendar: Calendar;
-  isVisible: boolean;
-  onToggleVisibility: (id: string) => void;
-}
-
-/**
- * Props for the main CalendarList component.
- */
-export interface CalendarListProps {
-  calendars: Calendar[];
 }
 
 /**

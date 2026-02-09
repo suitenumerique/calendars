@@ -8,12 +8,11 @@ from urllib.parse import unquote
 
 from django.conf import settings
 from django.core.cache import cache
-from django.db import models as db
 from django.utils.text import slugify
 
 import rest_framework as drf
-from rest_framework import mixins, status, viewsets
 from rest_framework import response as drf_response
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -262,149 +261,105 @@ class ConfigView(drf.views.APIView):
         return theme_customization
 
 
-# CalDAV ViewSets
-class CalendarViewSet(
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.CreateModelMixin,
-    mixins.UpdateModelMixin,
-    mixins.DestroyModelMixin,
-    viewsets.GenericViewSet,
-):
-    """
-    ViewSet for managing user calendars.
+# Regex for CalDAV path validation (shared with SubscriptionTokenViewSet)
+# Pattern: /calendars/<email-or-encoded>/<calendar-id>/
+CALDAV_PATH_PATTERN = re.compile(
+    r"^/calendars/[^/]+/[a-zA-Z0-9-]+/$",
+)
 
-    list: Get all calendars accessible by the user (owned + shared)
-    retrieve: Get a specific calendar
-    create: Create a new calendar
-    update: Update calendar properties
-    destroy: Delete a calendar
+
+def _verify_caldav_access(user, caldav_path):
+    """Verify that the user has access to the CalDAV calendar.
+
+    Checks that:
+    1. The path matches the expected pattern (prevents path injection)
+    2. The user's email matches the email in the path
+    """
+    if not CALDAV_PATH_PATTERN.match(caldav_path):
+        return False
+    parts = caldav_path.strip("/").split("/")
+    if len(parts) >= 2 and parts[0] == "calendars":
+        path_email = unquote(parts[1])
+        return path_email.lower() == user.email.lower()
+    return False
+
+
+def _normalize_caldav_path(caldav_path):
+    """Normalize CalDAV path to consistent format.
+
+    Strips the CalDAV API prefix (e.g. /api/v1.0/caldav/) if present,
+    so that paths like /api/v1.0/caldav/calendars/user@ex.com/uuid/
+    become /calendars/user@ex.com/uuid/.
+    """
+    if not caldav_path.startswith("/"):
+        caldav_path = "/" + caldav_path
+    # Strip CalDAV API prefix — keep from /calendars/ onwards
+    calendars_idx = caldav_path.find("/calendars/")
+    if calendars_idx > 0:
+        caldav_path = caldav_path[calendars_idx:]
+    if not caldav_path.endswith("/"):
+        caldav_path = caldav_path + "/"
+    return caldav_path
+
+
+class CalendarViewSet(viewsets.GenericViewSet):
+    """ViewSet for calendar operations.
+
+    create: Create a new calendar (CalDAV only, no Django record).
+    import_events: Import events from an ICS file.
     """
 
     permission_classes = [IsAuthenticated]
-    serializer_class = serializers.CalendarSerializer
+    serializer_class = serializers.CalendarCreateSerializer
 
-    def get_queryset(self):
-        """Return calendars owned by or shared with the current user."""
-        user = self.request.user
-        shared_ids = models.CalendarShare.objects.filter(shared_with=user).values_list(
-            "calendar_id", flat=True
-        )
-        return (
-            models.Calendar.objects.filter(db.Q(owner=user) | db.Q(id__in=shared_ids))
-            .distinct()
-            .order_by("-is_default", "name")
-        )
+    def create(self, request):
+        """Create a new calendar via CalDAV.
 
-    def get_serializer_class(self):
-        if self.action == "create":
-            return serializers.CalendarCreateSerializer
-        return serializers.CalendarSerializer
+        POST /api/v1.0/calendars/
+        Body: { name, color?, description? }
+        Returns: { caldav_path }
+        """
+        serializer = serializers.CalendarCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-    def perform_create(self, serializer):
-        """Create a new calendar via CalendarService."""
         service = CalendarService()
-        calendar = service.create_calendar(
-            user=self.request.user,
+        caldav_path = service.create_calendar(
+            user=request.user,
             name=serializer.validated_data["name"],
             color=serializer.validated_data.get("color", "#3174ad"),
         )
-        # Update the serializer instance with the created calendar
-        serializer.instance = calendar
-
-    def perform_destroy(self, instance):
-        """Delete calendar. Prevent deletion of default calendar."""
-        if instance.is_default:
-            raise ValueError("Cannot delete the default calendar.")
-        if instance.owner != self.request.user:
-            raise PermissionError("You can only delete your own calendars.")
-        instance.delete()
-
-    @action(detail=True, methods=["patch"])
-    def toggle_visibility(self, request, **kwargs):
-        """Toggle calendar visibility."""
-        calendar = self.get_object()
-
-        # Check if it's a shared calendar
-        share = models.CalendarShare.objects.filter(
-            calendar=calendar, shared_with=request.user
-        ).first()
-
-        if share:
-            share.is_visible = not share.is_visible
-            share.save()
-            is_visible = share.is_visible
-        elif calendar.owner == request.user:
-            calendar.is_visible = not calendar.is_visible
-            calendar.save()
-            is_visible = calendar.is_visible
-        else:
-            return drf_response.Response(
-                {"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN
-            )
-
-        return drf_response.Response({"is_visible": is_visible})
-
-    @action(
-        detail=True,
-        methods=["post"],
-        serializer_class=serializers.CalendarShareSerializer,
-    )
-    def share(self, request, **kwargs):
-        """Share calendar with another user."""
-        calendar = self.get_object()
-
-        if calendar.owner != request.user:
-            return drf_response.Response(
-                {"error": "Only the owner can share this calendar"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        serializer = serializers.CalendarShareSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        email = serializer.validated_data["shared_with_email"]
-        try:
-            user_to_share = models.User.objects.get(email=email)
-        except models.User.DoesNotExist:
-            return drf_response.Response(
-                {"error": "User not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-
-        share, created = models.CalendarShare.objects.get_or_create(
-            calendar=calendar,
-            shared_with=user_to_share,
-            defaults={
-                "permission": serializer.validated_data.get("permission", "read")
-            },
-        )
-
-        if not created:
-            share.permission = serializer.validated_data.get(
-                "permission", share.permission
-            )
-            share.save()
 
         return drf_response.Response(
-            serializers.CalendarShareSerializer(share).data,
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+            {"caldav_path": caldav_path},
+            status=status.HTTP_201_CREATED,
         )
 
     @action(
-        detail=True,
+        detail=False,
         methods=["post"],
         parser_classes=[MultiPartParser],
-        url_path="import_events",
+        url_path="import-events",
         url_name="import-events",
     )
     def import_events(self, request, **kwargs):
-        """Import events from an ICS file into this calendar."""
-        calendar = self.get_object()
+        """Import events from an ICS file into a calendar.
 
-        # Only the owner can import events
-        if calendar.owner != request.user:
+        POST /api/v1.0/calendars/import-events/
+        Body (multipart): file=<ics>, caldav_path=/calendars/user@.../uuid/
+        """
+        caldav_path = request.data.get("caldav_path", "")
+        if not caldav_path:
             return drf_response.Response(
-                {"error": "Only the owner can import events"},
+                {"error": "caldav_path is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        caldav_path = _normalize_caldav_path(caldav_path)
+
+        # Verify user access
+        if not _verify_caldav_access(request.user, caldav_path):
+            return drf_response.Response(
+                {"error": "You don't have access to this calendar"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -426,7 +381,7 @@ class CalendarViewSet(
 
         ics_data = uploaded_file.read()
         service = ICSImportService()
-        result = service.import_events(request.user, calendar, ics_data)
+        result = service.import_events(request.user, caldav_path, ics_data)
 
         response_data = {
             "total_events": result.total_events,
@@ -457,48 +412,6 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = serializers.CalendarSubscriptionTokenSerializer
 
-    # Regex for CalDAV path validation
-    # Pattern: /calendars/<email>/<calendar-id>/
-    # Calendar ID: alphanumeric with hyphens only (prevents path traversal like ../)
-    # This blocks injection attacks while allowing UUIDs and test identifiers
-    CALDAV_PATH_PATTERN = re.compile(
-        r"^/calendars/[^/]+/[a-zA-Z0-9-]+/$",
-    )
-
-    def _verify_caldav_access(self, user, caldav_path):
-        """
-        Verify that the user has access to the CalDAV calendar.
-
-        We verify by checking:
-        1. The path matches the expected pattern (prevents path injection)
-        2. The user's email matches the email in the path
-
-        CalDAV paths follow the pattern: /calendars/<user_email>/<calendar_id>/
-        """
-        # Format validation to prevent path injection attacks (e.g., ../, query params)
-        if not self.CALDAV_PATH_PATTERN.match(caldav_path):
-            logger.warning(
-                "Invalid CalDAV path format rejected: %s",
-                caldav_path[:100],  # Truncate for logging
-            )
-            return False
-
-        # Extract and verify email from path
-        # Path format: /calendars/user@example.com/calendar-id/
-        parts = caldav_path.strip("/").split("/")
-        if len(parts) >= 2 and parts[0] == "calendars":
-            path_email = unquote(parts[1])
-            return path_email.lower() == user.email.lower()
-        return False
-
-    def _normalize_caldav_path(self, caldav_path):
-        """Normalize CalDAV path to consistent format."""
-        if not caldav_path.startswith("/"):
-            caldav_path = "/" + caldav_path
-        if not caldav_path.endswith("/"):
-            caldav_path = caldav_path + "/"
-        return caldav_path
-
     def create(self, request):
         """
         Create or get existing subscription token.
@@ -516,7 +429,7 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
         calendar_name = create_serializer.validated_data.get("calendar_name", "")
 
         # Verify user has access to this calendar
-        if not self._verify_caldav_access(request.user, caldav_path):
+        if not _verify_caldav_access(request.user, caldav_path):
             return drf_response.Response(
                 {"error": "You don't have access to this calendar"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -555,10 +468,10 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        caldav_path = self._normalize_caldav_path(caldav_path)
+        caldav_path = _normalize_caldav_path(caldav_path)
 
         # Verify user has access to this calendar
-        if not self._verify_caldav_access(request.user, caldav_path):
+        if not _verify_caldav_access(request.user, caldav_path):
             return drf_response.Response(
                 {"error": "You don't have access to this calendar"},
                 status=status.HTTP_403_FORBIDDEN,

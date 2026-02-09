@@ -95,7 +95,7 @@ class TestCalDAVScheduling:
 
         # Create calendar for organizer
         service = CalendarService()
-        calendar = service.create_calendar(
+        caldav_path = service.create_calendar(
             organizer, name="Test Calendar", color="#ff0000"
         )
 
@@ -126,7 +126,7 @@ class TestCalDAVScheduling:
         try:
             # Create an event with an attendee
             client = service.caldav._get_client(organizer)  # pylint: disable=protected-access
-            calendar_url = f"{settings.CALDAV_URL}{calendar.caldav_path}"
+            calendar_url = f"{settings.CALDAV_URL}{caldav_path}"
 
             # Add custom callback URL header to the client
             # The CalDAV server will use this URL for the callback

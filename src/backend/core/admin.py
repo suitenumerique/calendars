@@ -93,16 +93,6 @@ class UserAdmin(auth_admin.UserAdmin):
     search_fields = ("id", "sub", "admin_email", "email", "full_name")
 
 
-@admin.register(models.Calendar)
-class CalendarAdmin(admin.ModelAdmin):
-    """Admin class for Calendar model."""
-
-    list_display = ("name", "owner", "is_default", "is_visible", "created_at")
-    list_filter = ("is_default", "is_visible")
-    search_fields = ("name", "owner__email", "caldav_path")
-    readonly_fields = ("id", "created_at", "updated_at")
-
-
 @admin.register(models.CalendarSubscriptionToken)
 class CalendarSubscriptionTokenAdmin(admin.ModelAdmin):
     """Admin class for CalendarSubscriptionToken model."""
