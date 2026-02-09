@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   IcsEvent,
   IcsAttendee,
@@ -11,6 +11,7 @@ import type {
 } from "ts-ics";
 import type { EventCalendarAdapter } from "../../../services/dav/EventCalendarAdapter";
 import type { AttachmentMeta, EventFormSectionId } from "../types";
+import { cleanEventForDisplay } from "../utils/eventDisplayRules";
 import {
   formatDateTimeLocal,
   formatDateLocal,
@@ -40,6 +41,8 @@ export const useEventForm = ({
   const [location, setLocation] = useState("");
   const [startDateTime, setStartDateTime] = useState("");
   const [endDateTime, setEndDateTime] = useState("");
+  // Stash full datetime strings so toggling all-day off restores the original times
+  const savedDateTimesRef = useRef({ start: "", end: "" });
   const [selectedCalendarUrl, setSelectedCalendarUrl] = useState(calendarUrl);
   const [isAllDay, setIsAllDay] = useState(false);
   const [attendees, setAttendees] = useState<IcsAttendee[]>([]);
@@ -60,13 +63,20 @@ export const useEventForm = ({
   // Reset form when event changes
   useEffect(() => {
     setTitle(event?.summary || "");
-    setDescription(event?.description || "");
-    setLocation(event?.location || "");
     setSelectedCalendarUrl(calendarUrl);
     setStatus(event?.status || "CONFIRMED");
     setVisibility(event?.class || "PUBLIC");
     setAvailability(event?.timeTransparent || "OPAQUE");
-    setVideoConferenceUrl(event?.url || "");
+
+    // Clean and deduplicate description / location / url for display
+    const cleaned = cleanEventForDisplay({
+      description: event?.description || "",
+      location: event?.location || "",
+      url: event?.url || "",
+    });
+    setDescription(cleaned.description);
+    setLocation(cleaned.location);
+    setVideoConferenceUrl(cleaned.url);
     setAlarms(event?.alarms || []);
     setAttachments([]);
 
@@ -89,10 +99,10 @@ export const useEventForm = ({
     setIsAllDay(eventIsAllDay);
 
     const initialExpanded = new Set<EventFormSectionId>();
-    if (event?.location) initialExpanded.add("location");
-    if (event?.description) initialExpanded.add("description");
+    if (cleaned.location) initialExpanded.add("location");
+    if (cleaned.description) initialExpanded.add("description");
     if (event?.recurrenceRule) initialExpanded.add("recurrence");
-    if (event?.url) initialExpanded.add("videoConference");
+    if (cleaned.url) initialExpanded.add("videoConference");
 
     if (mode === "create") {
       initialExpanded.add("attendees");
@@ -107,7 +117,10 @@ export const useEventForm = ({
 
     setExpandedSections(initialExpanded);
 
-    // Parse start/end dates
+    // Parse start/end dates and stash full datetime strings for all-day toggle
+    let initStart = "";
+    let initEnd = "";
+
     if (event?.start?.date) {
       const startDate =
         event.start.date instanceof Date
@@ -116,15 +129,15 @@ export const useEventForm = ({
       const isFakeUtc = Boolean(event.start.local?.timezone);
 
       if (eventIsAllDay) {
-        setStartDateTime(formatDateLocal(startDate, isFakeUtc));
+        initStart = formatDateLocal(startDate, isFakeUtc);
       } else {
-        setStartDateTime(formatDateTimeLocal(startDate, isFakeUtc));
+        initStart = formatDateTimeLocal(startDate, isFakeUtc);
       }
     } else {
       if (eventIsAllDay) {
-        setStartDateTime(formatDateLocal(new Date()));
+        initStart = formatDateLocal(new Date());
       } else {
-        setStartDateTime(formatDateTimeLocal(new Date()));
+        initStart = formatDateTimeLocal(new Date());
       }
     }
 
@@ -138,18 +151,27 @@ export const useEventForm = ({
       if (eventIsAllDay) {
         const displayEndDate = new Date(endDate);
         displayEndDate.setUTCDate(displayEndDate.getUTCDate() - 1);
-        setEndDateTime(formatDateLocal(displayEndDate, isFakeUtc));
+        initEnd = formatDateLocal(displayEndDate, isFakeUtc);
       } else {
-        setEndDateTime(formatDateTimeLocal(endDate, isFakeUtc));
+        initEnd = formatDateTimeLocal(endDate, isFakeUtc);
       }
     } else {
       if (eventIsAllDay) {
-        setEndDateTime(formatDateLocal(new Date()));
+        initEnd = formatDateLocal(new Date());
       } else {
         const defaultEnd = new Date();
         defaultEnd.setHours(defaultEnd.getHours() + 1);
-        setEndDateTime(formatDateTimeLocal(defaultEnd));
+        initEnd = formatDateTimeLocal(defaultEnd);
       }
+    }
+
+    setStartDateTime(initStart);
+    setEndDateTime(initEnd);
+
+    // For timed events, stash the full datetime so toggling all-day off
+    // can restore the original times instead of defaulting to midnight.
+    if (!eventIsAllDay) {
+      savedDateTimesRef.current = { start: initStart, end: initEnd };
     }
   }, [event, calendarUrl, mode, organizer?.email]);
 
@@ -201,15 +223,23 @@ export const useEventForm = ({
       setIsAllDay(newIsAllDay);
 
       if (newIsAllDay) {
+        // Stash current datetimes before stripping the time portion
+        savedDateTimesRef.current = { start: startDateTime, end: endDateTime };
         const start = parseDateTimeLocal(startDateTime);
         const end = parseDateTimeLocal(endDateTime);
         setStartDateTime(formatDateLocal(start));
         setEndDateTime(formatDateLocal(end));
       } else {
-        const start = parseDateLocal(startDateTime);
-        const end = parseDateLocal(endDateTime);
-        setStartDateTime(formatDateTimeLocal(start));
-        setEndDateTime(formatDateTimeLocal(end));
+        // Restore stashed datetimes to preserve the original time of day
+        if (savedDateTimesRef.current.start) {
+          setStartDateTime(savedDateTimesRef.current.start);
+          setEndDateTime(savedDateTimesRef.current.end);
+        } else {
+          const start = parseDateLocal(startDateTime);
+          const end = parseDateLocal(endDateTime);
+          setStartDateTime(formatDateTimeLocal(start));
+          setEndDateTime(formatDateTimeLocal(end));
+        }
       }
     },
     [startDateTime, endDateTime],
@@ -218,6 +248,7 @@ export const useEventForm = ({
   const toIcsEvent = useCallback((): IcsEvent => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { duration: _duration, ...eventWithoutDuration } = event ?? {};
+
 
     if (isAllDay) {
       const startDate = parseDateLocal(startDateTime);

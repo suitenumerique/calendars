@@ -229,6 +229,7 @@ export const EventModal = ({
                 value: cal.url,
                 label: cal.displayName || cal.url,
               }))}
+              clearable={false}
               variant="classic"
               fullWidth
             />

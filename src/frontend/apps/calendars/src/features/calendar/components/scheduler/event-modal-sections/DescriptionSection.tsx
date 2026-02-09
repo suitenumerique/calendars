@@ -34,7 +34,7 @@ export const DescriptionSection = ({
         placeholder={t("calendar.event.descriptionPlaceholder")}
         value={description}
         onChange={(e) => onChange(e.target.value)}
-        rows={3}
+        rows={5}
         fullWidth
         variant="classic"
         hideLabel

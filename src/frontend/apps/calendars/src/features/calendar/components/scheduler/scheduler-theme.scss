@@ -122,21 +122,95 @@
 }
 
 // -----------------------------------------------------------------------------
-// 4. Events styling - Rounded corners, no shadow, bold title
+// 4. Events styling - Custom duration-aware content (see utils/eventContent.ts)
 // -----------------------------------------------------------------------------
 .ec-event {
   border-radius: 6px;
   box-shadow: none;
-  padding: 8px 10px;
+  overflow: hidden;
+
+  padding-left: 4px !important;
+
+  // Compact (≤ 30 min): vertically center the single line
+  &:has(.ec-custom--compact) {
+    display: flex;
+    align-items: center;
+  }
+
+  // Medium / large: small top padding
+  &:has(.ec-custom--medium),
+  &:has(.ec-custom--large) {
+    padding-top: 2px;
+  }
 }
 
-.ec-event-title {
+.ec-event-body {
+  overflow: hidden;
+  width: 100%;
+}
+
+// --- Shared custom-content styles ---
+.ec-custom__title {
   font-weight: 600;
 }
 
-.ec-event-time {
+.ec-custom__details,
+.ec-custom__time {
   font-weight: 400;
-  opacity: 0.95;
+  opacity: 0.9;
+}
+
+// --- Compact: ≤ 30 min — single line ---
+.ec-custom--compact {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+// --- Medium: 45–60 min — two truncated lines ---
+.ec-custom--medium {
+  overflow: hidden;
+  font-size: 0.8rem;
+  line-height: 1.30;
+
+  .ec-custom__title,
+  .ec-custom__details {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+  }
+}
+
+// --- Large: 75 min+ — title wraps up to 2 lines, then details ---
+.ec-custom--large {
+  overflow: hidden;
+  font-size: 0.85rem;
+  line-height: 1.35;
+
+  .ec-custom__title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .ec-custom__details {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    margin-top: 1px;
+  }
+}
+
+// --- All-day events ---
+.ec-custom--allday {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  font-size: 0.8rem;
+  line-height: 1.3;
 }
 
 // -----------------------------------------------------------------------------

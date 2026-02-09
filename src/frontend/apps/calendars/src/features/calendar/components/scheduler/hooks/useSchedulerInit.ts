@@ -19,6 +19,7 @@ import type { CalDavService } from "../../../services/dav/CalDavService";
 import type { CalDavCalendar } from "../../../services/dav/types/caldav-service";
 import type { EventCalendarEvent, EventCalendarFetchInfo } from "../../../services/dav/types/event-calendar";
 import type { CalendarApi } from "../types";
+import { createEventContent, type EventContentInfo } from "../utils/eventContent";
 
 type ECEvent = EventCalendarEvent;
 
@@ -131,6 +132,9 @@ export const useSchedulerInit = ({
         datesSet: (info: { start: Date; end: Date }) => {
           handlersRef.current.setCurrentDate(info);
         },
+
+        // Custom event content — adapts layout to event duration
+        eventContent: (info: EventContentInfo) => createEventContent(info),
 
         // Event display
         dayMaxEvents: true,
