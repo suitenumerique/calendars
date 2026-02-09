@@ -26,7 +26,7 @@ class CallbackHandler(http.server.BaseHTTPRequestHandler):
         self.callback_data = callback_data
         super().__init__(*args, **kwargs)
 
-    def do_POST(self):
+    def do_POST(self):  # pylint: disable=invalid-name
         """Handle POST requests (scheduling callbacks)."""
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""
@@ -44,9 +44,8 @@ class CallbackHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"OK")
 
-    def log_message(self, format, *args):
+    def log_message(self, format, *args):  # pylint: disable=redefined-builtin
         """Suppress default logging."""
-        pass
 
 
 def create_test_server() -> tuple:
@@ -79,7 +78,9 @@ class TestCalDAVScheduling:
         not settings.CALDAV_URL,
         reason="CalDAV server URL not configured - integration test requires real server",
     )
-    def test_scheduling_callback_received_when_creating_event_with_attendee(self):
+    def test_scheduling_callback_received_when_creating_event_with_attendee(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
+        self,
+    ):
         """Test that creating an event with an attendee triggers scheduling callback.
 
         This test verifies that when an event is created with an attendee via CalDAV,
@@ -114,7 +115,7 @@ class TestCalDAVScheduling:
         try:
             test_socket.connect(("127.0.0.1", port))
             test_socket.close()
-        except Exception as e:
+        except OSError as e:
             pytest.fail(f"Test server failed to start on port {port}: {e}")
 
         # Use the named test container hostname
@@ -124,7 +125,7 @@ class TestCalDAVScheduling:
 
         try:
             # Create an event with an attendee
-            client = service.caldav._get_client(organizer)
+            client = service.caldav._get_client(organizer)  # pylint: disable=protected-access
             calendar_url = f"{settings.CALDAV_URL}{calendar.caldav_path}"
 
             # Add custom callback URL header to the client
@@ -159,7 +160,7 @@ END:VEVENT
 END:VCALENDAR"""
 
                 # Save event to trigger scheduling
-                event = caldav_calendar.save_event(ical_content)
+                caldav_calendar.save_event(ical_content)
 
                 # Give the callback a moment to be called (scheduling may be async)
                 # sabre/dav processes scheduling synchronously during the request
@@ -167,21 +168,24 @@ END:VCALENDAR"""
 
                 # Verify callback was called
                 assert callback_data["called"], (
-                    "Scheduling callback was not called when creating event with attendee. "
-                    "This may indicate that sabre/dav's scheduling plugin is not working correctly. "
+                    "Scheduling callback was not called when creating event "
+                    "with attendee. This may indicate that sabre/dav's "
+                    "scheduling plugin is not working correctly. "
                     "Check CalDAV server logs for scheduling errors."
                 )
 
                 # Verify callback request details
-                request_data = callback_data["request_data"]
+                # pylint: disable=unsubscriptable-object
+                request_data: dict = callback_data["request_data"]
                 assert request_data is not None
 
                 # Verify API key authentication
                 api_key = request_data["headers"].get("X-Api-Key", "")
                 expected_key = settings.CALDAV_INBOUND_API_KEY
                 assert expected_key and secrets.compare_digest(api_key, expected_key), (
-                    f"Callback request missing or invalid X-Api-Key header. "
-                    f"Expected: {expected_key[:10]}..., Got: {api_key[:10] if api_key else 'None'}..."
+                    "Callback request missing or invalid X-Api-Key header. "
+                    f"Expected: {expected_key[:10]}..., "
+                    f"Got: {api_key[:10] if api_key else 'None'}..."
                 )
 
                 # Verify scheduling headers
@@ -238,7 +242,7 @@ END:VCALENDAR"""
 
             except NotFoundError:
                 pytest.skip("Calendar not found - CalDAV server may not be running")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 pytest.fail(f"Failed to create event with attendee: {str(e)}")
         finally:
             # Shutdown server

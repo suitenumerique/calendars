@@ -25,6 +25,7 @@ export interface CalendarItemMenuProps {
   onOpenChange: (isOpen: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onImport?: () => void;
   onSubscription?: () => void;
 }
 
@@ -50,6 +51,7 @@ export interface CalendarListItemProps {
   onMenuToggle: (url: string) => void;
   onEdit: (calendar: CalDavCalendar) => void;
   onDelete: (calendar: CalDavCalendar) => void;
+  onImport?: (calendar: CalDavCalendar) => void;
   onSubscription?: (calendar: CalDavCalendar) => void;
   onCloseMenu: () => void;
 }

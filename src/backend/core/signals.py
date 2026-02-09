@@ -16,7 +16,7 @@ User = get_user_model()
 
 
 @receiver(post_save, sender=User)
-def provision_default_calendar(sender, instance, created, **kwargs):
+def provision_default_calendar(sender, instance, created, **kwargs):  # pylint: disable=unused-argument
     """
     Auto-provision a default calendar when a new user is created.
     """
@@ -35,7 +35,7 @@ def provision_default_calendar(sender, instance, created, **kwargs):
         service = CalendarService()
         service.create_default_calendar(instance)
         logger.info("Created default calendar for user %s", instance.email)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         # In tests, CalDAV server may not be available, so fail silently
         # Check if it's a database error that suggests we're in tests
         error_str = str(e).lower()

@@ -99,7 +99,7 @@ class CalDAVClient:
         except NotFoundError:
             logger.warning("Calendar not found at path: %s", calendar_path)
             return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.error("Failed to get calendar info from CalDAV: %s", str(e))
             return None
 
@@ -184,6 +184,25 @@ class CalDAVClient:
             return []
         except Exception as e:
             logger.error("Failed to get events from CalDAV server: %s", str(e))
+            raise
+
+    def create_event_raw(self, user, calendar_path: str, ics_data: str) -> str:
+        """
+        Create an event in CalDAV server from raw ICS data.
+        The ics_data should be a complete VCALENDAR string.
+        Returns the event UID.
+        """
+        client = self._get_client(user)
+        calendar_url = f"{self.base_url}{calendar_path}"
+        calendar = client.calendar(url=calendar_url)
+
+        try:
+            event = calendar.save_event(ics_data)
+            event_uid = str(event.icalendar_component.get("uid", ""))
+            logger.info("Created event in CalDAV server: %s", event_uid)
+            return event_uid
+        except Exception as e:
+            logger.error("Failed to create event in CalDAV server: %s", str(e))
             raise
 
     def create_event(self, user, calendar_path: str, event_data: dict) -> str:
@@ -353,7 +372,7 @@ class CalDAVClient:
                     event_data["end"] = event_data["end"].strftime("%Y%m%d")
 
             return event_data if event_data.get("uid") else None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.warning("Failed to parse event: %s", str(e))
             return None
 

@@ -9,3 +9,10 @@ CALDAV_OUTBOUND_API_KEY=changeme-outbound-in-production
 # Default callback URL for sending scheduling notifications (emails)
 # Used when clients (like Apple Calendar) don't provide X-CalDAV-Callback-URL header
 CALDAV_CALLBACK_URL=http://backend-dev:8000/api/v1.0/caldav-scheduling-callback
+# Calendar sanitizer: strip inline binary attachments (base64 images from Outlook/Exchange)
+# Applies to all CalDAV writes (client PUTs + import)
+SANITIZER_STRIP_BINARY_ATTACHMENTS=true
+# Calendar sanitizer: max DESCRIPTION size in bytes (0 = no limit)
+SANITIZER_MAX_DESCRIPTION_BYTES=102400
+# Calendar sanitizer: max total resource size in bytes per calendar object (0 = no limit)
+SANITIZER_MAX_RESOURCE_SIZE=1048576

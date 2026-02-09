@@ -15,6 +15,7 @@ export const CalendarItemMenu = ({
   onOpenChange,
   onEdit,
   onDelete,
+  onImport,
   onSubscription,
 }: CalendarItemMenuProps) => {
   const { t } = useTranslation();
@@ -27,6 +28,14 @@ export const CalendarItemMenu = ({
         callback: onEdit,
       },
     ];
+
+    if (onImport) {
+      items.push({
+        label: t("calendar.list.import"),
+        icon: <span className="material-icons">upload_file</span>,
+        callback: onImport,
+      });
+    }
 
     if (onSubscription) {
       items.push({
@@ -43,7 +52,7 @@ export const CalendarItemMenu = ({
     });
 
     return items;
-  }, [t, onEdit, onDelete, onSubscription]);
+  }, [t, onEdit, onDelete, onImport, onSubscription]);
 
   return (
     <DropdownMenu options={options} isOpen={isOpen} onOpenChange={onOpenChange}>

@@ -85,7 +85,7 @@ PHP SabreDAV server providing CalDAV protocol support, running against the share
 - Backend API: http://localhost:8921
 - CalDAV: http://localhost:8922
 - Keycloak: http://localhost:8925
-- PostgreSQL: 8912
+- PostgreSQL: 8926
 - Mailcatcher: http://localhost:1081
 
 ## Key Technologies

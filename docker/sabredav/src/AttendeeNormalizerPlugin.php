@@ -60,12 +60,14 @@ class AttendeeNormalizerPlugin extends ServerPlugin
 
         // Hook into calendar object creation and updates
         // Priority 90 to run before most other plugins but after authentication
-        $server->on('beforeCreateFile', [$this, 'beforeWriteCalendarObject'], 90);
-        $server->on('beforeWriteContent', [$this, 'beforeWriteCalendarObject'], 90);
+        // Note: beforeCreateFile and beforeWriteContent have different signatures
+        $server->on('beforeCreateFile', [$this, 'beforeCreateCalendarObject'], 90);
+        $server->on('beforeWriteContent', [$this, 'beforeUpdateCalendarObject'], 90);
     }
 
     /**
-     * Called before a calendar object is created or updated.
+     * Called before a calendar object is created.
+     * Signature: ($path, &$data, \Sabre\DAV\ICollection $parent, &$modified)
      *
      * @param string $path The path to the file
      * @param resource|string $data The data being written
@@ -73,15 +75,38 @@ class AttendeeNormalizerPlugin extends ServerPlugin
      * @param bool $modified Whether the data was modified
      * @return void
      */
-    public function beforeWriteCalendarObject($path, &$data, $parentNode = null, &$modified = false)
+    public function beforeCreateCalendarObject($path, &$data, $parentNode = null, &$modified = false)
+    {
+        $this->processCalendarData($path, $data, $modified);
+    }
+
+    /**
+     * Called before a calendar object is updated.
+     * Signature: ($path, \Sabre\DAV\IFile $node, &$data, &$modified)
+     *
+     * @param string $path The path to the file
+     * @param \Sabre\DAV\IFile $node The existing file node
+     * @param resource|string $data The data being written
+     * @param bool $modified Whether the data was modified
+     * @return void
+     */
+    public function beforeUpdateCalendarObject($path, $node, &$data, &$modified = false)
+    {
+        $this->processCalendarData($path, $data, $modified);
+    }
+
+    /**
+     * Process calendar data to normalize and deduplicate attendees.
+     *
+     * @param string $path The path to the file
+     * @param resource|string &$data The data being written (modified in place)
+     * @param bool &$modified Whether the data was modified
+     * @return void
+     */
+    private function processCalendarData($path, &$data, &$modified)
     {
         // Only process .ics files in calendar collections
         if (!preg_match('/\.ics$/i', $path)) {
-            return;
-        }
-
-        // Check if parent is a calendar collection
-        if ($parentNode && !($parentNode instanceof \Sabre\CalDAV\ICalendarObjectContainer)) {
             return;
         }
 

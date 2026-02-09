@@ -28,7 +28,7 @@ class CalDAVProxyView(View):
     Authentication is handled via session cookies instead.
     """
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request, *args, **kwargs):  # noqa: PLR0912  # pylint: disable=too-many-branches
         """Forward all HTTP methods to CalDAV server."""
         # Handle CORS preflight requests
         if request.method == "OPTIONS":
@@ -247,7 +247,8 @@ class CalDAVSchedulingCallbackView(View):
             )
             return HttpResponse(
                 status=400,
-                content="Missing required headers: X-CalDAV-Sender, X-CalDAV-Recipient, X-CalDAV-Method",
+                content="Missing required headers: X-CalDAV-Sender, "
+                "X-CalDAV-Recipient, X-CalDAV-Method",
                 content_type="text/plain",
             )
 
@@ -291,20 +292,20 @@ class CalDAVSchedulingCallbackView(View):
                     content="OK",
                     content_type="text/plain",
                 )
-            else:
-                logger.error(
-                    "Failed to send calendar %s email: %s -> %s",
-                    method,
-                    sender,
-                    recipient,
-                )
-                return HttpResponse(
-                    status=500,
-                    content="Failed to send email",
-                    content_type="text/plain",
-                )
 
-        except Exception as e:
+            logger.error(
+                "Failed to send calendar %s email: %s -> %s",
+                method,
+                sender,
+                recipient,
+            )
+            return HttpResponse(
+                status=500,
+                content="Failed to send email",
+                content_type="text/plain",
+            )
+
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.exception("Error processing CalDAV scheduling callback: %s", e)
             return HttpResponse(
                 status=500,

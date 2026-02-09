@@ -12,7 +12,9 @@ use Sabre\DAV;
 use Calendars\SabreDav\AutoCreatePrincipalBackend;
 use Calendars\SabreDav\HttpCallbackIMipPlugin;
 use Calendars\SabreDav\ApiKeyAuthBackend;
+use Calendars\SabreDav\CalendarSanitizerPlugin;
 use Calendars\SabreDav\AttendeeNormalizerPlugin;
+use Calendars\SabreDav\ICSImportPlugin;
 
 // Composer autoloader
 require_once __DIR__ . '/vendor/autoload.php';
@@ -89,38 +91,55 @@ $server->addPlugin(new CalDAV\ICSExportPlugin());
 $server->addPlugin(new DAV\Sharing\Plugin());
 $server->addPlugin(new CalDAV\SharingPlugin());
 
-// Debug logging for sharing requests
-$server->on('method:POST', function($request) {
-    $contentType = $request->getHeader('Content-Type');
-    $path = $request->getPath();
-    $body = $request->getBodyAsString();
-    error_log("[sabre/dav] POST request received:");
-    error_log("[sabre/dav] Path: " . $path);
-    error_log("[sabre/dav] Content-Type: " . $contentType);
-    error_log("[sabre/dav] Body: " . substr($body, 0, 1000));
-    // Reset body stream position
-    $request->setBody($body);
-}, 50); // Priority 50 to run early
+// Debug logging for POST requests - commented out to avoid PII in logs
+// Uncomment for local debugging only, never in production.
+// $server->on('method:POST', function($request) {
+//     $contentType = $request->getHeader('Content-Type');
+//     $path = $request->getPath();
+//     $body = $request->getBodyAsString();
+//     error_log("[sabre/dav] POST request received:");
+//     error_log("[sabre/dav] Path: " . $path);
+//     error_log("[sabre/dav] Content-Type: " . $contentType);
+//     error_log("[sabre/dav] Body: " . substr($body, 0, 1000));
+//     $request->setBody($body);
+// }, 50);
+//
+// $server->on('afterMethod:POST', function($request, $response) {
+//     error_log("[sabre/dav] POST response status: " . $response->getStatus());
+//     $body = $response->getBodyAsString();
+//     if ($body) {
+//         error_log("[sabre/dav] POST response body: " . substr($body, 0, 500));
+//     }
+// }, 50);
 
-// Debug: Log when share plugin processes request
-$server->on('afterMethod:POST', function($request, $response) {
-    error_log("[sabre/dav] POST response status: " . $response->getStatus());
-    $body = $response->getBodyAsString();
-    if ($body) {
-        error_log("[sabre/dav] POST response body: " . substr($body, 0, 500));
-    }
-}, 50);
-
-// Debug: Log exceptions
+// Log unhandled exceptions
 $server->on('exception', function($e) {
     error_log("[sabre/dav] Exception: " . get_class($e) . " - " . $e->getMessage());
     error_log("[sabre/dav] Exception trace: " . $e->getTraceAsString());
 }, 50);
 
+// Add calendar sanitizer plugin (priority 85, runs before all other calendar plugins)
+// Strips inline binary attachments (Outlook/Exchange base64 images) and truncates
+// oversized DESCRIPTION fields. Applies to ALL CalDAV writes (PUT from any client).
+$sanitizerStripAttachments = getenv('SANITIZER_STRIP_BINARY_ATTACHMENTS') !== 'false';
+$sanitizerMaxDescBytes = getenv('SANITIZER_MAX_DESCRIPTION_BYTES');
+$sanitizerMaxDescBytes = ($sanitizerMaxDescBytes !== false) ? (int)$sanitizerMaxDescBytes : 102400;
+$sanitizerMaxResourceSize = getenv('SANITIZER_MAX_RESOURCE_SIZE');
+$sanitizerMaxResourceSize = ($sanitizerMaxResourceSize !== false) ? (int)$sanitizerMaxResourceSize : 1048576;
+$server->addPlugin(new CalendarSanitizerPlugin(
+    $sanitizerStripAttachments,
+    $sanitizerMaxDescBytes,
+    $sanitizerMaxResourceSize
+));
+
 // Add attendee normalizer plugin to fix duplicate attendees issue
 // This plugin normalizes attendee emails (lowercase) and deduplicates them
 // when processing calendar objects, fixing issues with REPLY handling
 $server->addPlugin(new AttendeeNormalizerPlugin());
+
+// Add ICS import plugin for bulk event import from a single POST request
+// Only accessible via the X-Calendars-Import header (backend-only)
+$server->addPlugin(new ICSImportPlugin($caldavBackend, $apiKey));
 
 // Add custom IMipPlugin that forwards scheduling messages via HTTP callback
 // This MUST be added BEFORE the Schedule\Plugin so that Schedule\Plugin finds it

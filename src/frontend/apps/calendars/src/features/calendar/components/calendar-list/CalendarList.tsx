@@ -2,22 +2,26 @@
  * CalendarList component - List of calendars with visibility toggles.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 
 import type { Calendar } from "../../types";
 import { useCalendarContext } from "../../contexts";
 
 import { CalendarModal } from "./CalendarModal";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
+import { ImportEventsModal } from "./ImportEventsModal";
 import { SubscriptionUrlModal } from "./SubscriptionUrlModal";
 import { CalendarListItem, SharedCalendarListItem } from "./CalendarListItem";
 import { useCalendarListState } from "./hooks/useCalendarListState";
 import type { CalendarListProps } from "./types";
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
+import { Calendar as DjangoCalendar, getCalendars } from "../../api";
 
 export const CalendarList = ({ calendars }: CalendarListProps) => {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const {
     davCalendars,
     visibleCalendarUrls,
@@ -26,6 +30,7 @@ export const CalendarList = ({ calendars }: CalendarListProps) => {
     updateCalendar,
     deleteCalendar,
     shareCalendar,
+    calendarRef,
   } = useCalendarContext();
 
   const {
@@ -108,6 +113,68 @@ export const CalendarList = ({ calendars }: CalendarListProps) => {
   // Ensure calendars is an array
   const calendarsArray = Array.isArray(calendars) ? calendars : [];
 
+  // Import modal state
+  const [importModal, setImportModal] = useState<{
+    isOpen: boolean;
+    calendarId: string | null;
+    calendarName: string;
+  }>({ isOpen: false, calendarId: null, calendarName: "" });
+
+  const handleOpenImportModal = async (davCalendar: CalDavCalendar) => {
+    try {
+      // Extract the CalDAV path from the calendar URL
+      const url = new URL(davCalendar.url);
+      const pathParts = url.pathname.split("/").filter(Boolean);
+      const calendarsIndex = pathParts.findIndex((part) => part === "calendars");
+
+      if (calendarsIndex === -1 || pathParts.slice(calendarsIndex).length < 3) {
+        console.error("Invalid calendar URL format:", davCalendar.url);
+        return;
+      }
+
+      const caldavPath = "/" + pathParts.slice(calendarsIndex).join("/") + "/";
+
+      // Find the matching Django Calendar by caldav_path
+      const caldavApiRoot = "/api/v1.0/caldav";
+      const normalize = (p: string) =>
+        decodeURIComponent(p).replace(caldavApiRoot, "").replace(/\/+$/, "");
+
+      const findCalendar = (cals: DjangoCalendar[]) =>
+        cals.find((cal) => normalize(cal.caldav_path) === normalize(caldavPath));
+
+      // Fetch fresh Django calendars to ensure newly created calendars are included.
+      // Uses React Query cache, forcing a refetch if stale.
+      const freshCalendars = await queryClient.fetchQuery({
+        queryKey: ["calendars"],
+        queryFn: getCalendars,
+      });
+      const djangoCalendar = findCalendar(freshCalendars);
+
+      if (!djangoCalendar) {
+        console.error("No matching Django calendar found for path:", caldavPath);
+        return;
+      }
+
+      setImportModal({
+        isOpen: true,
+        calendarId: djangoCalendar.id,
+        calendarName: davCalendar.displayName || "",
+      });
+    } catch (error) {
+      console.error("Failed to parse calendar URL:", error);
+    }
+  };
+
+  const handleCloseImportModal = () => {
+    setImportModal({ isOpen: false, calendarId: null, calendarName: "" });
+  };
+
+  const handleImportSuccess = useCallback(() => {
+    if (calendarRef.current) {
+      calendarRef.current.refetchEvents();
+    }
+  }, [calendarRef]);
+
   // Use translation key for shared marker
   const sharedMarker = t('calendar.list.shared');
 
@@ -160,6 +227,7 @@ export const CalendarList = ({ calendars }: CalendarListProps) => {
                   onMenuToggle={handleMenuToggle}
                   onEdit={handleOpenEditModal}
                   onDelete={handleOpenDeleteModal}
+                  onImport={handleOpenImportModal}
                   onSubscription={handleOpenSubscriptionModal}
                   onCloseMenu={handleCloseMenu}
                 />
@@ -229,6 +297,16 @@ export const CalendarList = ({ calendars }: CalendarListProps) => {
           caldavPath={subscriptionModal.caldavPath}
           calendarName={subscriptionModal.calendarName}
           onClose={handleCloseSubscriptionModal}
+        />
+      )}
+
+      {importModal.isOpen && importModal.calendarId && (
+        <ImportEventsModal
+          isOpen={importModal.isOpen}
+          calendarId={importModal.calendarId}
+          calendarName={importModal.calendarName}
+          onClose={handleCloseImportModal}
+          onImportSuccess={handleImportSuccess}
         />
       )}
     </>

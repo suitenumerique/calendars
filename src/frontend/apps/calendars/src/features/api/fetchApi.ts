@@ -53,3 +53,37 @@ export const fetchAPI = async (
 
   throw new APIError(response.status);
 };
+
+export const fetchAPIFormData = async (
+  input: string,
+  init?: RequestInit & { params?: Record<string, string | number> },
+) => {
+  const apiUrl = new URL(`${baseApiUrl("1.0")}${input}`);
+  if (init?.params) {
+    Object.entries(init.params).forEach(([key, value]) => {
+      apiUrl.searchParams.set(key, String(value));
+    });
+  }
+  const csrfToken = getCSRFToken();
+
+  const response = await fetch(apiUrl, {
+    ...init,
+    credentials: "include",
+    headers: {
+      ...init?.headers,
+      ...(csrfToken && { "X-CSRFToken": csrfToken }),
+    },
+  });
+
+  if (response.ok) {
+    return response;
+  }
+
+  const data = await response.text();
+
+  if (isJson(data)) {
+    throw new APIError(response.status, JSON.parse(data));
+  }
+
+  throw new APIError(response.status);
+};

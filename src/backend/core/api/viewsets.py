@@ -4,32 +4,24 @@
 import json
 import logging
 import re
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote
 
 from django.conf import settings
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
 from django.db import models as db
-from django.db import transaction
-from django.urls import reverse
-from django.utils.decorators import method_decorator
 from django.utils.text import slugify
 
 import rest_framework as drf
-from corsheaders.middleware import (
-    ACCESS_CONTROL_ALLOW_METHODS,
-    ACCESS_CONTROL_ALLOW_ORIGIN,
-)
-from lasuite.oidc_login.decorators import refresh_oidc_access_token
-from rest_framework import filters, mixins, status, viewsets
+from rest_framework import mixins, status, viewsets
 from rest_framework import response as drf_response
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.throttling import UserRateThrottle
-from rest_framework_api_key.permissions import HasAPIKey
 
-from core import enums, models
+from core import models
 from core.services.caldav_service import CalendarService
+from core.services.import_service import MAX_FILE_SIZE, ICSImportService
 
 from . import permissions, serializers
 
@@ -295,12 +287,14 @@ class CalendarViewSet(
     def get_queryset(self):
         """Return calendars owned by or shared with the current user."""
         user = self.request.user
-        owned = models.Calendar.objects.filter(owner=user)
         shared_ids = models.CalendarShare.objects.filter(shared_with=user).values_list(
             "calendar_id", flat=True
         )
-        shared = models.Calendar.objects.filter(id__in=shared_ids)
-        return owned.union(shared).order_by("-is_default", "name")
+        return (
+            models.Calendar.objects.filter(db.Q(owner=user) | db.Q(id__in=shared_ids))
+            .distinct()
+            .order_by("-is_default", "name")
+        )
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -327,7 +321,7 @@ class CalendarViewSet(
         instance.delete()
 
     @action(detail=True, methods=["patch"])
-    def toggle_visibility(self, request, pk=None):
+    def toggle_visibility(self, request, **kwargs):
         """Toggle calendar visibility."""
         calendar = self.get_object()
 
@@ -356,7 +350,7 @@ class CalendarViewSet(
         methods=["post"],
         serializer_class=serializers.CalendarShareSerializer,
     )
-    def share(self, request, pk=None):
+    def share(self, request, **kwargs):
         """Share calendar with another user."""
         calendar = self.get_object()
 
@@ -395,6 +389,55 @@ class CalendarViewSet(
             serializers.CalendarShareSerializer(share).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        parser_classes=[MultiPartParser],
+        url_path="import_events",
+        url_name="import-events",
+    )
+    def import_events(self, request, **kwargs):
+        """Import events from an ICS file into this calendar."""
+        calendar = self.get_object()
+
+        # Only the owner can import events
+        if calendar.owner != request.user:
+            return drf_response.Response(
+                {"error": "Only the owner can import events"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Validate file presence
+        if "file" not in request.FILES:
+            return drf_response.Response(
+                {"error": "No file provided"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        uploaded_file = request.FILES["file"]
+
+        # Validate file size
+        if uploaded_file.size > MAX_FILE_SIZE:
+            return drf_response.Response(
+                {"error": "File too large. Maximum size is 10 MB."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ics_data = uploaded_file.read()
+        service = ICSImportService()
+        result = service.import_events(request.user, calendar, ics_data)
+
+        response_data = {
+            "total_events": result.total_events,
+            "imported_count": result.imported_count,
+            "duplicate_count": result.duplicate_count,
+            "skipped_count": result.skipped_count,
+        }
+        if result.errors:
+            response_data["errors"] = result.errors
+
+        return drf_response.Response(response_data, status=status.HTTP_200_OK)
 
 
 class SubscriptionTokenViewSet(viewsets.GenericViewSet):
@@ -535,6 +578,7 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
         if request.method == "GET":
             serializer = self.get_serializer(token, context={"request": request})
             return drf_response.Response(serializer.data)
-        elif request.method == "DELETE":
-            token.delete()
-            return drf_response.Response(status=status.HTTP_204_NO_CONTENT)
+
+        # DELETE
+        token.delete()
+        return drf_response.Response(status=status.HTTP_204_NO_CONTENT)

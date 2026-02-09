@@ -2,7 +2,7 @@
  * API functions for calendar operations.
  */
 
-import { fetchAPI } from "@/features/api/fetchApi";
+import { fetchAPI, fetchAPIFormData } from "@/features/api/fetchApi";
 
 export interface Calendar {
   id: string;
@@ -11,6 +11,7 @@ export interface Calendar {
   description: string;
   is_default: boolean;
   is_visible: boolean;
+  caldav_path: string;
   owner: string;
 }
 
@@ -202,5 +203,36 @@ export const deleteSubscriptionToken = async (
       method: "DELETE",
     }
   );
+};
+
+/**
+ * Result of an ICS import operation.
+ */
+export interface ImportEventsResult {
+  total_events: number;
+  imported_count: number;
+  duplicate_count: number;
+  skipped_count: number;
+  errors?: string[];
+}
+
+/**
+ * Import events from an ICS file into a calendar.
+ */
+export const importEventsApi = async (
+  calendarId: string,
+  file: File,
+): Promise<ImportEventsResult> => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetchAPIFormData(
+    `calendars/${calendarId}/import_events/`,
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+  return response.json();
 };
 

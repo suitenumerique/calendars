@@ -23,6 +23,7 @@ export const CalendarListItem = ({
   onMenuToggle,
   onEdit,
   onDelete,
+  onImport,
   onSubscription,
   onCloseMenu,
 }: CalendarListItemProps) => {
@@ -55,6 +56,9 @@ export const CalendarListItem = ({
           }
           onEdit={() => onEdit(calendar)}
           onDelete={() => onDelete(calendar)}
+          onImport={
+            onImport ? () => onImport(calendar) : undefined
+          }
           onSubscription={
             onSubscription ? () => onSubscription(calendar) : undefined
           }

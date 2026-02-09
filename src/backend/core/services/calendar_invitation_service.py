@@ -17,6 +17,10 @@ from email import encoders
 from email.mime.base import MIMEBase
 from typing import Optional
 
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+
 # French month and day names for date formatting
 FRENCH_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 FRENCH_MONTHS = [
@@ -35,15 +39,11 @@ FRENCH_MONTHS = [
     "décembre",
 ]
 
-from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
-
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class EventDetails:
+class EventDetails:  # pylint: disable=too-many-instance-attributes
     """Parsed event details from iCalendar data."""
 
     uid: str
@@ -127,10 +127,9 @@ class ICalendarParser:
         if params_str:
             # Split by ; but not within quotes
             param_matches = re.findall(r";([^=]+)=([^;]+)", params_str)
-            for param_name, param_value in param_matches:
+            for param_name, raw_value in param_matches:
                 # Remove quotes if present
-                param_value = param_value.strip('"')
-                params[param_name.upper()] = param_value
+                params[param_name.upper()] = raw_value.strip('"')
 
         return value, params
 
@@ -160,13 +159,17 @@ class ICalendarParser:
                 elif tzid:
                     # Has timezone info - try to convert using zoneinfo
                     try:
-                        from zoneinfo import ZoneInfo
+                        from zoneinfo import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+                            ZoneInfo,
+                        )
 
                         tz = ZoneInfo(tzid)
                         dt = dt.replace(tzinfo=tz)
-                    except Exception:
+                    except (KeyError, ValueError):
                         # If timezone conversion fails, keep as naive datetime
-                        pass
+                        logger.debug(
+                            "Unknown timezone %s, keeping naive datetime", tzid
+                        )
                 return dt
             except ValueError:
                 continue
@@ -175,7 +178,9 @@ class ICalendarParser:
         return None
 
     @classmethod
-    def parse(cls, icalendar: str, recipient_email: str) -> Optional[EventDetails]:
+    def parse(  # pylint: disable=too-many-locals,too-many-branches
+        cls, icalendar: str, recipient_email: str
+    ) -> Optional[EventDetails]:
         """
         Parse iCalendar data and extract event details.
 
@@ -272,12 +277,12 @@ class ICalendarParser:
                 raw_icalendar=icalendar,
             )
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.exception("Failed to parse iCalendar data: %s", e)
             return None
 
 
-class CalendarInvitationService:
+class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
     """
     Service for sending calendar invitation emails.
 
@@ -369,7 +374,7 @@ class CalendarInvitationService:
                 event_uid=event.uid,
             )
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "Failed to send calendar invitation to %s: %s", recipient, e
             )
@@ -456,7 +461,7 @@ class CalendarInvitationService:
 
         return icalendar_data
 
-    def _send_email(
+    def _send_email(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         from_email: str,
         to_email: str,
@@ -506,7 +511,7 @@ class CalendarInvitationService:
                 "Content-Type", f"text/calendar; charset=utf-8; method={ics_method}"
             )
             ics_attachment.add_header(
-                "Content-Disposition", f'attachment; filename="invite.ics"'
+                "Content-Disposition", 'attachment; filename="invite.ics"'
             )
 
             # Attach the ICS file
@@ -524,7 +529,7 @@ class CalendarInvitationService:
             )
             return True
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "Failed to send calendar invitation email to %s: %s", to_email, e
             )

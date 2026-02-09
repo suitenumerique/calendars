@@ -1,8 +1,5 @@
 """Client serializers for the calendars core app."""
 
-import json
-from datetime import timedelta
-
 from django.conf import settings
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
@@ -130,10 +127,17 @@ class CalendarSerializer(serializers.ModelSerializer):
             "description",
             "is_default",
             "is_visible",
+            "caldav_path",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "is_default", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "is_default",
+            "caldav_path",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class CalendarCreateSerializer(serializers.ModelSerializer):
@@ -198,7 +202,7 @@ class CalendarSubscriptionTokenSerializer(serializers.ModelSerializer):
         return url
 
 
-class CalendarSubscriptionTokenCreateSerializer(serializers.Serializer):
+class CalendarSubscriptionTokenCreateSerializer(serializers.Serializer):  # pylint: disable=abstract-method
     """Serializer for creating a CalendarSubscriptionToken."""
 
     caldav_path = serializers.CharField(max_length=512)

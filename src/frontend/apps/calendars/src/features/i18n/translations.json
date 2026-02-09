@@ -182,7 +182,21 @@
           "showCalendar": "Show calendar",
           "edit": "Edit",
           "delete": "Delete",
-          "subscription": "Subscription URL"
+          "import": "Import events",
+          "subscription": "Subscription URL",
+          "options": "Options"
+        },
+        "importEvents": {
+          "title": "Import events",
+          "description": "Import events from an ICS file into \"{{name}}\".",
+          "selectFile": "Select file",
+          "import": "Import",
+          "resultHeader": "Import results",
+          "imported": "events imported",
+          "duplicates": "events already existed",
+          "skipped": "events skipped (unsupported format)",
+          "error": "An error occurred during import. Please try again.",
+          "errorDetails": "Error details"
         },
         "subscription": {
           "title": "Calendar Subscription URL",
@@ -793,7 +807,21 @@
           "showCalendar": "Afficher le calendrier",
           "edit": "Modifier",
           "delete": "Supprimer",
-          "subscription": "URL d'abonnement"
+          "import": "Importer des événements",
+          "subscription": "URL d'abonnement",
+          "options": "Options"
+        },
+        "importEvents": {
+          "title": "Importer des événements",
+          "description": "Importer des événements depuis un fichier ICS dans \"{{name}}\".",
+          "selectFile": "Choisir un fichier",
+          "import": "Importer",
+          "resultHeader": "Résultats de l'import",
+          "imported": "événements importés",
+          "duplicates": "événements existaient déjà",
+          "skipped": "événements ignorés (format non supporté)",
+          "error": "Une erreur est survenue lors de l'importation. Veuillez réessayer.",
+          "errorDetails": "Détails des erreurs"
         },
         "subscription": {
           "title": "URL d'abonnement au calendrier",
@@ -1151,7 +1179,21 @@
           "showCalendar": "Agenda tonen",
           "edit": "Bewerken",
           "delete": "Verwijderen",
-          "subscription": "Abonnements-URL"
+          "import": "Evenementen importeren",
+          "subscription": "Abonnements-URL",
+          "options": "Opties"
+        },
+        "importEvents": {
+          "title": "Evenementen importeren",
+          "description": "Importeer evenementen vanuit een ICS-bestand in \"{{name}}\".",
+          "selectFile": "Bestand kiezen",
+          "import": "Importeren",
+          "resultHeader": "Importresultaten",
+          "imported": "evenementen geïmporteerd",
+          "duplicates": "evenementen bestonden al",
+          "skipped": "evenementen overgeslagen (niet-ondersteund formaat)",
+          "error": "Er is een fout opgetreden tijdens het importeren. Probeer het opnieuw.",
+          "errorDetails": "Foutdetails"
         },
         "subscription": {
           "title": "Agenda-abonnements-URL",

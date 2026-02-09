@@ -12,6 +12,8 @@ import {
   getCalendars,
   getSubscriptionToken,
   GetSubscriptionTokenResult,
+  importEventsApi,
+  ImportEventsResult,
   SubscriptionToken,
   SubscriptionTokenError,
   SubscriptionTokenParams,
@@ -129,6 +131,24 @@ export const useDeleteSubscriptionToken = () => {
       queryClient.invalidateQueries({
         queryKey: ["subscription-token", caldavPath],
       });
+    },
+  });
+};
+
+/**
+ * Hook to import events from an ICS file.
+ */
+export const useImportEvents = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    ImportEventsResult,
+    Error,
+    { calendarId: string; file: File }
+  >({
+    mutationFn: ({ calendarId, file }) => importEventsApi(calendarId, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: CALENDARS_KEY });
     },
   });
 };

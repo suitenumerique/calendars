@@ -21,10 +21,8 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Create application directory
 WORKDIR /var/www/sabredav
 
-# Copy composer files
+# Copy composer files and install dependencies
 COPY composer.json ./
-
-# Install sabre/dav and dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Copy server configuration
@@ -51,7 +49,8 @@ RUN a2enmod rewrite headers \
 RUN echo "log_errors = On" >> /usr/local/etc/php/conf.d/error-logging.ini \
     && echo "error_log = /proc/self/fd/2" >> /usr/local/etc/php/conf.d/error-logging.ini \
     && echo "display_errors = Off" >> /usr/local/etc/php/conf.d/error-logging.ini \
-    && echo "display_startup_errors = Off" >> /usr/local/etc/php/conf.d/error-logging.ini
+    && echo "display_startup_errors = Off" >> /usr/local/etc/php/conf.d/error-logging.ini \
+    && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/error-logging.ini
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/sabredav \
