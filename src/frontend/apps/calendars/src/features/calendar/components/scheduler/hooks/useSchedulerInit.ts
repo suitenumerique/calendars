@@ -151,76 +151,86 @@ export const useSchedulerInit = ({
           return visibleCalendarUrlsRef.current.has(eventCalendarUrl);
         },
 
-        // Event sources - fetch from ALL CalDAV calendars (filtering done by eventFilter)
+        // Event sources - fetch only from visible calendars
         eventSources: [
           {
             events: async (fetchInfo: EventCalendarFetchInfo) => {
               const calendars = davCalendarsRef.current;
               if (calendars.length === 0) return [];
 
+              // Only fetch events for calendars the user has toggled visible
+              const visibleCalendars = calendars.filter(
+                (c) => visibleCalendarUrlsRef.current.has(c.url)
+              );
+              if (visibleCalendars.length === 0) return [];
+
               try {
-                // Fetch events from ALL calendars in parallel
-                const allEventsPromises = calendars.map(async (calendar) => {
-                  const timeRange = {
-                    start: fetchInfo.start,
-                    end: fetchInfo.end,
-                  };
+                const calendarColors = adapter.createCalendarColorMap(calendars);
+                const timeRange = {
+                  start: fetchInfo.start,
+                  end: fetchInfo.end,
+                };
 
-                  // Fetch source events and expanded instances in parallel
-                  const [sourceEventsResult, expandedEventsResult] = await Promise.all([
-                    caldavService.fetchEvents(calendar.url, { timeRange, expand: false }),
-                    caldavService.fetchEvents(calendar.url, { timeRange, expand: true }),
-                  ]);
+                // Single expanded fetch per visible calendar
+                const allEventsPromises = visibleCalendars.map(async (calendar) => {
+                  const result = await caldavService.fetchEvents(
+                    calendar.url, { timeRange, expand: true }
+                  );
 
-                  if (!expandedEventsResult.success || !expandedEventsResult.data) {
+                  if (!result.success || !result.data) {
                     console.error(
                       `Failed to fetch events from ${calendar.url}:`,
-                      expandedEventsResult.error
+                      result.error
                     );
                     return [];
                   }
 
-                  // Build a map of source recurrence rules by UID
-                  const sourceRulesByUid = new Map<string, unknown>();
-                  if (sourceEventsResult.success && sourceEventsResult.data) {
-                    for (const sourceEvent of sourceEventsResult.data) {
-                      const icsEvents = sourceEvent.data.events ?? [];
-                      for (const icsEvent of icsEvents) {
-                        if (icsEvent.recurrenceRule && !icsEvent.recurrenceId) {
-                          sourceRulesByUid.set(icsEvent.uid, icsEvent.recurrenceRule);
+                  // Check if any expanded instances need recurrence rules
+                  const uidsNeedingRules = new Set<string>();
+                  for (const evt of result.data) {
+                    for (const icsEvent of evt.data.events ?? []) {
+                      if (icsEvent.recurrenceId && !icsEvent.recurrenceRule) {
+                        uidsNeedingRules.add(icsEvent.uid);
+                      }
+                    }
+                  }
+
+                  // Only fetch source events if we actually need recurrence rules
+                  let sourceRulesByUid = new Map<string, unknown>();
+                  if (uidsNeedingRules.size > 0) {
+                    const sourceResult = await caldavService.fetchEvents(
+                      calendar.url, { timeRange, expand: false }
+                    );
+                    if (sourceResult.success && sourceResult.data) {
+                      for (const sourceEvent of sourceResult.data) {
+                        for (const icsEvent of sourceEvent.data.events ?? []) {
+                          if (icsEvent.recurrenceRule && !icsEvent.recurrenceId) {
+                            sourceRulesByUid.set(icsEvent.uid, icsEvent.recurrenceRule);
+                          }
                         }
                       }
                     }
                   }
 
                   // Enrich expanded events with recurrence rules from sources
-                  const enrichedExpandedData = expandedEventsResult.data.map(
-                    (event) => {
-                      const enrichedEvents = event.data.events?.map((icsEvent) => {
-                        // If this is an instance without recurrenceRule, add it from source
-                        if (icsEvent.recurrenceId && !icsEvent.recurrenceRule) {
-                          const sourceRule = sourceRulesByUid.get(icsEvent.uid);
-                          if (sourceRule) {
-                            return { ...icsEvent, recurrenceRule: sourceRule };
-                          }
-                        }
-                        return icsEvent;
-                      });
-
-                      return {
+                  const enrichedData = uidsNeedingRules.size > 0
+                    ? result.data.map((event) => ({
                         ...event,
                         data: {
                           ...event.data,
-                          events: enrichedEvents,
+                          events: event.data.events?.map((icsEvent) => {
+                            if (icsEvent.recurrenceId && !icsEvent.recurrenceRule) {
+                              const rule = sourceRulesByUid.get(icsEvent.uid);
+                              if (rule) return { ...icsEvent, recurrenceRule: rule };
+                            }
+                            return icsEvent;
+                          }),
                         },
-                      };
-                    }
-                  );
+                      }))
+                    : result.data;
 
-                  const calendarColors = adapter.createCalendarColorMap(calendars);
-                  // Type assertion needed due to the enrichment process
                   return adapter.toEventCalendarEvents(
-                    enrichedExpandedData as typeof expandedEventsResult.data,
+                    enrichedData as typeof result.data,
                     { calendarColors }
                   );
                 });
