@@ -52,3 +52,17 @@ server {
     }
 
 }
+
+# Internal CalDAV server (SabreDAV via PHP-FPM)
+# Only accessible from localhost — Django proxies to this
+server {
+    listen 127.0.0.1:9001;
+    server_name _;
+
+    location / {
+        include fastcgi_params;
+        fastcgi_pass unix:/tmp/php-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME /app/sabredav/server.php;
+        fastcgi_read_timeout 60;
+    }
+}

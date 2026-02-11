@@ -32,6 +32,7 @@ import {
   useCunninghamTheme,
 } from "@/features/ui/cunningham/useCunninghamTheme";
 import { FeedbackFooterMobile } from "@/features/feedback/Feedback";
+import { useDynamicFavicon } from "@/features/ui/hooks/useDynamicFavicon";
 
 export type NextPageWithLayout<P = object, IP = P> = NextPage<P, IP> & {
   getLayout?: (page: ReactElement) => ReactNode;
@@ -115,16 +116,15 @@ const MyAppInner = ({ Component, pageProps }: AppPropsWithLayout) => {
   const { t, i18n } = useTranslation();
   const { theme } = useAppContext();
   const themeTokens = useCunninghamTheme();
+  const dynamicFavicon = useDynamicFavicon();
+  const faviconHref =
+    dynamicFavicon || removeQuotes(themeTokens.components.favicon.src);
 
   return (
     <>
       <Head>
         <title>{t("app_title")}</title>
-        <link
-          rel="icon"
-          href={removeQuotes(themeTokens.components.favicon.src)}
-          type="image/png"
-        />
+        <link rel="icon" href={faviconHref} type="image/png" />
       </Head>
       <QueryClientProvider client={queryClient}>
         <CunninghamProvider

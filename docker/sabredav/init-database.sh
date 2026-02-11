@@ -40,8 +40,8 @@ done
 
 echo "PostgreSQL is ready. Initializing sabre/dav database schema..."
 
-# SQL files directory (will be copied into container)
-SQL_DIR="/var/www/sabredav/sql"
+# SQL files directory (configurable for Scalingo, defaults to Docker path)
+SQL_DIR="${SQL_DIR:-/var/www/sabredav/sql}"
 
 # Check if tables already exist
 TABLES_EXIST=$(psql -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('users', 'principals', 'calendars')" 2>/dev/null || echo "0")

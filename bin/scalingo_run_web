@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Parse DATABASE_URL into PG* vars for PHP and psql
+source bin/export_pg_vars.sh
+
+# Start PHP-FPM for SabreDAV (CalDAV server)
+PHP_INI_SCAN_DIR=/app/.php/etc/php/8.3/cli/conf.d \
+  .php/usr/sbin/php-fpm8.3 \
+  --fpm-config /app/sabredav/php-fpm.conf \
+  --nodaemonize &
+
 # Start the Django backend
 gunicorn -b :8000 calendars.wsgi:application --log-file - &
 

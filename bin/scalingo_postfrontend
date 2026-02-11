@@ -13,3 +13,46 @@ mv src/backend/* ./
 mv src/nginx/* ./
 
 echo "3.13" > .python-version
+
+# --- PHP + SabreDAV setup ---
+echo "-----> Installing PHP 8.3 from Ubuntu packages"
+
+PHP_PREFIX=".php"
+DEB_DIR="/tmp/php-debs"
+mkdir -p "$DEB_DIR" "$PHP_PREFIX"
+
+BASE_URL="http://security.ubuntu.com/ubuntu/pool/main/p/php8.3"
+VERSION="8.3.6-0ubuntu0.24.04.6"
+
+for pkg in cli fpm common opcache readline pgsql xml mbstring curl; do
+  echo "       Downloading php8.3-${pkg}"
+  curl -fsSL -o "$DEB_DIR/php8.3-${pkg}.deb" \
+    "${BASE_URL}/php8.3-${pkg}_${VERSION}_amd64.deb"
+done
+curl -fsSL -o "$DEB_DIR/php-common.deb" \
+  "http://mirrors.kernel.org/ubuntu/pool/main/p/php-defaults/php-common_93ubuntu2_all.deb"
+
+for deb in "$DEB_DIR"/*.deb; do
+  dpkg-deb -x "$deb" "$PHP_PREFIX"
+done
+
+# Create php wrapper
+cat > bin/php << 'WRAPPER'
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PHP_INI_SCAN_DIR="$DIR/.php/etc/php/8.3/cli/conf.d" \
+  exec "$DIR/.php/usr/bin/php8.3" "$@"
+WRAPPER
+chmod +x bin/php
+
+echo "-----> PHP version: $(bin/php -v | head -1)"
+
+# Download Composer and install SabreDAV dependencies
+echo "-----> Installing SabreDAV dependencies"
+curl -fsSL -o bin/composer.phar \
+  https://getcomposer.org/download/latest-stable/composer.phar
+cp -r docker/sabredav sabredav
+cd sabredav
+../bin/php ../bin/composer.phar install \
+  --no-dev --optimize-autoloader --no-interaction
+cd ..
