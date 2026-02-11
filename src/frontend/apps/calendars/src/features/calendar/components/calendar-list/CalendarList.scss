@@ -279,36 +279,15 @@
     }
   }
 
-  &__share-section {
-    margin-top: 0.5rem;
-  }
+}
 
-  &__share-divider {
-    height: 1px;
-    background-color: var(--c--theme--colors--greyscale-200);
-    margin-bottom: 1rem;
-  }
+// ============================================================================
+// Share Modal Styles (close button position fix)
+// ============================================================================
 
-  &__share-input-row {
-    display: flex;
-    gap: 0.5rem;
-    align-items: flex-start;
-
-    > div:first-child {
-      flex: 1;
-    }
-
-    > button {
-      flex-shrink: 0;
-      margin-top: 0.25rem;
-    }
-  }
-
-  &__share-hint {
-    margin-top: 0.5rem;
-    font-size: 0.75rem;
-    color: var(--c--theme--colors--greyscale-500);
-  }
+.c__modal__scroller:has(.c__share-modal) .c__modal__close .c__button {
+  top: 0.75rem !important;
+  right: 0.75rem !important;
 }
 
 // ============================================================================

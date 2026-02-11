@@ -183,6 +183,7 @@
           "showCalendar": "Show calendar",
           "edit": "Edit",
           "delete": "Delete",
+          "share": "Share",
           "import": "Import events",
           "subscription": "Subscription URL",
           "options": "Options"
@@ -809,6 +810,7 @@
           "showCalendar": "Afficher le calendrier",
           "edit": "Modifier",
           "delete": "Supprimer",
+          "share": "Partager",
           "import": "Importer des événements",
           "subscription": "URL d'abonnement",
           "options": "Options"
@@ -1182,6 +1184,7 @@
           "showCalendar": "Agenda tonen",
           "edit": "Bewerken",
           "delete": "Verwijderen",
+          "share": "Delen",
           "import": "Evenementen importeren",
           "subscription": "Abonnements-URL",
           "options": "Opties"

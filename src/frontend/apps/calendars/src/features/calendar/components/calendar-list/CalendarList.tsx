@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useCalendarContext } from "../../contexts";
 
 import { CalendarModal } from "./CalendarModal";
+import { CalendarShareModal } from "./CalendarShareModal";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 import { ImportEventsModal } from "./ImportEventsModal";
 import { SubscriptionUrlModal } from "./SubscriptionUrlModal";
@@ -25,20 +26,21 @@ export const CalendarList = () => {
     createCalendar,
     updateCalendar,
     deleteCalendar,
-    shareCalendar,
     calendarRef,
   } = useCalendarContext();
 
   const {
     modalState,
     deleteState,
+    shareModalState,
     isMyCalendarsExpanded,
     openMenuUrl,
     handleOpenCreateModal,
     handleOpenEditModal,
     handleCloseModal,
     handleSaveCalendar,
-    handleShareCalendar,
+    handleOpenShareModal,
+    handleCloseShareModal,
     handleOpenDeleteModal,
     handleCloseDeleteModal,
     handleConfirmDelete,
@@ -49,7 +51,6 @@ export const CalendarList = () => {
     createCalendar,
     updateCalendar,
     deleteCalendar,
-    shareCalendar,
   });
 
   // Subscription modal state
@@ -147,6 +148,7 @@ export const CalendarList = () => {
                   onMenuToggle={handleMenuToggle}
                   onEdit={handleOpenEditModal}
                   onDelete={handleOpenDeleteModal}
+                  onShare={handleOpenShareModal}
                   onImport={handleOpenImportModal}
                   onSubscription={handleOpenSubscriptionModal}
                   onCloseMenu={handleCloseMenu}
@@ -163,7 +165,12 @@ export const CalendarList = () => {
         calendar={modalState.calendar}
         onClose={handleCloseModal}
         onSave={handleSaveCalendar}
-        onShare={handleShareCalendar}
+      />
+
+      <CalendarShareModal
+        isOpen={shareModalState.isOpen}
+        calendar={shareModalState.calendar}
+        onClose={handleCloseShareModal}
       />
 
       <DeleteConfirmModal

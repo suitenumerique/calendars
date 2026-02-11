@@ -15,6 +15,7 @@ export const CalendarItemMenu = ({
   onOpenChange,
   onEdit,
   onDelete,
+  onShare,
   onImport,
   onSubscription,
 }: CalendarItemMenuProps) => {
@@ -28,6 +29,14 @@ export const CalendarItemMenu = ({
         callback: onEdit,
       },
     ];
+
+    if (onShare) {
+      items.push({
+        label: t("calendar.list.share"),
+        icon: <span className="material-icons">person_add</span>,
+        callback: onShare,
+      });
+    }
 
     if (onImport) {
       items.push({
@@ -52,7 +61,7 @@ export const CalendarItemMenu = ({
     });
 
     return items;
-  }, [t, onEdit, onDelete, onImport, onSubscription]);
+  }, [t, onEdit, onDelete, onShare, onImport, onSubscription]);
 
   return (
     <DropdownMenu options={options} isOpen={isOpen} onOpenChange={onOpenChange}>

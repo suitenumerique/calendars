@@ -13,7 +13,6 @@ export interface CalendarModalProps {
   calendar?: CalDavCalendar | null;
   onClose: () => void;
   onSave: (name: string, color: string, description?: string) => Promise<void>;
-  onShare?: (email: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 /**
@@ -24,6 +23,7 @@ export interface CalendarItemMenuProps {
   onOpenChange: (isOpen: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onShare?: () => void;
   onImport?: () => void;
   onSubscription?: () => void;
 }
@@ -50,6 +50,7 @@ export interface CalendarListItemProps {
   onMenuToggle: (url: string) => void;
   onEdit: (calendar: CalDavCalendar) => void;
   onDelete: (calendar: CalDavCalendar) => void;
+  onShare?: (calendar: CalDavCalendar) => void;
   onImport?: (calendar: CalDavCalendar) => void;
   onSubscription?: (calendar: CalDavCalendar) => void;
   onCloseMenu: () => void;
@@ -61,6 +62,14 @@ export interface CalendarListItemProps {
 export interface CalendarModalState {
   isOpen: boolean;
   mode: "create" | "edit";
+  calendar: CalDavCalendar | null;
+}
+
+/**
+ * State for the share modal.
+ */
+export interface ShareModalState {
+  isOpen: boolean;
   calendar: CalDavCalendar | null;
 }
 

@@ -10,7 +10,7 @@ import type {
   CalDavCalendarCreate,
   CalDavCalendarUpdate,
 } from "../../../services/dav/types/caldav-service";
-import type { CalendarModalState, DeleteState } from "../types";
+import type { CalendarModalState, DeleteState, ShareModalState } from "../types";
 
 interface UseCalendarListStateProps {
   createCalendar: (
@@ -21,17 +21,12 @@ interface UseCalendarListStateProps {
     options: CalDavCalendarUpdate
   ) => Promise<{ success: boolean; error?: string }>;
   deleteCalendar: (url: string) => Promise<{ success: boolean; error?: string }>;
-  shareCalendar: (
-    url: string,
-    email: string
-  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const useCalendarListState = ({
   createCalendar,
   updateCalendar,
   deleteCalendar,
-  shareCalendar,
 }: UseCalendarListStateProps) => {
   // Modal states
   const [modalState, setModalState] = useState<CalendarModalState>({
@@ -44,6 +39,11 @@ export const useCalendarListState = ({
     isOpen: false,
     calendar: null,
     isLoading: false,
+  });
+
+  const [shareModalState, setShareModalState] = useState<ShareModalState>({
+    isOpen: false,
+    calendar: null,
   });
 
   const [isMyCalendarsExpanded, setIsMyCalendarsExpanded] = useState(true);
@@ -100,15 +100,14 @@ export const useCalendarListState = ({
     [modalState, createCalendar, updateCalendar]
   );
 
-  const handleShareCalendar = useCallback(
-    async (email: string): Promise<{ success: boolean; error?: string }> => {
-      if (!modalState.calendar) {
-        return { success: false, error: 'No calendar selected' };
-      }
-      return shareCalendar(modalState.calendar.url, email);
-    },
-    [modalState.calendar, shareCalendar]
-  );
+  // Share modal handlers
+  const handleOpenShareModal = useCallback((calendar: CalDavCalendar) => {
+    setShareModalState({ isOpen: true, calendar });
+  }, []);
+
+  const handleCloseShareModal = useCallback(() => {
+    setShareModalState({ isOpen: false, calendar: null });
+  }, []);
 
   // Delete handlers
   const handleOpenDeleteModal = useCallback((calendar: CalDavCalendar) => {
@@ -164,6 +163,7 @@ export const useCalendarListState = ({
     // Modal state
     modalState,
     deleteState,
+    shareModalState,
 
     // Expansion state
     isMyCalendarsExpanded,
@@ -174,7 +174,10 @@ export const useCalendarListState = ({
     handleOpenEditModal,
     handleCloseModal,
     handleSaveCalendar,
-    handleShareCalendar,
+
+    // Share modal handlers
+    handleOpenShareModal,
+    handleCloseShareModal,
 
     // Delete handlers
     handleOpenDeleteModal,
