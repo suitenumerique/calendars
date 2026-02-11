@@ -48,6 +48,8 @@ export interface CalendarContextType {
   caldavService: CalDavService;
   adapter: EventCalendarAdapter;
   davCalendars: CalDavCalendar[];
+  ownedCalendars: CalDavCalendar[];
+  sharedCalendars: CalDavCalendar[];
   visibleCalendarUrls: Set<string>;
   isLoading: boolean;
   isConnected: boolean;
@@ -106,6 +108,23 @@ export const CalendarContextProvider = ({
   const [isConnected, setIsConnected] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  const { ownedCalendars, sharedCalendars } = useMemo(() => {
+    const homeUrl = caldavService.getAccount()?.homeUrl;
+    if (!homeUrl) {
+      return { ownedCalendars: davCalendars, sharedCalendars: [] };
+    }
+    const owned: CalDavCalendar[] = [];
+    const shared: CalDavCalendar[] = [];
+    for (const cal of davCalendars) {
+      if (cal.url.startsWith(homeUrl)) {
+        owned.push(cal);
+      } else {
+        shared.push(cal);
+      }
+    }
+    return { ownedCalendars: owned, sharedCalendars: shared };
+  }, [davCalendars, caldavService]);
 
   const refreshCalendars = useCallback(async () => {
     try {
@@ -325,6 +344,8 @@ export const CalendarContextProvider = ({
     caldavService,
     adapter,
     davCalendars,
+    ownedCalendars,
+    sharedCalendars,
     visibleCalendarUrls,
     isLoading,
     isConnected,

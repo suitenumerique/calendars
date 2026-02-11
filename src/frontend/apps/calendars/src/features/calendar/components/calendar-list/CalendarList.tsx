@@ -20,7 +20,8 @@ import { extractCaldavPath } from "./utils";
 export const CalendarList = () => {
   const { t } = useTranslation();
   const {
-    davCalendars,
+    ownedCalendars,
+    sharedCalendars,
     visibleCalendarUrls,
     toggleCalendarVisibility,
     createCalendar,
@@ -34,6 +35,7 @@ export const CalendarList = () => {
     deleteState,
     shareModalState,
     isMyCalendarsExpanded,
+    isSharedCalendarsExpanded,
     openMenuUrl,
     handleOpenCreateModal,
     handleOpenEditModal,
@@ -47,6 +49,7 @@ export const CalendarList = () => {
     handleMenuToggle,
     handleCloseMenu,
     handleToggleMyCalendars,
+    handleToggleSharedCalendars,
   } = useCalendarListState({
     createCalendar,
     updateCalendar,
@@ -138,7 +141,7 @@ export const CalendarList = () => {
           </div>
           {isMyCalendarsExpanded && (
             <div className="calendar-list__items">
-              {davCalendars.map((calendar) => (
+              {ownedCalendars.map((calendar) => (
                 <CalendarListItem
                   key={calendar.url}
                   calendar={calendar}
@@ -157,6 +160,50 @@ export const CalendarList = () => {
             </div>
           )}
         </div>
+
+        {sharedCalendars.length > 0 && (
+          <div className="calendar-list__section">
+            <div className="calendar-list__section-header">
+              <button
+                className="calendar-list__toggle-btn"
+                onClick={handleToggleSharedCalendars}
+                aria-expanded={isSharedCalendarsExpanded}
+              >
+                <span
+                  className={`material-icons calendar-list__toggle-icon ${
+                    isSharedCalendarsExpanded
+                      ? 'calendar-list__toggle-icon--expanded'
+                      : ''
+                  }`}
+                >
+                  expand_more
+                </span>
+                <span className="calendar-list__section-title">
+                  {t('calendar.list.sharedCalendars')}
+                </span>
+              </button>
+            </div>
+            {isSharedCalendarsExpanded && (
+              <div className="calendar-list__items">
+                {sharedCalendars.map((calendar) => (
+                  <CalendarListItem
+                    key={calendar.url}
+                    calendar={calendar}
+                    isVisible={visibleCalendarUrls.has(calendar.url)}
+                    isMenuOpen={openMenuUrl === calendar.url}
+                    onToggleVisibility={toggleCalendarVisibility}
+                    onMenuToggle={handleMenuToggle}
+                    onEdit={handleOpenEditModal}
+                    onDelete={handleOpenDeleteModal}
+                    onImport={handleOpenImportModal}
+                    onSubscription={handleOpenSubscriptionModal}
+                    onCloseMenu={handleCloseMenu}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <CalendarModal

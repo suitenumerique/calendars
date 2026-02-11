@@ -804,8 +804,8 @@
           }
         },
         "list": {
-          "myCalendars": "Mes agendas",
-          "sharedCalendars": "Agendas partagés",
+          "myCalendars": "Mes calendriers",
+          "sharedCalendars": "Calendriers partagés",
           "shared": "(partagé)",
           "showCalendar": "Afficher le calendrier",
           "edit": "Modifier",
@@ -906,32 +906,32 @@
           }
         },
         "createCalendar": {
-          "title": "Créer un agenda",
+          "title": "Créer un calendrier",
           "name": "Nom",
-          "namePlaceholder": "Nom de l'agenda",
+          "namePlaceholder": "Nom du calendrier",
           "nameRequired": "Le nom est requis",
           "color": "Couleur",
           "description": "Description",
-          "descriptionPlaceholder": "Description de l'agenda (optionnel)",
+          "descriptionPlaceholder": "Description du calendrier (optionnel)",
           "cancel": "Annuler",
           "create": "Créer"
         },
         "editCalendar": {
-          "title": "Modifier l'agenda",
+          "title": "Modifier le calendrier",
           "save": "Enregistrer"
         },
         "deleteCalendar": {
-          "title": "Supprimer l'agenda",
-          "message": "Êtes-vous sûr de vouloir supprimer l'agenda \"{{name}}\" ? Cette action est irréversible.",
+          "title": "Supprimer le calendrier",
+          "message": "Êtes-vous sûr de vouloir supprimer le calendrier \"{{name}}\" ? Cette action est irréversible.",
           "confirm": "Supprimer"
         },
         "shareCalendar": {
-          "title": "Partager l'agenda",
+          "title": "Partager le calendrier",
           "emailPlaceholder": "Entrez l'adresse email",
           "share": "Partager",
           "hint": "La personne aura les mêmes droits que vous (lecture et écriture).",
-          "success": "Agenda partagé avec {{email}}",
-          "error": "Échec du partage de l'agenda",
+          "success": "Calendrier partagé avec {{email}}",
+          "error": "Échec du partage du calendrier",
           "invalidEmail": "Veuillez entrer une adresse email valide"
         },
         "attendees": {
@@ -1109,7 +1109,7 @@
         "event": {
           "createTitle": "Evenement aanmaken",
           "editTitle": "Evenement bewerken",
-          "calendar": "Agenda",
+          "calendar": "Kalender",
           "title": "Titel",
           "titlePlaceholder": "Evenement titel",
           "location": "Locatie",
@@ -1178,10 +1178,10 @@
           }
         },
         "list": {
-          "myCalendars": "Mijn agenda's",
-          "sharedCalendars": "Gedeelde agenda's",
+          "myCalendars": "Mijn kalenders",
+          "sharedCalendars": "Gedeelde kalenders",
           "shared": "(gedeeld)",
-          "showCalendar": "Agenda tonen",
+          "showCalendar": "Kalender tonen",
           "edit": "Bewerken",
           "delete": "Verwijderen",
           "share": "Delen",
@@ -1202,21 +1202,21 @@
           "errorDetails": "Foutdetails"
         },
         "subscription": {
-          "title": "Agenda-abonnements-URL",
-          "description": "Gebruik deze URL om u te abonneren op \"{{name}}\" vanuit externe agendatoepassingen (Apple Calendar, Google Calendar, Outlook, etc.).",
+          "title": "Kalender-abonnements-URL",
+          "description": "Gebruik deze URL om u te abonneren op \"{{name}}\" vanuit externe kalendertoepassingen (Apple Calendar, Google Calendar, Outlook, etc.).",
           "loading": "Abonnements-URL wordt gegenereerd...",
           "copy": "Kopiëren",
           "copied": "Gekopieerd!",
           "close": "Sluiten",
-          "warning": "Deze URL bevat een privétoken. Iedereen met deze link kan uw agenda-evenementen bekijken.",
+          "warning": "Deze URL bevat een privétoken. Iedereen met deze link kan uw kalender-evenementen bekijken.",
           "regenerate": "URL regenereren",
           "regenerateConfirm": {
             "title": "Abonnements-URL regenereren?",
-            "message": "Dit maakt de huidige URL ongeldig. Externe agenda's die de oude URL gebruiken zullen niet meer synchroniseren.",
+            "message": "Dit maakt de huidige URL ongeldig. Externe kalenders die de oude URL gebruiken zullen niet meer synchroniseren.",
             "confirm": "Regenereren"
           },
           "error": "Genereren van abonnements-URL mislukt. Probeer het opnieuw.",
-          "errorPermission": "U heeft geen toegang tot deze agenda.",
+          "errorPermission": "U heeft geen toegang tot deze kalender.",
           "errorNetwork": "Netwerkfout. Controleer uw verbinding en probeer het opnieuw.",
           "errorServer": "Serverfout. Probeer het later opnieuw."
         },
@@ -1280,32 +1280,32 @@
           }
         },
         "createCalendar": {
-          "title": "Agenda aanmaken",
+          "title": "Kalender aanmaken",
           "name": "Naam",
-          "namePlaceholder": "Agenda naam",
+          "namePlaceholder": "Kalender naam",
           "nameRequired": "Naam is verplicht",
           "color": "Kleur",
           "description": "Beschrijving",
-          "descriptionPlaceholder": "Agenda beschrijving (optioneel)",
+          "descriptionPlaceholder": "Kalender beschrijving (optioneel)",
           "cancel": "Annuleren",
           "create": "Aanmaken"
         },
         "editCalendar": {
-          "title": "Agenda bewerken",
+          "title": "Kalender bewerken",
           "save": "Opslaan"
         },
         "deleteCalendar": {
-          "title": "Agenda verwijderen",
-          "message": "Weet u zeker dat u de agenda \"{{name}}\" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
+          "title": "Kalender verwijderen",
+          "message": "Weet u zeker dat u de kalender \"{{name}}\" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
           "confirm": "Verwijderen"
         },
         "shareCalendar": {
-          "title": "Agenda delen",
+          "title": "Kalender delen",
           "emailPlaceholder": "Voer e-mailadres in",
           "share": "Delen",
           "hint": "De persoon krijgt dezelfde rechten als u (lezen en schrijven).",
-          "success": "Agenda gedeeld met {{email}}",
-          "error": "Delen van agenda mislukt",
+          "success": "Kalender gedeeld met {{email}}",
+          "error": "Delen van kalender mislukt",
           "invalidEmail": "Voer een geldig e-mailadres in"
         },
         "attendees": {
