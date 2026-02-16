@@ -18,12 +18,12 @@ services:
   redis:
     image: redis:5
     ports:
-      - "6379:6379"
+      - "8924:6379"
 
   mailcatcher:
     image: sj26/mailcatcher:latest
     ports:
-      - "1081:1080"
+      - "8927:1080"
 
   backend-dev:
     build:

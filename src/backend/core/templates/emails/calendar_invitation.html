@@ -139,8 +139,15 @@
         </div>
         {% endif %}
 
+        {% if rsvp_accept_url %}
+        <div style="text-align: center; margin: 20px 0;">
+            <a href="{{ rsvp_accept_url }}" style="display: inline-block; padding: 10px 24px; margin: 0 6px; background-color: #16a34a; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Accepter</a>
+            <a href="{{ rsvp_tentative_url }}" style="display: inline-block; padding: 10px 24px; margin: 0 6px; background-color: #d97706; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Peut-être</a>
+            <a href="{{ rsvp_decline_url }}" style="display: inline-block; padding: 10px 24px; margin: 0 6px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">Refuser</a>
+        </div>
+        {% endif %}
         <div class="instructions">
-            <p>Pour répondre à cette invitation, veuillez ouvrir le fichier .ics en pièce jointe avec votre application de calendrier ou répondre directement depuis votre client de messagerie.</p>
+            <p>Vous pouvez aussi ouvrir le fichier .ics en pièce jointe avec votre application de calendrier.</p>
         </div>
 
         <div class="footer">

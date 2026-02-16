@@ -14,7 +14,12 @@ Description :
 {{ event.description }}
 {% endif %}
 
-Pour répondre à cette invitation, veuillez ouvrir le fichier .ics en pièce jointe avec votre application de calendrier ou répondre directement depuis votre client de messagerie.
+{% if rsvp_accept_url %}Répondre à cette invitation :
+  Accepter : {{ rsvp_accept_url }}
+  Peut-être : {{ rsvp_tentative_url }}
+  Refuser : {{ rsvp_decline_url }}
+
+{% endif %}Vous pouvez aussi ouvrir le fichier .ics en pièce jointe avec votre application de calendrier.
 
 ---
 Cette invitation a été envoyée via {{ app_name }}

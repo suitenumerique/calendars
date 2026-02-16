@@ -14,7 +14,12 @@ Description :
 {{ event.description }}
 {% endif %}
 
-Cet événement a été modifié. Veuillez vérifier les changements et mettre à jour votre calendrier en conséquence.
+{% if rsvp_accept_url %}Répondre à cette invitation :
+  Accepter : {{ rsvp_accept_url }}
+  Peut-être : {{ rsvp_tentative_url }}
+  Refuser : {{ rsvp_decline_url }}
+
+{% endif %}Cet événement a été modifié. Vous pouvez aussi ouvrir le fichier .ics en pièce jointe pour mettre à jour votre calendrier.
 
 ---
 Cette notification a été envoyée via {{ app_name }}

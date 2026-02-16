@@ -119,6 +119,9 @@ class Base(Configuration):
     )
     APP_NAME = values.Value("Calendrier", environ_name="APP_NAME", environ_prefix=None)
     APP_URL = values.Value("", environ_name="APP_URL", environ_prefix=None)
+    CALENDAR_ITIP_ENABLED = values.BooleanValue(
+        False, environ_name="CALENDAR_ITIP_ENABLED", environ_prefix=None
+    )
 
     # Security
     ALLOWED_HOSTS = values.ListValue([])
@@ -857,7 +860,7 @@ class Development(Base):
     DEFAULT_FROM_EMAIL = "calendars@calendars.world"
     CALENDAR_INVITATION_FROM_EMAIL = "calendars@calendars.world"
     APP_NAME = "Calendrier (Dev)"
-    APP_URL = "http://localhost:8920"
+    APP_URL = "http://localhost:8921"
 
     DEBUG_TOOLBAR_CONFIG = {
         "SHOW_TOOLBAR_CALLBACK": lambda request: True,

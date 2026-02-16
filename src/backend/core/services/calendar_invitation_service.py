@@ -16,9 +16,11 @@ from datetime import timezone as dt_timezone
 from email import encoders
 from email.mime.base import MIMEBase
 from typing import Optional
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.core.signing import Signer
 from django.template.loader import render_to_string
 
 # French month and day names for date formatting
@@ -421,7 +423,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             )
             time_str = f"{start_time} - {end_time}" if end_time else start_time
 
-        return {
+        context = {
             "event": event,
             "method": method,
             "organizer_display": event.organizer_name or event.organizer_email,
@@ -435,26 +437,65 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             "app_url": getattr(settings, "APP_URL", ""),
         }
 
+        # Add RSVP links for REQUEST method (invitations and updates)
+        if method == self.METHOD_REQUEST:
+            signer = Signer(salt="rsvp")
+            # Strip mailto: prefix (case-insensitive) for shorter tokens
+            organizer = re.sub(
+                r"^mailto:", "", event.organizer_email, flags=re.IGNORECASE
+            )
+            token = signer.sign_object(
+                {
+                    "uid": event.uid,
+                    "email": event.attendee_email,
+                    "organizer": organizer,
+                }
+            )
+            app_url = getattr(settings, "APP_URL", "")
+            base = f"{app_url}/rsvp/"
+            for action in ("accept", "tentative", "decline"):
+                partstat = {
+                    "accept": "accepted",
+                    "tentative": "tentative",
+                    "decline": "declined",
+                }
+                context[f"rsvp_{action}_url"] = (
+                    f"{base}?{urlencode({'token': token, 'action': partstat[action]})}"
+                )
+
+        return context
+
     def _prepare_ics_attachment(self, icalendar_data: str, method: str) -> str:
         """
-        Prepare ICS content with correct METHOD for attachment.
+        Prepare ICS content for attachment.
 
-        The METHOD property must be in the VCALENDAR component, not VEVENT.
+        When CALENDAR_ITIP_ENABLED is True, sets the METHOD property so that
+        calendar clients show Accept/Decline buttons (standard iTIP flow).
+        When False (default), strips METHOD so the ICS is treated as a plain
+        calendar object — our own RSVP web links handle responses instead.
         """
-        # Check if METHOD is already present
-        if "METHOD:" not in icalendar_data.upper():
-            # Insert METHOD after VERSION
-            icalendar_data = re.sub(
-                r"(VERSION:2\.0\r?\n)",
-                rf"\1METHOD:{method}\r\n",
-                icalendar_data,
-                flags=re.IGNORECASE,
-            )
+        itip_enabled = getattr(settings, "CALENDAR_ITIP_ENABLED", False)
+
+        if itip_enabled:
+            if "METHOD:" not in icalendar_data.upper():
+                icalendar_data = re.sub(
+                    r"(VERSION:2\.0\r?\n)",
+                    rf"\1METHOD:{method}\r\n",
+                    icalendar_data,
+                    flags=re.IGNORECASE,
+                )
+            else:
+                icalendar_data = re.sub(
+                    r"METHOD:[^\r\n]+",
+                    f"METHOD:{method}",
+                    icalendar_data,
+                    flags=re.IGNORECASE,
+                )
         else:
-            # Update existing METHOD
+            # Strip any existing METHOD so clients treat it as a plain event
             icalendar_data = re.sub(
-                r"METHOD:[^\r\n]+",
-                f"METHOD:{method}",
+                r"METHOD:[^\r\n]+\r?\n",
+                "",
                 icalendar_data,
                 flags=re.IGNORECASE,
             )
@@ -503,13 +544,14 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             email.attach_alternative(html_body, "text/html")
 
             # Add ICS attachment with proper MIME type
-            # The Content-Type must include method parameter for calendar clients
             ics_attachment = MIMEBase("text", "calendar")
             ics_attachment.set_payload(ics_content.encode("utf-8"))
             encoders.encode_base64(ics_attachment)
-            ics_attachment.add_header(
-                "Content-Type", f"text/calendar; charset=utf-8; method={ics_method}"
-            )
+            itip_enabled = getattr(settings, "CALENDAR_ITIP_ENABLED", False)
+            content_type = "text/calendar; charset=utf-8"
+            if itip_enabled:
+                content_type += f"; method={ics_method}"
+            ics_attachment.add_header("Content-Type", content_type)
             ics_attachment.add_header(
                 "Content-Disposition", 'attachment; filename="invite.ics"'
             )

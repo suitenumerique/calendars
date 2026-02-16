@@ -80,13 +80,20 @@ Yarn workspaces monorepo:
 ### CalDAV Server (`docker/sabredav/`)
 PHP SabreDAV server providing CalDAV protocol support, running against the shared PostgreSQL database.
 
-### Service Ports (Development)
-- Frontend: http://localhost:8920
-- Backend API: http://localhost:8921
-- CalDAV: http://localhost:8922
-- Keycloak: http://localhost:8925
-- PostgreSQL: 8926
-- Mailcatcher: http://localhost:1081
+**IMPORTANT: Never query the SabreDAV database tables directly from Django.** Always interact with CalDAV through the SabreDAV HTTP API (PROPFIND, REPORT, PUT, etc.).
+
+### Development Services
+
+| Service | URL / Port | Description |
+|---------|------------|-------------|
+| **Frontend** | [http://localhost:8920](http://localhost:8920) | Next.js Calendar frontend |
+| **Backend API** | [http://localhost:8921](http://localhost:8921) | Django REST API |
+| **CalDAV** | [http://localhost:8922](http://localhost:8922) | SabreDAV CalDAV server |
+| **Nginx** | [http://localhost:8923](http://localhost:8923) | Reverse proxy (frontend + API) |
+| **Redis** | 8924 | Cache and Celery broker |
+| **Keycloak** | [http://localhost:8925](http://localhost:8925) | OIDC identity provider |
+| **PostgreSQL** | 8926 | Database server |
+| **Mailcatcher** | [http://localhost:8927](http://localhost:8927) | Email testing interface |
 
 ## Key Technologies
 
