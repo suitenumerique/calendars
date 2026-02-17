@@ -61,7 +61,12 @@ PHP_INI="$PHP_PREFIX/php.ini"
   echo ""
   for so in "$PHP_PREFIX/usr/lib/php/$EXT_DIR_NAME"/*.so; do
     [ -f "$so" ] || continue
-    echo "extension = $(basename "$so")"
+    name="$(basename "$so")"
+    if [ "$name" = "opcache.so" ]; then
+      echo "zend_extension = ${name}"
+    else
+      echo "extension = ${name}"
+    fi
   done
 } > "$PHP_INI"
 echo "       Generated php.ini:"
