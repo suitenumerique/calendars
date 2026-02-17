@@ -45,16 +45,33 @@ for deb in "$DEB_DIR"/*.deb; do
   dpkg-deb -x "$deb" "$PHP_PREFIX"
 done
 
+# Fix broken conf.d symlinks: they point to absolute /etc/php/... paths
+# but the files are inside our .php prefix. Re-link them.
+MODS_DIR="$PHP_PREFIX/etc/php/8.3/mods-available"
+for conf_dir in "$PHP_PREFIX/etc/php/8.3/cli/conf.d" "$PHP_PREFIX/etc/php/8.3/fpm/conf.d"; do
+  if [ -d "$conf_dir" ]; then
+    for link in "$conf_dir"/*.ini; do
+      [ -L "$link" ] || continue
+      target_basename="$(basename "$(readlink "$link")")"
+      if [ -f "$MODS_DIR/$target_basename" ]; then
+        ln -sf "$PWD/$MODS_DIR/$target_basename" "$link"
+      fi
+    done
+  fi
+done
+
 # Create php wrapper
-cat > bin/php << 'WRAPPER'
+EXT_DIR="$(ls -d "$PHP_PREFIX"/usr/lib/php/20* 2>/dev/null | head -1)"
+cat > bin/php << WRAPPER
 #!/bin/bash
-DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PHP_INI_SCAN_DIR="$DIR/.php/etc/php/8.3/cli/conf.d" \
-  exec "$DIR/.php/usr/bin/php8.3" "$@"
+DIR="\$(cd "\$(dirname "\$0")/.." && pwd)"
+PHP_INI_SCAN_DIR="\$DIR/.php/etc/php/8.3/cli/conf.d" \\
+  exec "\$DIR/.php/usr/bin/php8.3" -d "extension_dir=\$DIR/${EXT_DIR}" "\$@"
 WRAPPER
 chmod +x bin/php
 
 echo "-----> PHP version: $(bin/php -v | head -1)"
+echo "-----> PHP modules: $(bin/php -m | tr '\n' ' ')"
 
 # Download Composer and install SabreDAV dependencies
 echo "-----> Installing SabreDAV dependencies"

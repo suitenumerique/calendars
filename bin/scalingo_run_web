@@ -4,10 +4,12 @@
 source bin/export_pg_vars.sh
 
 # Start PHP-FPM for SabreDAV (CalDAV server)
-PHP_INI_SCAN_DIR=/app/.php/etc/php/8.3/cli/conf.d \
+EXT_DIR="$(ls -d /app/.php/usr/lib/php/20* 2>/dev/null | head -1)"
+PHP_INI_SCAN_DIR=/app/.php/etc/php/8.3/fpm/conf.d \
   .php/usr/sbin/php-fpm8.3 \
   --fpm-config /app/sabredav/php-fpm.conf \
-  --nodaemonize &
+  --nodaemonize \
+  -d "extension_dir=${EXT_DIR}" &
 
 # Start the Django backend
 gunicorn -b :8000 calendars.wsgi:application --log-file - &
