@@ -45,42 +45,43 @@ for deb in "$DEB_DIR"/*.deb; do
   dpkg-deb -x "$deb" "$PHP_PREFIX"
 done
 
-# Fix broken conf.d symlinks: debs contain absolute symlinks to
-# /etc/php/8.3/mods-available/ which don't exist on Scalingo.
-# Replace them with copies of the actual .ini files.
-MODS_DIR="$PHP_PREFIX/etc/php/8.3/mods-available"
-for conf_dir in "$PHP_PREFIX/etc/php/8.3/cli/conf.d" "$PHP_PREFIX/etc/php/8.3/fpm/conf.d"; do
-  if [ -d "$conf_dir" ]; then
-    for link in "$conf_dir"/*.ini; do
-      [ -L "$link" ] || continue
-      target_basename="$(basename "$(readlink "$link")")"
-      if [ -f "$MODS_DIR/$target_basename" ]; then
-        rm "$link"
-        cp "$MODS_DIR/$target_basename" "$link"
-      fi
-    done
-  fi
-done
-
 # Detect PHP extension directory (e.g. .php/usr/lib/php/20230831)
 EXT_DIR_NAME="$(ls -1 "$PHP_PREFIX/usr/lib/php/" | grep '^20' | head -1)"
 echo "       Extension API dir: ${EXT_DIR_NAME}"
+echo "       Available .so files: $(ls "$PHP_PREFIX/usr/lib/php/$EXT_DIR_NAME/" 2>/dev/null | tr '\n' ' ')"
 
-# Create php wrapper that sets extension_dir and INI scan dir at runtime
+# Build a single php.ini that sets extension_dir (relative to /app at runtime)
+# then loads every shared extension present.
+# Conf.d symlinks from debs are broken (absolute paths to /etc/php/...),
+# so we bypass them entirely with a self-contained ini.
+PHP_INI="$PHP_PREFIX/php.ini"
+{
+  echo "; Auto-generated PHP config"
+  echo "extension_dir = /app/.php/usr/lib/php/${EXT_DIR_NAME}"
+  echo ""
+  for so in "$PHP_PREFIX/usr/lib/php/$EXT_DIR_NAME"/*.so; do
+    [ -f "$so" ] || continue
+    echo "extension = $(basename "$so")"
+  done
+} > "$PHP_INI"
+echo "       Generated php.ini:"
+cat "$PHP_INI" | sed 's/^/         /'
+
+# Create a build-time copy with the current path (not /app)
+BUILD_INI="/tmp/php-build.ini"
+sed "s|/app/.php|$PWD/.php|" "$PHP_INI" > "$BUILD_INI"
+
+# Create php wrapper (uses /app php.ini at runtime)
 cat > bin/php << 'WRAPPER'
 #!/bin/bash
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PHP_INI_SCAN_DIR="$DIR/.php/etc/php/8.3/cli/conf.d" \
-  exec "$DIR/.php/usr/bin/php8.3" \
-    -d "extension_dir=$DIR/.php/usr/lib/php/EXTDIR" \
-    "$@"
+exec "$DIR/.php/usr/bin/php8.3" -c "$DIR/.php/php.ini" -n "$@"
 WRAPPER
-# Patch in the actual extension dir name
-sed -i "s/EXTDIR/${EXT_DIR_NAME}/" bin/php
 chmod +x bin/php
 
-echo "-----> PHP version: $(bin/php -v | head -1)"
-echo "-----> PHP modules: $(bin/php -m | tr '\n' ' ')"
+# For build-time, verify with the build-time ini
+echo "-----> PHP version: $("$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" -v | head -1)"
+echo "-----> PHP modules: $("$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" -m | tr '\n' ' ')"
 
 # Download Composer and install SabreDAV dependencies
 echo "-----> Installing SabreDAV dependencies"
@@ -88,6 +89,6 @@ curl -fsSL -o bin/composer.phar \
   https://getcomposer.org/download/latest-stable/composer.phar
 cp -r docker/sabredav sabredav
 cd sabredav
-../bin/php ../bin/composer.phar install \
+"../$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" ../bin/composer.phar install \
   --no-dev --optimize-autoloader --no-interaction
 cd ..
