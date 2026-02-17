@@ -10,11 +10,14 @@ if [ -n "$DATABASE_URL" ] && [ -z "$PGHOST" ]; then
   eval "$(python3 -c "
 import os, urllib.parse
 u = urllib.parse.urlparse(os.environ['DATABASE_URL'])
+qs = dict(urllib.parse.parse_qsl(u.query))
 print(f'export PGHOST=\"{u.hostname}\"')
 print(f'export PGPORT=\"{u.port or 5432}\"')
 print(f'export PGDATABASE=\"{u.path.lstrip(\"/\")}\"')
 print(f'export PGUSER=\"{u.username}\"')
 print(f'export PGPASSWORD=\"{urllib.parse.unquote(u.password)}\"')
+if 'sslmode' in qs:
+    print(f'export PGSSLMODE=\"{qs[\"sslmode\"]}\"')
 ")"
   echo "-----> Parsed DATABASE_URL into PG* vars (host=$PGHOST port=$PGPORT db=$PGDATABASE)"
 fi
