@@ -1,25 +1,23 @@
-{{ organizer_display }} a modifié l'événement
+{{ content.body }}
 
-Détails de l'événement mis à jour
+{{ summary }}
 =================================
 
-Titre : {{ event.summary }}
-Quand : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
-{% if event.location %}Lieu : {{ event.location }}
-{% endif %}{% if event.url %}Visio : {{ event.url }}
-{% endif %}Organisateur : {{ organizer_display }} <{{ event.organizer_email }}>
+{{ labels.when }} : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
+{% if event.location %}{{ labels.location }} : {{ event.location }}
+{% endif %}{% if event.url %}{{ labels.videoConference }} : {{ event.url }}
+{% endif %}{{ labels.organizer }} : {{ organizer_display }} <{{ event.organizer_email }}>
 
 {% if event.description %}
-Description :
+{{ labels.description }} :
 {{ event.description }}
 {% endif %}
 
-{% if rsvp_accept_url %}Répondre à cette invitation :
-  Accepter : {{ rsvp_accept_url }}
-  Peut-être : {{ rsvp_tentative_url }}
-  Refuser : {{ rsvp_decline_url }}
+{% if rsvp_accept_url %}{{ actions.accept }} : {{ rsvp_accept_url }}
+{{ actions.maybe }} : {{ rsvp_tentative_url }}
+{{ actions.decline }} : {{ rsvp_decline_url }}
 
-{% endif %}Cet événement a été modifié. Vous pouvez aussi ouvrir le fichier .ics en pièce jointe pour mettre à jour votre calendrier.
+{% endif %}{{ instructions }}
 
 ---
-Cette notification a été envoyée via {{ app_name }}
+{{ footer }}

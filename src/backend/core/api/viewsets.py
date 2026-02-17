@@ -3,8 +3,6 @@
 
 import json
 import logging
-import re
-from urllib.parse import unquote
 
 from django.conf import settings
 from django.core.cache import cache
@@ -19,7 +17,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.throttling import UserRateThrottle
 
 from core import models
-from core.services.caldav_service import CalendarService
+from core.services.caldav_service import (
+    CalendarService,
+    normalize_caldav_path,
+    verify_caldav_access,
+)
 from core.services.import_service import MAX_FILE_SIZE, ICSImportService
 
 from . import permissions, serializers
@@ -261,47 +263,6 @@ class ConfigView(drf.views.APIView):
         return theme_customization
 
 
-# Regex for CalDAV path validation (shared with SubscriptionTokenViewSet)
-# Pattern: /calendars/<email-or-encoded>/<calendar-id>/
-CALDAV_PATH_PATTERN = re.compile(
-    r"^/calendars/[^/]+/[a-zA-Z0-9-]+/$",
-)
-
-
-def _verify_caldav_access(user, caldav_path):
-    """Verify that the user has access to the CalDAV calendar.
-
-    Checks that:
-    1. The path matches the expected pattern (prevents path injection)
-    2. The user's email matches the email in the path
-    """
-    if not CALDAV_PATH_PATTERN.match(caldav_path):
-        return False
-    parts = caldav_path.strip("/").split("/")
-    if len(parts) >= 2 and parts[0] == "calendars":
-        path_email = unquote(parts[1])
-        return path_email.lower() == user.email.lower()
-    return False
-
-
-def _normalize_caldav_path(caldav_path):
-    """Normalize CalDAV path to consistent format.
-
-    Strips the CalDAV API prefix (e.g. /api/v1.0/caldav/) if present,
-    so that paths like /api/v1.0/caldav/calendars/user@ex.com/uuid/
-    become /calendars/user@ex.com/uuid/.
-    """
-    if not caldav_path.startswith("/"):
-        caldav_path = "/" + caldav_path
-    # Strip CalDAV API prefix — keep from /calendars/ onwards
-    calendars_idx = caldav_path.find("/calendars/")
-    if calendars_idx > 0:
-        caldav_path = caldav_path[calendars_idx:]
-    if not caldav_path.endswith("/"):
-        caldav_path = caldav_path + "/"
-    return caldav_path
-
-
 class CalendarViewSet(viewsets.GenericViewSet):
     """ViewSet for calendar operations.
 
@@ -354,10 +315,10 @@ class CalendarViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        caldav_path = _normalize_caldav_path(caldav_path)
+        caldav_path = normalize_caldav_path(caldav_path)
 
         # Verify user access
-        if not _verify_caldav_access(request.user, caldav_path):
+        if not verify_caldav_access(request.user, caldav_path):
             return drf_response.Response(
                 {"error": "You don't have access to this calendar"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -429,7 +390,7 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
         calendar_name = create_serializer.validated_data.get("calendar_name", "")
 
         # Verify user has access to this calendar
-        if not _verify_caldav_access(request.user, caldav_path):
+        if not verify_caldav_access(request.user, caldav_path):
             return drf_response.Response(
                 {"error": "You don't have access to this calendar"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -468,10 +429,10 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        caldav_path = _normalize_caldav_path(caldav_path)
+        caldav_path = normalize_caldav_path(caldav_path)
 
         # Verify user has access to this calendar
-        if not _verify_caldav_access(request.user, caldav_path):
+        if not verify_caldav_access(request.user, caldav_path):
             return drf_response.Response(
                 {"error": "You don't have access to this calendar"},
                 status=status.HTTP_403_FORBIDDEN,

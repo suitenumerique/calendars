@@ -1,17 +1,173 @@
 """Services for CalDAV integration."""
 
 import logging
+import re
 from datetime import date, datetime, timedelta
 from typing import Optional
+from urllib.parse import unquote
 from uuid import uuid4
 
 from django.conf import settings
 from django.utils import timezone
 
+import icalendar
+import requests
+
+import caldav as caldav_lib
 from caldav import DAVClient
 from caldav.lib.error import NotFoundError
 
 logger = logging.getLogger(__name__)
+
+
+class CalDAVHTTPClient:
+    """Low-level HTTP client for CalDAV server communication.
+
+    Centralizes header building, URL construction, API key validation,
+    and HTTP requests. All higher-level CalDAV consumers delegate to this.
+    """
+
+    BASE_URI_PATH = "/api/v1.0/caldav"
+    DEFAULT_TIMEOUT = 30
+
+    def __init__(self):
+        self.base_url = settings.CALDAV_URL.rstrip("/")
+
+    @staticmethod
+    def get_api_key() -> str:
+        """Return the outbound API key, raising ValueError if not configured."""
+        key = settings.CALDAV_OUTBOUND_API_KEY
+        if not key:
+            raise ValueError("CALDAV_OUTBOUND_API_KEY is not configured")
+        return key
+
+    @classmethod
+    def build_base_headers(cls, email: str) -> dict:
+        """Build authentication headers for CalDAV requests."""
+        return {
+            "X-Api-Key": cls.get_api_key(),
+            "X-Forwarded-User": email,
+        }
+
+    def build_url(self, path: str, query: str = "") -> str:
+        """Build a full CalDAV URL from a resource path.
+
+        Handles paths with or without the /api/v1.0/caldav prefix.
+        """
+        # If the path already includes the base URI prefix, use it directly
+        if path.startswith(self.BASE_URI_PATH):
+            url = f"{self.base_url}{path}"
+        else:
+            clean_path = path.lstrip("/")
+            url = f"{self.base_url}{self.BASE_URI_PATH}/{clean_path}"
+        if query:
+            url = f"{url}?{query}"
+        return url
+
+    def request(  # noqa: PLR0913
+        self,
+        method: str,
+        email: str,
+        path: str,
+        *,
+        query: str = "",
+        data=None,
+        extra_headers: dict | None = None,
+        timeout: int | None = None,
+        content_type: str | None = None,
+    ) -> requests.Response:
+        """Make an authenticated HTTP request to the CalDAV server."""
+        headers = self.build_base_headers(email)
+        if content_type:
+            headers["Content-Type"] = content_type
+        if extra_headers:
+            headers.update(extra_headers)
+
+        url = self.build_url(path, query)
+        return requests.request(
+            method=method,
+            url=url,
+            headers=headers,
+            data=data,
+            timeout=timeout or self.DEFAULT_TIMEOUT,
+        )
+
+    def get_dav_client(self, email: str) -> DAVClient:
+        """Return a configured caldav.DAVClient for the given user email."""
+        headers = self.build_base_headers(email)
+        caldav_url = f"{self.base_url}{self.BASE_URI_PATH}/"
+        return DAVClient(
+            url=caldav_url,
+            username=None,
+            password=None,
+            timeout=self.DEFAULT_TIMEOUT,
+            headers=headers,
+        )
+
+    def find_event_by_uid(self, email: str, uid: str) -> tuple[str | None, str | None]:
+        """Find an event by UID across all of the user's calendars.
+
+        Returns (ical_data, href) or (None, None).
+        """
+        client = self.get_dav_client(email)
+        try:
+            principal = client.principal()
+            for cal in principal.calendars():
+                try:
+                    event = cal.object_by_uid(uid)
+                    return event.data, str(event.url.path)
+                except caldav_lib.error.NotFoundError:
+                    continue
+            logger.warning("Event UID %s not found in user %s calendars", uid, email)
+            return None, None
+        except Exception:
+            logger.exception("CalDAV error looking up event %s", uid)
+            return None, None
+
+    def put_event(self, email: str, href: str, ical_data: str) -> bool:
+        """PUT updated iCalendar data back to CalDAV. Returns True on success."""
+        try:
+            response = self.request(
+                "PUT",
+                email,
+                href,
+                data=ical_data.encode("utf-8"),
+                content_type="text/calendar; charset=utf-8",
+            )
+            if response.status_code in (200, 201, 204):
+                return True
+            logger.error(
+                "CalDAV PUT failed: %s %s",
+                response.status_code,
+                response.text[:500],
+            )
+            return False
+        except requests.exceptions.RequestException:
+            logger.exception("CalDAV PUT error for %s", href)
+            return False
+
+    @staticmethod
+    def update_attendee_partstat(
+        ical_data: str, email: str, new_partstat: str
+    ) -> str | None:
+        """Update the PARTSTAT of an attendee in iCalendar data.
+
+        Returns the modified iCalendar string, or None if attendee not found.
+        """
+        cal = icalendar.Calendar.from_ical(ical_data)
+        updated = False
+
+        for component in cal.walk("VEVENT"):
+            for _name, attendee in component.property_items("ATTENDEE"):
+                attendee_val = str(attendee).lower()
+                if email.lower() in attendee_val:
+                    attendee.params["PARTSTAT"] = icalendar.vText(new_partstat)
+                    updated = True
+
+        if not updated:
+            return None
+
+        return cal.to_ical().decode("utf-8")
 
 
 class CalDAVClient:
@@ -20,10 +176,8 @@ class CalDAVClient:
     """
 
     def __init__(self):
-        self.base_url = settings.CALDAV_URL
-        # Set the base URI path as expected by the CalDAV server
-        self.base_uri_path = "/api/v1.0/caldav/"
-        self.timeout = 30
+        self._http = CalDAVHTTPClient()
+        self.base_url = self._http.base_url
 
     def _get_client(self, user) -> DAVClient:
         """
@@ -32,33 +186,7 @@ class CalDAVClient:
         The CalDAV server requires API key authentication via Authorization header
         and X-Forwarded-User header for user identification.
         """
-        # CalDAV server base URL - include the base URI path that sabre/dav expects
-        # Remove trailing slash from base_url and base_uri_path to avoid double slashes
-        base_url_clean = self.base_url.rstrip("/")
-        base_uri_clean = self.base_uri_path.rstrip("/")
-        caldav_url = f"{base_url_clean}{base_uri_clean}/"
-
-        # Prepare headers
-        # API key is required for authentication
-        headers = {
-            "X-Forwarded-User": user.email,
-        }
-
-        outbound_api_key = settings.CALDAV_OUTBOUND_API_KEY
-        if not outbound_api_key:
-            raise ValueError("CALDAV_OUTBOUND_API_KEY is not configured")
-
-        headers["X-Api-Key"] = outbound_api_key
-
-        # No username/password needed - authentication is via API key and X-Forwarded-User header
-        # Pass None to prevent the caldav library from trying Basic auth
-        return DAVClient(
-            url=caldav_url,
-            username=None,
-            password=None,
-            timeout=self.timeout,
-            headers=headers,
-        )
+        return self._http.get_dav_client(user.email)
 
     def get_calendar_info(self, user, calendar_path: str) -> dict | None:
         """
@@ -414,3 +542,75 @@ class CalendarService:
     def delete_event(self, user, caldav_path: str, event_uid: str) -> None:
         """Delete an event."""
         self.caldav.delete_event(user, caldav_path, event_uid)
+
+
+# ---------------------------------------------------------------------------
+# CalDAV path utilities
+# ---------------------------------------------------------------------------
+
+# Pattern: /calendars/<email-or-encoded>/<calendar-id>/
+CALDAV_PATH_PATTERN = re.compile(
+    r"^/calendars/[^/]+/[a-zA-Z0-9-]+/$",
+)
+
+
+def normalize_caldav_path(caldav_path):
+    """Normalize CalDAV path to consistent format.
+
+    Strips the CalDAV API prefix (e.g. /api/v1.0/caldav/) if present,
+    so that paths like /api/v1.0/caldav/calendars/user@ex.com/uuid/
+    become /calendars/user@ex.com/uuid/.
+    """
+    if not caldav_path.startswith("/"):
+        caldav_path = "/" + caldav_path
+    # Strip CalDAV API prefix — keep from /calendars/ onwards
+    calendars_idx = caldav_path.find("/calendars/")
+    if calendars_idx > 0:
+        caldav_path = caldav_path[calendars_idx:]
+    if not caldav_path.endswith("/"):
+        caldav_path = caldav_path + "/"
+    return caldav_path
+
+
+def verify_caldav_access(user, caldav_path):
+    """Verify that the user has access to the CalDAV calendar.
+
+    Checks that:
+    1. The path matches the expected pattern (prevents path injection)
+    2. The user's email matches the email in the path
+    """
+    if not CALDAV_PATH_PATTERN.match(caldav_path):
+        return False
+    parts = caldav_path.strip("/").split("/")
+    if len(parts) >= 2 and parts[0] == "calendars":
+        path_email = unquote(parts[1])
+        return path_email.lower() == user.email.lower()
+    return False
+
+
+def validate_caldav_proxy_path(path):
+    """Validate that a CalDAV proxy path is safe.
+
+    Prevents path traversal attacks by rejecting paths with:
+    - Directory traversal sequences (../)
+    - Null bytes
+    - Paths that don't start with expected prefixes
+    """
+    if not path:
+        return True  # Empty path is fine (root request)
+
+    # Block directory traversal
+    if ".." in path:
+        return False
+
+    # Block null bytes
+    if "\x00" in path:
+        return False
+
+    # Path must start with a known CalDAV resource prefix
+    allowed_prefixes = ("calendars/", "principals/", ".well-known/")
+    clean = path.lstrip("/")
+    if clean and not any(clean.startswith(prefix) for prefix in allowed_prefixes):
+        return False
+
+    return True

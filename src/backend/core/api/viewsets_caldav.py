@@ -12,6 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 import requests
 
+from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy_path
 from core.services.calendar_invitation_service import calendar_invitation_service
 
 logger = logging.getLogger(__name__)
@@ -45,44 +46,37 @@ class CalDAVProxyView(View):
             return HttpResponse(status=401)
 
         # Build the CalDAV server URL
-        caldav_url = settings.CALDAV_URL
         path = kwargs.get("path", "")
+
+        # Validate path to prevent traversal attacks
+        if not validate_caldav_proxy_path(path):
+            return HttpResponse(status=400, content="Invalid path")
 
         # Use user email as the principal (CalDAV server uses email as username)
         user_principal = request.user.email
 
-        # Build target URL - CalDAV server uses base URI /api/v1.0/caldav/
-        # The proxy receives requests at /api/v1.0/caldav/... and forwards them
-        # to the CalDAV server at the same path (sabre/dav expects requests at its base URI)
-        base_uri_path = "/api/v1.0/caldav"
+        http = CalDAVHTTPClient()
+
+        # Build target URL
         clean_path = path.lstrip("/") if path else ""
-
-        # Construct target URL - always include the base URI path
         if clean_path:
-            target_url = f"{caldav_url}{base_uri_path}/{clean_path}"
+            target_url = http.build_url(clean_path)
         else:
-            # Root request - use base URI path
-            target_url = f"{caldav_url}{base_uri_path}/"
+            target_url = http.build_url("")
 
-        # Prepare headers for CalDAV server
-        # CalDAV server uses custom auth backend that requires X-Forwarded-User header and API key
-        headers = {
-            "Content-Type": request.content_type or "application/xml",
-            "X-Forwarded-User": user_principal,
-            "X-Forwarded-For": request.META.get("REMOTE_ADDR", ""),
-            "X-Forwarded-Host": request.get_host(),
-            "X-Forwarded-Proto": request.scheme,
-        }
-
-        # API key is required for authentication
-        outbound_api_key = settings.CALDAV_OUTBOUND_API_KEY
-        if not outbound_api_key:
+        # Prepare headers — start with shared auth headers, add proxy-specific ones
+        try:
+            headers = CalDAVHTTPClient.build_base_headers(user_principal)
+        except ValueError:
             logger.error("CALDAV_OUTBOUND_API_KEY is not configured")
             return HttpResponse(
                 status=500, content="CalDAV authentication not configured"
             )
 
-        headers["X-Api-Key"] = outbound_api_key
+        headers["Content-Type"] = request.content_type or "application/xml"
+        headers["X-Forwarded-For"] = request.META.get("REMOTE_ADDR", "")
+        headers["X-Forwarded-Host"] = request.get_host()
+        headers["X-Forwarded-Proto"] = request.scheme
 
         # Add callback URL for CalDAV scheduling (iTip/iMip)
         # The CalDAV server will call this URL when it needs to send invitations
@@ -130,7 +124,7 @@ class CalDAVProxyView(View):
                 headers=headers,
                 data=body,
                 auth=auth,
-                timeout=30,
+                timeout=CalDAVHTTPClient.DEFAULT_TIMEOUT,
                 allow_redirects=False,
             )
 

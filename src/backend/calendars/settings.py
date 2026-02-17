@@ -122,6 +122,11 @@ class Base(Configuration):
     CALENDAR_ITIP_ENABLED = values.BooleanValue(
         False, environ_name="CALENDAR_ITIP_ENABLED", environ_prefix=None
     )
+    TRANSLATIONS_JSON_PATH = values.Value(
+        "/data/translations.json",
+        environ_name="TRANSLATIONS_JSON_PATH",
+        environ_prefix=None,
+    )
 
     # Security
     ALLOWED_HOSTS = values.ListValue([])

@@ -1,9 +1,11 @@
 """Tests for RSVP view and token generation."""
 
+import re
 from datetime import timedelta
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
+from django.core import mail
 from django.core.signing import BadSignature, Signer
 from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase, override_settings
@@ -12,10 +14,8 @@ from django.utils import timezone
 import icalendar
 import pytest
 
-from core.api.viewsets_rsvp import (
-    RSVPView,
-    _update_attendee_partstat,
-)
+from core.api.viewsets_rsvp import RSVPView
+from core.services.caldav_service import CalDAVHTTPClient
 from core.services.calendar_invitation_service import (
     CalendarInvitationService,
     ICalendarParser,
@@ -195,29 +195,37 @@ class TestUpdateAttendeePartstat:
     """Tests for the _update_attendee_partstat function."""
 
     def test_update_existing_partstat(self):
-        result = _update_attendee_partstat(SAMPLE_ICS, "bob@example.com", "ACCEPTED")
+        result = CalDAVHTTPClient.update_attendee_partstat(
+            SAMPLE_ICS, "bob@example.com", "ACCEPTED"
+        )
         assert result is not None
         assert "PARTSTAT=ACCEPTED" in result
         assert "PARTSTAT=NEEDS-ACTION" not in result
 
     def test_update_to_declined(self):
-        result = _update_attendee_partstat(SAMPLE_ICS, "bob@example.com", "DECLINED")
+        result = CalDAVHTTPClient.update_attendee_partstat(
+            SAMPLE_ICS, "bob@example.com", "DECLINED"
+        )
         assert result is not None
         assert "PARTSTAT=DECLINED" in result
 
     def test_update_to_tentative(self):
-        result = _update_attendee_partstat(SAMPLE_ICS, "bob@example.com", "TENTATIVE")
+        result = CalDAVHTTPClient.update_attendee_partstat(
+            SAMPLE_ICS, "bob@example.com", "TENTATIVE"
+        )
         assert result is not None
         assert "PARTSTAT=TENTATIVE" in result
 
     def test_unknown_attendee_returns_none(self):
-        result = _update_attendee_partstat(
+        result = CalDAVHTTPClient.update_attendee_partstat(
             SAMPLE_ICS, "unknown@example.com", "ACCEPTED"
         )
         assert result is None
 
     def test_preserves_other_attendee_properties(self):
-        result = _update_attendee_partstat(SAMPLE_ICS, "bob@example.com", "ACCEPTED")
+        result = CalDAVHTTPClient.update_attendee_partstat(
+            SAMPLE_ICS, "bob@example.com", "ACCEPTED"
+        )
         assert result is not None
         assert "CN=Bob" in result
         assert "mailto:bob@example.com" in result
@@ -259,8 +267,8 @@ class TestRSVPView(TestCase):
         response = self.view(request)
         assert response.status_code == 400
 
-    @patch("core.api.viewsets_rsvp._put_event_to_caldav")
-    @patch("core.api.viewsets_rsvp._find_event_in_caldav")
+    @patch.object(CalDAVHTTPClient, "put_event")
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_accept_flow(self, mock_find, mock_put):
         """Full accept flow: find event, update partstat, put back."""
         mock_find.return_value = (
@@ -274,7 +282,7 @@ class TestRSVPView(TestCase):
         response = self.view(request)
 
         assert response.status_code == 200
-        assert "accepté" in response.content.decode()
+        assert "accepted the invitation" in response.content.decode()
 
         # Verify CalDAV calls
         mock_find.assert_called_once_with("alice@example.com", "test-uid-123")
@@ -283,8 +291,8 @@ class TestRSVPView(TestCase):
         put_args = mock_put.call_args
         assert "PARTSTAT=ACCEPTED" in put_args[0][2]
 
-    @patch("core.api.viewsets_rsvp._put_event_to_caldav")
-    @patch("core.api.viewsets_rsvp._find_event_in_caldav")
+    @patch.object(CalDAVHTTPClient, "put_event")
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_decline_flow(self, mock_find, mock_put):
         mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
         mock_put.return_value = True
@@ -294,12 +302,12 @@ class TestRSVPView(TestCase):
         response = self.view(request)
 
         assert response.status_code == 200
-        assert "décliné" in response.content.decode()
+        assert "declined the invitation" in response.content.decode()
         put_args = mock_put.call_args
         assert "PARTSTAT=DECLINED" in put_args[0][2]
 
-    @patch("core.api.viewsets_rsvp._put_event_to_caldav")
-    @patch("core.api.viewsets_rsvp._find_event_in_caldav")
+    @patch.object(CalDAVHTTPClient, "put_event")
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_tentative_flow(self, mock_find, mock_put):
         mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
         mock_put.return_value = True
@@ -309,11 +317,12 @@ class TestRSVPView(TestCase):
         response = self.view(request)
 
         assert response.status_code == 200
-        assert "peut-être" in response.content.decode()
+        content = response.content.decode()
+        assert "maybe" in content.lower()
         put_args = mock_put.call_args
         assert "PARTSTAT=TENTATIVE" in put_args[0][2]
 
-    @patch("core.api.viewsets_rsvp._find_event_in_caldav")
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_event_not_found_returns_400(self, mock_find):
         mock_find.return_value = (None, None)
 
@@ -322,10 +331,10 @@ class TestRSVPView(TestCase):
         response = self.view(request)
 
         assert response.status_code == 400
-        assert "trouvé" in response.content.decode()
+        assert "not found" in response.content.decode().lower()
 
-    @patch("core.api.viewsets_rsvp._put_event_to_caldav")
-    @patch("core.api.viewsets_rsvp._find_event_in_caldav")
+    @patch.object(CalDAVHTTPClient, "put_event")
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_put_failure_returns_400(self, mock_find, mock_put):
         mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
         mock_put.return_value = False
@@ -335,9 +344,9 @@ class TestRSVPView(TestCase):
         response = self.view(request)
 
         assert response.status_code == 400
-        assert "erreur" in response.content.decode()
+        assert "error occurred" in response.content.decode().lower()
 
-    @patch("core.api.viewsets_rsvp._find_event_in_caldav")
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_attendee_not_in_event_returns_400(self, mock_find):
         """If the attendee email is not in the event, return error."""
         mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
@@ -348,9 +357,9 @@ class TestRSVPView(TestCase):
         response = self.view(request)
 
         assert response.status_code == 400
-        assert "participants" in response.content.decode()
+        assert "not listed" in response.content.decode().lower()
 
-    @patch("core.api.viewsets_rsvp._find_event_in_caldav")
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_past_event_returns_400(self, mock_find):
         """Cannot RSVP to an event that has already ended."""
         mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics")
@@ -360,7 +369,7 @@ class TestRSVPView(TestCase):
         response = self.view(request)
 
         assert response.status_code == 400
-        assert "passé" in response.content.decode()
+        assert "already passed" in response.content.decode().lower()
 
 
 def _make_ics_with_method(method="REQUEST"):
@@ -413,3 +422,201 @@ class TestItipSetting:
         result = self._prepare(_make_ics_with_method("CANCEL"), method="REQUEST")
         cal = icalendar.Calendar.from_ical(result)
         assert str(cal["METHOD"]) == "REQUEST"
+
+
+@override_settings(
+    CALDAV_URL="http://caldav:80",
+    CALDAV_OUTBOUND_API_KEY="test-api-key",
+    CALDAV_INBOUND_API_KEY="test-inbound-key",
+    APP_URL="http://localhost:8921",
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
+class TestRSVPEndToEndFlow(TestCase):
+    """
+    Integration test: scheduling callback sends email → extract RSVP links
+    → follow link → verify event is updated.
+
+    This tests the full flow from CalDAV scheduling callback to RSVP response,
+    using Django's in-memory email backend to intercept sent emails.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.rsvp_view = RSVPView.as_view()
+
+    def test_email_to_rsvp_accept_flow(self):
+        """
+        1. CalDAV scheduling callback sends an invitation email
+        2. Extract RSVP accept link from the email HTML
+        3. Follow the RSVP link
+        4. Verify the event PARTSTAT is updated to ACCEPTED
+        """
+        # Step 1: Send invitation via the CalendarInvitationService
+        service = CalendarInvitationService()
+        success = service.send_invitation(
+            sender_email="alice@example.com",
+            recipient_email="bob@example.com",
+            method="REQUEST",
+            icalendar_data=SAMPLE_ICS,
+        )
+        assert success is True
+        assert len(mail.outbox) == 1
+
+        sent_email = mail.outbox[0]
+        assert "bob@example.com" in sent_email.to
+
+        # Step 2: Extract RSVP accept link from email HTML
+        html_body = None
+        for alternative in sent_email.alternatives:
+            if alternative[1] == "text/html":
+                html_body = alternative[0]
+                break
+        assert html_body is not None, "Email should have an HTML body"
+
+        # Find the accept link (green button with "Accepter")
+        accept_match = re.search(r'<a\s+href="([^"]*action=accepted[^"]*)"', html_body)
+        assert accept_match is not None, "Email HTML should contain an RSVP accept link"
+        accept_url = accept_match.group(1)
+        # Unescape HTML entities
+        accept_url = accept_url.replace("&amp;", "&")
+
+        # Step 3: Parse the URL and extract token + action
+        parsed = urlparse(accept_url)
+        params = parse_qs(parsed.query)
+        assert "token" in params
+        assert params["action"] == ["accepted"]
+
+        # Step 4: Follow the RSVP link (mock CalDAV interactions)
+        with (
+            patch.object(CalDAVHTTPClient, "find_event_by_uid") as mock_find,
+            patch.object(CalDAVHTTPClient, "put_event") as mock_put,
+        ):
+            mock_find.return_value = (
+                SAMPLE_ICS,
+                "/api/v1.0/caldav/calendars/alice%40example.com/cal/event.ics",
+            )
+            mock_put.return_value = True
+
+            request = self.factory.get(
+                "/rsvp/",
+                {"token": params["token"][0], "action": "accepted"},
+            )
+            response = self.rsvp_view(request)
+
+        # Step 5: Verify success
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "accepted the invitation" in content
+
+        # Verify CalDAV was called with the right data
+        mock_find.assert_called_once_with("alice@example.com", "test-uid-123")
+        mock_put.assert_called_once()
+        put_data = mock_put.call_args[0][2]
+        assert "PARTSTAT=ACCEPTED" in put_data
+
+    def test_email_to_rsvp_decline_flow(self):
+        """Same flow but for declining an invitation."""
+        service = CalendarInvitationService()
+        service.send_invitation(
+            sender_email="alice@example.com",
+            recipient_email="bob@example.com",
+            method="REQUEST",
+            icalendar_data=SAMPLE_ICS,
+        )
+        assert len(mail.outbox) == 1
+
+        html_body = next(
+            alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
+        )
+
+        decline_match = re.search(r'<a\s+href="([^"]*action=declined[^"]*)"', html_body)
+        assert decline_match is not None
+        decline_url = decline_match.group(1).replace("&amp;", "&")
+
+        parsed = urlparse(decline_url)
+        params = parse_qs(parsed.query)
+
+        with (
+            patch.object(CalDAVHTTPClient, "find_event_by_uid") as mock_find,
+            patch.object(CalDAVHTTPClient, "put_event") as mock_put,
+        ):
+            mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
+            mock_put.return_value = True
+
+            request = self.factory.get(
+                "/rsvp/",
+                {"token": params["token"][0], "action": "declined"},
+            )
+            response = self.rsvp_view(request)
+
+        assert response.status_code == 200
+        assert "declined the invitation" in response.content.decode()
+        assert "PARTSTAT=DECLINED" in mock_put.call_args[0][2]
+
+    def test_email_contains_all_three_rsvp_links(self):
+        """Verify the email contains accept, tentative, and decline links."""
+        service = CalendarInvitationService()
+        service.send_invitation(
+            sender_email="alice@example.com",
+            recipient_email="bob@example.com",
+            method="REQUEST",
+            icalendar_data=SAMPLE_ICS,
+        )
+
+        html_body = next(
+            alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
+        )
+
+        for action in ("accepted", "tentative", "declined"):
+            match = re.search(rf'<a\s+href="([^"]*action={action}[^"]*)"', html_body)
+            assert match is not None, (
+                f"Email should contain an RSVP link for action={action}"
+            )
+
+    def test_cancel_email_has_no_rsvp_links(self):
+        """Cancel emails should NOT contain any RSVP links."""
+        service = CalendarInvitationService()
+        service.send_invitation(
+            sender_email="alice@example.com",
+            recipient_email="bob@example.com",
+            method="CANCEL",
+            icalendar_data=SAMPLE_ICS,
+        )
+        assert len(mail.outbox) == 1
+
+        html_body = next(
+            alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
+        )
+        assert "action=accepted" not in html_body
+        assert "action=declined" not in html_body
+
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
+    def test_rsvp_link_for_past_event_fails(self, mock_find):
+        """RSVP link for a past event should return an error."""
+        service = CalendarInvitationService()
+        service.send_invitation(
+            sender_email="alice@example.com",
+            recipient_email="bob@example.com",
+            method="REQUEST",
+            icalendar_data=SAMPLE_ICS,
+        )
+
+        html_body = next(
+            alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
+        )
+        accept_match = re.search(r'<a\s+href="([^"]*action=accepted[^"]*)"', html_body)
+        accept_url = accept_match.group(1).replace("&amp;", "&")
+        parsed = urlparse(accept_url)
+        params = parse_qs(parsed.query)
+
+        # The event is in the past
+        mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics")
+
+        request = self.factory.get(
+            "/rsvp/",
+            {"token": params["token"][0], "action": "accepted"},
+        )
+        response = self.rsvp_view(request)
+
+        assert response.status_code == 400
+        assert "already passed" in response.content.decode().lower()

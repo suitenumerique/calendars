@@ -3,9 +3,9 @@
 import logging
 from dataclasses import dataclass, field
 
-from django.conf import settings
-
 import requests
+
+from core.services.caldav_service import CalDAVHTTPClient
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class ICSImportService:
     """
 
     def __init__(self):
-        self.base_url = settings.CALDAV_URL.rstrip("/")
+        self._http = CalDAVHTTPClient()
 
     def import_events(self, user, caldav_path: str, ics_data: bytes) -> ImportResult:
         """Import events from ICS data into a calendar.
@@ -53,30 +53,26 @@ class ICSImportService:
         """
         result = ImportResult()
 
-        # Ensure caldav_path includes the base URI prefix that SabreDAV expects
-        base_uri = "/api/v1.0/caldav/"
-        if not caldav_path.startswith(base_uri):
-            caldav_path = base_uri.rstrip("/") + caldav_path
-        url = f"{self.base_url}{caldav_path}?import"
-
-        outbound_api_key = settings.CALDAV_OUTBOUND_API_KEY
-        if not outbound_api_key:
+        try:
+            api_key = CalDAVHTTPClient.get_api_key()
+        except ValueError:
             result.errors.append("CALDAV_OUTBOUND_API_KEY is not configured")
             return result
 
-        headers = {
-            "Content-Type": "text/calendar",
-            "X-Api-Key": outbound_api_key,
-            "X-Forwarded-User": user.email,
-            "X-Calendars-Import": outbound_api_key,
-        }
+        # Timeout scales with file size: 60s base + 30s per MB of ICS data.
+        # 8000 events (~4MB) took ~70s in practice.
+        timeout = 60 + int(len(ics_data) / 1024 / 1024) * 30
 
         try:
-            # Timeout scales with file size: 60s base + 30s per MB of ICS data.
-            # 8000 events (~4MB) took ~70s in practice.
-            timeout = 60 + int(len(ics_data) / 1024 / 1024) * 30
-            response = requests.post(
-                url, data=ics_data, headers=headers, timeout=timeout
+            response = self._http.request(
+                "POST",
+                user.email,
+                caldav_path,
+                query="import",
+                data=ics_data,
+                content_type="text/calendar",
+                extra_headers={"X-Calendars-Import": api_key},
+                timeout=timeout,
             )
         except requests.RequestException as exc:
             logger.error("Failed to reach SabreDAV import endpoint: %s", exc)
