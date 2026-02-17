@@ -45,8 +45,9 @@ for deb in "$DEB_DIR"/*.deb; do
   dpkg-deb -x "$deb" "$PHP_PREFIX"
 done
 
-# Fix broken conf.d symlinks: they point to absolute /etc/php/... paths
-# but the files are inside our .php prefix. Re-link them.
+# Fix broken conf.d symlinks: debs contain absolute symlinks to
+# /etc/php/8.3/mods-available/ which don't exist on Scalingo.
+# Replace them with copies of the actual .ini files.
 MODS_DIR="$PHP_PREFIX/etc/php/8.3/mods-available"
 for conf_dir in "$PHP_PREFIX/etc/php/8.3/cli/conf.d" "$PHP_PREFIX/etc/php/8.3/fpm/conf.d"; do
   if [ -d "$conf_dir" ]; then
@@ -54,20 +55,28 @@ for conf_dir in "$PHP_PREFIX/etc/php/8.3/cli/conf.d" "$PHP_PREFIX/etc/php/8.3/fp
       [ -L "$link" ] || continue
       target_basename="$(basename "$(readlink "$link")")"
       if [ -f "$MODS_DIR/$target_basename" ]; then
-        ln -sf "$PWD/$MODS_DIR/$target_basename" "$link"
+        rm "$link"
+        cp "$MODS_DIR/$target_basename" "$link"
       fi
     done
   fi
 done
 
-# Create php wrapper
-EXT_DIR="$(ls -d "$PHP_PREFIX"/usr/lib/php/20* 2>/dev/null | head -1)"
-cat > bin/php << WRAPPER
+# Detect PHP extension directory (e.g. .php/usr/lib/php/20230831)
+EXT_DIR_NAME="$(ls -1 "$PHP_PREFIX/usr/lib/php/" | grep '^20' | head -1)"
+echo "       Extension API dir: ${EXT_DIR_NAME}"
+
+# Create php wrapper that sets extension_dir and INI scan dir at runtime
+cat > bin/php << 'WRAPPER'
 #!/bin/bash
-DIR="\$(cd "\$(dirname "\$0")/.." && pwd)"
-PHP_INI_SCAN_DIR="\$DIR/.php/etc/php/8.3/cli/conf.d" \\
-  exec "\$DIR/.php/usr/bin/php8.3" -d "extension_dir=\$DIR/${EXT_DIR}" "\$@"
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PHP_INI_SCAN_DIR="$DIR/.php/etc/php/8.3/cli/conf.d" \
+  exec "$DIR/.php/usr/bin/php8.3" \
+    -d "extension_dir=$DIR/.php/usr/lib/php/EXTDIR" \
+    "$@"
 WRAPPER
+# Patch in the actual extension dir name
+sed -i "s/EXTDIR/${EXT_DIR_NAME}/" bin/php
 chmod +x bin/php
 
 echo "-----> PHP version: $(bin/php -v | head -1)"
