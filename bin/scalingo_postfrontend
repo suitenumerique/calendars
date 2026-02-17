@@ -21,16 +21,25 @@ PHP_PREFIX=".php"
 DEB_DIR="/tmp/php-debs"
 mkdir -p "$DEB_DIR" "$PHP_PREFIX"
 
-BASE_URL="http://security.ubuntu.com/ubuntu/pool/main/p/php8.3"
-VERSION="8.3.6-0ubuntu0.24.04.6"
+# Hardcoded Launchpad URLs for PHP 8.3.6-0maysync1 (Ubuntu Noble amd64)
+# Source: https://launchpad.net/ubuntu/noble/amd64/php8.3-fpm/8.3.6-0maysync1
+declare -A PHP_DEBS=(
+  [php8.3-cli]="http://launchpadlibrarian.net/724872605/php8.3-cli_8.3.6-0maysync1_amd64.deb"
+  [php8.3-fpm]="http://launchpadlibrarian.net/724872610/php8.3-fpm_8.3.6-0maysync1_amd64.deb"
+  [php8.3-common]="http://launchpadlibrarian.net/724872606/php8.3-common_8.3.6-0maysync1_amd64.deb"
+  [php8.3-opcache]="http://launchpadlibrarian.net/724872623/php8.3-opcache_8.3.6-0maysync1_amd64.deb"
+  [php8.3-readline]="http://launchpadlibrarian.net/724872627/php8.3-readline_8.3.6-0maysync1_amd64.deb"
+  [php8.3-pgsql]="http://launchpadlibrarian.net/724872624/php8.3-pgsql_8.3.6-0maysync1_amd64.deb"
+  [php8.3-xml]="http://launchpadlibrarian.net/724872633/php8.3-xml_8.3.6-0maysync1_amd64.deb"
+  [php8.3-mbstring]="http://launchpadlibrarian.net/724872617/php8.3-mbstring_8.3.6-0maysync1_amd64.deb"
+  [php8.3-curl]="http://launchpadlibrarian.net/724872607/php8.3-curl_8.3.6-0maysync1_amd64.deb"
+  [php-common]="http://launchpadlibrarian.net/710804987/php-common_93ubuntu2_all.deb"
+)
 
-for pkg in cli fpm common opcache readline pgsql xml mbstring curl; do
-  echo "       Downloading php8.3-${pkg}"
-  curl -fsSL -o "$DEB_DIR/php8.3-${pkg}.deb" \
-    "${BASE_URL}/php8.3-${pkg}_${VERSION}_amd64.deb"
+for pkg in "${!PHP_DEBS[@]}"; do
+  echo "       Downloading ${pkg}"
+  curl -fsSL -o "$DEB_DIR/${pkg}.deb" "${PHP_DEBS[$pkg]}"
 done
-curl -fsSL -o "$DEB_DIR/php-common.deb" \
-  "http://mirrors.kernel.org/ubuntu/pool/main/p/php-defaults/php-common_93ubuntu2_all.deb"
 
 for deb in "$DEB_DIR"/*.deb; do
   dpkg-deb -x "$deb" "$PHP_PREFIX"
