@@ -21,7 +21,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 // Get base URI from environment variable (set by compose.yaml)
 // This ensures sabre/dav generates URLs with the correct proxy path
-$baseUri = getenv('CALENDARS_BASE_URI') ?: '/';
+$baseUri = getenv('CALDAV_BASE_URI') ?: '/';
 
 // Database connection from environment variables
 $dbHost = getenv('PGHOST') ?: 'postgresql';
