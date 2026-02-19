@@ -9,6 +9,8 @@ echo "-----> Running post-frontend script"
 mkdir -p build/
 mv src/frontend/apps/calendars/out build/frontend-out
 
+cp src/frontend/apps/calendars/src/features/i18n/translations.json translations.json
+
 mv src/backend/* ./
 mv src/nginx/* ./
 
