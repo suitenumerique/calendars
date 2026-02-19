@@ -127,6 +127,11 @@ class Base(Configuration):
         environ_name="TRANSLATIONS_JSON_PATH",
         environ_prefix=None,
     )
+    DEFAULT_CALENDAR_COLOR = values.Value(
+        "#3788d8",
+        environ_name="DEFAULT_CALENDAR_COLOR",
+        environ_prefix=None,
+    )
 
     # Security
     ALLOWED_HOSTS = values.ListValue([])

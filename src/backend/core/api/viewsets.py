@@ -287,7 +287,7 @@ class CalendarViewSet(viewsets.GenericViewSet):
         caldav_path = service.create_calendar(
             user=request.user,
             name=serializer.validated_data["name"],
-            color=serializer.validated_data.get("color", "#3174ad"),
+            color=serializer.validated_data.get("color", ""),
         )
 
         return drf_response.Response(

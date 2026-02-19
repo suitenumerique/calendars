@@ -207,7 +207,7 @@ class CalDAVClient:
             )
 
             name = props.get(DisplayName.tag, "Calendar")
-            color = props.get(CalendarColor.tag, "#3174ad")
+            color = props.get(CalendarColor.tag, settings.DEFAULT_CALENDAR_COLOR)
             description = props.get(CalendarDescription.tag, "")
 
             # Clean up color (CalDAV may return with alpha channel like #RRGGBBAA)
@@ -517,16 +517,25 @@ class CalendarService:
 
     def create_default_calendar(self, user) -> str:
         """Create a default calendar for a user. Returns the caldav_path."""
+        from core.services.translation_service import TranslationService  # noqa: PLC0415
+
         calendar_id = str(uuid4())
-        calendar_name = "Mon calendrier"
-        return self.caldav.create_calendar(user, calendar_name, calendar_id)
+        lang = TranslationService.resolve_language(email=user.email)
+        calendar_name = TranslationService.t(
+            "calendar.list.defaultCalendarName", lang
+        )
+        return self.caldav.create_calendar(
+            user, calendar_name, calendar_id, color=settings.DEFAULT_CALENDAR_COLOR
+        )
 
     def create_calendar(
-        self, user, name: str, color: str = "#3174ad"
+        self, user, name: str, color: str = ""
     ) -> str:
         """Create a new calendar for a user. Returns the caldav_path."""
         calendar_id = str(uuid4())
-        return self.caldav.create_calendar(user, name, calendar_id, color=color)
+        return self.caldav.create_calendar(
+            user, name, calendar_id, color=color or settings.DEFAULT_CALENDAR_COLOR
+        )
 
     def get_events(self, user, caldav_path: str, start=None, end=None) -> list:
         """Get events from a calendar. Returns parsed event data."""

@@ -181,6 +181,7 @@
           }
         },
         "list": {
+          "defaultCalendarName": "My calendar",
           "myCalendars": "My calendars",
           "sharedCalendars": "Shared calendars",
           "shared": "(shared)",
@@ -914,6 +915,7 @@
           }
         },
         "list": {
+          "defaultCalendarName": "Mon calendrier",
           "myCalendars": "Mes calendriers",
           "sharedCalendars": "Calendriers partagés",
           "shared": "(partagé)",
@@ -1394,6 +1396,7 @@
           }
         },
         "list": {
+          "defaultCalendarName": "Mijn kalender",
           "myCalendars": "Mijn kalenders",
           "sharedCalendars": "Gedeelde kalenders",
           "shared": "(gedeeld)",

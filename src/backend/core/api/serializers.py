@@ -118,7 +118,7 @@ class CalendarCreateSerializer(serializers.Serializer):  # pylint: disable=abstr
     """Serializer for creating a Calendar (CalDAV only, no Django model)."""
 
     name = serializers.CharField(max_length=255)
-    color = serializers.CharField(max_length=7, required=False, default="#3174ad")
+    color = serializers.CharField(max_length=7, required=False, default="")
     description = serializers.CharField(required=False, default="")
 
 
