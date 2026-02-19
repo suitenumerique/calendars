@@ -204,10 +204,10 @@ def test_api_users_list_query_email_matching():
     client.force_login(user)
 
     user1 = factories.UserFactory(email="alice.johnson@example.gouv.fr")
-    user2 = factories.UserFactory(email="alice.johnnson@example.gouv.fr")
-    user3 = factories.UserFactory(email="alice.kohlson@example.gouv.fr")
+    factories.UserFactory(email="alice.johnnson@example.gouv.fr")
+    factories.UserFactory(email="alice.kohlson@example.gouv.fr")
     user4 = factories.UserFactory(email="alicia.johnnson@example.gouv.fr")
-    user5 = factories.UserFactory(email="alicia.johnnson@example.gov.uk")
+    factories.UserFactory(email="alicia.johnnson@example.gov.uk")
     factories.UserFactory(email="alice.thomson@example.gouv.fr")
 
     # Exact match returns only that user

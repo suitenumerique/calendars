@@ -451,7 +451,8 @@ class Base(Configuration):
     FRONTEND_FEEDBACK_BUTTON_SHOW = values.BooleanValue(
         default=False, environ_name="FRONTEND_FEEDBACK_BUTTON_SHOW", environ_prefix=None
     )
-    # For instance, you might want to bind this button to an external library to trigger survey instead of the build in feedback modal.
+    # Bind this button to an external library to trigger survey
+    # instead of the built-in feedback modal.
     FRONTEND_FEEDBACK_BUTTON_IDLE = values.BooleanValue(
         default=False, environ_name="FRONTEND_FEEDBACK_BUTTON_IDLE", environ_prefix=None
     )

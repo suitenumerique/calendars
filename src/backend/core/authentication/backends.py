@@ -10,7 +10,6 @@ from lasuite.oidc_login.backends import (
     OIDCAuthenticationBackend as LaSuiteOIDCAuthenticationBackend,
 )
 
-from core.authentication.exceptions import UserCannotAccessApp
 from core.models import DuplicateEmailError
 
 logger = logging.getLogger(__name__)

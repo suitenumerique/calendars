@@ -2,6 +2,7 @@
 
 import logging
 import re
+from datetime import timezone as dt_timezone
 
 from django.core.signing import BadSignature, Signer
 from django.shortcuts import render
@@ -78,7 +79,7 @@ def _is_event_past(icalendar_data):
         if dt:
             # Make timezone-aware if naive (assume UTC)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=dt_timezone.utc)
             return dt < timezone.now()
 
     return False
@@ -88,7 +89,7 @@ def _is_event_past(icalendar_data):
 class RSVPView(View):
     """Handle RSVP responses from invitation email links."""
 
-    def get(self, request):  # noqa: PLR0911
+    def get(self, request):  # noqa: PLR0911  # pylint: disable=too-many-return-statements
         """Process an RSVP response."""
         token = request.GET.get("token", "")
         action = request.GET.get("action", "")

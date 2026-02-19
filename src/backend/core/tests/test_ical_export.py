@@ -11,7 +11,6 @@ from rest_framework.status import HTTP_200_OK, HTTP_404_NOT_FOUND, HTTP_502_BAD_
 from rest_framework.test import APIClient
 
 from core import factories
-from core.models import CalendarSubscriptionToken
 
 
 @pytest.mark.django_db

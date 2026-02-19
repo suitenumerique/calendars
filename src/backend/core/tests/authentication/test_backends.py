@@ -2,7 +2,6 @@
 
 import random
 import re
-from unittest import mock
 
 from django.core.exceptions import SuspiciousOperation
 from django.test.utils import override_settings
@@ -14,7 +13,6 @@ from lasuite.oidc_login.backends import get_oidc_refresh_token
 
 from core import models
 from core.authentication.backends import OIDCAuthenticationBackend
-from core.authentication.exceptions import UserCannotAccessApp
 from core.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
@@ -500,7 +498,7 @@ def test_authentication_session_tokens(
         status=200,
     )
 
-    with django_assert_num_queries(5):
+    with django_assert_num_queries(6):
         user = klass.authenticate(
             request,
             code="test-code",

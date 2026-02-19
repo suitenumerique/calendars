@@ -1126,7 +1126,7 @@ END:VCALENDAR`
     scheduleOutboxUrl: string | null
     scheduleInboxUrl: string | null
     calendarUserAddressSet: string[]
-    rawResponse?: any
+    rawResponse?: unknown
   }>> {
     if (!this._account?.principalUrl) {
       return { success: false, error: 'Not connected or principal URL not found' }

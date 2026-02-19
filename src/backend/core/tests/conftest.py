@@ -8,7 +8,6 @@ from django.db import connection
 
 import pytest
 import responses
-from cryptography.fernet import Fernet
 
 from core import factories
 from core.tests.utils.urls import reload_urls
@@ -19,7 +18,7 @@ VIA = [USER, TEAM]
 
 
 @pytest.fixture(autouse=True)
-def truncate_caldav_tables(django_db_setup, django_db_blocker):
+def truncate_caldav_tables(django_db_setup, django_db_blocker):  # pylint: disable=unused-argument
     """Fixture to truncate CalDAV server tables at the start of each test.
 
     CalDAV server tables are created by the CalDAV server container migrations, not Django.
