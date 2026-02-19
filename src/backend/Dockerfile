@@ -143,10 +143,6 @@ ARG CALENDARS_STATIC_ROOT=/data/static
 # Remove git, we don't need it in the production image
 RUN apk del git
 
-# Gunicorn
-RUN mkdir -p /usr/local/etc/gunicorn
-COPY docker/files/usr/local/etc/gunicorn/calendars.py /usr/local/etc/gunicorn/calendars.py
-
 # Un-privileged user running the application
 ARG DOCKER_USER
 USER ${DOCKER_USER}

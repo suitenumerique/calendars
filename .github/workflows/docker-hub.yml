@@ -45,13 +45,13 @@ jobs:
         name: Run trivy scan
         uses: numerique-gouv/action-trivy-cache@main
         with:
-          docker-build-args: '--target backend-production -f Dockerfile'
+          docker-build-args: '--target backend-production -f src/backend/Dockerfile src/backend'
           docker-image-name: 'docker.io/lasuite/calendars-backend:${{ github.sha }}'
       -
         name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./src/backend
           target: backend-production
           platforms: linux/amd64,linux/arm64
           build-args: DOCKER_USER=${{ env.DOCKER_USER }}:-1000
@@ -88,14 +88,13 @@ jobs:
         name: Run trivy scan
         uses: numerique-gouv/action-trivy-cache@main
         with:
-          docker-build-args: '-f src/frontend/Dockerfile --target frontend-production'
+          docker-build-args: '-f src/frontend/Dockerfile --target frontend-production src/frontend'
           docker-image-name: 'docker.io/lasuite/calendars-frontend:${{ github.sha }}'
       -
         name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./src/frontend/Dockerfile
+          context: ./src/frontend
           target: frontend-production
           platforms: linux/amd64,linux/arm64
           build-args: DOCKER_USER=${{ env.DOCKER_USER }}:-1000
