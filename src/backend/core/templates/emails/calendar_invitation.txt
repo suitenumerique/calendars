@@ -1,20 +1,23 @@
-{{ organizer_display }} vous invite à un événement
+{{ content.body }}
 
-Détails de l'événement
+{{ summary }}
 ======================
 
-Titre : {{ event.summary }}
-Quand : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
-{% if event.location %}Lieu : {{ event.location }}
-{% endif %}{% if event.url %}Visio : {{ event.url }}
-{% endif %}Organisateur : {{ organizer_display }} <{{ event.organizer_email }}>
+{{ labels.when }} : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
+{% if event.location %}{{ labels.location }} : {{ event.location }}
+{% endif %}{% if event.url %}{{ labels.videoConference }} : {{ event.url }}
+{% endif %}{{ labels.organizer }} : {{ organizer_display }} <{{ event.organizer_email }}>
 
 {% if event.description %}
-Description :
+{{ labels.description }} :
 {{ event.description }}
 {% endif %}
 
-Pour répondre à cette invitation, veuillez ouvrir le fichier .ics en pièce jointe avec votre application de calendrier ou répondre directement depuis votre client de messagerie.
+{% if rsvp_accept_url %}{{ actions.accept }} : {{ rsvp_accept_url }}
+{{ actions.maybe }} : {{ rsvp_tentative_url }}
+{{ actions.decline }} : {{ rsvp_decline_url }}
+
+{% endif %}{{ instructions }}
 
 ---
-Cette invitation a été envoyée via {{ app_name }}
+{{ footer }}

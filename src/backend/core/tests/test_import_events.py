@@ -276,7 +276,7 @@ def _make_sabredav_response(  # noqa: PLR0913  # pylint: disable=too-many-argume
 class TestICSImportService:
     """Unit tests for ICSImportService with mocked HTTP call to SabreDAV."""
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_single_event(self, mock_post):
         """Importing a single event should succeed."""
         mock_post.return_value = _make_sabredav_response(
@@ -299,7 +299,7 @@ class TestICSImportService:
         call_kwargs = mock_post.call_args
         assert call_kwargs.kwargs["data"] == ICS_SINGLE_EVENT
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_multiple_events(self, mock_post):
         """Importing multiple events should forward all to SabreDAV."""
         mock_post.return_value = _make_sabredav_response(
@@ -319,7 +319,7 @@ class TestICSImportService:
         # Single HTTP call, not one per event
         mock_post.assert_called_once()
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_empty_ics(self, mock_post):
         """Importing an ICS with no events should return zero counts."""
         mock_post.return_value = _make_sabredav_response(
@@ -337,7 +337,7 @@ class TestICSImportService:
         assert result.skipped_count == 0
         assert not result.errors
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_invalid_ics(self, mock_post):
         """Importing invalid ICS data should return an error from SabreDAV."""
         mock_post.return_value = _make_sabredav_response(
@@ -354,7 +354,7 @@ class TestICSImportService:
         assert result.imported_count == 0
         assert len(result.errors) >= 1
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_with_timezone(self, mock_post):
         """Events with timezones should be forwarded to SabreDAV."""
         mock_post.return_value = _make_sabredav_response(
@@ -375,7 +375,7 @@ class TestICSImportService:
         assert b"VTIMEZONE" in call_kwargs.kwargs["data"]
         assert b"Europe/Paris" in call_kwargs.kwargs["data"]
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_partial_failure(self, mock_post):
         """When some events fail, SabreDAV reports partial success."""
         mock_post.return_value = _make_sabredav_response(
@@ -404,7 +404,7 @@ class TestICSImportService:
         # Only event name is exposed, not raw error details
         assert result.errors[0] == "Afternoon review"
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_all_day_event(self, mock_post):
         """All-day events should be forwarded to SabreDAV."""
         mock_post.return_value = _make_sabredav_response(
@@ -420,7 +420,7 @@ class TestICSImportService:
         assert result.total_events == 1
         assert result.imported_count == 1
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_valarm_without_action(self, mock_post):
         """VALARM without ACTION is handled by SabreDAV plugin repair."""
         mock_post.return_value = _make_sabredav_response(
@@ -436,7 +436,7 @@ class TestICSImportService:
         assert result.total_events == 1
         assert result.imported_count == 1
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_recurring_with_exception(self, mock_post):
         """Recurring event + modified occurrence handled by SabreDAV splitter."""
         mock_post.return_value = _make_sabredav_response(
@@ -453,7 +453,7 @@ class TestICSImportService:
         assert result.total_events == 1
         assert result.imported_count == 1
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_event_missing_dtstart(self, mock_post):
         """Events without DTSTART handling is delegated to SabreDAV."""
         mock_post.return_value = _make_sabredav_response(
@@ -480,7 +480,7 @@ class TestICSImportService:
         assert result.skipped_count == 1
         assert result.errors[0] == "Missing start"
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_passes_calendar_path(self, mock_post):
         """The import URL should include the caldav_path."""
         mock_post.return_value = _make_sabredav_response(
@@ -498,7 +498,7 @@ class TestICSImportService:
         assert caldav_path in url
         assert "?import" in url
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_sends_auth_headers(self, mock_post):
         """The import request must include all required auth headers."""
         mock_post.return_value = _make_sabredav_response(
@@ -518,7 +518,7 @@ class TestICSImportService:
         assert headers["X-Calendars-Import"] == settings.CALDAV_OUTBOUND_API_KEY
         assert headers["Content-Type"] == "text/calendar"
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_duplicates_not_treated_as_errors(self, mock_post):
         """Duplicate events should be counted separately, not as errors."""
         mock_post.return_value = _make_sabredav_response(
@@ -541,7 +541,7 @@ class TestICSImportService:
         assert result.skipped_count == 0
         assert not result.errors
 
-    @patch("core.services.import_service.requests.post")
+    @patch("core.services.caldav_service.requests.request")
     def test_import_network_failure(self, mock_post):
         """Network failures should return a graceful error."""
         mock_post.side_effect = req.ConnectionError("Connection refused")

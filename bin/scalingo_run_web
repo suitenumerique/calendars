@@ -4,8 +4,8 @@
 source bin/export_pg_vars.sh
 
 # Start PHP-FPM for SabreDAV (CalDAV server)
-PHP_INI_SCAN_DIR=/app/.php/etc/php/8.3/cli/conf.d \
-  .php/usr/sbin/php-fpm8.3 \
+.php/usr/sbin/php-fpm8.3 \
+  -n -c /app/.php/php.ini \
   --fpm-config /app/sabredav/php-fpm.conf \
   --nodaemonize &
 

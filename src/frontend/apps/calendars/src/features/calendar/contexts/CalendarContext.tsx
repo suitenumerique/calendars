@@ -8,6 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { CalDavService } from "../services/dav/CalDavService";
 import { EventCalendarAdapter } from "../services/dav/EventCalendarAdapter";
 import { caldavServerUrl, headers, fetchOptions } from "../utils/DavClient";
@@ -17,6 +18,10 @@ import type {
 } from "../services/dav/types/caldav-service";
 import type { CalendarApi } from "../components/scheduler/types";
 import { createCalendarApi } from "../api";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 
 const HIDDEN_CALENDARS_KEY = "calendar-hidden-urls";
 
@@ -97,10 +102,13 @@ interface CalendarContextProviderProps {
 export const CalendarContextProvider = ({
   children,
 }: CalendarContextProviderProps) => {
+  const { t } = useTranslation();
   const calendarRef = useRef<CalendarApi | null>(null);
   const caldavService = useMemo(() => new CalDavService(), []);
   const adapter = useMemo(() => new EventCalendarAdapter(), []);
   const [davCalendars, setDavCalendars] = useState<CalDavCalendar[]>([]);
+  const davCalendarsRef = useRef<CalDavCalendar[]>([]);
+  davCalendarsRef.current = davCalendars;
   const [visibleCalendarUrls, setVisibleCalendarUrls] = useState<Set<string>>(
     new Set(),
   );
@@ -139,17 +147,27 @@ export const CalendarContextProvider = ({
         );
       } else {
         console.error("Error fetching calendars:", result.error);
+        addToast(
+          <ToasterItem type="error" closeButton>
+            {t("calendar.error.fetchCalendars")}
+          </ToasterItem>,
+        );
         setDavCalendars([]);
         setVisibleCalendarUrls(new Set());
       }
     } catch (error) {
       console.error("Error loading calendars:", error);
+      addToast(
+        <ToasterItem type="error" closeButton>
+          {t("calendar.error.fetchCalendars")}
+        </ToasterItem>,
+      );
       setDavCalendars([]);
       setVisibleCalendarUrls(new Set());
     } finally {
       setIsLoading(false);
     }
-  }, [caldavService]);
+  }, [caldavService, t]);
 
   const toggleCalendarVisibility = useCallback((calendarUrl: string) => {
     setVisibleCalendarUrls((prev) => {
@@ -160,12 +178,13 @@ export const CalendarContextProvider = ({
         newVisible.add(calendarUrl);
       }
       // Persist: store the hidden set (all known URLs minus visible)
-      const allUrls = davCalendars.map((cal) => cal.url);
+      // Use ref to avoid stale closure over davCalendars
+      const allUrls = davCalendarsRef.current.map((cal) => cal.url);
       const newHidden = new Set(allUrls.filter((url) => !newVisible.has(url)));
       saveHiddenUrls(newHidden);
       return newVisible;
     });
-  }, [davCalendars]);
+  }, []);
 
   const createCalendar = useCallback(
     async (
@@ -319,11 +338,21 @@ export const CalendarContextProvider = ({
           setIsLoading(false);
         } else if (isMounted) {
           console.error("Failed to connect to CalDAV:", result.error);
+          addToast(
+            <ToasterItem type="error" closeButton>
+              {t("calendar.error.connection")}
+            </ToasterItem>,
+          );
           setIsLoading(false);
         }
       } catch (error) {
         if (isMounted) {
           console.error("Error connecting to CalDAV:", error);
+          addToast(
+            <ToasterItem type="error" closeButton>
+              {t("calendar.error.connection")}
+            </ToasterItem>,
+          );
           setIsLoading(false);
         }
       }

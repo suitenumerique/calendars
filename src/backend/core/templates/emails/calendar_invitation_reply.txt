@@ -1,14 +1,13 @@
-{{ attendee_display }} a répondu à votre événement : {{ event.summary }}
+{{ content.body }}
 
-Détails de l'événement
+{{ summary }}
 ======================
 
-Titre : {{ event.summary }}
-Quand : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
-{% if event.location %}Lieu : {{ event.location }}
-{% endif %}{% if event.url %}Visio : {{ event.url }}
+{{ labels.when }} : {{ start_date }} {{ time_str }}{% if start_date != end_date %} - {{ end_date }}{% endif %}
+{% if event.location %}{{ labels.location }} : {{ event.location }}
+{% endif %}{% if event.url %}{{ labels.videoConference }} : {{ event.url }}
 {% endif %}
-La réponse du participant a été enregistrée dans le fichier .ics en pièce jointe.
+{{ instructions }}
 
 ---
-Cette notification a été envoyée via {{ app_name }}
+{{ footer }}

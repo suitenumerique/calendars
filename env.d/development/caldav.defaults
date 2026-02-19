@@ -3,7 +3,7 @@ PGPORT=5432
 PGDATABASE=calendars
 PGUSER=pgroot
 PGPASSWORD=pass
-CALENDARS_BASE_URI=/api/v1.0/caldav/
+CALDAV_BASE_URI=/api/v1.0/caldav/
 CALDAV_INBOUND_API_KEY=changeme-inbound-in-production
 CALDAV_OUTBOUND_API_KEY=changeme-outbound-in-production
 # Default callback URL for sending scheduling notifications (emails)

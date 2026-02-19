@@ -9,11 +9,13 @@ import responses
 from rest_framework.status import (
     HTTP_200_OK,
     HTTP_207_MULTI_STATUS,
+    HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
 )
 from rest_framework.test import APIClient
 
 from core import factories
+from core.services.caldav_service import validate_caldav_proxy_path
 
 
 @pytest.mark.django_db
@@ -305,3 +307,48 @@ class TestCalDAVProxy:
         assert response.status_code == HTTP_200_OK
         assert "Access-Control-Allow-Methods" in response
         assert "PROPFIND" in response["Access-Control-Allow-Methods"]
+
+    def test_proxy_rejects_path_traversal(self):
+        """Test that proxy rejects paths with directory traversal."""
+        user = factories.UserFactory(email="test@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        response = client.generic(
+            "PROPFIND", "/api/v1.0/caldav/calendars/../../etc/passwd"
+        )
+        assert response.status_code == HTTP_400_BAD_REQUEST
+
+    def test_proxy_rejects_non_caldav_path(self):
+        """Test that proxy rejects paths outside allowed prefixes."""
+        user = factories.UserFactory(email="test@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        response = client.generic("PROPFIND", "/api/v1.0/caldav/etc/passwd")
+        assert response.status_code == HTTP_400_BAD_REQUEST
+
+
+class TestValidateCaldavProxyPath:
+    """Tests for validate_caldav_proxy_path utility."""
+
+    def test_empty_path_is_valid(self):
+        assert validate_caldav_proxy_path("") is True
+
+    def test_calendars_path_is_valid(self):
+        assert validate_caldav_proxy_path("calendars/user@ex.com/uuid/") is True
+
+    def test_principals_path_is_valid(self):
+        assert validate_caldav_proxy_path("principals/user@ex.com/") is True
+
+    def test_traversal_is_rejected(self):
+        assert validate_caldav_proxy_path("calendars/../../etc/passwd") is False
+
+    def test_null_byte_is_rejected(self):
+        assert validate_caldav_proxy_path("calendars/user\x00/") is False
+
+    def test_unknown_prefix_is_rejected(self):
+        assert validate_caldav_proxy_path("etc/passwd") is False
+
+    def test_leading_slash_calendars_is_valid(self):
+        assert validate_caldav_proxy_path("/calendars/user@ex.com/uuid/") is True

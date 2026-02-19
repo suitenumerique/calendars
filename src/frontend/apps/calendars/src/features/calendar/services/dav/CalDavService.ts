@@ -13,6 +13,7 @@ import {
   convertIcsTimezone,
   generateIcsCalendar,
   type IcsCalendar,
+  type IcsDateObject,
   type IcsEvent,
 } from 'ts-ics'
 import {
@@ -335,7 +336,10 @@ export class CalDavService {
   }
 
   /**
-   * Add EXDATE to a recurring event to exclude specific occurrences
+   * Add EXDATE to a recurring event to exclude specific occurrences.
+   *
+   * Uses ts-ics to parse and regenerate the ICS, ensuring correct
+   * EXDATE formatting (DATE vs DATE-TIME, timezone handling).
    */
   async addExdateToEvent(
     eventUrl: string,
@@ -357,111 +361,34 @@ export class CalDavService {
         throw new Error(`Failed to fetch event: ${fetchResponse.status}`)
       }
 
-      let icsText = await fetchResponse.text()
+      const icsText = await fetchResponse.text()
 
-      // Extract DTSTART format from the VEVENT block (not VTIMEZONE)
-      // Match DTSTART that comes after BEGIN:VEVENT
-      const veventMatch = icsText.match(/BEGIN:VEVENT[\s\S]*?DTSTART(;[^\r\n]*)?:([^\r\n]+)/)
-      let exdateLine = ''
-
-      if (veventMatch) {
-        const dtstartParams = veventMatch[1] || ''
-        const dtstartValue = veventMatch[2]
-
-        // Check if it's a DATE-only value (YYYYMMDD format, 8 chars)
-        const isDateOnly = dtstartValue.trim().length === 8
-
-        // Format the EXDATE to match DTSTART format
-        const pad = (n: number) => n.toString().padStart(2, '0')
-
-        if (isDateOnly) {
-          // DATE format: YYYYMMDD
-          const year = exdateToAdd.getFullYear()
-          const month = pad(exdateToAdd.getMonth() + 1)
-          const day = pad(exdateToAdd.getDate())
-          const formattedDate = `${year}${month}${day}`
-          exdateLine = `EXDATE${dtstartParams}:${formattedDate}`
-        } else {
-          // DATE-TIME format
-          const pad = (n: number) => n.toString().padStart(2, '0')
-
-          // Extract time from DTSTART value (format: YYYYMMDDTHHMMSS or YYYYMMDDTHHMMSSZ)
-          const timeMatch = dtstartValue.match(/T(\d{2})(\d{2})(\d{2})/)
-          const originalHours = timeMatch ? timeMatch[1] : '00'
-          const originalMinutes = timeMatch ? timeMatch[2] : '00'
-          const originalSeconds = timeMatch ? timeMatch[3] : '00'
-
-          // If DTSTART has TZID, use local time in that timezone
-          // Otherwise use UTC with Z suffix
-          if (dtstartParams.includes('TZID')) {
-            // Use the DATE from exdateToAdd but TIME from original DTSTART
-            const year = exdateToAdd.getFullYear()
-            const month = pad(exdateToAdd.getMonth() + 1)
-            const day = pad(exdateToAdd.getDate())
-            const formattedDate = `${year}${month}${day}T${originalHours}${originalMinutes}${originalSeconds}`
-            exdateLine = `EXDATE${dtstartParams}:${formattedDate}`
-          } else {
-            // Use UTC time with Z suffix
-            const year = exdateToAdd.getUTCFullYear()
-            const month = pad(exdateToAdd.getUTCMonth() + 1)
-            const day = pad(exdateToAdd.getUTCDate())
-            const formattedDate = `${year}${month}${day}T${originalHours}${originalMinutes}${originalSeconds}Z`
-            exdateLine = `EXDATE${dtstartParams}:${formattedDate}`
-          }
-        }
-      } else {
-        // Fallback if DTSTART not found - use UTC DATE-TIME format
-        const pad = (n: number) => n.toString().padStart(2, '0')
-        const year = exdateToAdd.getUTCFullYear()
-        const month = pad(exdateToAdd.getUTCMonth() + 1)
-        const day = pad(exdateToAdd.getUTCDate())
-        const hours = pad(exdateToAdd.getUTCHours())
-        const minutes = pad(exdateToAdd.getUTCMinutes())
-        const seconds = pad(exdateToAdd.getUTCSeconds())
-        const formattedDate = `${year}${month}${day}T${hours}${minutes}${seconds}Z`
-        exdateLine = `EXDATE:${formattedDate}`
+      // Parse ICS into structured object
+      const calendar = convertIcsCalendar(undefined, icsText)
+      const event = calendar.events?.[0]
+      if (!event) {
+        throw new Error('No event found in ICS data')
       }
 
-      // Find the RRULE line in the VEVENT block and add EXDATE after it
-      const lines = icsText.split('\n')
-      const newLines: string[] = []
-      let exdateAdded = false
-      let inVEvent = false
-
-      // Extract just the date value from our exdateLine for appending
-      const exdateValueMatch = exdateLine.match(/:([^\r\n]+)$/)
-      const exdateValue = exdateValueMatch ? exdateValueMatch[1] : ''
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim()
-
-        // Track if we're inside a VEVENT block
-        if (line === 'BEGIN:VEVENT') {
-          inVEvent = true
-          newLines.push(lines[i])
-        } else if (line === 'END:VEVENT') {
-          inVEvent = false
-          newLines.push(lines[i])
-        }
-        // If EXDATE already exists in VEVENT, append to it
-        else if (inVEvent && !exdateAdded && (line.startsWith('EXDATE:') || line.startsWith('EXDATE;'))) {
-          newLines.push(`${lines[i]},${exdateValue}`)
-          exdateAdded = true
-        }
-        // Only add EXDATE after RRULE if we're inside VEVENT and no EXDATE exists yet
-        else if (inVEvent && !exdateAdded && line.startsWith('RRULE:')) {
-          newLines.push(lines[i])
-          newLines.push(exdateLine)
-          exdateAdded = true
-        }
-        else {
-          newLines.push(lines[i])
-        }
+      // Build EXDATE entry matching DTSTART format (DATE vs DATE-TIME, timezone)
+      const newExdate: IcsDateObject = {
+        date: exdateToAdd,
+        type: event.start.type,
+        local: event.start.local ? {
+          date: exdateToAdd,
+          timezone: event.start.local.timezone,
+          tzoffset: event.start.local.tzoffset,
+        } : undefined,
       }
 
-      icsText = newLines.join('\n')
+      // Append to existing exception dates
+      event.exceptionDates = [...(event.exceptionDates ?? []), newExdate]
 
-      // Update the event with modified ICS
+      // Regenerate ICS with the updated event
+      this.validateTimezones(calendar)
+      const updatedIcsText = generateIcsCalendar(calendar)
+
+      // PUT the updated event back
       const updateResponse = await fetch(eventUrl, {
         method: 'PUT',
         headers: {
@@ -469,7 +396,7 @@ export class CalDavService {
           ...(etag ? { 'If-Match': etag } : {}),
           ...this._account?.headers,
         },
-        body: icsText,
+        body: updatedIcsText,
         ...this._account?.fetchOptions,
       })
 

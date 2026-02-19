@@ -66,3 +66,24 @@ class TestCalDAVClient:
         assert caldav_path is not None
         assert isinstance(caldav_path, str)
         assert "calendars/" in caldav_path
+
+    @pytest.mark.skipif(
+        not settings.CALDAV_URL,
+        reason="CalDAV server URL not configured",
+    )
+    def test_create_calendar_with_color_persists(self):
+        """Test that creating a calendar with a color saves it in CalDAV."""
+        user = factories.UserFactory(email="color-test@example.com")
+        service = CalendarService()
+        color = "#e74c3c"
+
+        # Create a calendar with a specific color
+        caldav_path = service.create_calendar(
+            user, name="Red Calendar", color=color
+        )
+
+        # Fetch the calendar info and verify the color was persisted
+        info = service.caldav.get_calendar_info(user, caldav_path)
+        assert info is not None
+        assert info["color"] == color
+        assert info["name"] == "Red Calendar"

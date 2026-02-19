@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Événement annulé</title>
+    <title>{{ content.title }}</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -89,50 +89,50 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Événement annulé</h1>
+            <h1>{{ content.heading }}</h1>
         </div>
 
-        <span class="cancel-badge">ANNULÉ</span>
+        <span class="cancel-badge">{{ content.badge }}</span>
 
-        <p>{{ organizer_display }} a annulé l'événement suivant</p>
+        <p>{{ content.body }}</p>
 
-        <div class="event-title">{{ event.summary }}</div>
+        <div class="event-title">{{ summary }}</div>
 
         <div class="event-details">
             <table>
                 <tr>
-                    <td>Était prévu le</td>
+                    <td>{{ labels.wasScheduledFor }}</td>
                     <td>
                         {{ start_date }}<br>
                         <strong>{{ time_str }}</strong>
-                        {% if start_date != end_date %}<br>jusqu'au {{ end_date }}{% endif %}
+                        {% if start_date != end_date %}<br>{{ labels.until }} {{ end_date }}{% endif %}
                     </td>
                 </tr>
                 {% if event.location %}
                 <tr>
-                    <td>Lieu</td>
+                    <td>{{ labels.location }}</td>
                     <td>{{ event.location }}</td>
                 </tr>
                 {% endif %}
                 {% if event.url %}
                 <tr>
-                    <td>Visio</td>
+                    <td>{{ labels.videoConference }}</td>
                     <td>{{ event.url }}</td>
                 </tr>
                 {% endif %}
                 <tr>
-                    <td>Organisateur</td>
+                    <td>{{ labels.organizer }}</td>
                     <td>{{ organizer_display }} &lt;{{ event.organizer_email }}&gt;</td>
                 </tr>
             </table>
         </div>
 
         <div class="instructions">
-            <p>Cet événement a été annulé. Ouvrez le fichier .ics en pièce jointe pour le supprimer de votre calendrier.</p>
+            <p>{{ instructions }}</p>
         </div>
 
         <div class="footer">
-            <p>Cette notification a été envoyée via {{ app_name }}</p>
+            <p>{{ footer }}</p>
         </div>
     </div>
 </body>

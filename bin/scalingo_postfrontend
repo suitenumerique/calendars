@@ -9,6 +9,8 @@ echo "-----> Running post-frontend script"
 mkdir -p build/
 mv src/frontend/apps/calendars/out build/frontend-out
 
+cp src/frontend/apps/calendars/src/features/i18n/translations.json translations.json
+
 mv src/backend/* ./
 mv src/nginx/* ./
 
@@ -21,31 +23,72 @@ PHP_PREFIX=".php"
 DEB_DIR="/tmp/php-debs"
 mkdir -p "$DEB_DIR" "$PHP_PREFIX"
 
-BASE_URL="http://security.ubuntu.com/ubuntu/pool/main/p/php8.3"
-VERSION="8.3.6-0ubuntu0.24.04.6"
+# Hardcoded Launchpad URLs for PHP 8.3.6-0maysync1 (Ubuntu Noble amd64)
+# Source: https://launchpad.net/ubuntu/noble/amd64/php8.3-fpm/8.3.6-0maysync1
+declare -A PHP_DEBS=(
+  [php8.3-cli]="http://launchpadlibrarian.net/724872605/php8.3-cli_8.3.6-0maysync1_amd64.deb"
+  [php8.3-fpm]="http://launchpadlibrarian.net/724872610/php8.3-fpm_8.3.6-0maysync1_amd64.deb"
+  [php8.3-common]="http://launchpadlibrarian.net/724872606/php8.3-common_8.3.6-0maysync1_amd64.deb"
+  [php8.3-opcache]="http://launchpadlibrarian.net/724872623/php8.3-opcache_8.3.6-0maysync1_amd64.deb"
+  [php8.3-readline]="http://launchpadlibrarian.net/724872627/php8.3-readline_8.3.6-0maysync1_amd64.deb"
+  [php8.3-pgsql]="http://launchpadlibrarian.net/724872624/php8.3-pgsql_8.3.6-0maysync1_amd64.deb"
+  [php8.3-xml]="http://launchpadlibrarian.net/724872633/php8.3-xml_8.3.6-0maysync1_amd64.deb"
+  [php8.3-mbstring]="http://launchpadlibrarian.net/724872617/php8.3-mbstring_8.3.6-0maysync1_amd64.deb"
+  [php8.3-curl]="http://launchpadlibrarian.net/724872607/php8.3-curl_8.3.6-0maysync1_amd64.deb"
+  [php-common]="http://launchpadlibrarian.net/710804987/php-common_93ubuntu2_all.deb"
+)
 
-for pkg in cli fpm common opcache readline pgsql xml mbstring curl; do
-  echo "       Downloading php8.3-${pkg}"
-  curl -fsSL -o "$DEB_DIR/php8.3-${pkg}.deb" \
-    "${BASE_URL}/php8.3-${pkg}_${VERSION}_amd64.deb"
+for pkg in "${!PHP_DEBS[@]}"; do
+  echo "       Downloading ${pkg}"
+  curl -fsSL -o "$DEB_DIR/${pkg}.deb" "${PHP_DEBS[$pkg]}"
 done
-curl -fsSL -o "$DEB_DIR/php-common.deb" \
-  "http://mirrors.kernel.org/ubuntu/pool/main/p/php-defaults/php-common_93ubuntu2_all.deb"
 
 for deb in "$DEB_DIR"/*.deb; do
   dpkg-deb -x "$deb" "$PHP_PREFIX"
 done
 
-# Create php wrapper
+# Detect PHP extension directory (e.g. .php/usr/lib/php/20230831)
+EXT_DIR_NAME="$(ls -1 "$PHP_PREFIX/usr/lib/php/" | grep '^20' | head -1)"
+echo "       Extension API dir: ${EXT_DIR_NAME}"
+echo "       Available .so files: $(ls "$PHP_PREFIX/usr/lib/php/$EXT_DIR_NAME/" 2>/dev/null | tr '\n' ' ')"
+
+# Build a single php.ini that sets extension_dir (relative to /app at runtime)
+# then loads every shared extension present.
+# Conf.d symlinks from debs are broken (absolute paths to /etc/php/...),
+# so we bypass them entirely with a self-contained ini.
+PHP_INI="$PHP_PREFIX/php.ini"
+{
+  echo "; Auto-generated PHP config"
+  echo "extension_dir = /app/.php/usr/lib/php/${EXT_DIR_NAME}"
+  echo ""
+  for so in "$PHP_PREFIX/usr/lib/php/$EXT_DIR_NAME"/*.so; do
+    [ -f "$so" ] || continue
+    name="$(basename "$so")"
+    if [ "$name" = "opcache.so" ]; then
+      echo "zend_extension = ${name}"
+    else
+      echo "extension = ${name}"
+    fi
+  done
+} > "$PHP_INI"
+echo "       Generated php.ini:"
+cat "$PHP_INI" | sed 's/^/         /'
+
+# Create a build-time copy with the current path (not /app)
+BUILD_INI="/tmp/php-build.ini"
+sed "s|/app/.php|$PWD/.php|" "$PHP_INI" > "$BUILD_INI"
+
+# Create php wrapper (uses /app php.ini at runtime)
 cat > bin/php << 'WRAPPER'
 #!/bin/bash
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PHP_INI_SCAN_DIR="$DIR/.php/etc/php/8.3/cli/conf.d" \
-  exec "$DIR/.php/usr/bin/php8.3" "$@"
+exec "$DIR/.php/usr/bin/php8.3" -c "$DIR/.php/php.ini" -n "$@"
 WRAPPER
 chmod +x bin/php
 
-echo "-----> PHP version: $(bin/php -v | head -1)"
+# For build-time, verify with the build-time ini
+echo "-----> PHP version: $("$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" -v | head -1)"
+echo "-----> PHP modules: $("$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" -m | tr '\n' ' ')"
 
 # Download Composer and install SabreDAV dependencies
 echo "-----> Installing SabreDAV dependencies"
@@ -53,6 +96,6 @@ curl -fsSL -o bin/composer.phar \
   https://getcomposer.org/download/latest-stable/composer.phar
 cp -r docker/sabredav sabredav
 cd sabredav
-../bin/php ../bin/composer.phar install \
+"../$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" ../bin/composer.phar install \
   --no-dev --optimize-autoloader --no-interaction
 cd ..

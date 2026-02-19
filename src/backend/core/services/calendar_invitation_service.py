@@ -16,28 +16,14 @@ from datetime import timezone as dt_timezone
 from email import encoders
 from email.mime.base import MIMEBase
 from typing import Optional
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.core.signing import Signer
 from django.template.loader import render_to_string
 
-# French month and day names for date formatting
-FRENCH_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-FRENCH_MONTHS = [
-    "",
-    "janvier",
-    "février",
-    "mars",
-    "avril",
-    "mai",
-    "juin",
-    "juillet",
-    "août",
-    "septembre",
-    "octobre",
-    "novembre",
-    "décembre",
-]
+from core.services.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +187,7 @@ class ICalendarParser:
 
             # Extract basic properties from VEVENT block
             uid = cls.extract_property(vevent_block, "UID")
-            summary = cls.extract_property(vevent_block, "SUMMARY") or "(Sans titre)"
+            summary = cls.extract_property(vevent_block, "SUMMARY") or ""
             description = cls.extract_property(vevent_block, "DESCRIPTION")
             location = cls.extract_property(vevent_block, "LOCATION")
             url = cls.extract_property(vevent_block, "URL")
@@ -338,22 +324,27 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             return False
 
         try:
+            # Resolve language for the recipient
+            lang = TranslationService.resolve_language(email=recipient)
+            t = TranslationService.t
+            summary = event.summary or t("email.noTitle", lang)
+
             # Determine email type and get appropriate subject/content
             if method == self.METHOD_CANCEL:
-                subject = self._get_cancel_subject(event)
+                subject = t("email.subject.cancel", lang, summary=summary)
                 template_prefix = "calendar_invitation_cancel"
             elif method == self.METHOD_REPLY:
-                subject = self._get_reply_subject(event)
+                subject = t("email.subject.reply", lang, summary=summary)
                 template_prefix = "calendar_invitation_reply"
             elif event.sequence > 0:
-                subject = self._get_update_subject(event)
+                subject = t("email.subject.update", lang, summary=summary)
                 template_prefix = "calendar_invitation_update"
             else:
-                subject = self._get_invitation_subject(event)
+                subject = t("email.subject.invitation", lang, summary=summary)
                 template_prefix = "calendar_invitation"
 
             # Build context for templates
-            context = self._build_template_context(event, method)
+            context = self._build_template_context(event, method, lang)
 
             # Render email bodies
             text_body = render_to_string(f"emails/{template_prefix}.txt", context)
@@ -380,52 +371,54 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             )
             return False
 
-    def _get_invitation_subject(self, event: EventDetails) -> str:
-        """Generate subject line for new invitation."""
-        return f"Invitation : {event.summary}"
-
-    def _get_update_subject(self, event: EventDetails) -> str:
-        """Generate subject line for event update."""
-        return f"Invitation modifiée : {event.summary}"
-
-    def _get_cancel_subject(self, event: EventDetails) -> str:
-        """Generate subject line for cancellation."""
-        return f"Annulé : {event.summary}"
-
-    def _get_reply_subject(self, event: EventDetails) -> str:
-        """Generate subject line for attendee reply."""
-        return f"Réponse : {event.summary}"
-
-    def _format_date_french(self, dt: datetime) -> str:
-        """Format a datetime in French (e.g., 'jeudi 23 janvier 2026')."""
-        day_name = FRENCH_DAYS[dt.weekday()]
-        month_name = FRENCH_MONTHS[dt.month]
-        return f"{day_name} {dt.day} {month_name} {dt.year}"
-
-    def _build_template_context(self, event: EventDetails, method: str) -> dict:
+    def _build_template_context(  # pylint: disable=too-many-locals
+        self, event: EventDetails, method: str, lang: str = "fr"
+    ) -> dict:
         """Build context dictionary for email templates."""
-        # Format dates for display in French
+        t = TranslationService.t
+        summary = event.summary or t("email.noTitle", lang)
+
+        # Format dates for display
         if event.is_all_day:
-            start_str = self._format_date_french(event.dtstart)
+            start_str = TranslationService.format_date(event.dtstart, lang)
             end_str = (
-                self._format_date_french(event.dtend) if event.dtend else start_str
+                TranslationService.format_date(event.dtend, lang)
+                if event.dtend
+                else start_str
             )
-            time_str = "Toute la journée"
+            time_str = t("email.allDay", lang)
         else:
             time_format = "%H:%M"
-            start_str = self._format_date_french(event.dtstart)
+            start_str = TranslationService.format_date(event.dtstart, lang)
             start_time = event.dtstart.strftime(time_format)
             end_time = event.dtend.strftime(time_format) if event.dtend else ""
             end_str = (
-                self._format_date_french(event.dtend) if event.dtend else start_str
+                TranslationService.format_date(event.dtend, lang)
+                if event.dtend
+                else start_str
             )
             time_str = f"{start_time} - {end_time}" if end_time else start_time
 
-        return {
+        organizer_display = event.organizer_name or event.organizer_email
+        attendee_display = event.attendee_name or event.attendee_email
+
+        # Determine email type key for content lookups
+        if method == self.METHOD_CANCEL:
+            type_key = "cancel"
+        elif method == self.METHOD_REPLY:
+            type_key = "reply"
+        elif event.sequence > 0:
+            type_key = "update"
+        else:
+            type_key = "invitation"
+
+        context = {
             "event": event,
+            "summary": summary,
             "method": method,
-            "organizer_display": event.organizer_name or event.organizer_email,
-            "attendee_display": event.attendee_name or event.attendee_email,
+            "lang": lang,
+            "organizer_display": organizer_display,
+            "attendee_display": attendee_display,
             "start_date": start_str,
             "end_date": end_str,
             "time_str": time_str,
@@ -433,28 +426,100 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             "is_cancel": method == self.METHOD_CANCEL,
             "app_name": getattr(settings, "APP_NAME", "Calendrier"),
             "app_url": getattr(settings, "APP_URL", ""),
+            # Translated content blocks
+            "content": {
+                "title": t(f"email.{type_key}.title", lang),
+                "heading": t(f"email.{type_key}.heading", lang),
+                "body": t(
+                    f"email.{type_key}.body",
+                    lang,
+                    organizer=organizer_display,
+                    attendee=attendee_display,
+                ),
+                "badge": t(f"email.{type_key}.badge", lang),
+            },
+            "labels": {
+                "when": t("email.labels.when", lang),
+                "until": t("email.labels.until", lang),
+                "location": t("email.labels.location", lang),
+                "videoConference": t("email.labels.videoConference", lang),
+                "organizer": t("email.labels.organizer", lang),
+                "attendee": t("email.labels.attendee", lang),
+                "description": t("email.labels.description", lang),
+                "wasScheduledFor": t("email.labels.wasScheduledFor", lang),
+            },
+            "actions": {
+                "accept": t("email.actions.accept", lang),
+                "maybe": t("email.actions.maybe", lang),
+                "decline": t("email.actions.decline", lang),
+            },
+            "instructions": t(f"email.instructions.{type_key}", lang),
+            "footer": t(
+                f"email.footer.{'invitation' if type_key == 'invitation' else 'notification'}",
+                lang,
+                appName=getattr(settings, "APP_NAME", "Calendrier"),
+            ),
         }
+
+        # Add RSVP links for REQUEST method (invitations and updates)
+        if method == self.METHOD_REQUEST:
+            signer = Signer(salt="rsvp")
+            # Strip mailto: prefix (case-insensitive) for shorter tokens
+            organizer = re.sub(
+                r"^mailto:", "", event.organizer_email, flags=re.IGNORECASE
+            )
+            token = signer.sign_object(
+                {
+                    "uid": event.uid,
+                    "email": event.attendee_email,
+                    "organizer": organizer,
+                }
+            )
+            app_url = getattr(settings, "APP_URL", "")
+            base = f"{app_url}/rsvp/"
+            for action in ("accept", "tentative", "decline"):
+                partstat = {
+                    "accept": "accepted",
+                    "tentative": "tentative",
+                    "decline": "declined",
+                }
+                context[f"rsvp_{action}_url"] = (
+                    f"{base}?{urlencode({'token': token, 'action': partstat[action]})}"
+                )
+
+        return context
 
     def _prepare_ics_attachment(self, icalendar_data: str, method: str) -> str:
         """
-        Prepare ICS content with correct METHOD for attachment.
+        Prepare ICS content for attachment.
 
-        The METHOD property must be in the VCALENDAR component, not VEVENT.
+        When CALENDAR_ITIP_ENABLED is True, sets the METHOD property so that
+        calendar clients show Accept/Decline buttons (standard iTIP flow).
+        When False (default), strips METHOD so the ICS is treated as a plain
+        calendar object — our own RSVP web links handle responses instead.
         """
-        # Check if METHOD is already present
-        if "METHOD:" not in icalendar_data.upper():
-            # Insert METHOD after VERSION
-            icalendar_data = re.sub(
-                r"(VERSION:2\.0\r?\n)",
-                rf"\1METHOD:{method}\r\n",
-                icalendar_data,
-                flags=re.IGNORECASE,
-            )
+        itip_enabled = getattr(settings, "CALENDAR_ITIP_ENABLED", False)
+
+        if itip_enabled:
+            if "METHOD:" not in icalendar_data.upper():
+                icalendar_data = re.sub(
+                    r"(VERSION:2\.0\r?\n)",
+                    rf"\1METHOD:{method}\r\n",
+                    icalendar_data,
+                    flags=re.IGNORECASE,
+                )
+            else:
+                icalendar_data = re.sub(
+                    r"METHOD:[^\r\n]+",
+                    f"METHOD:{method}",
+                    icalendar_data,
+                    flags=re.IGNORECASE,
+                )
         else:
-            # Update existing METHOD
+            # Strip any existing METHOD so clients treat it as a plain event
             icalendar_data = re.sub(
-                r"METHOD:[^\r\n]+",
-                f"METHOD:{method}",
+                r"METHOD:[^\r\n]+\r?\n",
+                "",
                 icalendar_data,
                 flags=re.IGNORECASE,
             )
@@ -503,13 +568,14 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             email.attach_alternative(html_body, "text/html")
 
             # Add ICS attachment with proper MIME type
-            # The Content-Type must include method parameter for calendar clients
             ics_attachment = MIMEBase("text", "calendar")
             ics_attachment.set_payload(ics_content.encode("utf-8"))
             encoders.encode_base64(ics_attachment)
-            ics_attachment.add_header(
-                "Content-Type", f"text/calendar; charset=utf-8; method={ics_method}"
-            )
+            itip_enabled = getattr(settings, "CALENDAR_ITIP_ENABLED", False)
+            content_type = "text/calendar; charset=utf-8"
+            if itip_enabled:
+                content_type += f"; method={ics_method}"
+            ics_attachment.add_header("Content-Type", content_type)
             ics_attachment.add_header(
                 "Content-Disposition", 'attachment; filename="invite.ics"'
             )

@@ -91,6 +91,10 @@
         "seconds_ago": "few seconds ago"
       },
       "calendar": {
+        "error": {
+          "connection": "Failed to connect to the calendar server. Please try again later.",
+          "fetchCalendars": "Failed to load calendars. Please try again later."
+        },
         "views": {
           "day": "Day",
           "week": "Week",
@@ -319,6 +323,108 @@
           "organizer": "Organizer",
           "viewProfile": "View profile",
           "cannotRemoveOrganizer": "Cannot remove organizer"
+        },
+        "weekdaysFull": {
+          "monday": "Monday",
+          "tuesday": "Tuesday",
+          "wednesday": "Wednesday",
+          "thursday": "Thursday",
+          "friday": "Friday",
+          "saturday": "Saturday",
+          "sunday": "Sunday"
+        }
+      },
+      "email": {
+        "subject": {
+          "invitation": "Invitation: {{summary}}",
+          "update": "Updated invitation: {{summary}}",
+          "cancel": "Cancelled: {{summary}}",
+          "reply": "Reply: {{summary}}"
+        },
+        "noTitle": "(No title)",
+        "allDay": "All day",
+        "invitation": {
+          "title": "Event invitation",
+          "heading": "Event invitation",
+          "body": "{{organizer}} invites you to an event"
+        },
+        "update": {
+          "title": "Event updated",
+          "heading": "Event updated",
+          "badge": "UPDATED",
+          "body": "{{organizer}} has updated an event you are invited to"
+        },
+        "cancel": {
+          "title": "Event cancelled",
+          "heading": "Event cancelled",
+          "badge": "CANCELLED",
+          "body": "{{organizer}} has cancelled the following event"
+        },
+        "reply": {
+          "title": "Event reply",
+          "heading": "Reply received",
+          "body": "{{attendee}} has replied to your event"
+        },
+        "labels": {
+          "when": "When",
+          "until": "until",
+          "location": "Location",
+          "videoConference": "Video conference",
+          "organizer": "Organizer",
+          "attendee": "Attendee",
+          "description": "Description",
+          "wasScheduledFor": "Was scheduled for"
+        },
+        "actions": {
+          "accept": "Accept",
+          "maybe": "Maybe",
+          "decline": "Decline"
+        },
+        "instructions": {
+          "invitation": "You can also open the attached .ics file with your calendar application.",
+          "update": "This event has been updated. You can also open the attached .ics file to update your calendar.",
+          "cancel": "This event has been cancelled. Open the attached .ics file to remove it from your calendar.",
+          "reply": "The attendee's reply has been recorded. Open the attached .ics file to update your calendar."
+        },
+        "footer": {
+          "invitation": "This invitation was sent via {{appName}}",
+          "notification": "This notification was sent via {{appName}}"
+        },
+        "replyTo": {
+          "body": "{{attendee}} has replied to your event: {{summary}}",
+          "details": "Event details",
+          "instruction": "The attendee's reply has been recorded in the attached .ics file."
+        },
+        "cancelDetails": {
+          "body": "{{organizer}} has cancelled the event: {{summary}}",
+          "details": "Cancelled event details",
+          "instruction": "This event has been cancelled. You can remove it from your calendar by opening the attached .ics file."
+        },
+        "updateDetails": {
+          "body": "{{organizer}} has updated the event",
+          "details": "Updated event details"
+        },
+        "invitationDetails": {
+          "body": "{{organizer}} invites you to an event",
+          "details": "Event details",
+          "respond": "Respond to this invitation:"
+        }
+      },
+      "rsvp": {
+        "accepted": "You have accepted the invitation",
+        "tentative": "You have replied \"maybe\" to the invitation",
+        "declined": "You have declined the invitation",
+        "responseSent": "Your response has been sent to the organizer.",
+        "error": {
+          "title": "Error",
+          "invalidLink": "Invalid link",
+          "invalidAction": "Invalid action.",
+          "invalidToken": "This link is invalid or has expired.",
+          "invalidPayload": "This link is invalid.",
+          "eventNotFound": "The event was not found. It may have been deleted.",
+          "eventPast": "This event has already passed.",
+          "notAttendee": "You are not listed as an attendee of this event.",
+          "updateFailed": "An error occurred while updating. Please try again."
         }
       }
     }
@@ -718,6 +824,10 @@
         "seconds_ago": "il y a quelques secondes"
       },
       "calendar": {
+        "error": {
+          "connection": "Impossible de se connecter au serveur de calendrier. Veuillez réessayer plus tard.",
+          "fetchCalendars": "Impossible de charger les calendriers. Veuillez réessayer plus tard."
+        },
         "views": {
           "day": "Jour",
           "week": "Semaine",
@@ -946,6 +1056,108 @@
           "organizer": "Organisateur",
           "viewProfile": "Voir le profil",
           "cannotRemoveOrganizer": "Impossible de retirer l'organisateur"
+        },
+        "weekdaysFull": {
+          "monday": "lundi",
+          "tuesday": "mardi",
+          "wednesday": "mercredi",
+          "thursday": "jeudi",
+          "friday": "vendredi",
+          "saturday": "samedi",
+          "sunday": "dimanche"
+        }
+      },
+      "email": {
+        "subject": {
+          "invitation": "Invitation : {{summary}}",
+          "update": "Invitation modifiée : {{summary}}",
+          "cancel": "Annulé : {{summary}}",
+          "reply": "Réponse : {{summary}}"
+        },
+        "noTitle": "(Sans titre)",
+        "allDay": "Toute la journée",
+        "invitation": {
+          "title": "Invitation à un événement",
+          "heading": "Invitation à un événement",
+          "body": "{{organizer}} vous invite à un événement"
+        },
+        "update": {
+          "title": "Événement modifié",
+          "heading": "Événement modifié",
+          "badge": "MODIFIÉ",
+          "body": "{{organizer}} a modifié un événement auquel vous êtes invité(e)"
+        },
+        "cancel": {
+          "title": "Événement annulé",
+          "heading": "Événement annulé",
+          "badge": "ANNULÉ",
+          "body": "{{organizer}} a annulé l'événement suivant"
+        },
+        "reply": {
+          "title": "Réponse à l'événement",
+          "heading": "Réponse reçue",
+          "body": "{{attendee}} a répondu à votre événement"
+        },
+        "labels": {
+          "when": "Quand",
+          "until": "jusqu'au",
+          "location": "Lieu",
+          "videoConference": "Visio",
+          "organizer": "Organisateur",
+          "attendee": "Participant",
+          "description": "Description",
+          "wasScheduledFor": "Était prévu le"
+        },
+        "actions": {
+          "accept": "Accepter",
+          "maybe": "Peut-être",
+          "decline": "Refuser"
+        },
+        "instructions": {
+          "invitation": "Vous pouvez aussi ouvrir le fichier .ics en pièce jointe avec votre application de calendrier.",
+          "update": "Cet événement a été modifié. Vous pouvez aussi ouvrir le fichier .ics en pièce jointe pour mettre à jour votre calendrier.",
+          "cancel": "Cet événement a été annulé. Ouvrez le fichier .ics en pièce jointe pour le supprimer de votre calendrier.",
+          "reply": "La réponse du participant a été enregistrée. Ouvrez le fichier .ics en pièce jointe pour mettre à jour votre calendrier."
+        },
+        "footer": {
+          "invitation": "Cette invitation a été envoyée via {{appName}}",
+          "notification": "Cette notification a été envoyée via {{appName}}"
+        },
+        "replyTo": {
+          "body": "{{attendee}} a répondu à votre événement : {{summary}}",
+          "details": "Détails de l'événement",
+          "instruction": "La réponse du participant a été enregistrée dans le fichier .ics en pièce jointe."
+        },
+        "cancelDetails": {
+          "body": "{{organizer}} a annulé l'événement : {{summary}}",
+          "details": "Détails de l'événement annulé",
+          "instruction": "Cet événement a été annulé. Vous pouvez le supprimer de votre calendrier en ouvrant le fichier .ics en pièce jointe."
+        },
+        "updateDetails": {
+          "body": "{{organizer}} a modifié l'événement",
+          "details": "Détails de l'événement mis à jour"
+        },
+        "invitationDetails": {
+          "body": "{{organizer}} vous invite à un événement",
+          "details": "Détails de l'événement",
+          "respond": "Répondre à cette invitation :"
+        }
+      },
+      "rsvp": {
+        "accepted": "Vous avez accepté l'invitation",
+        "tentative": "Vous avez répondu « peut-être » à l'invitation",
+        "declined": "Vous avez décliné l'invitation",
+        "responseSent": "Votre réponse a été envoyée à l'organisateur.",
+        "error": {
+          "title": "Erreur",
+          "invalidLink": "Lien invalide",
+          "invalidAction": "Action invalide.",
+          "invalidToken": "Ce lien est invalide ou a expiré.",
+          "invalidPayload": "Ce lien est invalide.",
+          "eventNotFound": "L'événement n'a pas été trouvé. Il a peut-être été supprimé.",
+          "eventPast": "Cet événement est déjà passé.",
+          "notAttendee": "Vous ne figurez pas parmi les participants de cet événement.",
+          "updateFailed": "Une erreur est survenue lors de la mise à jour. Veuillez réessayer."
         }
       }
     }
@@ -1092,6 +1304,10 @@
         "seconds_ago": "een paar seconden geleden"
       },
       "calendar": {
+        "error": {
+          "connection": "Kan geen verbinding maken met de kalenderserver. Probeer het later opnieuw.",
+          "fetchCalendars": "Kan kalenders niet laden. Probeer het later opnieuw."
+        },
         "views": {
           "day": "Dag",
           "week": "Week",
@@ -1320,6 +1536,108 @@
           "organizer": "Organisator",
           "viewProfile": "Profiel bekijken",
           "cannotRemoveOrganizer": "Kan organisator niet verwijderen"
+        },
+        "weekdaysFull": {
+          "monday": "maandag",
+          "tuesday": "dinsdag",
+          "wednesday": "woensdag",
+          "thursday": "donderdag",
+          "friday": "vrijdag",
+          "saturday": "zaterdag",
+          "sunday": "zondag"
+        }
+      },
+      "email": {
+        "subject": {
+          "invitation": "Uitnodiging: {{summary}}",
+          "update": "Bijgewerkte uitnodiging: {{summary}}",
+          "cancel": "Geannuleerd: {{summary}}",
+          "reply": "Antwoord: {{summary}}"
+        },
+        "noTitle": "(Geen titel)",
+        "allDay": "Hele dag",
+        "invitation": {
+          "title": "Uitnodiging voor evenement",
+          "heading": "Uitnodiging voor evenement",
+          "body": "{{organizer}} nodigt u uit voor een evenement"
+        },
+        "update": {
+          "title": "Evenement bijgewerkt",
+          "heading": "Evenement bijgewerkt",
+          "badge": "BIJGEWERKT",
+          "body": "{{organizer}} heeft een evenement bijgewerkt waarvoor u bent uitgenodigd"
+        },
+        "cancel": {
+          "title": "Evenement geannuleerd",
+          "heading": "Evenement geannuleerd",
+          "badge": "GEANNULEERD",
+          "body": "{{organizer}} heeft het volgende evenement geannuleerd"
+        },
+        "reply": {
+          "title": "Antwoord op evenement",
+          "heading": "Antwoord ontvangen",
+          "body": "{{attendee}} heeft gereageerd op uw evenement"
+        },
+        "labels": {
+          "when": "Wanneer",
+          "until": "tot",
+          "location": "Locatie",
+          "videoConference": "Videoconferentie",
+          "organizer": "Organisator",
+          "attendee": "Deelnemer",
+          "description": "Beschrijving",
+          "wasScheduledFor": "Was gepland op"
+        },
+        "actions": {
+          "accept": "Accepteren",
+          "maybe": "Misschien",
+          "decline": "Weigeren"
+        },
+        "instructions": {
+          "invitation": "U kunt ook het bijgevoegde .ics-bestand openen met uw agendatoepassing.",
+          "update": "Dit evenement is bijgewerkt. U kunt ook het bijgevoegde .ics-bestand openen om uw agenda bij te werken.",
+          "cancel": "Dit evenement is geannuleerd. Open het bijgevoegde .ics-bestand om het uit uw agenda te verwijderen.",
+          "reply": "Het antwoord van de deelnemer is geregistreerd. Open het bijgevoegde .ics-bestand om uw agenda bij te werken."
+        },
+        "footer": {
+          "invitation": "Deze uitnodiging is verzonden via {{appName}}",
+          "notification": "Deze melding is verzonden via {{appName}}"
+        },
+        "replyTo": {
+          "body": "{{attendee}} heeft gereageerd op uw evenement: {{summary}}",
+          "details": "Evenementdetails",
+          "instruction": "Het antwoord van de deelnemer is geregistreerd in het bijgevoegde .ics-bestand."
+        },
+        "cancelDetails": {
+          "body": "{{organizer}} heeft het evenement geannuleerd: {{summary}}",
+          "details": "Details van het geannuleerde evenement",
+          "instruction": "Dit evenement is geannuleerd. U kunt het uit uw agenda verwijderen door het bijgevoegde .ics-bestand te openen."
+        },
+        "updateDetails": {
+          "body": "{{organizer}} heeft het evenement bijgewerkt",
+          "details": "Bijgewerkte evenementdetails"
+        },
+        "invitationDetails": {
+          "body": "{{organizer}} nodigt u uit voor een evenement",
+          "details": "Evenementdetails",
+          "respond": "Reageer op deze uitnodiging:"
+        }
+      },
+      "rsvp": {
+        "accepted": "U heeft de uitnodiging geaccepteerd",
+        "tentative": "U heeft \"misschien\" geantwoord op de uitnodiging",
+        "declined": "U heeft de uitnodiging afgewezen",
+        "responseSent": "Uw antwoord is naar de organisator gestuurd.",
+        "error": {
+          "title": "Fout",
+          "invalidLink": "Ongeldige link",
+          "invalidAction": "Ongeldige actie.",
+          "invalidToken": "Deze link is ongeldig of verlopen.",
+          "invalidPayload": "Deze link is ongeldig.",
+          "eventNotFound": "Het evenement is niet gevonden. Het is mogelijk verwijderd.",
+          "eventPast": "Dit evenement is al voorbij.",
+          "notAttendee": "U staat niet vermeld als deelnemer van dit evenement.",
+          "updateFailed": "Er is een fout opgetreden bij het bijwerken. Probeer het opnieuw."
         }
       }
     }

@@ -5,7 +5,9 @@
  * Used by CalendarContext to initialize CalDavService.
  */
 
-export const caldavServerUrl = `${process.env.NEXT_PUBLIC_API_ORIGIN}/api/v1.0/caldav/`;
+import { getOrigin } from "@/features/api/utils";
+
+export const caldavServerUrl = `${getOrigin()}/api/v1.0/caldav/`;
 
 export const headers = {
   "Content-Type": "application/xml",

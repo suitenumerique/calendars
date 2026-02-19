@@ -9,6 +9,7 @@ from rest_framework.routers import DefaultRouter
 from core.api import viewsets
 from core.api.viewsets_caldav import CalDAVProxyView, CalDAVSchedulingCallbackView
 from core.api.viewsets_ical import ICalExportView
+from core.api.viewsets_rsvp import RSVPView
 from core.external_api import viewsets as external_api_viewsets
 
 # - Main endpoints
@@ -54,6 +55,9 @@ urlpatterns = [
         ICalExportView.as_view(),
         name="ical-export",
     ),
+    # RSVP endpoint (no authentication required)
+    # Signed token in query string acts as authentication
+    path("rsvp/", RSVPView.as_view(), name="rsvp"),
 ]
 
 
