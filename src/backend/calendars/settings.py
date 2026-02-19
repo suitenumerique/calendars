@@ -953,6 +953,7 @@ class Production(Base):
     SECURE_REDIRECT_EXEMPT = [
         "^__lbheartbeat__",
         "^__heartbeat__",
+        r"^api/v1\.0/caldav-scheduling-callback/",
     ]
 
     # Modern browsers require to have the `secure` attribute on cookies with `Samesite=none`

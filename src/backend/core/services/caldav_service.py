@@ -15,6 +15,9 @@ import requests
 
 import caldav as caldav_lib
 from caldav import DAVClient
+from caldav.elements.cdav import CalendarDescription
+from caldav.elements.dav import DisplayName
+from caldav.elements.ical import CalendarColor
 from caldav.lib.error import NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -200,18 +203,12 @@ class CalDAVClient:
             calendar = client.calendar(url=calendar_url)
             # Fetch properties
             props = calendar.get_properties(
-                [
-                    "{DAV:}displayname",
-                    "{http://apple.com/ns/ical/}calendar-color",
-                    "{urn:ietf:params:xml:ns:caldav}calendar-description",
-                ]
+                [DisplayName(), CalendarColor(), CalendarDescription()]
             )
 
-            name = props.get("{DAV:}displayname", "Calendar")
-            color = props.get("{http://apple.com/ns/ical/}calendar-color", "#3174ad")
-            description = props.get(
-                "{urn:ietf:params:xml:ns:caldav}calendar-description", ""
-            )
+            name = props.get(DisplayName.tag, "Calendar")
+            color = props.get(CalendarColor.tag, "#3174ad")
+            description = props.get(CalendarDescription.tag, "")
 
             # Clean up color (CalDAV may return with alpha channel like #RRGGBBAA)
             if color and len(color) == 9 and color.startswith("#"):
@@ -230,7 +227,9 @@ class CalDAVClient:
             logger.error("Failed to get calendar info from CalDAV: %s", str(e))
             return None
 
-    def create_calendar(self, user, calendar_name: str, calendar_id: str) -> str:
+    def create_calendar(
+        self, user, calendar_name: str, calendar_id: str, color: str = ""
+    ) -> str:
         """
         Create a new calendar in CalDAV server for the given user.
         Returns the CalDAV server path for the calendar.
@@ -241,6 +240,10 @@ class CalDAVClient:
         try:
             # Create calendar using caldav library
             calendar = principal.make_calendar(name=calendar_name)
+
+            # Set calendar color if provided
+            if color:
+                calendar.set_properties([CalendarColor(color)])
 
             # CalDAV server calendar path format: /calendars/{username}/{calendar_id}/
             # The caldav library returns a URL object, convert to string and extract path
@@ -518,12 +521,12 @@ class CalendarService:
         calendar_name = "Mon calendrier"
         return self.caldav.create_calendar(user, calendar_name, calendar_id)
 
-    def create_calendar(  # pylint: disable=unused-argument
+    def create_calendar(
         self, user, name: str, color: str = "#3174ad"
     ) -> str:
         """Create a new calendar for a user. Returns the caldav_path."""
         calendar_id = str(uuid4())
-        return self.caldav.create_calendar(user, name, calendar_id)
+        return self.caldav.create_calendar(user, name, calendar_id, color=color)
 
     def get_events(self, user, caldav_path: str, start=None, end=None) -> list:
         """Get events from a calendar. Returns parsed event data."""
