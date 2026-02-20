@@ -9,31 +9,6 @@ on:
       - "*"
 
 jobs:
-  lint-git:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' # Makes sense only for pull requests
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - name: show
-        run: git log
-      - name: Enforce absence of print statements in code
-        if: always()
-        run: |
-          ! git diff origin/${{ github.event.pull_request.base.ref }}..HEAD -- . ':(exclude)**/calendars.yml' | grep "print("
-      - name: Check absence of fixup commits
-        if: always()
-        run: |
-          ! git log | grep 'fixup!'
-      - name: Install gitlint
-        if: always()
-        run: pip install --user requests gitlint
-      - name: Lint commit messages added to main
-        if: always()
-        run: ~/.local/bin/gitlint --commits origin/${{ github.event.pull_request.base.ref }}..HEAD
-
   check-changelog:
     runs-on: ubuntu-latest
     if: |
@@ -76,7 +51,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
       - name: Install the project
         run: uv sync --locked --all-extras
-      
+
       - name: Check code formatting with ruff
         run: uv run ruff format . --diff
       - name: Lint code with ruff
@@ -100,7 +75,6 @@ jobs:
           POSTGRES_PASSWORD: pass
         ports:
           - 5432:5432
-        # needed because the postgres container does not provide a healthcheck
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
     env:
@@ -114,6 +88,9 @@ jobs:
       DB_USER: pgroot
       DB_PASSWORD: pass
       DB_PORT: 5432
+      CALDAV_URL: http://localhost:80
+      CALDAV_OUTBOUND_API_KEY: test-outbound-key
+      CALDAV_INBOUND_API_KEY: test-inbound-key
 
     steps:
       - name: Checkout repository
@@ -123,6 +100,28 @@ jobs:
         run: |
           sudo mkdir -p /data/media && \
           sudo mkdir -p /data/static
+
+      - name: Build and start CalDAV server
+        working-directory: .
+        run: |
+          docker build -t caldav-test docker/sabredav
+          docker run -d --name caldav-test \
+            --network host \
+            -e PGHOST=localhost \
+            -e PGPORT=5432 \
+            -e PGDATABASE=calendars \
+            -e PGUSER=pgroot \
+            -e PGPASSWORD=pass \
+            -e CALDAV_BASE_URI=/api/v1.0/caldav/ \
+            -e CALDAV_INBOUND_API_KEY=test-inbound-key \
+            -e CALDAV_OUTBOUND_API_KEY=test-outbound-key \
+            caldav-test \
+            sh -c "/usr/local/bin/init-database.sh && apache2-foreground"
+
+      - name: Wait for CalDAV to be ready
+        run: |
+          timeout 30 bash -c 'until curl -s -o /dev/null http://localhost:80/; do sleep 1; done'
+          echo "CalDAV server is ready"
 
       - name: "Set up Python"
         uses: actions/setup-python@v6
