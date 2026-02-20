@@ -57,7 +57,7 @@ jobs:
       - name: Run unit tests
         run: |
           cd src/frontend/apps/calendars
-          yarn test
+          TZ=Europe/Paris yarn test
 
   test-e2e:
     runs-on: ubuntu-latest
