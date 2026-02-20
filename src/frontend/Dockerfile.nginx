@@ -1,0 +1,20 @@
+FROM nginxinc/nginx-unprivileged:alpine3.22
+
+# Upgrade system packages to install security updates
+USER root
+RUN apk update && \
+  apk upgrade && \
+  rm -rf /var/cache/apk/*
+
+# Un-privileged user running the application
+ARG DOCKER_USER
+USER ${DOCKER_USER}
+
+COPY out /usr/share/nginx/html
+
+COPY ./apps/calendars/conf/default.conf /etc/nginx/conf.d
+COPY ./docker/files/usr/local/bin/entrypoint /usr/local/bin/entrypoint
+
+ENTRYPOINT [ "/usr/local/bin/entrypoint" ]
+
+CMD ["nginx", "-g", "daemon off;"]
