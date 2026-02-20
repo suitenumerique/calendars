@@ -12,13 +12,13 @@
 </p>
 
 <p align="center">
-  <a href="https://matrix.to/#/#messages-official:matrix.org">
+  <a href="https://matrix.to/#/#calendars-official:matrix.org">
     Chat on Matrix
   </a> - <a href="/docs/">
     Documentation
   </a> - <a href="#getting-started-">
     Getting started
-  </a> - <a href="contact@suite.anct.gouv.fr">
+  </a> - <a href="mailto:contact@suite.anct.gouv.fr">
     Reach out
   </a>
 </p>
@@ -137,7 +137,7 @@ You can then login with sub `admin@example.com` and password `admin`.
 
 ## Feedback 🙋‍♂️🙋‍♀️
 
-We'd love to hear your thoughts and hear about your experiments, so come and say hi on [Matrix](https://matrix.to/#/#messages-official:matrix.org).
+We'd love to hear your thoughts and hear about your experiments, so come and say hi on [Matrix](https://matrix.to/#/#calendars-official:matrix.org).
 
 ## Contributing 🙌
 
@@ -152,4 +152,4 @@ While Calendars is a public driven initiative our licence choice is an invitatio
 
 ## Credits ❤️
 
-Calendars is built on top of [Django Rest Framework](https://www.django-rest-framework.org/), [Next.js](https://nextjs.org/). We thank the contributors of all these projects for their awesome work!
+Calendars is built on top of [Django REST Framework](https://www.django-rest-framework.org/), [Next.js](https://nextjs.org/) and [SabreDAV](https://sabre.io/dav/). We thank the contributors of all these projects for their awesome work!

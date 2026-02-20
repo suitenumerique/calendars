@@ -2,7 +2,6 @@
 
 import json
 import logging
-import os
 from datetime import datetime
 from typing import Optional
 
@@ -67,7 +66,7 @@ class TranslationService:
         return current if isinstance(current, str) else None
 
     @classmethod
-    def t(cls, key: str, lang: str = "en", **kwargs) -> str:
+    def t(cls, key: str, lang: str = "en", **kwargs) -> str:  # pylint: disable=invalid-name
         """Look up a translation key with interpolation.
 
         Fallback chain: lang -> "en" -> key itself.
@@ -95,7 +94,7 @@ class TranslationService:
         - Fallback: "fr".
         """
         if request is not None:
-            from django.utils.translation import (  # noqa: PLC0415
+            from django.utils.translation import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
                 get_language,
             )
 
@@ -105,7 +104,9 @@ class TranslationService:
 
         if email:
             try:
-                from core.models import User  # noqa: PLC0415
+                from core.models import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+                    User,
+                )
 
                 user = User.objects.filter(email=email).first()
                 if user and user.language:

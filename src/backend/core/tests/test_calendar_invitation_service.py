@@ -1,5 +1,7 @@
 """Tests for ICalendarParser and email template rendering."""
 
+# pylint: disable=missing-function-docstring,protected-access
+
 from django.template.loader import render_to_string
 
 import pytest

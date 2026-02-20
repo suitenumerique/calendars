@@ -67,7 +67,7 @@ class CalDAVHTTPClient:
             url = f"{url}?{query}"
         return url
 
-    def request(  # noqa: PLR0913
+    def request(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         self,
         method: str,
         email: str,
@@ -123,7 +123,7 @@ class CalDAVHTTPClient:
                     continue
             logger.warning("Event UID %s not found in user %s calendars", uid, email)
             return None, None
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             logger.exception("CalDAV error looking up event %s", uid)
             return None, None
 
@@ -517,20 +517,18 @@ class CalendarService:
 
     def create_default_calendar(self, user) -> str:
         """Create a default calendar for a user. Returns the caldav_path."""
-        from core.services.translation_service import TranslationService  # noqa: PLC0415
+        from core.services.translation_service import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+            TranslationService,
+        )
 
         calendar_id = str(uuid4())
         lang = TranslationService.resolve_language(email=user.email)
-        calendar_name = TranslationService.t(
-            "calendar.list.defaultCalendarName", lang
-        )
+        calendar_name = TranslationService.t("calendar.list.defaultCalendarName", lang)
         return self.caldav.create_calendar(
             user, calendar_name, calendar_id, color=settings.DEFAULT_CALENDAR_COLOR
         )
 
-    def create_calendar(
-        self, user, name: str, color: str = ""
-    ) -> str:
+    def create_calendar(self, user, name: str, color: str = "") -> str:
         """Create a new calendar for a user. Returns the caldav_path."""
         calendar_id = str(uuid4())
         return self.caldav.create_calendar(

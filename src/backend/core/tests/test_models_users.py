@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 
 import pytest
 
-from core import factories, models
+from core import factories
 
 pytestmark = pytest.mark.django_db
 

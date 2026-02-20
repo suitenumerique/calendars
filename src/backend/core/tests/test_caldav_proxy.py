@@ -1,5 +1,7 @@
 """Tests for CalDAV proxy view."""
 
+# pylint: disable=no-member
+
 from xml.etree import ElementTree as ET
 
 from django.conf import settings
@@ -47,7 +49,7 @@ class TestCalDAVProxy:
             )
         )
 
-        response = client.generic("PROPFIND", "/api/v1.0/caldav/")
+        client.generic("PROPFIND", "/api/v1.0/caldav/")
 
         # Verify request was made to CalDAV server
         assert len(responses.calls) == 1
@@ -84,7 +86,7 @@ class TestCalDAVProxy:
 
         # Try to send a malicious X-Forwarded-User header as if we were another user
         malicious_email = "attacker@example.com"
-        response = client.generic(
+        client.generic(
             "PROPFIND",
             "/api/v1.0/caldav/",
             HTTP_X_FORWARDED_USER=malicious_email,
@@ -110,7 +112,7 @@ class TestCalDAVProxy:
         reason="CalDAV server URL not configured - integration test requires real server",
     )
     def test_proxy_propfind_response_contains_prefixed_urls(self):
-        """Integration test: PROPFIND responses from sabre/dav should contain URLs with proxy prefix.
+        """PROPFIND responses should contain URLs with proxy prefix.
 
         This test verifies that sabre/dav's BaseUriPlugin correctly uses X-Forwarded-Prefix
         to generate URLs with the proxy prefix. It requires the CalDAV server to be running.
@@ -122,7 +124,10 @@ class TestCalDAVProxy:
 
         # Make actual request to CalDAV server through proxy
         # The server should use X-Forwarded-Prefix to generate URLs
-        propfind_body = '<?xml version="1.0"?><propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>'
+        propfind_body = (
+            '<?xml version="1.0"?>'
+            '<propfind xmlns="DAV:"><prop><resourcetype/></prop></propfind>'
+        )
         response = client.generic(
             "PROPFIND",
             "/api/v1.0/caldav/",
@@ -131,7 +136,8 @@ class TestCalDAVProxy:
         )
 
         assert response.status_code == HTTP_207_MULTI_STATUS, (
-            f"Expected 207 Multi-Status, got {response.status_code}: {response.content.decode('utf-8', errors='ignore')}"
+            f"Expected 207 Multi-Status, got {response.status_code}: "
+            f"{response.content.decode('utf-8', errors='ignore')}"
         )
 
         # Parse the response XML
@@ -149,9 +155,10 @@ class TestCalDAVProxy:
                 href.startswith("/principals/") or href.startswith("/calendars/")
             ):
                 assert href.startswith("/api/v1.0/caldav/"), (
-                    f"Expected URL to start with /api/v1.0/caldav/, got {href}. "
-                    f"This indicates sabre/dav BaseUriPlugin is not using X-Forwarded-Prefix correctly. "
-                    f"Full response: {response.content.decode('utf-8', errors='ignore')}"
+                    f"Expected URL to start with /api/v1.0/caldav/, "
+                    f"got {href}. BaseUriPlugin is not using "
+                    f"X-Forwarded-Prefix correctly. Full response: "
+                    f"{response.content.decode('utf-8', errors='ignore')}"
                 )
 
     @responses.activate
@@ -284,9 +291,7 @@ class TestCalDAVProxy:
         )
 
         # Request a specific path
-        response = client.generic(
-            "PROPFIND", "/api/v1.0/caldav/principals/test@example.com/"
-        )
+        client.generic("PROPFIND", "/api/v1.0/caldav/principals/test@example.com/")
 
         # Verify the request was made to the correct URL
         assert len(responses.calls) == 1
@@ -333,22 +338,29 @@ class TestValidateCaldavProxyPath:
     """Tests for validate_caldav_proxy_path utility."""
 
     def test_empty_path_is_valid(self):
+        """Empty path should be valid."""
         assert validate_caldav_proxy_path("") is True
 
     def test_calendars_path_is_valid(self):
+        """Standard calendars path should be valid."""
         assert validate_caldav_proxy_path("calendars/user@ex.com/uuid/") is True
 
     def test_principals_path_is_valid(self):
+        """Standard principals path should be valid."""
         assert validate_caldav_proxy_path("principals/user@ex.com/") is True
 
     def test_traversal_is_rejected(self):
+        """Directory traversal attempts should be rejected."""
         assert validate_caldav_proxy_path("calendars/../../etc/passwd") is False
 
     def test_null_byte_is_rejected(self):
+        """Paths containing null bytes should be rejected."""
         assert validate_caldav_proxy_path("calendars/user\x00/") is False
 
     def test_unknown_prefix_is_rejected(self):
+        """Paths without a known prefix should be rejected."""
         assert validate_caldav_proxy_path("etc/passwd") is False
 
     def test_leading_slash_calendars_is_valid(self):
+        """Paths with leading slash should still be valid."""
         assert validate_caldav_proxy_path("/calendars/user@ex.com/uuid/") is True

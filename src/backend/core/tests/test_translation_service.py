@@ -5,7 +5,7 @@ from datetime import datetime
 from core.services.translation_service import TranslationService
 
 
-class TestTranslationServiceLookup:
+class TestTranslationServiceLookup:  # pylint: disable=missing-function-docstring
     """Tests for key lookup and interpolation."""
 
     def test_lookup_french_key(self):
@@ -43,7 +43,7 @@ class TestTranslationServiceLookup:
         assert "passé" in value
 
 
-class TestNormalizeLang:
+class TestNormalizeLang:  # pylint: disable=missing-function-docstring
     """Tests for language normalization."""
 
     def test_normalize_fr_fr(self):
@@ -69,6 +69,7 @@ class TestFormatDate:
     """Tests for date formatting."""
 
     def test_format_date_french(self):
+        """Format date in French locale."""
         dt = datetime(2026, 1, 23, 10, 0)  # Friday
         result = TranslationService.format_date(dt, "fr")
         assert "vendredi" in result
@@ -77,6 +78,7 @@ class TestFormatDate:
         assert "2026" in result
 
     def test_format_date_english(self):
+        """Format date in English locale."""
         dt = datetime(2026, 1, 23, 10, 0)  # Friday
         result = TranslationService.format_date(dt, "en")
         assert "Friday" in result
@@ -85,6 +87,7 @@ class TestFormatDate:
         assert "2026" in result
 
     def test_format_date_dutch(self):
+        """Format date in Dutch locale."""
         dt = datetime(2026, 1, 23, 10, 0)  # Friday
         result = TranslationService.format_date(dt, "nl")
         assert "vrijdag" in result

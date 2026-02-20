@@ -1,7 +1,5 @@
 """Tests for CalDAV service integration."""
 
-from unittest.mock import Mock, patch
-
 from django.conf import settings
 
 import pytest
@@ -19,7 +17,7 @@ class TestCalDAVClient:
         user = factories.UserFactory(email="test@example.com")
         client = CalDAVClient()
 
-        dav_client = client._get_client(user)
+        dav_client = client._get_client(user)  # pylint: disable=protected-access
 
         # Verify the client is configured correctly
         # Username and password should be None to prevent Basic auth
@@ -78,9 +76,7 @@ class TestCalDAVClient:
         color = "#e74c3c"
 
         # Create a calendar with a specific color
-        caldav_path = service.create_calendar(
-            user, name="Red Calendar", color=color
-        )
+        caldav_path = service.create_calendar(user, name="Red Calendar", color=color)
 
         # Fetch the calendar info and verify the color was persisted
         info = service.caldav.get_calendar_info(user, caldav_path)

@@ -196,7 +196,7 @@ export const useSchedulerInit = ({
                   }
 
                   // Only fetch source events if we actually need recurrence rules
-                  let sourceRulesByUid = new Map<string, unknown>();
+                  const sourceRulesByUid = new Map<string, unknown>();
                   if (uidsNeedingRules.size > 0) {
                     const sourceResult = await caldavService.fetchEvents(
                       calendar.url, { timeRange, expand: false }

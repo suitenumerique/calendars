@@ -1,4 +1,6 @@
-# Gunicorn-django settings
+"""Gunicorn configuration for the Calendars backend."""
+
+# pylint: disable=invalid-name
 bind = ["0.0.0.0:8000"]
 name = "calendars"
 python_path = "/app"

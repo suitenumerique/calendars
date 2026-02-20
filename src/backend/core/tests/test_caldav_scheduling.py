@@ -2,6 +2,7 @@
 
 import http.server
 import logging
+import os
 import secrets
 import socket
 import threading
@@ -118,10 +119,9 @@ class TestCalDAVScheduling:
         except OSError as e:
             pytest.fail(f"Test server failed to start on port {port}: {e}")
 
-        # Use the named test container hostname
-        # The test container is created with --name backend-test in bin/pytest
-        # Docker Compose networking allows containers to reach each other by name
-        callback_url = f"http://backend-test:{port}/"
+        # In Docker Compose, use the container hostname; on bare host (CI), use localhost
+        callback_host = os.environ.get("CALDAV_CALLBACK_HOST", "backend-test")
+        callback_url = f"http://{callback_host}:{port}/"
 
         try:
             # Create an event with an attendee
