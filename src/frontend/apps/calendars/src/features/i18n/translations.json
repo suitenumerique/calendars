@@ -28,8 +28,8 @@
         }
       },
       "home": {
-        "title": "Easy storage and sharing",
-        "subtitle": "A modern calendar application built for French public teams. Sovereign hosting in France, strong security, and seamless sync with all LaSuite apps.",
+        "title": "Organize your time, together",
+        "subtitle": "A modern, open-source calendar application. Create events, invite attendees, share calendars with your team, and sync across all your devices.",
         "main_button": "Sign in",
         "more": "Learn more"
       },
@@ -498,8 +498,8 @@
         }
       },
       "home": {
-        "title": "Stocker et partager facilement",
-        "subtitle": "Une application de calendrier moderne pour les équipes publiques françaises. Hébergement en France, sécurité renforcée, et synchronisation fluide avec toutes les applications LaSuite.",
+        "title": "Organisez votre temps, ensemble",
+        "subtitle": "Une application de calendrier moderne et open source. Créez des événements, invitez des participants, partagez vos calendriers avec votre équipe et synchronisez sur tous vos appareils.",
         "main_button": "Se connecter",
         "more": "En savoir plus"
       },
@@ -1232,8 +1232,8 @@
         }
       },
       "home": {
-        "title": "Eenvoudige opslag en delen",
-        "subtitle": "Een moderne kalenderapplicatie ontworpen voor Franse publieke teams. Soevereine hosting in Frankrijk, sterke beveiliging en naadloze synchronisatie met alle LaSuite-apps.",
+        "title": "Organiseer je tijd, samen",
+        "subtitle": "Een moderne, open-source kalenderapplicatie. Maak evenementen, nodig deelnemers uit, deel kalenders met je team en synchroniseer op al je apparaten.",
         "main_button": "Inloggen",
         "more": "Meer informatie"
       },

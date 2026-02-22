@@ -23,8 +23,8 @@
   </a>
 </p>
 
-# La Suite Calendars
-A modern calendar application for managing events and schedules.
+# Calendars
+A modern, open-source calendar application for managing events and schedules.
 
 <img src="/docs/assets/calendars-UI.png" width="100%" align="center"/>
 
