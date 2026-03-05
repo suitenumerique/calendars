@@ -12,6 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 import requests
 
+from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
 from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy_path
 from core.services.calendar_invitation_service import calendar_invitation_service
 
@@ -29,7 +30,28 @@ class CalDAVProxyView(View):
     Authentication is handled via session cookies instead.
     """
 
-    def dispatch(self, request, *args, **kwargs):  # noqa: PLR0912  # pylint: disable=too-many-branches
+    @staticmethod
+    def _check_entitlements_for_creation(user):
+        """Check if user is entitled to create calendars.
+
+        Returns None if allowed, or an HttpResponse(403) if denied.
+        Fail-closed: denies if the entitlements service is unavailable.
+        """
+        try:
+            entitlements = get_user_entitlements(user.sub, user.email)
+            if not entitlements.get("can_access", True):
+                return HttpResponse(
+                    status=403,
+                    content="Calendar creation not allowed",
+                )
+        except EntitlementsUnavailableError:
+            return HttpResponse(
+                status=403,
+                content="Calendar creation not allowed",
+            )
+        return None
+
+    def dispatch(self, request, *args, **kwargs):  # noqa: PLR0912, PLR0911, PLR0915  # pylint: disable=too-many-branches,too-many-return-statements,too-many-statements
         """Forward all HTTP methods to CalDAV server."""
         # Handle CORS preflight requests
         if request.method == "OPTIONS":
@@ -44,6 +66,13 @@ class CalDAVProxyView(View):
 
         if not request.user.is_authenticated:
             return HttpResponse(status=401)
+
+        # Block calendar creation (MKCALENDAR/MKCOL) for non-entitled users.
+        # Other methods (GET, PROPFIND, REPORT, PUT, DELETE, etc.) are allowed
+        # so that users invited to shared calendars can still use them.
+        if request.method in ("MKCALENDAR", "MKCOL"):
+            if denied := self._check_entitlements_for_creation(request.user):
+                return denied
 
         # Build the CalDAV server URL
         path = kwargs.get("path", "")

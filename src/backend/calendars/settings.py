@@ -133,6 +133,23 @@ class Base(Configuration):
         environ_prefix=None,
     )
 
+    # Entitlements
+    ENTITLEMENTS_BACKEND = values.Value(
+        "core.entitlements.backends.local.LocalEntitlementsBackend",
+        environ_name="ENTITLEMENTS_BACKEND",
+        environ_prefix=None,
+    )
+    ENTITLEMENTS_BACKEND_PARAMETERS = values.DictValue(
+        {},
+        environ_name="ENTITLEMENTS_BACKEND_PARAMETERS",
+        environ_prefix=None,
+    )
+    ENTITLEMENTS_CACHE_TIMEOUT = values.IntegerValue(
+        300,
+        environ_name="ENTITLEMENTS_CACHE_TIMEOUT",
+        environ_prefix=None,
+    )
+
     # Security
     ALLOWED_HOSTS = values.ListValue([])
     SECRET_KEY = SecretFileValue(None)

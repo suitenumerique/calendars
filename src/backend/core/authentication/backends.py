@@ -4,12 +4,12 @@ import logging
 
 from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
-from django.utils.translation import gettext_lazy as _
 
 from lasuite.oidc_login.backends import (
     OIDCAuthenticationBackend as LaSuiteOIDCAuthenticationBackend,
 )
 
+from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
 from core.models import DuplicateEmailError
 
 logger = logging.getLogger(__name__)
@@ -51,3 +51,18 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
             return self.UserModel.objects.get_user_by_sub_or_email(sub, email)
         except DuplicateEmailError as err:
             raise SuspiciousOperation(err.message) from err
+
+    def post_get_or_create_user(self, user, claims, is_new_user):
+        """Warm the entitlements cache on login (force_refresh)."""
+        try:
+            get_user_entitlements(
+                user_sub=user.sub,
+                user_email=user.email,
+                user_info=claims,
+                force_refresh=True,
+            )
+        except EntitlementsUnavailableError:
+            logger.warning(
+                "Entitlements unavailable for %s during login",
+                user.email,
+            )

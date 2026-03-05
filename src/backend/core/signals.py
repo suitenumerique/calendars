@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
 from core.services.caldav_service import CalendarService
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,23 @@ def provision_default_calendar(sender, instance, created, **kwargs):  # pylint: 
 
     # Skip calendar creation if CalDAV server is not configured
     if not settings.CALDAV_URL:
+        return
+
+    # Check entitlements before creating calendar — fail-closed:
+    # never create a calendar if we can't confirm access.
+    try:
+        entitlements = get_user_entitlements(instance.sub, instance.email)
+        if not entitlements.get("can_access", True):
+            logger.info(
+                "Skipped calendar creation for %s (not entitled)",
+                instance.email,
+            )
+            return
+    except EntitlementsUnavailableError:
+        logger.warning(
+            "Entitlements unavailable for %s, skipping calendar creation",
+            instance.email,
+        )
         return
 
     try:

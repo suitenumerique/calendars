@@ -9,6 +9,11 @@
         "title": "You don't have the necessary permissions to access this page.",
         "button": "Home"
       },
+      "no_access": {
+        "title": "Your login was successful, but this application is not available for your account.",
+        "description": "If you think this is a mistake, please contact support.",
+        "button": "Logout"
+      },
       "common": {
         "cancel": "Cancel"
       },
@@ -444,6 +449,11 @@
       "403": {
         "title": "Vous n'avez pas les permissions nécessaires pour accéder à cette page.",
         "button": "Accueil"
+      },
+      "no_access": {
+        "title": "Votre connexion a réussi, mais cette application n'est pas disponible pour votre compte.",
+        "description": "Si vous pensez qu'il s'agit d'une erreur, veuillez contacter le support.",
+        "button": "Se déconnecter"
       },
       "file_download_modal": {
         "error": {

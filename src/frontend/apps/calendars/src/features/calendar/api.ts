@@ -5,21 +5,6 @@
 import { fetchAPI, fetchAPIFormData } from "@/features/api/fetchApi";
 
 /**
- * Create a new calendar via Django API (CalDAV only).
- */
-export const createCalendarApi = async (data: {
-  name: string;
-  color?: string;
-  description?: string;
-}): Promise<{ caldav_path: string }> => {
-  const response = await fetchAPI("calendars/", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-  return response.json();
-};
-
-/**
  * Subscription token for iCal export.
  */
 export interface SubscriptionToken {

@@ -18,7 +18,6 @@ from rest_framework.throttling import UserRateThrottle
 
 from core import models
 from core.services.caldav_service import (
-    CalendarService,
     normalize_caldav_path,
     verify_caldav_access,
 )
@@ -266,34 +265,15 @@ class ConfigView(drf.views.APIView):
 class CalendarViewSet(viewsets.GenericViewSet):
     """ViewSet for calendar operations.
 
-    create: Create a new calendar (CalDAV only, no Django record).
     import_events: Import events from an ICS file.
     """
 
     permission_classes = [IsAuthenticated]
-    serializer_class = serializers.CalendarCreateSerializer
 
-    def create(self, request):
-        """Create a new calendar via CalDAV.
-
-        POST /api/v1.0/calendars/
-        Body: { name, color?, description? }
-        Returns: { caldav_path }
-        """
-        serializer = serializers.CalendarCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        service = CalendarService()
-        caldav_path = service.create_calendar(
-            user=request.user,
-            name=serializer.validated_data["name"],
-            color=serializer.validated_data.get("color", ""),
-        )
-
-        return drf_response.Response(
-            {"caldav_path": caldav_path},
-            status=status.HTTP_201_CREATED,
-        )
+    def get_permissions(self):
+        if self.action == "import_events":
+            return [permissions.IsEntitled()]
+        return super().get_permissions()
 
     @action(
         detail=False,

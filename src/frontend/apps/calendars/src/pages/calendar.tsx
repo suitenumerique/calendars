@@ -28,6 +28,14 @@ export default function CalendarPage() {
     return <SpinnerPage />;
   }
 
+  // Redirect to no-access if not entitled
+  if (user.can_access === false) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/no-access";
+    }
+    return <SpinnerPage />;
+  }
+
   return (
     <>
       <Head>
