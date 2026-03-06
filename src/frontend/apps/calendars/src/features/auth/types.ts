@@ -9,4 +9,5 @@ export interface User {
   id: string;
   email: string;
   language: string;
+  can_access: boolean;
 }

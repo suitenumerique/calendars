@@ -27,6 +27,10 @@ export default function HomePage() {
 
   useEffect(() => {
     if (user) {
+      if (user.can_access === false) {
+        window.location.href = "/no-access";
+        return;
+      }
       const attemptedUrl = sessionStorage.getItem(
         SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL
       );
@@ -49,14 +53,6 @@ export default function HomePage() {
         <ToasterItem type="error">
           <span className="material-icons">science</span>
           <span>{t("authentication.error.alpha")}</span>
-        </ToasterItem>
-      );
-    }
-    if (failure === "user_cannot_access_app") {
-      addToast(
-        <ToasterItem type="error">
-          <span className="material-icons">lock</span>
-          <span>{t("authentication.error.user_cannot_access_app")}</span>
         </ToasterItem>
       );
     }

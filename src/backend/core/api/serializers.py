@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import exceptions, serializers
 
 from core import models
+from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
 
 
 class UserLiteSerializer(serializers.ModelSerializer):
@@ -108,18 +109,20 @@ class UserSerializer(serializers.ModelSerializer):
 class UserMeSerializer(UserSerializer):
     """Serialize users for me endpoint."""
 
+    can_access = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = models.User
-        fields = UserSerializer.Meta.fields
-        read_only_fields = UserSerializer.Meta.read_only_fields
+        fields = [*UserSerializer.Meta.fields, "can_access"]
+        read_only_fields = [*UserSerializer.Meta.read_only_fields, "can_access"]
 
-
-class CalendarCreateSerializer(serializers.Serializer):  # pylint: disable=abstract-method
-    """Serializer for creating a Calendar (CalDAV only, no Django model)."""
-
-    name = serializers.CharField(max_length=255)
-    color = serializers.CharField(max_length=7, required=False, default="")
-    description = serializers.CharField(required=False, default="")
+    def get_can_access(self, user) -> bool:
+        """Check entitlements for the current user."""
+        try:
+            entitlements = get_user_entitlements(user.sub, user.email)
+            return entitlements.get("can_access", True)
+        except EntitlementsUnavailableError:
+            return True  # fail-open
 
 
 class CalendarSubscriptionTokenSerializer(serializers.ModelSerializer):

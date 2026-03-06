@@ -17,7 +17,6 @@ import type {
   CalDavCalendarCreate,
 } from "../services/dav/types/caldav-service";
 import type { CalendarApi } from "../components/scheduler/types";
-import { createCalendarApi } from "../api";
 import {
   addToast,
   ToasterItem,
@@ -191,15 +190,15 @@ export const CalendarContextProvider = ({
       params: CalDavCalendarCreate,
     ): Promise<{ success: boolean; error?: string }> => {
       try {
-        // Use Django API to create calendar (CalDAV only)
-        await createCalendarApi({
-          name: params.displayName,
-          color: params.color,
-          description: params.description,
-        });
-        // Refresh CalDAV calendars list to show the new calendar
-        await refreshCalendars();
-        return { success: true };
+        const result = await caldavService.createCalendar(params);
+        if (result.success) {
+          await refreshCalendars();
+          return { success: true };
+        }
+        return {
+          success: false,
+          error: result.error || "Failed to create calendar",
+        };
       } catch (error) {
         console.error("Error creating calendar:", error);
         return {
@@ -208,7 +207,7 @@ export const CalendarContextProvider = ({
         };
       }
     },
-    [refreshCalendars],
+    [caldavService, refreshCalendars],
   );
 
   const updateCalendar = useCallback(

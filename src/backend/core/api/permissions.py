@@ -1,8 +1,14 @@
 """Permission handlers for the calendars core app."""
 
+import logging
+
 from django.core import exceptions
 
 from rest_framework import permissions
+
+from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
+
+logger = logging.getLogger(__name__)
 
 ACTION_FOR_METHOD_TO_PERMISSION = {
     "versions_detail": {"DELETE": "versions_destroy", "GET": "versions_retrieve"},
@@ -57,6 +63,23 @@ class IsOwnedOrPublic(IsAuthenticated):
         try:
             return obj.user == request.user
         except exceptions.ObjectDoesNotExist:
+            return False
+
+
+class IsEntitled(IsAuthenticated):
+    """Allows access only to users with can_access entitlement.
+
+    Fail-closed: denies access when the entitlements service is
+    unavailable and no cached value exists.
+    """
+
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        try:
+            entitlements = get_user_entitlements(request.user.sub, request.user.email)
+            return entitlements.get("can_access", True)
+        except EntitlementsUnavailableError:
             return False
 
 
