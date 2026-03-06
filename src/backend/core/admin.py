@@ -29,7 +29,6 @@ class UserAdmin(auth_admin.UserAdmin):
                     "sub",
                     "email",
                     "full_name",
-                    "short_name",
                     "language",
                     "timezone",
                 )
@@ -86,7 +85,6 @@ class UserAdmin(auth_admin.UserAdmin):
         "sub",
         "email",
         "full_name",
-        "short_name",
         "created_at",
         "updated_at",
     )

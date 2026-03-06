@@ -242,12 +242,17 @@ export const useSchedulerHandlers = ({
    * Handle modal save (create or update event).
    */
   const handleModalSave = useCallback(
-    async (event: IcsEvent, targetCalendarUrl: string) => {
+    async (
+      event: IcsEvent,
+      targetCalendarUrl: string,
+      resourceCutypes?: Map<string, "ROOM" | "RESOURCE">,
+    ) => {
       if (modalState.mode === "create") {
         // Create new event
         const result = await caldavService.createEvent({
           calendarUrl: targetCalendarUrl,
           event,
+          resourceCutypes,
         });
 
         if (!result.success) {
@@ -270,6 +275,7 @@ export const useSchedulerHandlers = ({
           eventUrl: modalState.eventUrl,
           event,
           etag: modalState.etag,
+          resourceCutypes,
         });
 
         if (!result.success) {

@@ -17,7 +17,7 @@ def get_user_entitlements(user_sub, user_email, user_info=None, force_refresh=Fa
         force_refresh: If True, bypass backend cache and fetch fresh data.
 
     Returns:
-        dict: {"can_access": bool}
+        dict: {"can_access": bool, "can_admin": bool, ...}
 
     Raises:
         EntitlementsUnavailableError: If the backend cannot be reached

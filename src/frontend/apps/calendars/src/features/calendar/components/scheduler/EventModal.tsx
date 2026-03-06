@@ -18,9 +18,11 @@ import { RecurrenceSection } from "./event-modal-sections/RecurrenceSection";
 import { LocationSection } from "./event-modal-sections/LocationSection";
 import { VideoConferenceSection } from "./event-modal-sections/VideoConferenceSection";
 import { AttendeesSection } from "./event-modal-sections/AttendeesSection";
+import { ResourcesSection } from "./event-modal-sections/ResourcesSection";
 import { DescriptionSection } from "./event-modal-sections/DescriptionSection";
 import { InvitationResponseSection } from "./event-modal-sections/InvitationResponseSection";
 import { SectionPills } from "./event-modal-sections/SectionPills";
+import { useResourcePrincipals } from "@/features/resources/api/useResourcePrincipals";
 import type { EventModalProps, RecurringDeleteOption } from "./types";
 import { SectionRow } from "./event-modal-sections/SectionRow";
 
@@ -41,13 +43,22 @@ export const EventModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  const { resources: availableResources } = useResourcePrincipals();
+
   const organizer: IcsOrganizer | undefined =
     event?.organizer ||
     (user?.email
       ? { email: user.email, name: user.email.split("@")[0] }
       : undefined);
 
-  const form = useEventForm({ event, calendarUrl, adapter, organizer, mode });
+  const form = useEventForm({
+    event,
+    calendarUrl,
+    adapter,
+    organizer,
+    mode,
+    availableResources,
+  });
 
   // Check if current user is invited
   const currentUserAttendee = event?.attendees?.find(
@@ -72,7 +83,20 @@ export const EventModal = ({
     setIsLoading(true);
     try {
       const icsEvent = form.toIcsEvent();
-      await onSave(icsEvent, form.selectedCalendarUrl);
+
+      // Build resource CUTYPE map for ICS post-processing
+      const resourceCutypes = new Map<string, "ROOM" | "RESOURCE">();
+      for (const r of form.resources) {
+        if (r.email) {
+          resourceCutypes.set(r.email, r.resourceType);
+        }
+      }
+
+      await onSave(
+        icsEvent,
+        form.selectedCalendarUrl,
+        resourceCutypes.size > 0 ? resourceCutypes : undefined,
+      );
       onClose();
     } catch (error) {
       console.error("Failed to save event:", error);
@@ -152,8 +176,17 @@ export const EventModal = ({
         icon: "group",
         label: t("calendar.event.attendees"),
       },
+      ...(availableResources.length > 0
+        ? [
+            {
+              id: "resources" as const,
+              icon: "meeting_room",
+              label: t("calendar.event.sections.addResources"),
+            },
+          ]
+        : []),
     ],
-    [t, visioBaseUrl],
+    [t, visioBaseUrl, availableResources.length],
   );
 
   return (
@@ -276,11 +309,20 @@ export const EventModal = ({
             <AttendeesSection
               attendees={form.attendees}
               onChange={form.setAttendees}
-              organizerEmail={user?.email}
+              organizerEmail={user?.email ?? undefined}
               organizer={organizer}
               alwaysOpen
             />
           )}
+          {availableResources.length > 0 &&
+            form.isSectionExpanded("resources") && (
+              <ResourcesSection
+                resources={form.resources}
+                onChange={form.setResources}
+                availableResources={availableResources}
+                alwaysOpen
+              />
+            )}
           {form.isSectionExpanded("description") && (
             <DescriptionSection
               description={form.description}

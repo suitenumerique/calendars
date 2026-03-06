@@ -47,25 +47,17 @@ ENV NEXT_PUBLIC_API_ORIGIN=${API_ORIGIN}
 RUN yarn build
 
 # ---- Front-end image ----
-FROM nginxinc/nginx-unprivileged:alpine3.22 AS frontend-production
+FROM caddy:2-alpine AS frontend-production
 
 # Upgrade system packages to install security updates
-USER root
 RUN apk update && \
   apk upgrade && \
   rm -rf /var/cache/apk/*
 
-# Un-privileged user running the application
-ARG DOCKER_USER
-USER ${DOCKER_USER}
-
 COPY --from=calendars-builder \
   /home/frontend/apps/calendars/out \
-  /usr/share/nginx/html
+  /srv
 
-COPY ./apps/calendars/conf/default.conf /etc/nginx/conf.d
-COPY ./docker/files/usr/local/bin/entrypoint /usr/local/bin/entrypoint
+COPY ./Caddyfile /etc/caddy/Caddyfile
 
-ENTRYPOINT [ "/usr/local/bin/entrypoint" ]
-
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

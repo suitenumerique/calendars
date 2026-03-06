@@ -71,6 +71,7 @@ import {
   type ShareeXmlParams,
 } from './caldav-helpers'
 import { getIcalTimezoneBlock } from './helpers/ical-timezones'
+import { injectCutype } from './helpers/ics-cutype'
 
 export class CalDavService {
   private _account: CalDavAccount | null = null
@@ -459,7 +460,11 @@ export class CalDavService {
       }
 
       this.validateTimezones(icsCalendar)
-      const iCalString = generateIcsCalendar(icsCalendar)
+      let iCalString = generateIcsCalendar(icsCalendar)
+
+      if (params.resourceCutypes?.size) {
+        iCalString = injectCutype(iCalString, params.resourceCutypes)
+      }
 
       const response = await davCreateCalendarObject({
         calendar: {
@@ -516,7 +521,11 @@ export class CalDavService {
       }
 
       this.validateTimezones(icsCalendar)
-      const iCalString = generateIcsCalendar(icsCalendar)
+      let iCalString = generateIcsCalendar(icsCalendar)
+
+      if (params.resourceCutypes?.size) {
+        iCalString = injectCutype(iCalString, params.resourceCutypes)
+      }
 
       const davObject: DAVCalendarObject = {
         url: params.eventUrl,
@@ -779,7 +788,11 @@ export class CalDavService {
       }
 
       this.validateTimezones(icsCalendar)
-      const iCalString = generateIcsCalendar(icsCalendar)
+      let iCalString = generateIcsCalendar(icsCalendar)
+
+      if (request.resourceCutypes?.size) {
+        iCalString = injectCutype(iCalString, request.resourceCutypes)
+      }
 
       const outboxUrl = await this.findSchedulingOutbox()
       if (!outboxUrl) {

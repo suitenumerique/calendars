@@ -27,10 +27,10 @@ from core.entitlements.factory import get_entitlements_backend
 
 
 def test_local_backend_always_grants_access():
-    """The local backend should always return can_access=True."""
+    """The local backend should always return can_access=True and can_admin=True."""
     backend = LocalEntitlementsBackend()
     result = backend.get_user_entitlements("sub-123", "user@example.com")
-    assert result == {"can_access": True}
+    assert result == {"can_access": True, "can_admin": True}
 
 
 def test_local_backend_ignores_parameters():
@@ -42,7 +42,7 @@ def test_local_backend_ignores_parameters():
         user_info={"some": "claim"},
         force_refresh=True,
     )
-    assert result == {"can_access": True}
+    assert result == {"can_access": True, "can_admin": True}
 
 
 # -- Factory --
@@ -99,7 +99,7 @@ def test_deploycenter_backend_grants_access():
     responses.add(
         responses.GET,
         DC_URL,
-        json={"entitlements": {"can_access": True}},
+        json={"entitlements": {"can_access": True, "can_admin": True}},
         status=200,
     )
 
@@ -109,7 +109,7 @@ def test_deploycenter_backend_grants_access():
         api_key="test-key",
     )
     result = backend.get_user_entitlements("sub-123", "user@example.com")
-    assert result == {"can_access": True}
+    assert result == {"can_access": True, "can_admin": True}
 
     # Verify request was made with correct params and header
     assert len(responses.calls) == 1
@@ -135,7 +135,7 @@ def test_deploycenter_backend_denies_access():
         api_key="test-key",
     )
     result = backend.get_user_entitlements("sub-123", "user@example.com")
-    assert result == {"can_access": False}
+    assert result == {"can_access": False, "can_admin": False}
 
 
 @responses.activate
@@ -157,12 +157,12 @@ def test_deploycenter_backend_uses_cache():
 
     # First call hits the API
     result1 = backend.get_user_entitlements("sub-123", "user@example.com")
-    assert result1 == {"can_access": True}
+    assert result1["can_access"] is True
     assert len(responses.calls) == 1
 
     # Second call should use cache
     result2 = backend.get_user_entitlements("sub-123", "user@example.com")
-    assert result2 == {"can_access": True}
+    assert result2["can_access"] is True
     assert len(responses.calls) == 1  # No additional API call
 
 
@@ -230,7 +230,7 @@ def test_deploycenter_backend_fallback_to_stale_cache():
     result = backend.get_user_entitlements(
         "sub-123", "user@example.com", force_refresh=True
     )
-    assert result == {"can_access": True}
+    assert result["can_access"] is True
 
 
 @responses.activate
@@ -355,15 +355,15 @@ def test_user_me_serializer_includes_can_access_false():
     assert data["can_access"] is False
 
 
-def test_user_me_serializer_can_access_fail_open():
-    """UserMeSerializer should return can_access=True when entitlements unavailable."""
+def test_user_me_serializer_can_access_fail_closed():
+    """UserMeSerializer should return can_access=False when entitlements unavailable."""
     user = factories.UserFactory()
     with mock.patch(
         "core.api.serializers.get_user_entitlements",
         side_effect=EntitlementsUnavailableError("unavailable"),
     ):
         data = UserMeSerializer(user).data
-    assert data["can_access"] is True
+    assert data["can_access"] is False
 
 
 # -- Signals integration --
@@ -456,7 +456,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         ):
             response = client.generic(
                 "MKCALENDAR",
-                "/api/v1.0/caldav/calendars/test@example.com/new-cal/",
+                "/caldav/calendars/users/test@example.com/new-cal/",
             )
 
         assert response.status_code == HTTP_403_FORBIDDEN
@@ -474,7 +474,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         ):
             response = client.generic(
                 "MKCOL",
-                "/api/v1.0/caldav/calendars/test@example.com/new-cal/",
+                "/caldav/calendars/users/test@example.com/new-cal/",
             )
 
         assert response.status_code == HTTP_403_FORBIDDEN
@@ -493,7 +493,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         ):
             response = client.generic(
                 "MKCALENDAR",
-                "/api/v1.0/caldav/calendars/test@example.com/new-cal/",
+                "/caldav/calendars/users/test@example.com/new-cal/",
             )
 
         assert response.status_code == HTTP_403_FORBIDDEN
@@ -509,7 +509,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         responses.add(
             responses.Response(
                 method="MKCALENDAR",
-                url=f"{caldav_url}/api/v1.0/caldav/calendars/test@example.com/new-cal/",
+                url=f"{caldav_url}/caldav/calendars/users/test@example.com/new-cal/",
                 status=201,
                 body="",
             )
@@ -521,7 +521,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         ):
             response = client.generic(
                 "MKCALENDAR",
-                "/api/v1.0/caldav/calendars/test@example.com/new-cal/",
+                "/caldav/calendars/users/test@example.com/new-cal/",
             )
 
         assert response.status_code == 201
@@ -538,7 +538,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         responses.add(
             responses.Response(
                 method="PROPFIND",
-                url=f"{caldav_url}/api/v1.0/caldav/",
+                url=f"{caldav_url}/caldav/",
                 status=HTTP_207_MULTI_STATUS,
                 body='<?xml version="1.0"?><multistatus xmlns="DAV:"></multistatus>',
                 headers={"Content-Type": "application/xml"},
@@ -546,7 +546,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         )
 
         # No entitlements mock needed — PROPFIND should not check entitlements
-        response = client.generic("PROPFIND", "/api/v1.0/caldav/")
+        response = client.generic("PROPFIND", "/caldav/")
 
         assert response.status_code == HTTP_207_MULTI_STATUS
 
@@ -561,7 +561,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         responses.add(
             responses.Response(
                 method="REPORT",
-                url=f"{caldav_url}/api/v1.0/caldav/calendars/other@example.com/cal-id/",
+                url=f"{caldav_url}/caldav/calendars/users/other@example.com/cal-id/",
                 status=HTTP_207_MULTI_STATUS,
                 body='<?xml version="1.0"?><multistatus xmlns="DAV:"></multistatus>',
                 headers={"Content-Type": "application/xml"},
@@ -570,7 +570,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
 
         response = client.generic(
             "REPORT",
-            "/api/v1.0/caldav/calendars/other@example.com/cal-id/",
+            "/caldav/calendars/users/other@example.com/cal-id/",
         )
 
         assert response.status_code == HTTP_207_MULTI_STATUS
@@ -587,7 +587,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         responses.add(
             responses.Response(
                 method="PUT",
-                url=f"{caldav_url}/api/v1.0/caldav/calendars/other@example.com/cal-id/event.ics",
+                url=f"{caldav_url}/caldav/calendars/users/other@example.com/cal-id/event.ics",
                 status=HTTP_200_OK,
                 body="",
             )
@@ -595,7 +595,7 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
 
         response = client.generic(
             "PUT",
-            "/api/v1.0/caldav/calendars/other@example.com/cal-id/event.ics",
+            "/caldav/calendars/users/other@example.com/cal-id/event.ics",
             data=b"BEGIN:VCALENDAR\nEND:VCALENDAR",
             content_type="text/calendar",
         )

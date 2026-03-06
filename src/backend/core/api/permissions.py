@@ -83,6 +83,23 @@ class IsEntitled(IsAuthenticated):
             return False
 
 
+class IsOrgAdmin(IsAuthenticated):
+    """Allows access only to users with can_admin entitlement.
+
+    Fail-closed: denies access when the entitlements service is
+    unavailable and no cached value exists.
+    """
+
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        try:
+            entitlements = get_user_entitlements(request.user.sub, request.user.email)
+            return entitlements.get("can_admin", False)
+        except EntitlementsUnavailableError:
+            return False
+
+
 class AccessPermission(permissions.BasePermission):
     """Permission class for access objects."""
 

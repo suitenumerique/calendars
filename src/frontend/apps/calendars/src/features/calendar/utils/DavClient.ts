@@ -7,7 +7,7 @@
 
 import { getOrigin } from "@/features/api/utils";
 
-export const caldavServerUrl = `${getOrigin()}/api/v1.0/caldav/`;
+export const caldavServerUrl = `${getOrigin()}/caldav/`;
 
 export const headers = {
   "Content-Type": "application/xml",

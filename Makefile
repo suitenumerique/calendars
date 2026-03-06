@@ -134,7 +134,6 @@ logs: ## display backend-dev logs (follow mode)
 
 run-backend: ## start the backend container
 	@$(COMPOSE) up --force-recreate -d celery-dev
-	@$(COMPOSE) up --force-recreate -d nginx
 .PHONY: run-backend
 
 bootstrap-e2e: ## bootstrap the backend container for e2e tests, without frontend
@@ -220,8 +219,16 @@ lint-ruff-check: ## lint back-end python sources with ruff
 
 lint-pylint: ## lint back-end python sources with pylint only on changed files from main
 	@echo 'lint:pylint started…'
-	bin/pylint --diff-only=origin/main
+	@files=$$(git diff origin/main --name-only --diff-filter=d -- src/backend ':!**/migrations/*.py' | grep -E '^src/backend/.*\.py$$' | sed 's|src/backend/||g'); \
+	if [ -n "$$files" ]; then \
+		$(COMPOSE_RUN_APP_NO_DEPS) pylint $$files; \
+	fi
 .PHONY: lint-pylint
+
+lint-pylint-all: ## lint all back-end python sources with pylint
+	@echo 'lint:pylint-all started…'
+	@$(COMPOSE_RUN_APP_NO_DEPS) pylint calendars core
+.PHONY: lint-pylint-all
 
 test: ## run project tests
 	@$(MAKE) test-back-parallel

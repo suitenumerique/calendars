@@ -64,6 +64,46 @@ class BaseModel(models.Model):
         super().save(*args, **kwargs)
 
 
+class Organization(BaseModel):
+    """Organization model, populated from OIDC claims and entitlements.
+
+    Every user belongs to exactly one organization, determined by their
+    email domain (default) or a configurable OIDC claim. Orgs are
+    created automatically on first login.
+    """
+
+    name = models.CharField(max_length=200, blank=True, default="")
+    external_id = models.CharField(
+        max_length=128,
+        unique=True,
+        db_index=True,
+        help_text=_("Organization identifier from OIDC claim or email domain."),
+    )
+
+    class Meta:
+        db_table = "calendars_organization"
+        verbose_name = _("organization")
+        verbose_name_plural = _("organizations")
+
+    def __str__(self):
+        return self.name or self.external_id
+
+    def delete(self, *args, **kwargs):
+        """Delete org after cleaning up members' CalDAV data.
+
+        Must run before super().delete() because the User FK uses
+        on_delete=PROTECT, which blocks deletion while members exist.
+        The pre_delete signal would never fire with PROTECT, so the
+        cleanup logic lives here instead.
+        """
+        from core.services.caldav_service import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+            cleanup_organization_caldav_data,
+        )
+
+        cleanup_organization_caldav_data(self)
+        super().delete(*args, **kwargs)
+
+
 class UserManager(auth_models.UserManager):
     """Custom manager for User model with additional methods."""
 
@@ -117,9 +157,10 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
     )
 
     full_name = models.CharField(_("full name"), max_length=100, null=True, blank=True)
-    short_name = models.CharField(_("short name"), max_length=20, null=True, blank=True)
 
-    email = models.EmailField(_("identity email address"), blank=True, null=True)
+    email = models.EmailField(
+        _("identity email address"), blank=True, null=True, db_index=True
+    )
 
     # Unlike the "email" field which stores the email coming from the OIDC token, this field
     # stores the email used by staff users to login to the admin site
@@ -161,6 +202,15 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
         ),
     )
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.PROTECT,
+        related_name="members",
+        null=True,
+        blank=True,
+        help_text=_("The organization this user belongs to."),
+    )
+
     claims = models.JSONField(
         blank=True,
         default=dict,
@@ -185,7 +235,6 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
         if not self.email:
             raise ValueError("User has no email address.")
         mail.send_mail(subject, message, from_email, [self.email], **kwargs)
-
 
 
 class CalendarSubscriptionToken(models.Model):

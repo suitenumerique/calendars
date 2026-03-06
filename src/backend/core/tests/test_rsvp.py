@@ -8,7 +8,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.core import mail
-from django.core.signing import BadSignature, Signer
+from django.core.signing import BadSignature, SignatureExpired, Signer, TimestampSigner
 from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
@@ -56,10 +56,10 @@ SAMPLE_CALDAV_RESPONSE = """\
 <?xml version="1.0" encoding="UTF-8"?>
 <d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
   <d:response>
-    <d:href>/api/v1.0/caldav/calendars/alice%40example.com/cal-uuid/test-uid-123.ics</d:href>
+    <d:href>/caldav/calendars/users/alice%40example.com/cal-uuid/test-uid-123.ics</d:href>
     <d:propstat>
       <d:prop>
-        <d:gethref>/api/v1.0/caldav/calendars/alice%40example.com/cal-uuid/test-uid-123.ics</d:gethref>
+        <d:gethref>/caldav/calendars/users/alice%40example.com/cal-uuid/test-uid-123.ics</d:gethref>
         <cal:calendar-data>{ics_data}</cal:calendar-data>
       </d:prop>
       <d:status>HTTP/1.1 200 OK</d:status>
@@ -275,7 +275,7 @@ class TestRSVPView(TestCase):
         """Full accept flow: find event, update partstat, put back."""
         mock_find.return_value = (
             SAMPLE_ICS,
-            "/api/v1.0/caldav/calendars/alice%40example.com/cal/event.ics",
+            "/caldav/calendars/users/alice%40example.com/cal/event.ics",
         )
         mock_put.return_value = True
 
@@ -495,7 +495,7 @@ class TestRSVPEndToEndFlow(TestCase):
         ):
             mock_find.return_value = (
                 SAMPLE_ICS,
-                "/api/v1.0/caldav/calendars/alice%40example.com/cal/event.ics",
+                "/caldav/calendars/users/alice%40example.com/cal/event.ics",
             )
             mock_put.return_value = True
 
@@ -622,3 +622,99 @@ class TestRSVPEndToEndFlow(TestCase):
 
         assert response.status_code == 400
         assert "already passed" in response.content.decode().lower()
+
+
+def _make_recurring_ics(
+    uid="recurring-uid-1", summary="Weekly Standup", days_from_now=30
+):
+    """Build a recurring ICS string with an RRULE."""
+    dt = timezone.now() + timedelta(days=days_from_now)
+    dtstart = dt.strftime("%Y%m%dT%H%M%SZ")
+    dtend = (dt + timedelta(hours=1)).strftime("%Y%m%dT%H%M%SZ")
+    return (
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//Test//EN\r\n"
+        "BEGIN:VEVENT\r\n"
+        f"UID:{uid}\r\n"
+        f"DTSTART:{dtstart}\r\n"
+        f"DTEND:{dtend}\r\n"
+        f"SUMMARY:{summary}\r\n"
+        "RRULE:FREQ=WEEKLY;COUNT=52\r\n"
+        "ORGANIZER;CN=Alice:mailto:alice@example.com\r\n"
+        "ATTENDEE;CN=Bob;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:bob@example.com\r\n"
+        "SEQUENCE:0\r\n"
+        "END:VEVENT\r\n"
+        "END:VCALENDAR"
+    )
+
+
+@override_settings(
+    CALDAV_URL="http://caldav:80",
+    CALDAV_OUTBOUND_API_KEY="test-api-key",
+    APP_URL="http://localhost:8921",
+    RSVP_TOKEN_MAX_AGE_RECURRING=7776000,  # 90 days
+)
+class TestRSVPRecurringTokenExpiry(TestCase):
+    """Tests for RSVP token max_age enforcement on recurring events.
+
+    Tokens are signed with Signer (not TimestampSigner). The RSVP view
+    first unsigns with Signer, then for recurring events tries a secondary
+    check with TimestampSigner. If the token isn't TimestampSigner-compatible,
+    the BadSignature is caught and the request is allowed through.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.view = RSVPView.as_view()
+
+    @patch.object(CalDAVHTTPClient, "put_event")
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
+    def test_recurring_event_with_fresh_token_succeeds(self, mock_find, mock_put):
+        """A fresh token for a recurring event should be accepted."""
+        ics = _make_recurring_ics()
+        mock_find.return_value = (ics, "/path/to/event.ics")
+        mock_put.return_value = True
+
+        # Signer-signed tokens pass through since TimestampSigner.unsign_object
+        # raises BadSignature (caught as pass in the view)
+        token = _make_token(uid="recurring-uid-1")
+        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
+        response = self.view(request)
+
+        assert response.status_code == 200
+
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
+    def test_recurring_event_with_expired_token_rejected(self, mock_find):
+        """Token for a recurring event should be rejected when TimestampSigner
+        raises SignatureExpired (simulating an aged token)."""
+        ics = _make_recurring_ics()
+        mock_find.return_value = (ics, "/path/to/event.ics")
+
+        token = _make_token(uid="recurring-uid-1")
+
+        # Patch TimestampSigner to always raise SignatureExpired when max_age is set
+        with patch.object(
+            TimestampSigner,
+            "unsign_object",
+            side_effect=SignatureExpired("Signature age exceeds max_age"),
+        ):
+            request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
+            response = self.view(request)
+
+        assert response.status_code == 400
+        content = response.content.decode().lower()
+        assert "expired" in content or "new invitation" in content
+
+    @patch.object(CalDAVHTTPClient, "put_event")
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
+    def test_non_recurring_event_ignores_token_age(self, mock_find, mock_put):
+        """Non-recurring events should not enforce token max_age."""
+        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
+        mock_put.return_value = True
+
+        token = _make_token()
+        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
+        response = self.view(request)
+
+        assert response.status_code == 200

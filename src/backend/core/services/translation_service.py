@@ -47,7 +47,7 @@ class TranslationService:
         if cls._translations is not None:
             return
 
-        path = getattr(settings, "TRANSLATIONS_JSON_PATH", "")
+        path = settings.TRANSLATIONS_JSON_PATH
         if not path:
             raise RuntimeError("TRANSLATIONS_JSON_PATH setting is not configured")
 
@@ -104,11 +104,11 @@ class TranslationService:
 
         if email:
             try:
-                from core.models import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
-                    User,
+                from django.contrib.auth import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+                    get_user_model,
                 )
 
-                user = User.objects.filter(email=email).first()
+                user = get_user_model().objects.filter(email=email).first()
                 if user and user.language:
                     return cls.normalize_lang(user.language)
             except Exception:  # pylint: disable=broad-exception-caught

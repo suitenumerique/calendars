@@ -74,12 +74,16 @@ class Base(Configuration):
 
     # CalDAV API keys for bidirectional authentication
     # INBOUND: API key for authenticating requests FROM CalDAV server TO Django
-    CALDAV_INBOUND_API_KEY = values.Value(
+    CALDAV_INBOUND_API_KEY = SecretFileValue(
         None, environ_name="CALDAV_INBOUND_API_KEY", environ_prefix=None
     )
     # OUTBOUND: API key for authenticating requests FROM Django TO CalDAV server
-    CALDAV_OUTBOUND_API_KEY = values.Value(
+    CALDAV_OUTBOUND_API_KEY = SecretFileValue(
         None, environ_name="CALDAV_OUTBOUND_API_KEY", environ_prefix=None
+    )
+    # INTERNAL: API key for Django → CalDAV internal API (resource provisioning, import)
+    CALDAV_INTERNAL_API_KEY = SecretFileValue(
+        None, environ_name="CALDAV_INTERNAL_API_KEY", environ_prefix=None
     )
     # Base URL for CalDAV scheduling callbacks (must be accessible from CalDAV container)
     # In Docker environments, use the internal Docker network URL (e.g., http://backend:8000)
@@ -117,7 +121,7 @@ class Base(Configuration):
     CALENDAR_INVITATION_FROM_EMAIL = values.Value(
         None, environ_name="CALENDAR_INVITATION_FROM_EMAIL", environ_prefix=None
     )
-    APP_NAME = values.Value("Calendrier", environ_name="APP_NAME", environ_prefix=None)
+    APP_NAME = values.Value("Calendars", environ_name="APP_NAME", environ_prefix=None)
     APP_URL = values.Value("", environ_name="APP_URL", environ_prefix=None)
     CALENDAR_ITIP_ENABLED = values.BooleanValue(
         False, environ_name="CALENDAR_ITIP_ENABLED", environ_prefix=None
@@ -130,6 +134,18 @@ class Base(Configuration):
     DEFAULT_CALENDAR_COLOR = values.Value(
         "#3788d8",
         environ_name="DEFAULT_CALENDAR_COLOR",
+        environ_prefix=None,
+    )
+
+    # Organizations
+    OIDC_USERINFO_ORGANIZATION_CLAIM = values.Value(
+        "",
+        environ_name="OIDC_USERINFO_ORGANIZATION_CLAIM",
+        environ_prefix=None,
+    )
+    RESOURCE_EMAIL_DOMAIN = values.Value(
+        "",
+        environ_name="RESOURCE_EMAIL_DOMAIN",
         environ_prefix=None,
     )
 
@@ -212,7 +228,7 @@ class Base(Configuration):
     # This is used to limit the size of the request body in memory.
     # This also limits the size of the file that can be uploaded to the server.
     DATA_UPLOAD_MAX_MEMORY_SIZE = values.PositiveIntegerValue(
-        2 * (2**30),  # 2GB
+        20 * (2**20),  # 20MB
         environ_name="DATA_UPLOAD_MAX_MEMORY_SIZE",
         environ_prefix=None,
     )
@@ -415,7 +431,11 @@ class Base(Configuration):
     )
 
     AUTH_USER_MODEL = "core.User"
-    INVITATION_VALIDITY_DURATION = 604800  # 7 days, in seconds
+    RSVP_TOKEN_MAX_AGE_RECURRING = values.PositiveIntegerValue(
+        7776000,  # 90 days
+        environ_name="RSVP_TOKEN_MAX_AGE_RECURRING",
+        environ_prefix=None,
+    )
 
     # CORS
     CORS_ALLOW_CREDENTIALS = True
@@ -635,12 +655,6 @@ class Base(Configuration):
         environ_name="OIDC_USERINFO_FULLNAME_FIELDS",
         environ_prefix=None,
     )
-    OIDC_USERINFO_SHORTNAME_FIELD = values.Value(
-        default="first_name",
-        environ_name="OIDC_USERINFO_SHORTNAME_FIELD",
-        environ_prefix=None,
-    )
-
     # OIDC Resource Server
 
     OIDC_RESOURCE_SERVER_ENABLED = values.BooleanValue(
@@ -887,7 +901,7 @@ class Development(Base):
     EMAIL_USE_SSL = False
     DEFAULT_FROM_EMAIL = "calendars@calendars.world"
     CALENDAR_INVITATION_FROM_EMAIL = "calendars@calendars.world"
-    APP_NAME = "Calendrier (Dev)"
+    APP_NAME = "Calendars (dev)"
     APP_URL = "http://localhost:8921"
 
     DEBUG_TOOLBAR_CONFIG = {
@@ -977,6 +991,7 @@ class Production(Base):
         "^__lbheartbeat__",
         "^__heartbeat__",
         r"^api/v1\.0/caldav-scheduling-callback/",
+        r"^caldav/",
     ]
 
     # Modern browsers require to have the `secure` attribute on cookies with `Samesite=none`

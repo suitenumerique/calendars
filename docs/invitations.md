@@ -171,9 +171,9 @@ When an event with attendees is deleted:
 | Email service | `src/backend/core/services/calendar_invitation_service.py` |
 | ICS parser | `src/backend/core/services/calendar_invitation_service.py` (`ICalendarParser`) |
 | Email templates | `src/backend/core/templates/emails/calendar_invitation*.html` |
-| SabreDAV sanitizer | `docker/sabredav/src/CalendarSanitizerPlugin.php` |
-| SabreDAV attendee dedup | `docker/sabredav/src/AttendeeNormalizerPlugin.php` |
-| SabreDAV callback plugin | `docker/sabredav/src/HttpCallbackIMipPlugin.php` |
+| SabreDAV sanitizer | `src/caldav/src/CalendarSanitizerPlugin.php` |
+| SabreDAV attendee dedup | `src/caldav/src/AttendeeNormalizerPlugin.php` |
+| SabreDAV callback plugin | `src/caldav/src/HttpCallbackIMipPlugin.php` |
 
 ## Future: Messages mail client integration
 

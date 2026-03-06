@@ -1,0 +1,11 @@
+FROM caddy:2-alpine
+
+RUN apk update && \
+  apk upgrade && \
+  rm -rf /var/cache/apk/*
+
+COPY out /srv
+
+COPY ./Caddyfile /etc/caddy/Caddyfile
+
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

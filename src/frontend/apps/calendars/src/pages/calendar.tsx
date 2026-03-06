@@ -9,12 +9,14 @@ import { useTranslation } from "next-i18next";
 import { login, useAuth } from "@/features/auth/Auth";
 import { LeftPanel } from "@/features/calendar/components";
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";
-import { HeaderRight } from "@/features/layouts/components/header/Header";
+import {
+  HeaderIcon,
+  HeaderRight,
+} from "@/features/layouts/components/header/Header";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
 import { Scheduler } from "@/features/calendar/components/scheduler/Scheduler";
 import { CalendarContextProvider } from "@/features/calendar/contexts";
-import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 
 export default function CalendarPage() {
   const { t } = useTranslation();
@@ -39,7 +41,7 @@ export default function CalendarPage() {
   return (
     <>
       <Head>
-        <title>Calendrier - {t("app_title")}</title>
+        <title>{t("app_title")}</title>
         <meta name="description" content={t("app_description")} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.png" />
@@ -64,11 +66,7 @@ CalendarPage.getLayout = function getLayout(page: React.ReactElement) {
           <MainLayout
             enableResize={false}
             leftPanelContent={<LeftPanel />}
-            icon={
-              <div className="calendars__header__left">
-                <DynamicCalendarLogo variant="header" />
-              </div>
-            }
+            icon={<HeaderIcon />}
             rightHeaderContent={<HeaderRight />}
           >
             {page}

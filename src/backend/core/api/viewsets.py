@@ -22,6 +22,7 @@ from core.services.caldav_service import (
     verify_caldav_access,
 )
 from core.services.import_service import MAX_FILE_SIZE, ICSImportService
+from core.services.resource_service import ResourceProvisioningError, ResourceService
 
 from . import permissions, serializers
 
@@ -142,7 +143,7 @@ class UserViewSet(
     queryset = models.User.objects.all().filter(is_active=True)
     serializer_class = serializers.UserSerializer
     get_me_serializer_class = serializers.UserMeSerializer
-    pagination_class = None
+    pagination_class = Pagination
     throttle_classes = []
 
     def get_throttles(self):
@@ -155,6 +156,7 @@ class UserViewSet(
     def get_queryset(self):
         """
         Limit listed users by querying the email field.
+        Scoped to the requesting user's organization.
         If query contains "@", search exactly. Otherwise return empty.
         """
         queryset = self.queryset
@@ -162,14 +164,18 @@ class UserViewSet(
         if self.action != "list":
             return queryset
 
+        # Scope to same organization
+        if self.request.user.organization_id:
+            queryset = queryset.filter(
+                organization_id=self.request.user.organization_id
+            )
+
         if not (query := self.request.query_params.get("q", "")) or len(query) < 5:
             return queryset.none()
 
         # For emails, match exactly
         if "@" in query:
-            return queryset.filter(email__iexact=query).order_by("email")[
-                : settings.API_USERS_LIST_LIMIT
-            ]
+            return queryset.filter(email__iexact=query).order_by("email")
 
         # For non-email queries, return empty (no fuzzy search)
         return queryset.none()
@@ -286,12 +292,12 @@ class CalendarViewSet(viewsets.GenericViewSet):
         """Import events from an ICS file into a calendar.
 
         POST /api/v1.0/calendars/import-events/
-        Body (multipart): file=<ics>, caldav_path=/calendars/user@.../uuid/
+        Body (multipart): file=<ics>, caldav_path=/calendars/users/user@.../uuid/
         """
         caldav_path = request.data.get("caldav_path", "")
         if not caldav_path:
             return drf_response.Response(
-                {"error": "caldav_path is required"},
+                {"detail": "caldav_path is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -300,14 +306,14 @@ class CalendarViewSet(viewsets.GenericViewSet):
         # Verify user access
         if not verify_caldav_access(request.user, caldav_path):
             return drf_response.Response(
-                {"error": "You don't have access to this calendar"},
+                {"detail": "You don't have access to this calendar"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         # Validate file presence
         if "file" not in request.FILES:
             return drf_response.Response(
-                {"error": "No file provided"},
+                {"detail": "No file provided"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -316,7 +322,7 @@ class CalendarViewSet(viewsets.GenericViewSet):
         # Validate file size
         if uploaded_file.size > MAX_FILE_SIZE:
             return drf_response.Response(
-                {"error": "File too large. Maximum size is 10 MB."},
+                {"detail": "File too large. Maximum size is 10 MB."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -358,7 +364,7 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
         Create or get existing subscription token.
 
         POST body:
-        - caldav_path: The CalDAV path (e.g., /calendars/user@example.com/uuid/)
+        - caldav_path: The CalDAV path (e.g., /calendars/users/user@example.com/uuid/)
         - calendar_name: Display name of the calendar (optional)
         """
         create_serializer = serializers.CalendarSubscriptionTokenCreateSerializer(
@@ -372,7 +378,7 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
         # Verify user has access to this calendar
         if not verify_caldav_access(request.user, caldav_path):
             return drf_response.Response(
-                {"error": "You don't have access to this calendar"},
+                {"detail": "You don't have access to this calendar"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -400,12 +406,12 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
         Get or delete subscription token by CalDAV path.
 
         Query parameter:
-        - caldav_path: The CalDAV path (e.g., /calendars/user@example.com/uuid/)
+        - caldav_path: The CalDAV path (e.g., /calendars/users/user@example.com/uuid/)
         """
         caldav_path = request.query_params.get("caldav_path")
         if not caldav_path:
             return drf_response.Response(
-                {"error": "caldav_path query parameter is required"},
+                {"detail": "caldav_path query parameter is required"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -414,7 +420,7 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
         # Verify user has access to this calendar
         if not verify_caldav_access(request.user, caldav_path):
             return drf_response.Response(
-                {"error": "You don't have access to this calendar"},
+                {"detail": "You don't have access to this calendar"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -425,7 +431,7 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
             )
         except models.CalendarSubscriptionToken.DoesNotExist:
             return drf_response.Response(
-                {"error": "No subscription token exists for this calendar"},
+                {"detail": "No subscription token exists for this calendar"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -435,4 +441,63 @@ class SubscriptionTokenViewSet(viewsets.GenericViewSet):
 
         # DELETE
         token.delete()
+        return drf_response.Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ResourceViewSet(viewsets.ViewSet):
+    """ViewSet for resource provisioning (create/delete).
+
+    Resources are CalDAV principals — this endpoint only handles
+    provisioning. All metadata, sharing, and discovery goes through CalDAV.
+    """
+
+    permission_classes = [permissions.IsOrgAdmin]
+
+    def create(self, request):
+        """Create a resource principal and its default calendar.
+
+        POST /api/v1.0/resources/
+        Body: {"name": "Room 101", "resource_type": "ROOM"}
+        """
+        name = request.data.get("name", "").strip()
+        resource_type = request.data.get("resource_type", "ROOM").strip().upper()
+
+        if not name:
+            return drf_response.Response(
+                {"detail": "name is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = ResourceService()
+        try:
+            result = service.create_resource(request.user, name, resource_type)
+        except ResourceProvisioningError as e:
+            return drf_response.Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return drf_response.Response(result, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, pk=None):
+        """Delete a resource principal and its calendar.
+
+        DELETE /api/v1.0/resources/{resource_id}/
+        """
+        resource_id = pk
+        if not resource_id:
+            return drf_response.Response(
+                {"detail": "Resource ID is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = ResourceService()
+        try:
+            service.delete_resource(request.user, resource_id)
+        except ResourceProvisioningError as e:
+            return drf_response.Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         return drf_response.Response(status=status.HTTP_204_NO_CONTENT)

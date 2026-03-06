@@ -21,6 +21,7 @@ router.register(
     viewsets.SubscriptionTokenViewSet,
     basename="subscription-tokens",
 )
+router.register("resources", viewsets.ResourceViewSet, basename="resources")
 
 urlpatterns = [
     path(
@@ -29,16 +30,7 @@ urlpatterns = [
             [
                 *router.urls,
                 *oidc_urls,
-                # CalDAV proxy - root path (must come before catch-all to match /caldav exactly)
-                path("caldav", CalDAVProxyView.as_view(), name="caldav-root"),
-                path("caldav/", CalDAVProxyView.as_view(), name="caldav-root-slash"),
-                # CalDAV proxy - catch all paths with content
-                re_path(
-                    r"^caldav/(?P<path>.+)$",
-                    CalDAVProxyView.as_view(),
-                    name="caldav-proxy",
-                ),
-                # CalDAV scheduling callback endpoint (separate from caldav proxy)
+                # CalDAV scheduling callback endpoint
                 path(
                     "caldav-scheduling-callback/",
                     CalDAVSchedulingCallbackView.as_view(),
@@ -48,6 +40,14 @@ urlpatterns = [
         ),
     ),
     path(f"api/{settings.API_VERSION}/config/", viewsets.ConfigView.as_view()),
+    # CalDAV proxy - top-level stable path (not versioned)
+    path("caldav", CalDAVProxyView.as_view(), name="caldav-root"),
+    path("caldav/", CalDAVProxyView.as_view(), name="caldav-root-slash"),
+    re_path(
+        r"^caldav/(?P<path>.+)$",
+        CalDAVProxyView.as_view(),
+        name="caldav-proxy",
+    ),
     # Public iCal export endpoint (no authentication required)
     # Token in URL acts as authentication
     path(

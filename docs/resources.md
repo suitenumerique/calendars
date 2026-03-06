@@ -18,7 +18,7 @@ This document describes the design and implementation plan for **calendar resour
 - [Sharing and Delegation](#sharing-and-delegation)
 - [Resource Discovery](#resource-discovery)
 - [Interoperability with CalDAV Clients](#interoperability-with-caldav-clients)
-- [Why a Custom Plugin?](#why-a-custom-plugin)
+- [What SabreDAV Provides (and What It Doesn't)](#what-sabredav-provides-and-what-it-doesnt)
 - [Implementation Plan](#implementation-plan)
   - [Phase 1: Resource Principals in SabreDAV](#phase-1-resource-principals-in-sabredav)
   - [Phase 2: Django Resource Management](#phase-2-django-resource-management)
@@ -146,7 +146,7 @@ The CalDAV scheduling server (RFC 6638):
 3. A server-side agent checks the resource's calendar for conflicts
 4. Sends an iTIP `REPLY` back with `PARTSTAT=ACCEPTED` or `PARTSTAT=DECLINED`
 
-**Auto-scheduling is not standardized** -- it is a server implementation feature. RFC 6638 only defines the transport mechanism. This project implements auto-scheduling as a custom SabreDAV plugin (see [Why a Custom Plugin?](#why-a-custom-plugin) for rationale).
+**Auto-scheduling is not standardized** -- it is a server implementation feature. RFC 6638 only defines the transport mechanism. This project implements auto-scheduling as a custom SabreDAV plugin (see [What SabreDAV Provides](#what-sabredav-provides-and-what-it-doesnt) for rationale).
 
 ### What This Means for Interoperability
 
@@ -182,10 +182,10 @@ Each resource exists as a principal in SabreDAV with a single
 dedicated calendar:
 
 ```
-principals/resources/{resource-slug}
-  -> calendar-home-set: /calendars/resources/{resource-slug}/
-  -> schedule-inbox-URL: /calendars/resources/{resource-slug}/inbox/
-  -> schedule-outbox-URL: /calendars/resources/{resource-slug}/outbox/
+principals/resources/{resource-id}
+  -> calendar-home-set: /calendars/resources/{resource-id}/
+  -> schedule-inbox-URL: /calendars/resources/{resource-id}/inbox/
+  -> schedule-outbox-URL: /calendars/resources/{resource-id}/outbox/
   -> calendar-user-type: ROOM | RESOURCE
   -> calendar-user-address-set: mailto:{opaque-id}@resource.calendar.example.com
 ```
@@ -328,21 +328,25 @@ This is simple, avoids data duplication, and works well up to ~1000 resources. I
 ### Creating a Resource
 
 1. An **org admin** (`can_admin` entitlement) calls the Django
-   REST API to create a resource (slug, name, type)
-2. Django creates the SabreDAV principal via CalDAV requests,
-   forwarding the admin's `X-Forwarded-Org` header so SabreDAV
-   sets the resource's `org_id` to the admin's org:
-   - Request to the resource's principal URL triggers
-     `AutoCreatePrincipalBackend` (auto-creates the principal row
-     with `calendar_user_type` and `org_id` set)
-   - `MKCALENDAR` creates the default calendar collection
-   - `PROPPATCH` sets initial properties (name, type)
+   REST API to create a resource (name, type)
+2. Django calls SabreDAV's `/internal-api/resources/` endpoint
+   (POST with JSON body). The `InternalApiPlugin` handles both
+   principal creation and default calendar creation atomically.
+   The admin's `org_id` is passed in the request body.
 3. The frontend sets additional metadata via PROPPATCH (capacity,
    location, equipment, etc.)
 4. The resource is immediately available for booking
 
 No Django model is created -- the CalDAV principal **is** the
 resource.
+
+> **Architecture note:** All resource CRUD goes through the
+> `/internal-api/` namespace in SabreDAV, which is completely
+> separate from the CalDAV protocol namespace. This avoids direct
+> database access from Django to SabreDAV tables. The internal API
+> is gated by the `X-Internal-Api-Key` header (different from the
+> `X-Api-Key` used by the CalDAV proxy) and is explicitly blocked
+> by the Django proxy's path validation.
 
 ### Updating a Resource
 
@@ -355,8 +359,9 @@ All metadata changes go through CalDAV `PROPPATCH` directly (from the frontend o
 
 ### Deleting a Resource
 
-1. Delete the CalDAV calendar collection (and its events)
-2. Delete the SabreDAV principal
+1. Django calls `DELETE /internal-api/resources/{resource-id}` on SabreDAV
+2. The `InternalApiPlugin` deletes all calendars, calendar objects,
+   scheduling objects, and the principal row atomically
 3. Sharing entries are automatically cleaned up with the calendar
 
 Existing events in user calendars that reference the resource as
@@ -419,37 +424,55 @@ The recommended approach is **Option A** for simplicity, with the UI helping use
 
 ---
 
-## Why a Custom Plugin?
+## What SabreDAV Provides (and What It Doesn't)
 
-No existing SabreDAV plugin or third-party package provides resource auto-scheduling. This was investigated thoroughly:
+SabreDAV is the most mature open-source CalDAV server, but its support for resource principals (ROOM/RESOURCE) has gaps. Understanding exactly what's built in vs. what we extend is important.
 
-### SabreDAV Core
+### CUTYPE: Extensible but Not Enabled by Default
 
-SabreDAV's `Schedule\Plugin` handles iTIP delivery (inbox/outbox) but has **no resource awareness**. The source code explicitly states: *"The server currently reports every principal to be of type INDIVIDUAL."* There is no CUTYPE differentiation, no auto-accept logic, and no conflict detection. The `principals` table schema only has `uri`, `email`, `displayname` -- no `calendar_user_type` column.
+RFC 6638 §2.4.2 defines the `{urn:ietf:params:xml:ns:caldav}calendar-user-type` property on principals, with values from RFC 5545's CUTYPE parameter (INDIVIDUAL, ROOM, RESOURCE, GROUP, etc.). SabreDAV **acknowledges** this property but doesn't fully implement it:
 
-### Nextcloud
+- The [`Schedule\Plugin`](https://github.com/sabre-io/dav/blob/master/lib/CalDAV/Schedule/Plugin.php) hardcodes `calendar-user-type` to `'INDIVIDUAL'` for all principals, with an inline comment: *"The server currently reports every principal to be of type INDIVIDUAL."*
+- The [`PrincipalBackend\PDO`](https://github.com/sabre-io/dav/blob/master/lib/DAVACL/PrincipalBackend/PDO.php) base class only maps two columns in its `$fieldMap`: `displayname` and `email`. There is no `calendar_user_type` column in the default schema.
 
-Nextcloud built resource scheduling on top of SabreDAV, but their implementation is **deeply coupled to the Nextcloud framework**:
-- `apps/dav/lib/CalDAV/ResourceBooking/AbstractPrincipalBackend.php`, `ResourcePrincipalBackend.php`, `RoomPrincipalBackend.php` all depend on `\OCP\` interfaces (Nextcloud's DI container, app framework, database abstraction)
-- Auto-accept logic lives in `CalDavBackend.php` which implements Nextcloud-specific `SchedulingSupport` interfaces
-- Resource backends require implementing `\OCP\Calendar\Resource\IBackend` -- a Nextcloud-only interface
-- None of this code is extractable as a standalone SabreDAV plugin
+**However**, SabreDAV was designed for this to be extended:
 
-### SOGo
+1. The `$fieldMap` in `PrincipalBackend\PDO` is a `protected` property that subclasses can override to add custom DB columns and map them to WebDAV properties.
+2. When a property is in the `$fieldMap`, the `Principal` node exposes it via `getProperties()`, which runs **before** the Schedule Plugin's `handle()` callback.
+3. The Schedule Plugin uses `$propFind->handle()` which is a **no-op when the property is already set**. So the hardcoded `'INDIVIDUAL'` only serves as a fallback for principals that lack the column.
 
-SOGo has resource auto-accept, but it is written in Objective-C with its own CalDAV stack -- not SabreDAV-based at all.
+This means adding CUTYPE support is a **one-line extension** of the fieldMap, not a hack:
 
-### Packagist / Open Source
+```php
+// In our AutoCreatePrincipalBackend (extends PrincipalBackend\PDO)
+protected $fieldMap = [
+    '{DAV:}displayname' => ['dbField' => 'displayname'],
+    '{http://sabredav.org/ns}email-address' => ['dbField' => 'email'],
+    // This is all it takes -- SabreDAV handles the rest
+    '{urn:ietf:params:xml:ns:caldav}calendar-user-type' => ['dbField' => 'calendar_user_type'],
+];
+```
 
-No third-party SabreDAV resource scheduling package exists on Packagist or GitHub.
+With this in place, `getPrincipalByPath()`, `getPrincipalsByPrefix()`, and `searchPrincipals()` all automatically include the real CUTYPE value. CalDAV clients that support `principal-property-search` (Apple Calendar) can discover rooms and resources. PROPFIND on resource principals returns the correct type. No custom plugin is needed for CUTYPE -- just the standard extension point.
+
+### Auto-Scheduling: Not Built In Anywhere
+
+While CUTYPE is a matter of data exposure (and SabreDAV provides the extension points), **auto-scheduling is a different story**. No existing CalDAV server component provides automatic accept/decline for resource principals:
+
+**SabreDAV Core**: The `Schedule\Plugin` handles iTIP delivery (inbox/outbox) but has no logic to auto-accept or auto-decline based on calendar-user-type or availability. After delivering a scheduling message, it's done.
+
+**Nextcloud**: Built resource scheduling on top of SabreDAV, but deeply coupled to the Nextcloud framework (`\OCP\` interfaces, DI container, app framework). None of the code (`ResourcePrincipalBackend.php`, `RoomPrincipalBackend.php`, `CalDavBackend.php`) is extractable as a standalone plugin.
+
+**SOGo**: Has resource auto-accept, but written in Objective-C with its own CalDAV stack -- not SabreDAV-based.
+
+**Bedework**: The one enterprise CalDAV server with built-in room/resource scheduling, but it's a Java application, not a SabreDAV plugin.
+
+**Packagist / Open Source**: No third-party SabreDAV resource scheduling package exists.
 
 ### What This Means
 
-We need a custom `ResourceAutoSchedulePlugin` (~150-200 lines of PHP). The good news:
-- The pattern is identical to this project's existing `HttpCallbackIMipPlugin`: listen for the `schedule` event, inspect the iTIP message, act on it
-- SabreDAV's plugin architecture makes this straightforward -- hook into the `schedule` event at a priority after `Schedule\Plugin` delivers the message
-- The auto-schedule logic (free/busy check + accept/decline) is the only new part
-- The plugin reads resource configuration from the shared PostgreSQL database directly (same instance SabreDAV already uses)
+- **CUTYPE support**: Uses SabreDAV's built-in `$fieldMap` extension. One line of code, fully idiomatic.
+- **Auto-scheduling**: Requires a custom `ResourceAutoSchedulePlugin` (~350 lines of PHP). Follows the same pattern as our existing `HttpCallbackIMipPlugin`: hook into the `schedule` event, inspect the iTIP message, act on it. The plugin reads resource configuration from the shared PostgreSQL database directly (same instance SabreDAV already uses).
 
 ---
 
@@ -457,7 +480,7 @@ We need a custom `ResourceAutoSchedulePlugin` (~150-200 lines of PHP). The good 
 
 ### How Auto-Scheduling Works
 
-Auto-scheduling is implemented as a **custom SabreDAV plugin** that intercepts scheduling deliveries to resource principals. It runs after `Sabre\CalDAV\Schedule\Plugin` delivers the iTIP message. No existing SabreDAV plugin provides this functionality (see [Why a Custom Plugin?](#why-a-custom-plugin)).
+Auto-scheduling is implemented as a **custom SabreDAV plugin** that intercepts scheduling deliveries to resource principals. It runs after `Sabre\CalDAV\Schedule\Plugin` delivers the iTIP message. No existing SabreDAV plugin provides this functionality (see [What SabreDAV Provides](#what-sabredav-provides-and-what-it-doesnt)).
 
 ```php
 class ResourceAutoSchedulePlugin extends ServerPlugin
@@ -577,7 +600,7 @@ For resources that should not be bookable by everyone (executive rooms, speciali
 
 See [docs/organizations.md](organizations.md) for the full org design. Key points for resources:
 
-- **Resource discovery** is org-scoped: SabreDAV filters resource principals by the `org_id` column on the `principals` table, using the `X-Forwarded-Org` header set by Django.
+- **Resource discovery** is org-scoped: SabreDAV filters resource principals by the `org_id` column on the `principals` table, using the `X-CalDAV-Organization` header set by Django.
 - **Cross-org resource booking is not allowed**: the auto-schedule plugin rejects invitations from users outside the resource's org.
 - **Resource creation** requires the `can_admin` entitlement (returned by the entitlements system alongside `can_access`).
 
@@ -679,15 +702,16 @@ The key takeaway: **booking works universally** (any client can invite a resourc
 
 **Changes**:
 
-1. **Extend SabreDAV principals table**: Add `calendar_user_type` column
-2. **Extend `AutoCreatePrincipalBackend`**: Map `{urn:ietf:params:xml:ns:caldav}calendar-user-type` to the new column; return it in `getPrincipalsByPrefix` and `getPrincipalByPath`
-3. **Add resource principal prefix**: `principals/resources/` alongside existing `principals/` for users
+1. **Extend SabreDAV principals table**: Add `calendar_user_type` column (and `org_id` for multi-tenancy)
+2. **Extend `AutoCreatePrincipalBackend.$fieldMap`**: Add `{urn:ietf:params:xml:ns:caldav}calendar-user-type` → `calendar_user_type`. This is SabreDAV's idiomatic extension point for principal properties -- the base `PrincipalBackend\PDO` automatically includes mapped fields in all queries, and the `Schedule\Plugin`'s hardcoded `INDIVIDUAL` becomes a fallback (see [What SabreDAV Provides](#what-sabredav-provides-and-what-it-doesnt))
+3. **Add nested principal prefixes**: `principals/users/` for user principals and `principals/resources/` for resource principals, with a custom `CalendarsRoot` node to handle the nested structure (SabreDAV's default `CalendarRoot` only supports flat principal prefixes)
 4. **Verify scheduling delivery**: Ensure `Schedule\Plugin` delivers iTIP messages to resource inboxes
 
 **Files to modify**:
-- `docker/sabredav/pgsql.principals.sql` -- add column
-- `docker/sabredav/src/AutoCreatePrincipalBackend.php` -- extend field map
-- `docker/sabredav/server.php` -- add resource principal collection
+- `src/caldav/sql/pgsql.principals.sql` -- add columns
+- `src/caldav/src/AutoCreatePrincipalBackend.php` -- extend `$fieldMap`
+- `src/caldav/src/CalendarsRoot.php` -- custom DAV Collection for nested prefixes
+- `src/caldav/server.php` -- use CalendarsRoot and nested principal collections
 
 ### Phase 2: Django Provisioning API
 
@@ -708,7 +732,7 @@ No Django model is needed. Metadata is managed via CalDAV PROPPATCH. Access cont
 
 **Goal**: Resources automatically accept/decline based on availability.
 
-No existing SabreDAV plugin provides this -- see [Why a Custom Plugin?](#why-a-custom-plugin). The plugin is ~150-200 lines of PHP, following the same pattern as the existing `HttpCallbackIMipPlugin`.
+No existing SabreDAV plugin provides this -- see [What SabreDAV Provides](#what-sabredav-provides-and-what-it-doesnt). The plugin is ~350 lines of PHP, following the same pattern as the existing `HttpCallbackIMipPlugin`.
 
 **Changes**:
 
@@ -719,8 +743,8 @@ No existing SabreDAV plugin provides this -- see [Why a Custom Plugin?](#why-a-c
 5. **Availability hours**: Not in v1 (see Phase 5)
 
 **Files to create/modify**:
-- `docker/sabredav/src/ResourceAutoSchedulePlugin.php` -- new plugin
-- `docker/sabredav/server.php` -- register plugin
+- `src/caldav/src/ResourceAutoSchedulePlugin.php` -- new plugin
+- `src/caldav/server.php` -- register plugin
 
 **Design choice**: The plugin reads the `auto_schedule_mode` from the database directly (same PostgreSQL instance SabreDAV already uses) rather than calling Django's API, to avoid circular HTTP dependencies during scheduling.
 
@@ -769,15 +793,26 @@ The frontend reads/writes resource metadata via CalDAV (PROPFIND/PROPPATCH), the
 
 ### SabreDAV: Principals Table
 
-```sql
-ALTER TABLE principals
-    ADD COLUMN calendar_user_type VARCHAR(20) DEFAULT 'INDIVIDUAL';
+The principals table includes two extra columns beyond the SabreDAV defaults (defined in `src/caldav/sql/pgsql.principals.sql`):
 
--- Index for resource discovery queries
-CREATE INDEX idx_principals_cutype
-    ON principals (calendar_user_type)
+```sql
+CREATE TABLE principals (
+    id SERIAL NOT NULL,
+    uri VARCHAR(200) NOT NULL,
+    email VARCHAR(80),
+    displayname VARCHAR(80),
+    calendar_user_type VARCHAR(20) DEFAULT 'INDIVIDUAL',  -- INDIVIDUAL, ROOM, RESOURCE
+    org_id VARCHAR(200),                                   -- organization scoping
+    PRIMARY KEY (id),
+    UNIQUE (uri)
+);
+
+CREATE INDEX idx_principals_org_id ON principals (org_id) WHERE org_id IS NOT NULL;
+CREATE INDEX idx_principals_cutype ON principals (calendar_user_type)
     WHERE calendar_user_type IN ('ROOM', 'RESOURCE');
 ```
+
+The `calendar_user_type` column is exposed as the standard `{urn:ietf:params:xml:ns:caldav}calendar-user-type` DAV property via `AutoCreatePrincipalBackend.$fieldMap`. The `org_id` column is used internally for org-scoped filtering and is not exposed as a DAV property.
 
 Resource metadata (capacity, location, equipment, etc.) is stored in SabreDAV's existing `propertystorage` table via PROPPATCH -- no additional SabreDAV schema changes needed.
 
@@ -795,7 +830,7 @@ Resource metadata is read/written via **CalDAV** (PROPFIND/PROPPATCH). The Djang
 
 ```
 POST   /api/v1.0/resources/                         # Create resource (provision principal + calendar)
-DELETE /api/v1.0/resources/{slug}/                   # Delete resource (cleanup principal + calendar)
+DELETE /api/v1.0/resources/{resource-id}/                   # Delete resource (cleanup principal + calendar)
 ```
 
 Both `POST` and `DELETE` require the `can_admin` entitlement. Access control (sharing) is managed via CalDAV `CS:share` on the resource's calendar -- no Django access endpoints needed.
@@ -805,7 +840,6 @@ Both `POST` and `DELETE` require the `can_admin` entitlement. Access control (sh
 ```json
 POST /api/v1.0/resources/
 {
-  "slug": "room-101",
   "name": "Room 101 - Large Conference",
   "resource_type": "ROOM"
 }
@@ -820,10 +854,10 @@ All resource metadata is managed via standard CalDAV protocol:
 | Operation | Method | URL |
 |-----------|--------|-----|
 | List all resources | `PROPFIND` | `/api/v1.0/caldav/principals/resources/` |
-| Get resource properties | `PROPFIND` | `/api/v1.0/caldav/principals/resources/{slug}/` |
-| Update resource properties | `PROPPATCH` | `/api/v1.0/caldav/principals/resources/{slug}/` |
-| Get resource calendar | `PROPFIND` | `/api/v1.0/caldav/calendars/resources/{slug}/default/` |
-| Query free/busy | `REPORT` | `/api/v1.0/caldav/calendars/resources/{slug}/default/` |
+| Get resource properties | `PROPFIND` | `/api/v1.0/caldav/principals/resources/{resource-id}/` |
+| Update resource properties | `PROPPATCH` | `/api/v1.0/caldav/principals/resources/{resource-id}/` |
+| Get resource calendar | `PROPFIND` | `/api/v1.0/caldav/calendars/resources/{resource-id}/default/` |
+| Query free/busy | `REPORT` | `/api/v1.0/caldav/calendars/resources/{resource-id}/default/` |
 
 The frontend fetches all resource principals with their properties in a single PROPFIND request and filters/sorts client-side. This is the same pattern used for fetching calendars today.
 
@@ -831,7 +865,7 @@ The frontend fetches all resource principals with their properties in a single P
 
 ## SabreDAV Plugin Design
 
-A custom plugin is required because SabreDAV has no built-in resource auto-scheduling, and no reusable third-party implementation exists (see [Why a Custom Plugin?](#why-a-custom-plugin)).
+CUTYPE support uses SabreDAV's built-in `$fieldMap` extension point (no plugin needed). Auto-scheduling requires a custom plugin because SabreDAV has no built-in resource auto-scheduling, and no reusable third-party implementation exists (see [What SabreDAV Provides](#what-sabredav-provides-and-what-it-doesnt)).
 
 ### ResourceAutoSchedulePlugin
 
@@ -898,8 +932,8 @@ The frontend reads/writes resource metadata via CalDAV, just like it does for ca
 
 ```
 CalDavService.fetchResourcePrincipals()   → PROPFIND /principals/resources/
-CalDavService.getResourceProperties(slug)  → PROPFIND /principals/resources/{slug}/
-CalDavService.updateResourceProperties()   → PROPPATCH /principals/resources/{slug}/
+CalDavService.getResourceProperties(id)    → PROPFIND /principals/resources/{resource-id}/
+CalDavService.updateResourceProperties()   → PROPPATCH /principals/resources/{resource-id}/
 CalDavService.fetchResourceEvents()        → REPORT on resource calendar
 CalDavService.queryResourceFreeBusy()      → free-busy-query REPORT
 ```

@@ -107,12 +107,16 @@ class CalDAVProxyView(View):
         headers["X-Forwarded-Host"] = request.get_host()
         headers["X-Forwarded-Proto"] = request.scheme
 
+        # Forward the user's organization ID for org-scoped CalDAV operations
+        if request.user.organization_id:
+            headers["X-CalDAV-Organization"] = str(request.user.organization_id)
+
         # Add callback URL for CalDAV scheduling (iTip/iMip)
         # The CalDAV server will call this URL when it needs to send invitations
         # Use CALDAV_CALLBACK_BASE_URL if configured (for Docker environments where
         # the CalDAV container needs to reach Django via internal network)
         callback_path = reverse("caldav-scheduling-callback")
-        callback_base_url = getattr(settings, "CALDAV_CALLBACK_BASE_URL", None)
+        callback_base_url = settings.CALDAV_CALLBACK_BASE_URL
         if callback_base_url:
             # Use configured internal URL (e.g., http://backend:8000)
             headers["X-CalDAV-Callback-URL"] = (
@@ -216,9 +220,8 @@ class CalDAVDiscoveryView(View):
         # Clients need to discover the CalDAV URL before authenticating
 
         # Return redirect to CalDAV server base URL
-        caldav_base_url = f"/api/{settings.API_VERSION}/caldav/"
         response = HttpResponse(status=301)
-        response["Location"] = caldav_base_url
+        response["Location"] = "/caldav/"
         return response
 
 

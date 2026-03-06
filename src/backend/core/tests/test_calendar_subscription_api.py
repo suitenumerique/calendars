@@ -27,7 +27,7 @@ class TestSubscriptionTokenViewSet:
     def test_create_subscription_token(self):
         """Test creating a subscription token for a calendar."""
         user = factories.UserFactory()
-        caldav_path = f"/calendars/{user.email}/test-calendar-uuid/"
+        caldav_path = f"/calendars/users/{user.email}/test-calendar-uuid/"
         client = APIClient()
         client.force_login(user)
 
@@ -57,7 +57,9 @@ class TestSubscriptionTokenViewSet:
     def test_create_subscription_token_normalizes_path(self):
         """Test that caldav_path is normalized to have leading/trailing slashes."""
         user = factories.UserFactory()
-        caldav_path = f"calendars/{user.email}/test-uuid"  # No leading/trailing slash
+        caldav_path = (
+            f"calendars/users/{user.email}/test-uuid"  # No leading/trailing slash
+        )
         client = APIClient()
         client.force_login(user)
 
@@ -70,7 +72,9 @@ class TestSubscriptionTokenViewSet:
 
         assert response.status_code == HTTP_201_CREATED
         # Path should be normalized
-        assert response.data["caldav_path"] == f"/calendars/{user.email}/test-uuid/"
+        assert (
+            response.data["caldav_path"] == f"/calendars/users/{user.email}/test-uuid/"
+        )
 
     def test_create_subscription_token_returns_existing(self):
         """Test that creating a token when one exists returns the existing one."""
@@ -110,7 +114,7 @@ class TestSubscriptionTokenViewSet:
     def test_get_subscription_token_not_found(self):
         """Test retrieving token when none exists."""
         user = factories.UserFactory()
-        caldav_path = f"/calendars/{user.email}/nonexistent/"
+        caldav_path = f"/calendars/users/{user.email}/nonexistent/"
         client = APIClient()
         client.force_login(user)
 
@@ -146,7 +150,7 @@ class TestSubscriptionTokenViewSet:
     def test_delete_subscription_token_not_found(self):
         """Test deleting token when none exists."""
         user = factories.UserFactory()
-        caldav_path = f"/calendars/{user.email}/nonexistent/"
+        caldav_path = f"/calendars/users/{user.email}/nonexistent/"
         client = APIClient()
         client.force_login(user)
 
@@ -160,7 +164,7 @@ class TestSubscriptionTokenViewSet:
         """Test that users cannot create tokens for other users' calendars."""
         user = factories.UserFactory()
         other_user = factories.UserFactory()
-        caldav_path = f"/calendars/{other_user.email}/test-calendar/"
+        caldav_path = f"/calendars/users/{other_user.email}/test-calendar/"
         client = APIClient()
         client.force_login(user)
 
@@ -203,7 +207,7 @@ class TestSubscriptionTokenViewSet:
     def test_unauthenticated_cannot_create_token(self):
         """Test that unauthenticated users cannot create tokens."""
         user = factories.UserFactory()
-        caldav_path = f"/calendars/{user.email}/test-calendar/"
+        caldav_path = f"/calendars/users/{user.email}/test-calendar/"
         client = APIClient()
 
         url = reverse("subscription-tokens-list")
@@ -317,7 +321,7 @@ class TestPathInjectionProtection:
     def test_create_token_rejects_malicious_calendar_id(self, malicious_suffix):
         """Test that malicious calendar IDs in paths are rejected."""
         user = factories.UserFactory()
-        caldav_path = f"/calendars/{user.email}/{malicious_suffix}"
+        caldav_path = f"/calendars/users/{user.email}/{malicious_suffix}"
         client = APIClient()
         client.force_login(user)
 
@@ -393,7 +397,9 @@ class TestPathInjectionProtection:
         """Test that valid UUID-style calendar IDs are accepted."""
         user = factories.UserFactory()
         # Standard UUID format
-        caldav_path = f"/calendars/{user.email}/550e8400-e29b-41d4-a716-446655440000/"
+        caldav_path = (
+            f"/calendars/users/{user.email}/550e8400-e29b-41d4-a716-446655440000/"
+        )
         client = APIClient()
         client.force_login(user)
 
@@ -410,7 +416,7 @@ class TestPathInjectionProtection:
         """Test that valid alphanumeric calendar IDs are accepted."""
         user = factories.UserFactory()
         # Alphanumeric with hyphens (allowed by regex)
-        caldav_path = f"/calendars/{user.email}/my-calendar-2024/"
+        caldav_path = f"/calendars/users/{user.email}/my-calendar-2024/"
         client = APIClient()
         client.force_login(user)
 
@@ -429,7 +435,7 @@ class TestPathInjectionProtection:
         client = APIClient()
         client.force_login(user)
 
-        malicious_path = f"/calendars/{user.email}/../../../etc/passwd/"
+        malicious_path = f"/calendars/users/{user.email}/../../../etc/passwd/"
 
         url = reverse("subscription-tokens-by-path")
         response = client.get(url, {"caldav_path": malicious_path})
@@ -442,7 +448,7 @@ class TestPathInjectionProtection:
         client = APIClient()
         client.force_login(user)
 
-        malicious_path = f"/calendars/{user.email}/../../../etc/passwd/"
+        malicious_path = f"/calendars/users/{user.email}/../../../etc/passwd/"
 
         base_url = reverse("subscription-tokens-by-path")
         url = f"{base_url}?caldav_path={quote(malicious_path, safe='')}"

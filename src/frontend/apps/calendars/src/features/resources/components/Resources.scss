@@ -1,0 +1,131 @@
+.resources-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--c--globals--spacings--base);
+}
+
+.resource-list {
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--c--globals--spacings--base);
+
+    h2 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+  }
+
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--c--globals--spacings--xs);
+  }
+
+  &__filters {
+    display: flex;
+    flex-direction: column;
+    gap: var(--c--globals--spacings--sm);
+    margin-bottom: var(--c--globals--spacings--base);
+  }
+
+  &__type-filters {
+    display: flex;
+    gap: var(--c--globals--spacings--2xs);
+  }
+
+  &__grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--c--globals--spacings--sm);
+  }
+
+  &__empty,
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--c--globals--spacings--xl) 0;
+    color: var(--c--contextuals--content--semantic--neutral--tertiary);
+
+    .material-icons {
+      font-size: 48px;
+      margin-bottom: var(--c--globals--spacings--sm);
+    }
+  }
+
+  &__spinner {
+    animation: spin 1.5s linear infinite;
+  }
+}
+
+.resource-card {
+  display: flex;
+  align-items: center;
+  gap: var(--c--globals--spacings--sm);
+  padding: var(--c--globals--spacings--sm);
+  border: 1px solid var(--c--contextuals--border--semantic--neutral--secondary);
+  border-radius: 8px;
+  transition: box-shadow 0.15s ease;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: var(--c--contextuals--background--semantic--brand--primary);
+    color: white;
+    flex-shrink: 0;
+
+    .material-icons {
+      font-size: 20px;
+    }
+  }
+
+  &__info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__meta {
+    display: flex;
+    gap: var(--c--globals--spacings--xs);
+    font-size: 0.8rem;
+    color: var(--c--contextuals--content--semantic--neutral--tertiary);
+  }
+
+  &__actions {
+    flex-shrink: 0;
+  }
+}
+
+.resources-create-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--c--globals--spacings--sm);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

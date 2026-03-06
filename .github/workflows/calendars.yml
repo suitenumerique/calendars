@@ -80,7 +80,7 @@ jobs:
       - name: Build and start CalDAV server
         working-directory: .
         run: |
-          docker build -t caldav-test docker/sabredav
+          docker build -t caldav-test src/caldav
           docker run -d --name caldav-test \
             --network host \
             -e PGHOST=localhost \
@@ -88,9 +88,10 @@ jobs:
             -e PGDATABASE=calendars \
             -e PGUSER=pgroot \
             -e PGPASSWORD=pass \
-            -e CALDAV_BASE_URI=/api/v1.0/caldav/ \
+            -e CALDAV_BASE_URI=/caldav/ \
             -e CALDAV_INBOUND_API_KEY=test-inbound-key \
             -e CALDAV_OUTBOUND_API_KEY=test-outbound-key \
+            -e CALDAV_INTERNAL_API_KEY=test-internal-key \
             caldav-test \
             sh -c "/usr/local/bin/init-database.sh && apache2-foreground"
 

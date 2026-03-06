@@ -69,7 +69,7 @@ Yarn workspaces monorepo:
   - `src/hooks/` - Custom React hooks
 - `apps/e2e/` - Playwright end-to-end tests
 
-### CalDAV Server (`docker/sabredav/`)
+### CalDAV Server (`src/caldav/`)
 PHP SabreDAV server providing CalDAV protocol support, running against the shared PostgreSQL database.
 
 **IMPORTANT: Never query the SabreDAV database tables directly from Django.** Always interact with CalDAV through the SabreDAV HTTP API (PROPFIND, REPORT, PUT, etc.).
@@ -81,7 +81,6 @@ PHP SabreDAV server providing CalDAV protocol support, running against the share
 | **Frontend** | [http://localhost:8920](http://localhost:8920) | Next.js Calendar frontend |
 | **Backend API** | [http://localhost:8921](http://localhost:8921) | Django REST API |
 | **CalDAV** | [http://localhost:8922](http://localhost:8922) | SabreDAV CalDAV server |
-| **Nginx** | [http://localhost:8923](http://localhost:8923) | Reverse proxy (frontend + API) |
 | **Redis** | 8924 | Cache and Celery broker |
 | **Keycloak** | [http://localhost:8925](http://localhost:8925) | OIDC identity provider |
 | **PostgreSQL** | 8926 | Database server |

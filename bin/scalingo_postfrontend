@@ -5,14 +5,27 @@ set -o pipefail   # don't ignore exit codes when piping output
 
 echo "-----> Running post-frontend script"
 
-# Move the frontend build to the nginx root and clean up
+# Move the frontend build to the app root and clean up
 mkdir -p build/
 mv src/frontend/apps/calendars/out build/frontend-out
 
 cp src/frontend/apps/calendars/src/features/i18n/translations.json translations.json
 
 mv src/backend/* ./
-mv src/nginx/* ./
+
+# Download Caddy binary with checksum verification
+CADDY_VERSION="2.11.2"
+CADDY_SHA512="2513b289054386b76642a9e8bfc10d217df2b5361e4cdd0c72672b0eeab57ae737d57466eb70f1a44233cbcc697ecf21de88137ca45ef4b64f150a32b58f5f14"
+CADDY_TAR="/tmp/caddy.tar.gz"
+curl -fsSL -o "$CADDY_TAR" \
+  "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz"
+echo "${CADDY_SHA512}  ${CADDY_TAR}" | sha512sum -c -
+tar -xz -C bin/ caddy < "$CADDY_TAR"
+rm "$CADDY_TAR"
+chmod +x bin/caddy
+
+# Copy Caddyfile (uses {$ENV} vars natively, no ERB needed)
+cp src/proxy/Caddyfile ./Caddyfile
 
 echo "3.13" > .python-version
 
@@ -25,22 +38,25 @@ mkdir -p "$DEB_DIR" "$PHP_PREFIX"
 
 # Hardcoded Launchpad URLs for PHP 8.3.6-0maysync1 (Ubuntu Noble amd64)
 # Source: https://launchpad.net/ubuntu/noble/amd64/php8.3-fpm/8.3.6-0maysync1
-declare -A PHP_DEBS=(
-  [php8.3-cli]="http://launchpadlibrarian.net/724872605/php8.3-cli_8.3.6-0maysync1_amd64.deb"
-  [php8.3-fpm]="http://launchpadlibrarian.net/724872610/php8.3-fpm_8.3.6-0maysync1_amd64.deb"
-  [php8.3-common]="http://launchpadlibrarian.net/724872606/php8.3-common_8.3.6-0maysync1_amd64.deb"
-  [php8.3-opcache]="http://launchpadlibrarian.net/724872623/php8.3-opcache_8.3.6-0maysync1_amd64.deb"
-  [php8.3-readline]="http://launchpadlibrarian.net/724872627/php8.3-readline_8.3.6-0maysync1_amd64.deb"
-  [php8.3-pgsql]="http://launchpadlibrarian.net/724872624/php8.3-pgsql_8.3.6-0maysync1_amd64.deb"
-  [php8.3-xml]="http://launchpadlibrarian.net/724872633/php8.3-xml_8.3.6-0maysync1_amd64.deb"
-  [php8.3-mbstring]="http://launchpadlibrarian.net/724872617/php8.3-mbstring_8.3.6-0maysync1_amd64.deb"
-  [php8.3-curl]="http://launchpadlibrarian.net/724872607/php8.3-curl_8.3.6-0maysync1_amd64.deb"
-  [php-common]="http://launchpadlibrarian.net/710804987/php-common_93ubuntu2_all.deb"
+# Format: "package_name url sha256"
+PHP_DEBS=(
+  "php8.3-cli http://launchpadlibrarian.net/724872605/php8.3-cli_8.3.6-0maysync1_amd64.deb 8cb7461dd06fb214b30c060b80b1c6f95d1ff5e2656fdadf215e50b9f299f196"
+  "php8.3-fpm http://launchpadlibrarian.net/724872610/php8.3-fpm_8.3.6-0maysync1_amd64.deb b3a9435025766bcbf6c16199c06481c5196098c084933dfabf8867c982edc2b2"
+  "php8.3-common http://launchpadlibrarian.net/724872606/php8.3-common_8.3.6-0maysync1_amd64.deb 0e0d0ad9c17add5fb2afcc14c6fffb81c2beb99114108b8ebd0461d910a79dfc"
+  "php8.3-opcache http://launchpadlibrarian.net/724872623/php8.3-opcache_8.3.6-0maysync1_amd64.deb 13b2662201c57904c1eda9b048b1349acaf3609c7d9e8df5b2d93833a059bdb0"
+  "php8.3-readline http://launchpadlibrarian.net/724872627/php8.3-readline_8.3.6-0maysync1_amd64.deb 380f8ed79196914ee2eebb68bf518a752204826af1fdb8a0d5c9609c76086b90"
+  "php8.3-pgsql http://launchpadlibrarian.net/724872624/php8.3-pgsql_8.3.6-0maysync1_amd64.deb b1ed204c980c348d1870cfa88c1b40257621ae5696a2a7f44f861a9d00eb7477"
+  "php8.3-xml http://launchpadlibrarian.net/724872633/php8.3-xml_8.3.6-0maysync1_amd64.deb 6c6ded219d1966a50108d032b7a522e641765a8a6aa48747483313fa7dafd533"
+  "php8.3-mbstring http://launchpadlibrarian.net/724872617/php8.3-mbstring_8.3.6-0maysync1_amd64.deb 42c89945eb105c2232ab208b893ef65e9abc8af5c95aa10c507498655ef812c4"
+  "php8.3-curl http://launchpadlibrarian.net/724872607/php8.3-curl_8.3.6-0maysync1_amd64.deb 95d46a22e6b493ba0b6256cf036a2a37d4b9b5f438968073709845af1c17df4c"
+  "php-common http://launchpadlibrarian.net/710804987/php-common_93ubuntu2_all.deb 39b15c407700e81ddd62580736feba31b187ffff56f6835dac5fa8f847c42529"
 )
 
-for pkg in "${!PHP_DEBS[@]}"; do
+for entry in "${PHP_DEBS[@]}"; do
+  read -r pkg url sha256 <<< "$entry"
   echo "       Downloading ${pkg}"
-  curl -fsSL -o "$DEB_DIR/${pkg}.deb" "${PHP_DEBS[$pkg]}"
+  curl -fsSL -o "$DEB_DIR/${pkg}.deb" "$url"
+  echo "${sha256}  ${DEB_DIR}/${pkg}.deb" | sha256sum -c -
 done
 
 for deb in "$DEB_DIR"/*.deb; do
@@ -94,7 +110,7 @@ echo "-----> PHP modules: $("$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" -m |
 echo "-----> Installing SabreDAV dependencies"
 curl -fsSL -o bin/composer.phar \
   https://getcomposer.org/download/latest-stable/composer.phar
-cp -r docker/sabredav sabredav
+cp -r src/caldav sabredav
 cd sabredav
 "../$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" ../bin/composer.phar install \
   --no-dev --optimize-autoloader --no-interaction

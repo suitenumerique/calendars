@@ -6,11 +6,11 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
-from core.services.caldav_service import CalendarService
+from core.services.caldav_service import CalDAVHTTPClient, CalendarService
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -67,3 +67,27 @@ def provision_default_calendar(sender, instance, created, **kwargs):  # pylint: 
                 instance.email,
                 str(e),
             )
+
+
+@receiver(pre_delete, sender=User)
+def delete_user_caldav_data(sender, instance, **kwargs):  # pylint: disable=unused-argument
+    """Clean up CalDAV data when a user is deleted."""
+    if not instance.email:
+        return
+
+    if not settings.CALDAV_INTERNAL_API_KEY:
+        return
+
+    try:
+        http = CalDAVHTTPClient()
+        http.request(
+            "DELETE",
+            instance.email,
+            f"internal-api/users/{instance.email}",
+            extra_headers={"X-Internal-Api-Key": settings.CALDAV_INTERNAL_API_KEY},
+        )
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception(
+            "Failed to clean up CalDAV data for user %s",
+            instance.email,
+        )

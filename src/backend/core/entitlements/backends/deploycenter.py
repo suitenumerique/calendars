@@ -114,7 +114,14 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         entitlements = data.get("entitlements", {})
         result = {
             "can_access": entitlements.get("can_access", False),
+            "can_admin": entitlements.get("can_admin", False),
         }
+
+        # Organization name from DeployCenter response (if present)
+        org = data.get("organization") or {}
+        org_name = org.get("name", "")
+        if org_name:
+            result["organization_name"] = org_name
 
         cache.set(cache_key, result, settings.ENTITLEMENTS_CACHE_TIMEOUT)
         return result

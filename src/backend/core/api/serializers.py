@@ -9,13 +9,22 @@ from core import models
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
 
 
+class OrganizationSerializer(serializers.ModelSerializer):
+    """Serialize organizations."""
+
+    class Meta:
+        model = models.Organization
+        fields = ["id", "name"]
+        read_only_fields = ["id", "name"]
+
+
 class UserLiteSerializer(serializers.ModelSerializer):
     """Serialize users with limited fields."""
 
     class Meta:
         model = models.User
-        fields = ["id", "full_name", "short_name"]
-        read_only_fields = ["id", "full_name", "short_name"]
+        fields = ["id", "full_name"]
+        read_only_fields = ["id", "full_name"]
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -27,29 +36,60 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "full_name",
-            "short_name",
             "language",
         ]
-        read_only_fields = ["id", "email", "full_name", "short_name"]
+        read_only_fields = ["id", "email", "full_name"]
 
 
 class UserMeSerializer(UserSerializer):
     """Serialize users for me endpoint."""
 
     can_access = serializers.SerializerMethodField(read_only=True)
+    can_admin = serializers.SerializerMethodField(read_only=True)
+    organization = OrganizationSerializer(read_only=True)
 
     class Meta:
         model = models.User
-        fields = [*UserSerializer.Meta.fields, "can_access"]
-        read_only_fields = [*UserSerializer.Meta.read_only_fields, "can_access"]
+        fields = [
+            *UserSerializer.Meta.fields,
+            "can_access",
+            "can_admin",
+            "organization",
+        ]
+        read_only_fields = [
+            *UserSerializer.Meta.read_only_fields,
+            "can_access",
+            "can_admin",
+            "organization",
+        ]
+
+    def _get_entitlements(self, user):
+        """Get cached entitlements for the user."""
+        cache_attr = "_entitlements_cache"
+        if not hasattr(self, cache_attr):
+            try:
+                setattr(
+                    self,
+                    cache_attr,
+                    get_user_entitlements(user.sub, user.email),
+                )
+            except EntitlementsUnavailableError:
+                setattr(self, cache_attr, None)
+        return getattr(self, cache_attr)
 
     def get_can_access(self, user) -> bool:
         """Check entitlements for the current user."""
-        try:
-            entitlements = get_user_entitlements(user.sub, user.email)
-            return entitlements.get("can_access", True)
-        except EntitlementsUnavailableError:
-            return True  # fail-open
+        entitlements = self._get_entitlements(user)
+        if entitlements is None:
+            return False  # fail-closed
+        return entitlements.get("can_access", True)
+
+    def get_can_admin(self, user) -> bool:
+        """Check admin entitlement for the current user."""
+        entitlements = self._get_entitlements(user)
+        if entitlements is None:
+            return False  # fail-closed
+        return entitlements.get("can_admin", False)
 
 
 class CalendarSubscriptionTokenSerializer(serializers.ModelSerializer):
@@ -85,7 +125,7 @@ class CalendarSubscriptionTokenSerializer(serializers.ModelSerializer):
             url = request.build_absolute_uri(f"/ical/{obj.token}.ics")
         else:
             # Fallback to APP_URL if no request context
-            app_url = getattr(settings, "APP_URL", "")
+            app_url = settings.APP_URL
             url = f"{app_url.rstrip('/')}/ical/{obj.token}.ics"
 
         # Force HTTPS in production to protect the token in transit

@@ -81,7 +81,7 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_PASSWORD }}
       -
-        name: Build SSG assets (platform-independent, amd64 only)
+        name: Build Next.js static output (amd64 only, avoids QEMU for Node)
         uses: docker/build-push-action@v6
         with:
           context: ./src/frontend
@@ -90,19 +90,18 @@ jobs:
           load: true
           tags: calendars-builder:local
       -
-        name: Extract SSG build output
+        name: Extract static output
         run: |
           docker create --name extract calendars-builder:local
           docker cp extract:/home/frontend/apps/calendars/out ./src/frontend/out
           docker rm extract
       -
-        name: Build and push nginx image (multi-arch)
+        name: Build and push frontend image (multi-arch)
         uses: docker/build-push-action@v6
         with:
           context: ./src/frontend
-          file: ./src/frontend/Dockerfile.nginx
+          file: ./src/frontend/Dockerfile.caddy
           platforms: ${{ github.event_name != 'pull_request' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
-          build-args: DOCKER_USER=${{ env.DOCKER_USER }}:-1000
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
