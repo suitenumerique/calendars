@@ -45,8 +45,6 @@ COMPOSE_RUN             = $(COMPOSE) run --rm
 COMPOSE_RUN_APP         = $(COMPOSE_RUN) backend-dev
 COMPOSE_RUN_APP_NO_DEPS = $(COMPOSE_RUN) --no-deps backend-dev 
 
-COMPOSE_RUN_CROWDIN     = $(COMPOSE_RUN) crowdin crowdin
-
 # -- Backend
 MANAGE              	= $(COMPOSE_RUN_APP) python manage.py
 MANAGE_EXEC         	= $(COMPOSE_EXEC_APP) python manage.py
@@ -71,7 +69,6 @@ data/static:
 
 create-env-files: ## Create empty .local env files for local development
 create-env-files: \
-	env.d/development/crowdin.local \
 	env.d/development/postgresql.local \
 	env.d/development/keycloak.local \
 	env.d/development/backend.local \
@@ -299,18 +296,6 @@ resetdb: ## flush database and create a superuser "admin"
 
 # -- Internationalization
 
-crowdin-download: ## Download translated message from crowdin
-	@$(COMPOSE_RUN_CROWDIN) download -c crowdin/config.yml
-.PHONY: crowdin-download
-
-crowdin-download-sources: ## Download sources from Crowdin
-	@$(COMPOSE_RUN_CROWDIN) download sources -c crowdin/config.yml
-.PHONY: crowdin-download-sources
-
-crowdin-upload: ## Upload source translations to crowdin
-	@$(COMPOSE_RUN_CROWDIN) upload sources -c crowdin/config.yml
-.PHONY: crowdin-upload
-
 i18n-compile: ## compile all translations
 i18n-compile: \
 	back-i18n-compile \
@@ -322,19 +307,6 @@ i18n-generate: \
 	back-i18n-generate \
 	frontend-i18n-generate
 .PHONY: i18n-generate
-
-i18n-download-and-compile: ## download all translated messages and compile them to be used by all applications
-i18n-download-and-compile: \
-  crowdin-download \
-  i18n-compile
-.PHONY: i18n-download-and-compile
-
-i18n-generate-and-upload: ## generate source translations for all applications and upload them to Crowdin
-i18n-generate-and-upload: \
-  i18n-generate \
-  crowdin-upload
-.PHONY: i18n-generate-and-upload
-
 
 # -- Misc
 clean: ## restore repository state as it was freshly cloned
@@ -365,13 +337,12 @@ run-frontend-development: ## Run the frontend in development mode
 	cd $(PATH_FRONT_CALENDARS) && yarn dev
 .PHONY: run-frontend-development
 
-frontend-i18n-extract: ## Extract the frontend translation inside a json to be used for crowdin
+frontend-i18n-extract: ## Extract the frontend translation inside a json
 	cd $(PATH_FRONT) && yarn i18n:extract
 .PHONY: frontend-i18n-extract
 
-frontend-i18n-generate: ## Generate the frontend json files used for crowdin
+frontend-i18n-generate: ## Generate the frontend json files
 frontend-i18n-generate: \
-	crowdin-download-sources \
 	frontend-i18n-extract
 .PHONY: frontend-i18n-generate
 

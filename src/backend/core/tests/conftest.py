@@ -1,7 +1,6 @@
 """Fixtures for tests in the calendars core application"""
 
 import base64
-from unittest import mock
 
 from django.core.cache import cache
 from django.db import connection
@@ -13,8 +12,6 @@ from core import factories
 from core.tests.utils.urls import reload_urls
 
 USER = "user"
-TEAM = "team"
-VIA = [USER, TEAM]
 
 
 @pytest.fixture(autouse=True)
@@ -56,15 +53,6 @@ def clear_cache():
     yield
     cache.clear()
     # Clear functools.cache for functions decorated with @functools.cache
-
-
-@pytest.fixture
-def mock_user_teams():
-    """Mock for the "teams" property on the User model."""
-    with mock.patch(
-        "core.models.User.teams", new_callable=mock.PropertyMock
-    ) as mock_teams:
-        yield mock_teams
 
 
 def resource_server_backend_setup(settings):

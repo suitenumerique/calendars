@@ -10,45 +10,11 @@ from django.contrib.auth import models as auth_models
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.core import mail, validators
 from django.db import models
-from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy as _
 
 from timezone_field import TimeZoneField
 
 logger = getLogger(__name__)
-
-
-class LinkRoleChoices(models.TextChoices):
-    """Defines the possible roles a link can offer on a item."""
-
-    READER = "reader", _("Reader")  # Can read
-    EDITOR = "editor", _("Editor")  # Can read and edit
-
-
-class RoleChoices(models.TextChoices):
-    """Defines the possible roles a user can have in a resource."""
-
-    READER = "reader", _("Reader")  # Can read
-    EDITOR = "editor", _("Editor")  # Can read and edit
-    ADMIN = "administrator", _("Administrator")  # Can read, edit, delete and share
-    OWNER = "owner", _("Owner")
-
-
-PRIVILEGED_ROLES = [RoleChoices.ADMIN, RoleChoices.OWNER]
-
-
-class LinkReachChoices(models.TextChoices):
-    """Defines types of access for links"""
-
-    RESTRICTED = (
-        "restricted",
-        _("Restricted"),
-    )  # Only users with a specific access can read/edit the item
-    AUTHENTICATED = (
-        "authenticated",
-        _("Authenticated"),
-    )  # Any authenticated user can access the item
-    PUBLIC = "public", _("Public")  # Even anonymous users can access the item
 
 
 class DuplicateEmailError(Exception):
@@ -220,86 +186,6 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
             raise ValueError("User has no email address.")
         mail.send_mail(subject, message, from_email, [self.email], **kwargs)
 
-    @cached_property
-    def teams(self):
-        """
-        Get list of teams in which the user is, as a list of strings.
-        Must be cached if retrieved remotely.
-        """
-        return []
-
-
-class BaseAccess(BaseModel):
-    """Base model for accesses to handle resources."""
-
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-    )
-    team = models.CharField(max_length=100, blank=True)
-    role = models.CharField(
-        max_length=20, choices=RoleChoices.choices, default=RoleChoices.READER
-    )
-
-    class Meta:
-        abstract = True
-
-    def _get_abilities(self, resource, user):
-        """
-        Compute and return abilities for a given user taking into account
-        the current state of the object.
-        """
-        roles = []
-        if user.is_authenticated:
-            teams = user.teams
-            try:
-                roles = self.user_roles or []
-            except AttributeError:
-                try:
-                    roles = resource.accesses.filter(
-                        models.Q(user=user) | models.Q(team__in=teams),
-                    ).values_list("role", flat=True)
-                except (self._meta.model.DoesNotExist, IndexError):
-                    roles = []
-
-        is_owner_or_admin = bool(
-            set(roles).intersection({RoleChoices.OWNER, RoleChoices.ADMIN})
-        )
-        if self.role == RoleChoices.OWNER:
-            can_delete = (
-                RoleChoices.OWNER in roles
-                and resource.accesses.filter(role=RoleChoices.OWNER).count() > 1
-            )
-            set_role_to = (
-                [RoleChoices.ADMIN, RoleChoices.EDITOR, RoleChoices.READER]
-                if can_delete
-                else []
-            )
-        else:
-            can_delete = is_owner_or_admin
-            set_role_to = []
-            if RoleChoices.OWNER in roles:
-                set_role_to.append(RoleChoices.OWNER)
-            if is_owner_or_admin:
-                set_role_to.extend(
-                    [RoleChoices.ADMIN, RoleChoices.EDITOR, RoleChoices.READER]
-                )
-
-        # Remove the current role as we don't want to propose it as an option
-        try:
-            set_role_to.remove(self.role)
-        except ValueError:
-            pass
-
-        return {
-            "destroy": can_delete,
-            "update": bool(set_role_to),
-            "partial_update": bool(set_role_to),
-            "retrieve": bool(roles),
-            "set_role_to": set_role_to,
-        }
 
 
 class CalendarSubscriptionToken(models.Model):

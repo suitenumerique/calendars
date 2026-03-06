@@ -50,14 +50,6 @@ make run-tests-e2e                           # Run all e2e tests
 make run-tests-e2e -- --project chromium --headed  # Run with specific browser
 ```
 
-### Internationalization
-```bash
-make i18n-generate         # Generate translation files
-make i18n-compile          # Compile translations
-make crowdin-upload        # Upload sources to Crowdin
-make crowdin-download      # Download translations from Crowdin
-```
-
 ## Architecture
 
 ### Backend Structure (`src/backend/`)
