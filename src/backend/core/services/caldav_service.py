@@ -671,12 +671,14 @@ def cleanup_organization_caldav_data(org):
 
     http = CalDAVHTTPClient()
     members = org.members.all()
+    users_to_delete = []
 
     for user in members:
         if not user.email:
+            users_to_delete.append(user.pk)
             continue
         try:
-            http.request(
+            response = http.request(
                 "DELETE",
                 user.email,
                 f"internal-api/users/{user.email}",
@@ -684,6 +686,16 @@ def cleanup_organization_caldav_data(org):
                     "X-Internal-Api-Key": settings.CALDAV_INTERNAL_API_KEY,
                 },
             )
+            if 200 <= response.status_code < 300:
+                users_to_delete.append(user.pk)
+            else:
+                logger.error(
+                    "CalDAV DELETE for user %s (org %s) returned %s, "
+                    "skipping local deletion",
+                    user.email,
+                    org.external_id,
+                    response.status_code,
+                )
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "Failed to clean up CalDAV data for user %s (org %s)",
@@ -691,5 +703,6 @@ def cleanup_organization_caldav_data(org):
                 org.external_id,
             )
 
-    # Delete members so PROTECT FK doesn't block org deletion
-    members.delete()
+    # Delete only members whose CalDAV data was successfully removed
+    if users_to_delete:
+        org.members.filter(pk__in=users_to_delete).delete()

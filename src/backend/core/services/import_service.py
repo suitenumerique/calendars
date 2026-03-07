@@ -63,7 +63,7 @@ class ICSImportService:
         # Extract calendar URI from caldav_path
         # Path format: /calendars/users/<email>/<calendar-uri>/
         parts = caldav_path.strip("/").split("/")
-        if len(parts) >= 4 and parts[0] == "calendars" and parts[1] == "users":
+        if len(parts) == 4 and parts[0] == "calendars" and parts[1] == "users":
             principal_user = parts[2]
             calendar_uri = parts[3]
         else:

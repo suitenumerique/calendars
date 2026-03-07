@@ -44,20 +44,21 @@ export const CreateResourceModal = ({
         name: name.trim(),
         resource_type: resourceType,
       });
-      addToast(
-        <ToasterItem type="info">
-          <span>{t("resources.create.success")}</span>
-        </ToasterItem>,
-      );
-      onSuccess();
-      handleClose();
     } catch {
       addToast(
         <ToasterItem type="error">
           <span>{t("resources.create.error")}</span>
         </ToasterItem>,
       );
+      return;
     }
+    addToast(
+      <ToasterItem type="info">
+        <span>{t("resources.create.success")}</span>
+      </ToasterItem>,
+    );
+    onSuccess();
+    handleClose();
   };
 
   const handleClose = () => {

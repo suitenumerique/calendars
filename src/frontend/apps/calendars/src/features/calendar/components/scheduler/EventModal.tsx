@@ -311,6 +311,7 @@ export const EventModal = ({
                 resources={form.resources}
                 onChange={form.setResources}
                 availableResources={availableResources}
+                eventAttendees={form.attendees}
                 alwaysOpen
               />
             )}

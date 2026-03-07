@@ -70,25 +70,24 @@ class UserMeSerializer(UserSerializer):
         ]
 
     def _get_entitlements(self, user):
-        """Get cached entitlements for the user."""
-        cache_attr = "_entitlements_cache"
-        if not hasattr(self, cache_attr):
+        """Get cached entitlements for the user, keyed by user.sub."""
+        if not hasattr(self, "_entitlements_cache"):
+            self._entitlements_cache = {}
+        if user.sub not in self._entitlements_cache:
             try:
-                setattr(
-                    self,
-                    cache_attr,
-                    get_user_entitlements(user.sub, user.email),
+                self._entitlements_cache[user.sub] = get_user_entitlements(
+                    user.sub, user.email
                 )
             except EntitlementsUnavailableError:
-                setattr(self, cache_attr, None)
-        return getattr(self, cache_attr)
+                self._entitlements_cache[user.sub] = None
+        return self._entitlements_cache[user.sub]
 
     def get_can_access(self, user) -> bool:
         """Check entitlements for the current user."""
         entitlements = self._get_entitlements(user)
         if entitlements is None:
             return False  # fail-closed
-        return entitlements.get("can_access", True)
+        return entitlements.get("can_access", False)
 
     def get_can_admin(self, user) -> bool:
         """Check admin entitlement for the current user."""

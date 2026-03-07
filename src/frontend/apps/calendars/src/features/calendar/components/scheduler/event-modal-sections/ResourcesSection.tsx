@@ -10,6 +10,7 @@ interface ResourcesSectionProps {
   resources: ResourcePrincipal[];
   onChange: (resources: ResourcePrincipal[]) => void;
   availableResources: ResourcePrincipal[];
+  eventAttendees?: { email: string; partstat?: string }[];
   alwaysOpen?: boolean;
   isExpanded?: boolean;
   onToggle?: () => void;
@@ -50,6 +51,7 @@ export const ResourcesSection = ({
   resources: selectedResources,
   onChange,
   availableResources,
+  eventAttendees,
   alwaysOpen,
   isExpanded,
   onToggle,
@@ -117,7 +119,7 @@ export const ResourcesSection = ({
             {selectedResources.map((resource) => (
               <Badge
                 key={resource.id}
-                type={getPartstatBadgeType(resource.email)}
+                type={getPartstatBadgeType(resource.email, eventAttendees)}
                 className="attendees-input__pill"
               >
                 <span className="material-icons">

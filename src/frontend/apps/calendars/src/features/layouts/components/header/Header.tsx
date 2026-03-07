@@ -4,7 +4,6 @@ import {
   IconType,
   LanguagePicker,
   useResponsive,
-  VerticalSeparator,
 } from "@gouvfr-lasuite/ui-kit";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useAuth } from "@/features/auth/Auth";
