@@ -247,7 +247,7 @@ END:VCALENDAR"""
 
 def _make_caldav_path(user):
     """Build a caldav_path string for a user (test helper)."""
-    return f"/calendars/{user.email}/{uuid.uuid4()}/"
+    return f"/calendars/users/{user.email}/{uuid.uuid4()}/"
 
 
 def _make_sabredav_response(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -482,7 +482,7 @@ class TestICSImportService:
 
     @patch("core.services.caldav_service.requests.request")
     def test_import_passes_calendar_path(self, mock_post):
-        """The import URL should include the caldav_path."""
+        """The import URL should use the internal-api/import/ endpoint."""
         mock_post.return_value = _make_sabredav_response(
             total_events=1, imported_count=1
         )
@@ -495,8 +495,11 @@ class TestICSImportService:
 
         call_args = mock_post.call_args
         url = call_args.args[0] if call_args.args else call_args.kwargs.get("url", "")
-        assert caldav_path in url
-        assert "?import" in url
+        assert "internal-api/import/" in url
+        # URL should contain the user email and calendar URI from the path
+        parts = caldav_path.strip("/").split("/")
+        assert parts[2] in url  # user email
+        assert parts[3] in url  # calendar URI
 
     @patch("core.services.caldav_service.requests.request")
     def test_import_sends_auth_headers(self, mock_post):
@@ -515,7 +518,7 @@ class TestICSImportService:
         headers = call_kwargs["headers"]
         assert headers["X-Api-Key"] == settings.CALDAV_OUTBOUND_API_KEY
         assert headers["X-Forwarded-User"] == user.email
-        assert headers["X-Calendars-Import"] == settings.CALDAV_OUTBOUND_API_KEY
+        assert headers["X-Internal-Api-Key"] == settings.CALDAV_INTERNAL_API_KEY
         assert headers["Content-Type"] == "text/calendar"
 
     @patch("core.services.caldav_service.requests.request")
@@ -571,7 +574,7 @@ class TestImportEventsAPI:
         """Users cannot import to a calendar they don't own."""
         owner = factories.UserFactory(email="owner@example.com")
         other_user = factories.UserFactory(email="other@example.com")
-        caldav_path = f"/calendars/{owner.email}/some-uuid/"
+        caldav_path = f"/calendars/users/{owner.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(other_user)
@@ -597,12 +600,12 @@ class TestImportEventsAPI:
         )
         response = client.post(self.IMPORT_URL, {"file": ics_file}, format="multipart")
         assert response.status_code == 400
-        assert "caldav_path" in response.json()["error"]
+        assert "caldav_path" in response.json()["detail"]
 
     def test_import_events_missing_file(self):
         """Request without a file should return 400."""
         user = factories.UserFactory(email="nofile@example.com")
-        caldav_path = f"/calendars/{user.email}/some-uuid/"
+        caldav_path = f"/calendars/users/{user.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(user)
@@ -613,12 +616,12 @@ class TestImportEventsAPI:
             format="multipart",
         )
         assert response.status_code == 400
-        assert "No file provided" in response.json()["error"]
+        assert "No file provided" in response.json()["detail"]
 
     def test_import_events_file_too_large(self):
         """Files exceeding MAX_FILE_SIZE should be rejected."""
         user = factories.UserFactory(email="largefile@example.com")
-        caldav_path = f"/calendars/{user.email}/some-uuid/"
+        caldav_path = f"/calendars/users/{user.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(user)
@@ -634,7 +637,7 @@ class TestImportEventsAPI:
             format="multipart",
         )
         assert response.status_code == 400
-        assert "too large" in response.json()["error"]
+        assert "too large" in response.json()["detail"]
 
     @patch.object(ICSImportService, "import_events")
     def test_import_events_success(self, mock_import):
@@ -648,7 +651,7 @@ class TestImportEventsAPI:
         )
 
         user = factories.UserFactory(email="success@example.com")
-        caldav_path = f"/calendars/{user.email}/some-uuid/"
+        caldav_path = f"/calendars/users/{user.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(user)
@@ -681,7 +684,7 @@ class TestImportEventsAPI:
         )
 
         user = factories.UserFactory(email="partial@example.com")
-        caldav_path = f"/calendars/{user.email}/some-uuid/"
+        caldav_path = f"/calendars/users/{user.email}/some-uuid/"
 
         client = APIClient()
         client.force_login(user)
@@ -955,7 +958,7 @@ class TestImportEventsE2E:
         """Fetch the raw ICS data of a single event from SabreDAV by UID."""
         caldav_client = CalDAVClient()
         client = caldav_client._get_client(user)  # pylint: disable=protected-access
-        cal_url = f"{caldav_client.base_url}{caldav_path}"
+        cal_url = caldav_client._calendar_url(caldav_path)  # pylint: disable=protected-access
         cal = client.calendar(url=cal_url)
         event = cal.event_by_uid(uid)
         return event.data
@@ -1038,7 +1041,7 @@ class TestCalendarSanitizerE2E:
         """Fetch the raw ICS data of a single event from SabreDAV by UID."""
         caldav_client = CalDAVClient()
         client = caldav_client._get_client(user)  # pylint: disable=protected-access
-        cal_url = f"{caldav_client.base_url}{caldav_path}"
+        cal_url = caldav_client._calendar_url(caldav_path)  # pylint: disable=protected-access
         cal = client.calendar(url=cal_url)
         event = cal.event_by_uid(uid)
         return event.data

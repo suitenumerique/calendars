@@ -10,7 +10,7 @@ from lasuite.oidc_login.backends import (
 )
 
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
-from core.models import DuplicateEmailError
+from core.models import DuplicateEmailError, Organization
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,6 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
         }
         return {
             "full_name": self.compute_full_name(user_info),
-            "short_name": user_info.get(settings.OIDC_USERINFO_SHORTNAME_FIELD),
             "claims": claims_to_store,
         }
 
@@ -53,9 +52,10 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
             raise SuspiciousOperation(err.message) from err
 
     def post_get_or_create_user(self, user, claims, is_new_user):
-        """Warm the entitlements cache on login (force_refresh)."""
+        """Warm the entitlements cache and resolve organization on login."""
+        entitlements = {}
         try:
-            get_user_entitlements(
+            entitlements = get_user_entitlements(
                 user_sub=user.sub,
                 user_email=user.email,
                 user_info=claims,
@@ -66,3 +66,39 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
                 "Entitlements unavailable for %s during login",
                 user.email,
             )
+
+        self._resolve_organization(user, claims, entitlements)
+
+    @staticmethod
+    def _resolve_organization(user, claims, entitlements):
+        """Resolve and assign the user's organization.
+
+        The org identifier (external_id) comes from the OIDC claim
+        configured via OIDC_USERINFO_ORGANIZATION_CLAIM, or falls back to the
+        email domain. The org name comes from the entitlements response.
+        """
+        claim_key = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
+        if claim_key:
+            external_id = claims.get(claim_key)
+        else:
+            # Default: derive org from email domain
+            external_id = (
+                user.email.split("@")[-1] if user.email and "@" in user.email else None
+            )
+
+        if not external_id:
+            return
+
+        org_name = entitlements.get("organization_name", "") or external_id
+
+        org, created = Organization.objects.get_or_create(
+            external_id=external_id,
+            defaults={"name": org_name},
+        )
+        if not created and org_name and org.name != org_name:
+            org.name = org_name
+            org.save(update_fields=["name"])
+
+        if user.organization_id != org.id:
+            user.organization = org
+            user.save(update_fields=["organization"])

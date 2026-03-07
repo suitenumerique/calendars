@@ -13,6 +13,16 @@ from core import models
 fake = Faker()
 
 
+class OrganizationFactory(factory.django.DjangoModelFactory):
+    """A factory to create organizations for testing purposes."""
+
+    class Meta:
+        model = models.Organization
+
+    name = factory.Faker("company")
+    external_id = factory.Sequence(lambda n: f"org-{n}")
+
+
 class UserFactory(factory.django.DjangoModelFactory):
     """A factory to random users for testing purposes."""
 
@@ -23,7 +33,6 @@ class UserFactory(factory.django.DjangoModelFactory):
     sub = factory.Sequence(lambda n: f"user{n!s}")
     email = factory.Faker("email")
     full_name = factory.Faker("name")
-    short_name = factory.Faker("first_name")
     language = factory.fuzzy.FuzzyChoice([lang[0] for lang in settings.LANGUAGES])
     password = make_password("password")
 
@@ -36,7 +45,7 @@ class CalendarSubscriptionTokenFactory(factory.django.DjangoModelFactory):
 
     owner = factory.SubFactory(UserFactory)
     caldav_path = factory.LazyAttribute(
-        lambda obj: f"/calendars/{obj.owner.email}/{fake.uuid4()}/"
+        lambda obj: f"/calendars/users/{obj.owner.email}/{fake.uuid4()}/"
     )
     calendar_name = factory.Faker("sentence", nb_words=3)
     is_active = True

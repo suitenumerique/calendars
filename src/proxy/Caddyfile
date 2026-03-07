@@ -1,0 +1,95 @@
+{
+	auto_https off
+	admin off
+}
+
+:{$PORT} {
+	root * {$CALENDARS_FRONTEND_ROOT:/app}
+	header -Server
+
+	route {
+		# Health checks
+		respond /__lbheartbeat__ 200
+		respond /__lbheartbeat__/ 200
+
+		reverse_proxy /__heartbeat__/* {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		# Django backend proxy
+		reverse_proxy /api/* {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		reverse_proxy /external_api/* {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		# CalDAV proxy (Django proxies to SabreDAV internally)
+		reverse_proxy /caldav/* {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		reverse_proxy /caldav {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		# CalDAV well-known discovery
+		reverse_proxy /.well-known/caldav {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		# Django views (RSVP, iCal export)
+		reverse_proxy /rsvp/* {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		reverse_proxy /ical/* {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		# Django admin
+		redir /{$DJANGO_ADMIN_URL:admin} /{$DJANGO_ADMIN_URL:admin}/ 301
+
+		reverse_proxy /{$DJANGO_ADMIN_URL:admin}/* {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		# Django static files (admin CSS/JS)
+		reverse_proxy /static/* {$CALENDARS_FRONTEND_BACKEND_SERVER:localhost:8000} {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {remote_host}
+		}
+
+		# Default: SPA fallback
+		try_files {path} /index.html
+		file_server
+	}
+
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
+}
+
+# Internal CalDAV server (SabreDAV via PHP-FPM)
+# Only accessible from localhost - Django proxies to this
+http://localhost:9001 {
+	route {
+		reverse_proxy unix//tmp/php-fpm.sock {
+			transport fastcgi {
+				root /app/sabredav
+				env SCRIPT_FILENAME /app/sabredav/server.php
+			}
+		}
+	}
+}

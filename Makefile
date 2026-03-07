@@ -45,8 +45,6 @@ COMPOSE_RUN             = $(COMPOSE) run --rm
 COMPOSE_RUN_APP         = $(COMPOSE_RUN) backend-dev
 COMPOSE_RUN_APP_NO_DEPS = $(COMPOSE_RUN) --no-deps backend-dev 
 
-COMPOSE_RUN_CROWDIN     = $(COMPOSE_RUN) crowdin crowdin
-
 # -- Backend
 MANAGE              	= $(COMPOSE_RUN_APP) python manage.py
 MANAGE_EXEC         	= $(COMPOSE_EXEC_APP) python manage.py
@@ -71,7 +69,6 @@ data/static:
 
 create-env-files: ## Create empty .local env files for local development
 create-env-files: \
-	env.d/development/crowdin.local \
 	env.d/development/postgresql.local \
 	env.d/development/keycloak.local \
 	env.d/development/backend.local \
@@ -137,7 +134,6 @@ logs: ## display backend-dev logs (follow mode)
 
 run-backend: ## start the backend container
 	@$(COMPOSE) up --force-recreate -d celery-dev
-	@$(COMPOSE) up --force-recreate -d nginx
 .PHONY: run-backend
 
 bootstrap-e2e: ## bootstrap the backend container for e2e tests, without frontend
@@ -165,7 +161,7 @@ run-backend-e2e: ## start the backend container for e2e tests, always remove the
 run-tests-e2e: ## run the e2e tests, example: make run-tests-e2e -- --project chromium --headed
 	@$(MAKE) run-backend-e2e	
 	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
-	cd src/frontend/apps/e2e && yarn test $${args:-${1}}
+	cd src/frontend/apps/e2e && pnpm test $${args:-${1}}
 .PHONY: run-tests-e2e
 
 backend-exec-command: ## execute a command in the backend container
@@ -223,8 +219,16 @@ lint-ruff-check: ## lint back-end python sources with ruff
 
 lint-pylint: ## lint back-end python sources with pylint only on changed files from main
 	@echo 'lint:pylint started…'
-	bin/pylint --diff-only=origin/main
+	@files=$$(git diff origin/main --name-only --diff-filter=d -- src/backend ':!**/migrations/*.py' | grep -E '^src/backend/.*\.py$$' | sed 's|src/backend/||g'); \
+	if [ -n "$$files" ]; then \
+		$(COMPOSE_RUN_APP_NO_DEPS) pylint $$files; \
+	fi
 .PHONY: lint-pylint
+
+lint-pylint-all: ## lint all back-end python sources with pylint
+	@echo 'lint:pylint-all started…'
+	@$(COMPOSE_RUN_APP_NO_DEPS) pylint calendars core
+.PHONY: lint-pylint-all
 
 test: ## run project tests
 	@$(MAKE) test-back-parallel
@@ -299,18 +303,6 @@ resetdb: ## flush database and create a superuser "admin"
 
 # -- Internationalization
 
-crowdin-download: ## Download translated message from crowdin
-	@$(COMPOSE_RUN_CROWDIN) download -c crowdin/config.yml
-.PHONY: crowdin-download
-
-crowdin-download-sources: ## Download sources from Crowdin
-	@$(COMPOSE_RUN_CROWDIN) download sources -c crowdin/config.yml
-.PHONY: crowdin-download-sources
-
-crowdin-upload: ## Upload source translations to crowdin
-	@$(COMPOSE_RUN_CROWDIN) upload sources -c crowdin/config.yml
-.PHONY: crowdin-upload
-
 i18n-compile: ## compile all translations
 i18n-compile: \
 	back-i18n-compile \
@@ -322,19 +314,6 @@ i18n-generate: \
 	back-i18n-generate \
 	frontend-i18n-generate
 .PHONY: i18n-generate
-
-i18n-download-and-compile: ## download all translated messages and compile them to be used by all applications
-i18n-download-and-compile: \
-  crowdin-download \
-  i18n-compile
-.PHONY: i18n-download-and-compile
-
-i18n-generate-and-upload: ## generate source translations for all applications and upload them to Crowdin
-i18n-generate-and-upload: \
-  i18n-generate \
-  crowdin-upload
-.PHONY: i18n-generate-and-upload
-
 
 # -- Misc
 clean: ## restore repository state as it was freshly cloned
@@ -353,28 +332,27 @@ help:
 
 # Front
 frontend-development-install: ## install the frontend locally
-	cd $(PATH_FRONT_CALENDARS) && yarn
+	cd $(PATH_FRONT_CALENDARS) && pnpm install
 .PHONY: frontend-development-install
 
 frontend-lint: ## run the frontend linter
-	cd $(PATH_FRONT) && yarn lint
+	cd $(PATH_FRONT) && pnpm lint
 .PHONY: frontend-lint
 
 run-frontend-development: ## Run the frontend in development mode
 	@$(COMPOSE) stop frontend-dev
-	cd $(PATH_FRONT_CALENDARS) && yarn dev
+	cd $(PATH_FRONT_CALENDARS) && pnpm dev
 .PHONY: run-frontend-development
 
-frontend-i18n-extract: ## Extract the frontend translation inside a json to be used for crowdin
-	cd $(PATH_FRONT) && yarn i18n:extract
+frontend-i18n-extract: ## Extract the frontend translation inside a json
+	cd $(PATH_FRONT) && pnpm i18n:extract
 .PHONY: frontend-i18n-extract
 
-frontend-i18n-generate: ## Generate the frontend json files used for crowdin
+frontend-i18n-generate: ## Generate the frontend json files
 frontend-i18n-generate: \
-	crowdin-download-sources \
 	frontend-i18n-extract
 .PHONY: frontend-i18n-generate
 
 frontend-i18n-compile: ## Format the crowin json files used deploy to the apps
-	cd $(PATH_FRONT) && yarn i18n:deploy
+	cd $(PATH_FRONT) && pnpm i18n:deploy
 .PHONY: frontend-i18n-compile

@@ -4,7 +4,8 @@ import logging
 import re
 from datetime import timezone as dt_timezone
 
-from django.core.signing import BadSignature, Signer
+from django.conf import settings
+from django.core.signing import BadSignature, SignatureExpired, Signer, TimestampSigner
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -35,7 +36,7 @@ PARTSTAT_VALUES = {
 }
 
 
-def _render_error(request, message, lang="fr"):
+def _render_error(request, message, lang="en"):
     """Render the RSVP error page."""
     t = TranslationService.t
     return render(
@@ -85,11 +86,24 @@ def _is_event_past(icalendar_data):
     return False
 
 
+def _is_event_recurring(icalendar_data):
+    """Check if the event has an RRULE (is recurring)."""
+    from core.services.calendar_invitation_service import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+        ICalendarParser,
+    )
+
+    vevent = ICalendarParser.extract_vevent_block(icalendar_data)
+    if not vevent:
+        return False
+    rrule, _ = ICalendarParser.extract_property_with_params(vevent, "RRULE")
+    return bool(rrule)
+
+
 @method_decorator(csrf_exempt, name="dispatch")
 class RSVPView(View):
     """Handle RSVP responses from invitation email links."""
 
-    def get(self, request):  # noqa: PLR0911  # pylint: disable=too-many-return-statements
+    def get(self, request):  # noqa: PLR0911  # pylint: disable=too-many-return-statements,too-many-locals
         """Process an RSVP response."""
         token = request.GET.get("token", "")
         action = request.GET.get("action", "")
@@ -102,6 +116,7 @@ class RSVPView(View):
 
         # Unsign token — tokens don't have a built-in expiry,
         # but RSVPs are rejected once the event has ended (_is_event_past).
+        # For recurring events, we enforce a max age on the token.
         signer = Signer(salt="rsvp")
         try:
             payload = signer.unsign_object(token)
@@ -128,6 +143,21 @@ class RSVPView(View):
         # Check if the event is already over
         if _is_event_past(calendar_data):
             return _render_error(request, t("rsvp.error.eventPast", lang), lang)
+
+        # For recurring events, enforce a max token age
+        if _is_event_recurring(calendar_data):
+            max_age = settings.RSVP_TOKEN_MAX_AGE_RECURRING
+            ts_signer = TimestampSigner(salt="rsvp")
+            try:
+                ts_signer.unsign_object(token, max_age=max_age)
+            except SignatureExpired:
+                return _render_error(
+                    request,
+                    t("rsvp.error.tokenExpired", lang),
+                    lang,
+                )
+            except (BadSignature, ValueError):
+                pass  # Not a timestamped token — allow through
 
         # Update the attendee's PARTSTAT
         partstat = PARTSTAT_VALUES[action]

@@ -9,6 +9,13 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
   }
 }
 
+.calendars__header__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 0.5rem;
+}
+
 .c__header__right {
   display: flex;
   align-items: center;

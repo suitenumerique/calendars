@@ -29,7 +29,10 @@ export interface EventModalProps {
   calendarUrl: string;
   calendars: CalDavCalendar[];
   adapter: EventCalendarAdapter;
-  onSave: (event: IcsEvent, calendarUrl: string) => Promise<void>;
+  onSave: (
+    event: IcsEvent,
+    calendarUrl: string,
+  ) => Promise<void>;
   onDelete?: (
     event: IcsEvent,
     calendarUrl: string,
@@ -79,6 +82,7 @@ export type EventFormSectionId =
   | "description"
   | "recurrence"
   | "attendees"
+  | "resources"
   | "videoConference";
 
 /**

@@ -20,7 +20,11 @@ class EntitlementsBackend(ABC):
             force_refresh: If True, bypass any cache and fetch fresh data.
 
         Returns:
-            dict: {"can_access": bool}
+            dict: {
+                "can_access": bool,
+                "can_admin": bool,
+                "organization_name": str,  # optional, extracted from response
+            }
 
         Raises:
             EntitlementsUnavailableError: If the backend cannot be reached.

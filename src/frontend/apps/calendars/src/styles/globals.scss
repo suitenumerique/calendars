@@ -21,6 +21,7 @@
 @use "./../features/calendar/components/scheduler/event-modal-sections/SectionRow.scss";
 @use "./../features/calendar/components/scheduler/event-modal-sections/InvitationResponseSection.scss";
 @use "./../features/calendar/components/scheduler/event-modal-sections/SectionPill.scss";
+@use "./../features/resources/components/Resources";
 @use "./../pages/index.scss" as *;
 @use "./../pages/calendar.scss" as *;
 html,

@@ -242,7 +242,10 @@ export const useSchedulerHandlers = ({
    * Handle modal save (create or update event).
    */
   const handleModalSave = useCallback(
-    async (event: IcsEvent, targetCalendarUrl: string) => {
+    async (
+      event: IcsEvent,
+      targetCalendarUrl: string,
+    ) => {
       if (modalState.mode === "create") {
         // Create new event
         const result = await caldavService.createEvent({

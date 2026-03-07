@@ -1,13 +1,21 @@
 """Client serializers for the calendars core app."""
 
 from django.conf import settings
-from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
-from rest_framework import exceptions, serializers
+from rest_framework import serializers
 
 from core import models
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
+
+
+class OrganizationSerializer(serializers.ModelSerializer):
+    """Serialize organizations."""
+
+    class Meta:
+        model = models.Organization
+        fields = ["id", "name"]
+        read_only_fields = ["id", "name"]
 
 
 class UserLiteSerializer(serializers.ModelSerializer):
@@ -15,84 +23,14 @@ class UserLiteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.User
-        fields = ["id", "full_name", "short_name"]
-        read_only_fields = ["id", "full_name", "short_name"]
-
-
-class BaseAccessSerializer(serializers.ModelSerializer):
-    """Serialize template accesses."""
-
-    abilities = serializers.SerializerMethodField(read_only=True)
-
-    def update(self, instance, validated_data):
-        """Make "user" field is readonly but only on update."""
-        validated_data.pop("user", None)
-        return super().update(instance, validated_data)
-
-    def get_abilities(self, access) -> dict:
-        """Return abilities of the logged-in user on the instance."""
-        request = self.context.get("request")
-        if request:
-            return access.get_abilities(request.user)
-        return {}
-
-    def validate(self, attrs):
-        """
-        Check access rights specific to writing (create/update)
-        """
-        request = self.context.get("request")
-        user = getattr(request, "user", None)
-        role = attrs.get("role")
-
-        # Update
-        if self.instance:
-            can_set_role_to = self.instance.get_abilities(user)["set_role_to"]
-
-            if role and role not in can_set_role_to:
-                message = (
-                    f"You are only allowed to set role to {', '.join(can_set_role_to)}"
-                    if can_set_role_to
-                    else "You are not allowed to set this role for this template."
-                )
-                raise exceptions.PermissionDenied(message)
-
-        # Create
-        else:
-            try:
-                resource_id = self.context["resource_id"]
-            except KeyError as exc:
-                raise exceptions.ValidationError(
-                    "You must set a resource ID in kwargs to create a new access."
-                ) from exc
-
-            if not self.Meta.model.objects.filter(  # pylint: disable=no-member
-                Q(user=user) | Q(team__in=user.teams),
-                role__in=[models.RoleChoices.OWNER, models.RoleChoices.ADMIN],
-                **{self.Meta.resource_field_name: resource_id},  # pylint: disable=no-member
-            ).exists():
-                raise exceptions.PermissionDenied(
-                    "You are not allowed to manage accesses for this resource."
-                )
-
-            if (
-                role == models.RoleChoices.OWNER
-                and not self.Meta.model.objects.filter(  # pylint: disable=no-member
-                    Q(user=user) | Q(team__in=user.teams),
-                    role=models.RoleChoices.OWNER,
-                    **{self.Meta.resource_field_name: resource_id},  # pylint: disable=no-member
-                ).exists()
-            ):
-                raise exceptions.PermissionDenied(
-                    "Only owners of a resource can assign other users as owners."
-                )
-
-        # pylint: disable=no-member
-        attrs[f"{self.Meta.resource_field_name}_id"] = self.context["resource_id"]
-        return attrs
+        fields = ["id", "full_name"]
+        read_only_fields = ["id", "full_name"]
 
 
 class UserSerializer(serializers.ModelSerializer):
     """Serialize users."""
+
+    email = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = models.User
@@ -100,29 +38,63 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "full_name",
-            "short_name",
             "language",
         ]
-        read_only_fields = ["id", "email", "full_name", "short_name"]
+        read_only_fields = ["id", "email", "full_name"]
+
+    def get_email(self, user) -> str | None:
+        """Return OIDC email, falling back to admin_email for staff users."""
+        return user.email or user.admin_email
 
 
 class UserMeSerializer(UserSerializer):
     """Serialize users for me endpoint."""
 
     can_access = serializers.SerializerMethodField(read_only=True)
+    can_admin = serializers.SerializerMethodField(read_only=True)
+    organization = OrganizationSerializer(read_only=True)
 
     class Meta:
         model = models.User
-        fields = [*UserSerializer.Meta.fields, "can_access"]
-        read_only_fields = [*UserSerializer.Meta.read_only_fields, "can_access"]
+        fields = [
+            *UserSerializer.Meta.fields,
+            "can_access",
+            "can_admin",
+            "organization",
+        ]
+        read_only_fields = [
+            *UserSerializer.Meta.read_only_fields,
+            "can_access",
+            "can_admin",
+            "organization",
+        ]
+
+    def _get_entitlements(self, user):
+        """Get cached entitlements for the user, keyed by user.sub."""
+        if not hasattr(self, "_entitlements_cache"):
+            self._entitlements_cache = {}
+        if user.sub not in self._entitlements_cache:
+            try:
+                self._entitlements_cache[user.sub] = get_user_entitlements(
+                    user.sub, user.email
+                )
+            except EntitlementsUnavailableError:
+                self._entitlements_cache[user.sub] = None
+        return self._entitlements_cache[user.sub]
 
     def get_can_access(self, user) -> bool:
         """Check entitlements for the current user."""
-        try:
-            entitlements = get_user_entitlements(user.sub, user.email)
-            return entitlements.get("can_access", True)
-        except EntitlementsUnavailableError:
-            return True  # fail-open
+        entitlements = self._get_entitlements(user)
+        if entitlements is None:
+            return False  # fail-closed
+        return entitlements.get("can_access", False)
+
+    def get_can_admin(self, user) -> bool:
+        """Check admin entitlement for the current user."""
+        entitlements = self._get_entitlements(user)
+        if entitlements is None:
+            return False  # fail-closed
+        return entitlements.get("can_admin", False)
 
 
 class CalendarSubscriptionTokenSerializer(serializers.ModelSerializer):
@@ -158,7 +130,7 @@ class CalendarSubscriptionTokenSerializer(serializers.ModelSerializer):
             url = request.build_absolute_uri(f"/ical/{obj.token}.ics")
         else:
             # Fallback to APP_URL if no request context
-            app_url = getattr(settings, "APP_URL", "")
+            app_url = settings.APP_URL
             url = f"{app_url.rstrip('/')}/ical/{obj.token}.ics"
 
         # Force HTTPS in production to protect the token in transit

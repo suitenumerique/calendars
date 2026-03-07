@@ -27,6 +27,7 @@
       "logout": "Logout",
       "login": "Login",
       "my_account": "My Account",
+      "settings": "Settings",
       "api": {
         "error": {
           "unexpected": "An unexpected error occurred."
@@ -150,6 +151,7 @@
             "removeVisio": "Remove video conference",
             "videoLink": "Video conference link",
             "addAttendees": "Add participants",
+            "addResources": "Add resources",
             "addDescription": "Add description",
             "addReminder": "Add reminder",
             "addAttachment": "Add attachment",
@@ -330,6 +332,10 @@
           "viewProfile": "View profile",
           "cannotRemoveOrganizer": "Cannot remove organizer"
         },
+        "resources": {
+          "placeholder": "Select a resource...",
+          "remove": "Remove resource"
+        },
         "weekdaysFull": {
           "monday": "Monday",
           "tuesday": "Tuesday",
@@ -432,6 +438,38 @@
           "notAttendee": "You are not listed as an attendee of this event.",
           "updateFailed": "An error occurred while updating. Please try again."
         }
+      },
+      "resources": {
+        "title": "Resources",
+        "description": "Manage meeting rooms and shared resources.",
+        "search": "Search resources...",
+        "loading": "Loading resources...",
+        "empty": "No resources have been created yet.",
+        "noResults": "No resources match your search.",
+        "types": {
+          "room": "Room",
+          "resource": "Resource"
+        },
+        "filters": {
+          "all": "All"
+        },
+        "create": {
+          "button": "Add resource",
+          "title": "Create resource",
+          "nameLabel": "Name",
+          "typeLabel": "Type",
+          "submit": "Create",
+          "success": "Resource created successfully.",
+          "error": "Failed to create resource."
+        },
+        "delete": {
+          "button": "Delete",
+          "title": "Delete resource",
+          "message": "Are you sure you want to delete \"{{name}}\"? This cannot be undone.",
+          "confirm": "Delete",
+          "success": "Resource deleted successfully.",
+          "error": "Failed to delete resource."
+        }
       }
     }
   },
@@ -502,6 +540,7 @@
       "logout": "Déconnexion",
       "login": "Connexion",
       "my_account": "Mon Compte",
+      "settings": "Paramètres",
       "api": {
         "error": {
           "unexpected": "Une erreur inattendue est survenue."
@@ -889,6 +928,7 @@
             "removeVisio": "Supprimer la visioconférence",
             "videoLink": "Lien de visioconférence",
             "addAttendees": "Ajouter des participants",
+            "addResources": "Ajouter des ressources",
             "addDescription": "Ajouter une description",
             "addReminder": "Ajouter un rappel",
             "addAttachment": "Ajouter une pièce jointe",
@@ -1069,6 +1109,10 @@
           "viewProfile": "Voir le profil",
           "cannotRemoveOrganizer": "Impossible de retirer l'organisateur"
         },
+        "resources": {
+          "placeholder": "Sélectionner une ressource...",
+          "remove": "Retirer la ressource"
+        },
         "weekdaysFull": {
           "monday": "lundi",
           "tuesday": "mardi",
@@ -1171,6 +1215,38 @@
           "notAttendee": "Vous ne figurez pas parmi les participants de cet événement.",
           "updateFailed": "Une erreur est survenue lors de la mise à jour. Veuillez réessayer."
         }
+      },
+      "resources": {
+        "title": "Ressources",
+        "description": "Gérer les salles de réunion et les ressources partagées.",
+        "search": "Rechercher des ressources...",
+        "loading": "Chargement des ressources...",
+        "empty": "Aucune ressource n'a encore été créée.",
+        "noResults": "Aucune ressource ne correspond à votre recherche.",
+        "types": {
+          "room": "Salle",
+          "resource": "Ressource"
+        },
+        "filters": {
+          "all": "Toutes"
+        },
+        "create": {
+          "button": "Ajouter une ressource",
+          "title": "Créer une ressource",
+          "nameLabel": "Nom",
+          "typeLabel": "Type",
+          "submit": "Créer",
+          "success": "Ressource créée avec succès.",
+          "error": "Échec de la création de la ressource."
+        },
+        "delete": {
+          "button": "Supprimer",
+          "title": "Supprimer la ressource",
+          "message": "Êtes-vous sûr de vouloir supprimer « {{name}} » ? Cette action est irréversible.",
+          "confirm": "Supprimer",
+          "success": "Ressource supprimée avec succès.",
+          "error": "Échec de la suppression de la ressource."
+        }
       }
     }
   },
@@ -1236,6 +1312,7 @@
       "logout": "Uitloggen",
       "login": "Inloggen",
       "my_account": "Mijn account",
+      "settings": "Instellingen",
       "api": {
         "error": {
           "unexpected": "Er is een onverwachte fout opgetreden."
@@ -1370,6 +1447,7 @@
             "removeVisio": "Videoconferentie verwijderen",
             "videoLink": "Videoconferentie link",
             "addAttendees": "Deelnemers toevoegen",
+            "addResources": "Middelen toevoegen",
             "addDescription": "Beschrijving toevoegen",
             "addReminder": "Herinnering toevoegen",
             "addAttachment": "Bijlage toevoegen",
@@ -1550,6 +1628,10 @@
           "viewProfile": "Profiel bekijken",
           "cannotRemoveOrganizer": "Kan organisator niet verwijderen"
         },
+        "resources": {
+          "placeholder": "Selecteer een middel...",
+          "remove": "Middel verwijderen"
+        },
         "weekdaysFull": {
           "monday": "maandag",
           "tuesday": "dinsdag",
@@ -1651,6 +1733,38 @@
           "eventPast": "Dit evenement is al voorbij.",
           "notAttendee": "U staat niet vermeld als deelnemer van dit evenement.",
           "updateFailed": "Er is een fout opgetreden bij het bijwerken. Probeer het opnieuw."
+        }
+      },
+      "resources": {
+        "title": "Middelen",
+        "description": "Vergaderruimtes en gedeelde middelen beheren.",
+        "search": "Middelen zoeken...",
+        "loading": "Middelen laden...",
+        "empty": "Er zijn nog geen middelen aangemaakt.",
+        "noResults": "Geen middelen gevonden.",
+        "types": {
+          "room": "Ruimte",
+          "resource": "Middel"
+        },
+        "filters": {
+          "all": "Alle"
+        },
+        "create": {
+          "button": "Middel toevoegen",
+          "title": "Middel aanmaken",
+          "nameLabel": "Naam",
+          "typeLabel": "Type",
+          "submit": "Aanmaken",
+          "success": "Middel succesvol aangemaakt.",
+          "error": "Middel aanmaken mislukt."
+        },
+        "delete": {
+          "button": "Verwijderen",
+          "title": "Middel verwijderen",
+          "message": "Weet u zeker dat u \"{{name}}\" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
+          "confirm": "Verwijderen",
+          "success": "Middel succesvol verwijderd.",
+          "error": "Middel verwijderen mislukt."
         }
       }
     }

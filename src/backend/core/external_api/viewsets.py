@@ -4,7 +4,7 @@ from django.conf import settings
 
 from lasuite.oidc_resource_server.authentication import ResourceServerAuthentication
 
-from core.api.permissions import AccessPermission, IsSelf
+from core.api.permissions import IsSelf
 from core.api.viewsets import UserViewSet
 from core.external_api.permissions import ResourceServerClientPermission
 

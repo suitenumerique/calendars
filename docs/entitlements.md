@@ -5,8 +5,10 @@ checking whether a user is allowed to access the application. It
 integrates with the DeployCenter API in production and uses a local
 backend for development.
 
-Unlike La Suite Messages, Calendars only checks `can_access` — there
-is no admin permission sync.
+Calendars checks two entitlements:
+- `can_access`: whether the user can use the app at all
+- `can_admin`: whether the user is an admin of their organization
+  (e.g. can create/delete resources)
 
 ## Architecture
 
@@ -18,7 +20,7 @@ is no admin permission sync.
                │
 ┌──────────────▼──────────────────────────────┐
 │          UserMeSerializer                   │
-│    GET /users/me/ → { can_access: bool }    │
+│  GET /users/me/ → { can_access, can_admin } │
 └──────────────┬──────────────────────────────┘
                │
 ┌──────────────▼──────────────────────────────┐
@@ -97,6 +99,10 @@ is no admin permission sync.
   is denied (returns 403).
 - **Import events is fail-closed**: if the entitlements service is
   unavailable, ICS import is denied (returns 403).
+- **Resource provisioning is fail-closed**: if the entitlements
+  service is unavailable, resource creation/deletion is denied
+  (returns 403). The `can_admin` check follows the same pattern
+  as `can_access` fail-closed checks.
 - The DeployCenter backend falls back to stale cached data when the
   API is unavailable.
 - `EntitlementsUnavailableError` is only raised when the API fails
@@ -157,7 +163,7 @@ class MyBackend(EntitlementsBackend):
     def get_user_entitlements(
         self, user_sub, user_email, user_info=None, force_refresh=False
     ):
-        # Return: {"can_access": bool}
+        # Return: {"can_access": bool, "can_admin": bool, ...}
         # Raise EntitlementsUnavailableError on failure.
         pass
 ```
@@ -175,7 +181,8 @@ Headers: `X-Service-Auth: Bearer {api_key}`
 Query parameters include any configured `oidc_claims` extracted from
 the OIDC user_info response (e.g. `siret`).
 
-Expected response: `{"entitlements": {"can_access": true}}`
+Expected response:
+`{"entitlements": {"can_access": true, "can_admin": false}}`
 
 ## Access control flow
 

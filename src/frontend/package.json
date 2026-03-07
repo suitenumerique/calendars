@@ -2,24 +2,26 @@
   "name": "main",
   "version": "0.10.1",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "engines": {
     "node": ">=22.0.0 <25.0.0",
-    "yarn": "1.22.22"
+    "pnpm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "yarn workspace calendars run dev",
-    "build": "yarn workspace calendars run build",
-    "lint": "yarn workspace calendars run lint",
-    "build-theme": "yarn workspace calendars build-theme"
+    "dev": "pnpm -F calendars run dev",
+    "build": "pnpm -F calendars run build",
+    "lint": "pnpm -F calendars run lint",
+    "build-theme": "pnpm -F calendars build-theme"
   },
-  "resolutions": {},
+  "pnpm": {
+    "overrides": {
+      "ts-ics": "workspace:*",
+      "@gouvfr-lasuite/cunningham-react": "4.2.0",
+      "@types/node": "24.10.1"
+    }
+  },
   "devDependencies": {
     "@types/minimatch": "^6.0.0",
     "turbo": "2.6.1"
   },
-  "packageManager": "yarn@1.22.22"
+  "packageManager": "pnpm@9.15.9"
 }

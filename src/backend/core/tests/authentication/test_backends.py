@@ -2,6 +2,7 @@
 
 import random
 import re
+from unittest import mock
 
 from django.core.exceptions import SuspiciousOperation
 from django.test.utils import override_settings
@@ -17,7 +18,14 @@ from core.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
 
+# Patch org resolution out by default in this module.
+# Tests for org resolution are in test_organizations.py.
+_no_org_resolve = mock.patch.object(
+    OIDCAuthenticationBackend, "_resolve_organization", lambda *a, **kw: None
+)
 
+
+@_no_org_resolve
 def test_authentication_getter_existing_user_no_email(
     django_assert_num_queries, monkeypatch
 ):
@@ -41,6 +49,7 @@ def test_authentication_getter_existing_user_no_email(
     assert user == db_user
 
 
+@_no_org_resolve
 def test_authentication_getter_existing_user_via_email(
     django_assert_num_queries, monkeypatch
 ):
@@ -154,6 +163,7 @@ def test_authentication_getter_existing_user_no_fallback_to_email_no_duplicate(
     assert models.User.objects.count() == 1
 
 
+@_no_org_resolve
 def test_authentication_getter_existing_user_with_email(
     django_assert_num_queries, monkeypatch
 ):
@@ -161,7 +171,7 @@ def test_authentication_getter_existing_user_with_email(
     When the user's info contains an email and targets an existing user,
     """
     klass = OIDCAuthenticationBackend()
-    user = UserFactory(full_name="John Doe", short_name="John")
+    user = UserFactory(full_name="John Doe")
 
     def get_userinfo_mocked(*args):
         return {
@@ -182,6 +192,7 @@ def test_authentication_getter_existing_user_with_email(
     assert user == authenticated_user
 
 
+@_no_org_resolve
 @pytest.mark.parametrize(
     "first_name, last_name, email",
     [
@@ -199,9 +210,7 @@ def test_authentication_getter_existing_user_change_fields_sub(
     and the user was identified by its "sub".
     """
     klass = OIDCAuthenticationBackend()
-    user = UserFactory(
-        full_name="John Doe", short_name="John", email="john.doe@example.com"
-    )
+    user = UserFactory(full_name="John Doe", email="john.doe@example.com")
 
     def get_userinfo_mocked(*args):
         return {
@@ -223,9 +232,9 @@ def test_authentication_getter_existing_user_change_fields_sub(
     user.refresh_from_db()
     assert user.email == email
     assert user.full_name == f"{first_name:s} {last_name:s}"
-    assert user.short_name == first_name
 
 
+@_no_org_resolve
 @pytest.mark.parametrize(
     "first_name, last_name, email",
     [
@@ -241,9 +250,7 @@ def test_authentication_getter_existing_user_change_fields_email(
     and the user was identified by its "email" as fallback.
     """
     klass = OIDCAuthenticationBackend()
-    user = UserFactory(
-        full_name="John Doe", short_name="John", email="john.doe@example.com"
-    )
+    user = UserFactory(full_name="John Doe", email="john.doe@example.com")
 
     def get_userinfo_mocked(*args):
         return {
@@ -265,7 +272,6 @@ def test_authentication_getter_existing_user_change_fields_email(
     user.refresh_from_db()
     assert user.email == email
     assert user.full_name == f"{first_name:s} {last_name:s}"
-    assert user.short_name == first_name
 
 
 def test_authentication_getter_new_user_no_email(monkeypatch):
@@ -287,7 +293,7 @@ def test_authentication_getter_new_user_no_email(monkeypatch):
     assert user.sub == "123"
     assert user.email is None
     assert user.full_name is None
-    assert user.short_name is None
+
     assert user.has_usable_password() is False
     assert models.User.objects.count() == 1
 
@@ -314,7 +320,7 @@ def test_authentication_getter_new_user_with_email(monkeypatch):
     assert user.sub == "123"
     assert user.email == email
     assert user.full_name == "John Doe"
-    assert user.short_name == "John"
+
     assert user.has_usable_password() is False
     assert models.User.objects.count() == 1
 
@@ -458,6 +464,7 @@ def test_authentication_getter_existing_disabled_user_via_email(
     assert models.User.objects.count() == 1
 
 
+@_no_org_resolve
 @responses.activate
 def test_authentication_session_tokens(
     django_assert_num_queries, monkeypatch, rf, settings
@@ -538,7 +545,7 @@ def test_authentication_store_claims_new_user(monkeypatch):
     assert user.sub == "123"
     assert user.email == email
     assert user.full_name == "John Doe"
-    assert user.short_name == "John"
+
     assert user.has_usable_password() is False
     assert user.claims == {"iss": "https://example.com"}
     assert models.User.objects.count() == 1

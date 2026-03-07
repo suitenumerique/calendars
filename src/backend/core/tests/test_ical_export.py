@@ -26,7 +26,7 @@ class TestICalExport:
         with responses.RequestsMock() as rsps:
             caldav_url = settings.CALDAV_URL
             caldav_path = subscription.caldav_path.lstrip("/")
-            target_url = f"{caldav_url}/api/v1.0/caldav/{caldav_path}?export"
+            target_url = f"{caldav_url}/caldav/{caldav_path}?export"
 
             ics_content = b"""BEGIN:VCALENDAR
 VERSION:2.0
@@ -86,7 +86,7 @@ END:VCALENDAR"""
         with responses.RequestsMock() as rsps:
             caldav_url = settings.CALDAV_URL
             caldav_path = subscription.caldav_path.lstrip("/")
-            target_url = f"{caldav_url}/api/v1.0/caldav/{caldav_path}?export"
+            target_url = f"{caldav_url}/caldav/{caldav_path}?export"
 
             rsps.add(
                 responses.GET,
@@ -111,7 +111,7 @@ END:VCALENDAR"""
         with responses.RequestsMock() as rsps:
             caldav_url = settings.CALDAV_URL
             caldav_path = subscription.caldav_path.lstrip("/")
-            target_url = f"{caldav_url}/api/v1.0/caldav/{caldav_path}?export"
+            target_url = f"{caldav_url}/caldav/{caldav_path}?export"
 
             rsps.add(
                 responses.GET,
@@ -134,7 +134,7 @@ END:VCALENDAR"""
         with responses.RequestsMock() as rsps:
             caldav_url = settings.CALDAV_URL
             caldav_path = subscription.caldav_path.lstrip("/")
-            target_url = f"{caldav_url}/api/v1.0/caldav/{caldav_path}?export"
+            target_url = f"{caldav_url}/caldav/{caldav_path}?export"
 
             rsps.add(
                 responses.GET,
@@ -161,7 +161,7 @@ END:VCALENDAR"""
         with responses.RequestsMock() as rsps:
             caldav_url = settings.CALDAV_URL
             caldav_path = subscription.caldav_path.lstrip("/")
-            target_url = f"{caldav_url}/api/v1.0/caldav/{caldav_path}?export"
+            target_url = f"{caldav_url}/caldav/{caldav_path}?export"
 
             rsps.add(
                 responses.GET,
@@ -183,7 +183,7 @@ END:VCALENDAR"""
         with responses.RequestsMock() as rsps:
             caldav_url = settings.CALDAV_URL
             caldav_path = subscription.caldav_path.lstrip("/")
-            target_url = f"{caldav_url}/api/v1.0/caldav/{caldav_path}?export"
+            target_url = f"{caldav_url}/caldav/{caldav_path}?export"
 
             rsps.add(
                 responses.GET,
@@ -210,7 +210,7 @@ END:VCALENDAR"""
         with responses.RequestsMock() as rsps:
             caldav_url = settings.CALDAV_URL
             caldav_path = subscription.caldav_path.lstrip("/")
-            target_url = f"{caldav_url}/api/v1.0/caldav/{caldav_path}?export"
+            target_url = f"{caldav_url}/caldav/{caldav_path}?export"
 
             rsps.add(
                 responses.GET,

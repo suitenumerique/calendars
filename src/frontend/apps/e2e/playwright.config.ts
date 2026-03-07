@@ -32,7 +32,7 @@ export default defineConfig({
   },
 
   webServer: {
-    command: !process.env.CI ? `cd ../calendars && yarn dev --port ${PORT}` : "",
+    command: !process.env.CI ? `cd ../calendars && pnpm dev --port ${PORT}` : "",
     url: baseURL,
     timeout: 120 * 1000,
     reuseExistingServer: true,

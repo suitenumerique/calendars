@@ -30,7 +30,7 @@ class CalDAVHTTPClient:
     and HTTP requests. All higher-level CalDAV consumers delegate to this.
     """
 
-    BASE_URI_PATH = "/api/v1.0/caldav"
+    BASE_URI_PATH = "/caldav"
     DEFAULT_TIMEOUT = 30
 
     def __init__(self):
@@ -182,6 +182,10 @@ class CalDAVClient:
         self._http = CalDAVHTTPClient()
         self.base_url = self._http.base_url
 
+    def _calendar_url(self, calendar_path: str) -> str:
+        """Build a full URL for a calendar path, including the BASE_URI_PATH."""
+        return f"{self.base_url}{CalDAVHTTPClient.BASE_URI_PATH}{calendar_path}"
+
     def _get_client(self, user) -> DAVClient:
         """
         Get a CalDAV client for the given user.
@@ -197,7 +201,7 @@ class CalDAVClient:
         Returns dict with name, color, description or None if not found.
         """
         client = self._get_client(user)
-        calendar_url = f"{self.base_url}{calendar_path}"
+        calendar_url = self._calendar_url(calendar_path)
 
         try:
             calendar = client.calendar(url=calendar_url)
@@ -248,13 +252,23 @@ class CalDAVClient:
             # CalDAV server calendar path format: /calendars/{username}/{calendar_id}/
             # The caldav library returns a URL object, convert to string and extract path
             calendar_url = str(calendar.url)
-            # Extract path from full URL
+            # Extract path from full URL (strip base_url and BASE_URI_PATH prefix)
             if calendar_url.startswith(self.base_url):
                 path = calendar_url[len(self.base_url) :]
             else:
                 # Fallback: construct path manually based on standard CalDAV structure
-                # CalDAV servers typically create calendars under /calendars/{principal}/
-                path = f"/calendars/{user.email}/{calendar_id}/"
+                path = f"/calendars/users/{user.email}/{calendar_id}/"
+
+            # Strip the BASE_URI_PATH prefix so the returned path
+            # is a CalDAV-relative path like /calendars/users/{email}/{id}/
+            base_prefix = CalDAVHTTPClient.BASE_URI_PATH
+            if path.startswith(base_prefix):
+                path = path[len(base_prefix) :]
+                if not path.startswith("/"):
+                    path = "/" + path
+
+            # URL-decode the path (e.g. %40 → @)
+            path = unquote(path)
 
             logger.info(
                 "Created calendar in CalDAV server: %s at %s", calendar_name, path
@@ -285,7 +299,7 @@ class CalDAVClient:
         client = self._get_client(user)
 
         # Get calendar by URL
-        calendar_url = f"{self.base_url}{calendar_path}"
+        calendar_url = self._calendar_url(calendar_path)
         calendar = client.calendar(url=calendar_url)
 
         try:
@@ -323,7 +337,7 @@ class CalDAVClient:
         Returns the event UID.
         """
         client = self._get_client(user)
-        calendar_url = f"{self.base_url}{calendar_path}"
+        calendar_url = self._calendar_url(calendar_path)
         calendar = client.calendar(url=calendar_url)
 
         try:
@@ -342,7 +356,7 @@ class CalDAVClient:
         """
 
         client = self._get_client(user)
-        calendar_url = f"{self.base_url}{calendar_path}"
+        calendar_url = self._calendar_url(calendar_path)
         calendar = client.calendar(url=calendar_url)
 
         # Extract event data
@@ -385,7 +399,7 @@ class CalDAVClient:
         """Update an existing event in CalDAV server."""
 
         client = self._get_client(user)
-        calendar_url = f"{self.base_url}{calendar_path}"
+        calendar_url = self._calendar_url(calendar_path)
         calendar = client.calendar(url=calendar_url)
 
         try:
@@ -440,7 +454,7 @@ class CalDAVClient:
         """Delete an event from CalDAV server."""
 
         client = self._get_client(user)
-        calendar_url = f"{self.base_url}{calendar_path}"
+        calendar_url = self._calendar_url(calendar_path)
         calendar = client.calendar(url=calendar_url)
 
         try:
@@ -558,9 +572,10 @@ class CalendarService:
 # CalDAV path utilities
 # ---------------------------------------------------------------------------
 
-# Pattern: /calendars/<email-or-encoded>/<calendar-id>/
+# Pattern: /calendars/users/<email-or-encoded>/<calendar-id>/
+# or /calendars/resources/<resource-id>/<calendar-id>/
 CALDAV_PATH_PATTERN = re.compile(
-    r"^/calendars/[^/]+/[a-zA-Z0-9-]+/$",
+    r"^/calendars/(users|resources)/[^/]+/[a-zA-Z0-9-]+/$",
 )
 
 
@@ -568,8 +583,8 @@ def normalize_caldav_path(caldav_path):
     """Normalize CalDAV path to consistent format.
 
     Strips the CalDAV API prefix (e.g. /api/v1.0/caldav/) if present,
-    so that paths like /api/v1.0/caldav/calendars/user@ex.com/uuid/
-    become /calendars/user@ex.com/uuid/.
+    so that paths like /api/v1.0/caldav/calendars/users/user@ex.com/uuid/
+    become /calendars/users/user@ex.com/uuid/.
     """
     if not caldav_path.startswith("/"):
         caldav_path = "/" + caldav_path
@@ -587,14 +602,21 @@ def verify_caldav_access(user, caldav_path):
 
     Checks that:
     1. The path matches the expected pattern (prevents path injection)
-    2. The user's email matches the email in the path
+    2. For user calendars: the user's email matches the email in the path
+    3. For resource calendars: the user has an organization (org membership)
     """
     if not CALDAV_PATH_PATTERN.match(caldav_path):
         return False
     parts = caldav_path.strip("/").split("/")
-    if len(parts) >= 2 and parts[0] == "calendars":
-        path_email = unquote(parts[1])
+    if len(parts) < 3 or parts[0] != "calendars":
+        return False
+    # User calendars: calendars/users/<email>/<calendar-id>
+    if parts[1] == "users":
+        path_email = unquote(parts[2])
         return path_email.lower() == user.email.lower()
+    # Resource calendars: calendars/resources/<resource-id>/<calendar-id>
+    if parts[1] == "resources":
+        return user.organization_id is not None
     return False
 
 
@@ -617,10 +639,70 @@ def validate_caldav_proxy_path(path):
     if "\x00" in path:
         return False
 
+    clean = path.lstrip("/")
+
+    # Explicitly block internal-api/ paths — these must never be proxied.
+    # The allowlist below already rejects them, but an explicit block makes
+    # the intent clear and survives future allowlist additions.
+    blocked_prefixes = ("internal-api/",)
+    if clean and any(clean.startswith(prefix) for prefix in blocked_prefixes):
+        return False
+
     # Path must start with a known CalDAV resource prefix
     allowed_prefixes = ("calendars/", "principals/", ".well-known/")
-    clean = path.lstrip("/")
     if clean and not any(clean.startswith(prefix) for prefix in allowed_prefixes):
         return False
 
     return True
+
+
+def cleanup_organization_caldav_data(org):
+    """Clean up CalDAV data for all members of an organization.
+
+    Deletes each member's CalDAV data via the SabreDAV internal API,
+    then deletes the Django User objects so the PROTECT foreign key
+    on User.organization doesn't block org deletion.
+
+    Called from Organization.delete() — NOT a signal, because the
+    PROTECT FK raises ProtectedError before pre_delete fires.
+    """
+    if not settings.CALDAV_INTERNAL_API_KEY:
+        return
+
+    http = CalDAVHTTPClient()
+    members = org.members.all()
+    users_to_delete = []
+
+    for user in members:
+        if not user.email:
+            users_to_delete.append(user.pk)
+            continue
+        try:
+            response = http.request(
+                "DELETE",
+                user.email,
+                f"internal-api/users/{user.email}",
+                extra_headers={
+                    "X-Internal-Api-Key": settings.CALDAV_INTERNAL_API_KEY,
+                },
+            )
+            if 200 <= response.status_code < 300:
+                users_to_delete.append(user.pk)
+            else:
+                logger.error(
+                    "CalDAV DELETE for user %s (org %s) returned %s, "
+                    "skipping local deletion",
+                    user.email,
+                    org.external_id,
+                    response.status_code,
+                )
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception(
+                "Failed to clean up CalDAV data for user %s (org %s)",
+                user.email,
+                org.external_id,
+            )
+
+    # Delete only members whose CalDAV data was successfully removed
+    if users_to_delete:
+        org.members.filter(pk__in=users_to_delete).delete()

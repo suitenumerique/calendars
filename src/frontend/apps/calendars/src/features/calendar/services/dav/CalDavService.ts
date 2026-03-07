@@ -769,6 +769,7 @@ export class CalDavService {
         role: att.role,
         partstat: att.partstat ?? 'NEEDS-ACTION',
         rsvp: att.rsvp,
+        cutype: att.cutype,
       }))
 
       const icsCalendar: IcsCalendar = {

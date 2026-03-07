@@ -1,0 +1,19 @@
+{
+	auto_https off
+	admin off
+}
+
+:8080 {
+	root * /srv
+	header X-Frame-Options DENY
+
+	route {
+		try_files {path} /index.html
+		file_server
+	}
+
+	handle_errors {
+		rewrite * /404.html
+		file_server
+	}
+}

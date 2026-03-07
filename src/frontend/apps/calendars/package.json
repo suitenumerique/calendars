@@ -13,7 +13,7 @@
   },
   "engines": {
     "node": ">=22.0.0 <25.0.0",
-    "yarn": "1.22.22"
+    "pnpm": ">=9.0.0"
   },
   "dependencies": {
     "@event-calendar/core": "^5.2.3",
@@ -41,6 +41,7 @@
     "tsdav": "2.1.6"
   },
   "devDependencies": {
+    "@gouvfr-lasuite/cunningham-tokens": "3.1.0",
     "@eslint/eslintrc": "3.2.0",
     "@tanstack/eslint-plugin-query": "5.66.1",
     "@tanstack/react-query-devtools": "5.66.9",
