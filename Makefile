@@ -161,7 +161,7 @@ run-backend-e2e: ## start the backend container for e2e tests, always remove the
 run-tests-e2e: ## run the e2e tests, example: make run-tests-e2e -- --project chromium --headed
 	@$(MAKE) run-backend-e2e	
 	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
-	cd src/frontend/apps/e2e && yarn test $${args:-${1}}
+	cd src/frontend/apps/e2e && pnpm test $${args:-${1}}
 .PHONY: run-tests-e2e
 
 backend-exec-command: ## execute a command in the backend container
@@ -332,20 +332,20 @@ help:
 
 # Front
 frontend-development-install: ## install the frontend locally
-	cd $(PATH_FRONT_CALENDARS) && yarn
+	cd $(PATH_FRONT_CALENDARS) && pnpm install
 .PHONY: frontend-development-install
 
 frontend-lint: ## run the frontend linter
-	cd $(PATH_FRONT) && yarn lint
+	cd $(PATH_FRONT) && pnpm lint
 .PHONY: frontend-lint
 
 run-frontend-development: ## Run the frontend in development mode
 	@$(COMPOSE) stop frontend-dev
-	cd $(PATH_FRONT_CALENDARS) && yarn dev
+	cd $(PATH_FRONT_CALENDARS) && pnpm dev
 .PHONY: run-frontend-development
 
 frontend-i18n-extract: ## Extract the frontend translation inside a json
-	cd $(PATH_FRONT) && yarn i18n:extract
+	cd $(PATH_FRONT) && pnpm i18n:extract
 .PHONY: frontend-i18n-extract
 
 frontend-i18n-generate: ## Generate the frontend json files
@@ -354,5 +354,5 @@ frontend-i18n-generate: \
 .PHONY: frontend-i18n-generate
 
 frontend-i18n-compile: ## Format the crowin json files used deploy to the apps
-	cd $(PATH_FRONT) && yarn i18n:deploy
+	cd $(PATH_FRONT) && pnpm i18n:deploy
 .PHONY: frontend-i18n-compile

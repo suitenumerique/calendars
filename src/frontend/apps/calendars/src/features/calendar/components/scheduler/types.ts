@@ -32,7 +32,6 @@ export interface EventModalProps {
   onSave: (
     event: IcsEvent,
     calendarUrl: string,
-    resourceCutypes?: Map<string, "ROOM" | "RESOURCE">,
   ) => Promise<void>;
   onDelete?: (
     event: IcsEvent,

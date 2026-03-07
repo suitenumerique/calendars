@@ -84,18 +84,9 @@ export const EventModal = ({
     try {
       const icsEvent = form.toIcsEvent();
 
-      // Build resource CUTYPE map for ICS post-processing
-      const resourceCutypes = new Map<string, "ROOM" | "RESOURCE">();
-      for (const r of form.resources) {
-        if (r.email) {
-          resourceCutypes.set(r.email, r.resourceType);
-        }
-      }
-
       await onSave(
         icsEvent,
         form.selectedCalendarUrl,
-        resourceCutypes.size > 0 ? resourceCutypes : undefined,
       );
       onClose();
     } catch (error) {

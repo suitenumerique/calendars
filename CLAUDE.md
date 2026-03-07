@@ -40,8 +40,8 @@ make dbshell                                                # PostgreSQL shell
 make frontend-development-install   # Install frontend dependencies locally
 make run-frontend-development       # Run frontend locally (after run-backend)
 make frontend-lint                  # Run ESLint on frontend
-cd src/frontend/apps/calendars && yarn test              # Run frontend tests
-cd src/frontend/apps/calendars && yarn test:watch        # Watch mode
+cd src/frontend/apps/calendars && pnpm test              # Run frontend tests
+cd src/frontend/apps/calendars && pnpm test:watch        # Watch mode
 ```
 
 ### E2E Tests
@@ -62,7 +62,7 @@ make run-tests-e2e -- --project chromium --headed  # Run with specific browser
   - `tests/` - pytest test files
 
 ### Frontend Structure (`src/frontend/`)
-Yarn workspaces monorepo:
+pnpm workspaces monorepo:
 - `apps/calendars/` - Main Next.js application
   - `src/features/` - Feature modules (calendar, auth, api, i18n, etc.)
   - `src/pages/` - Next.js pages

@@ -30,6 +30,8 @@ class UserLiteSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     """Serialize users."""
 
+    email = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = models.User
         fields = [
@@ -39,6 +41,10 @@ class UserSerializer(serializers.ModelSerializer):
             "language",
         ]
         read_only_fields = ["id", "email", "full_name"]
+
+    def get_email(self, user) -> str | None:
+        """Return OIDC email, falling back to admin_email for staff users."""
+        return user.email or user.admin_email
 
 
 class UserMeSerializer(UserSerializer):

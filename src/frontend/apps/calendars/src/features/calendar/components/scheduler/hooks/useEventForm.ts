@@ -294,6 +294,7 @@ export const useEventForm = ({
           partstat: existing?.partstat ?? "NEEDS-ACTION",
           rsvp: false,
           role: "NON-PARTICIPANT" as const,
+          cutype: r.resourceType,
         };
       });
     const allAttendees = [...attendees, ...resourceAttendees];

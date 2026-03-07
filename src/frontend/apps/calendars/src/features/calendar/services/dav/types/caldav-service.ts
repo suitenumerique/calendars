@@ -93,14 +93,12 @@ export type CalDavEvent = Pick<DAVCalendarObject, 'url' | 'etag'> & {
 export type CalDavEventCreate = {
   calendarUrl: string
   event: IcsEvent
-  resourceCutypes?: Map<string, "ROOM" | "RESOURCE">
 }
 
 export type CalDavEventUpdate = {
   eventUrl: string
   event: IcsEvent
   etag?: string
-  resourceCutypes?: Map<string, "ROOM" | "RESOURCE">
 }
 
 // ============================================================================
@@ -167,7 +165,6 @@ export type SchedulingRequest = {
   organizer: CalDavOrganizer
   attendees: CalDavAttendee[]
   event: IcsEvent
-  resourceCutypes?: Map<string, "ROOM" | "RESOURCE">
 }
 
 export type SchedulingResponse = {
