@@ -8,6 +8,7 @@ from django.test import override_settings
 import pytest
 import responses
 from rest_framework.status import (
+    HTTP_200_OK,
     HTTP_201_CREATED,
     HTTP_207_MULTI_STATUS,
     HTTP_403_FORBIDDEN,
@@ -39,16 +40,14 @@ class TestVerifyCaldavAccessResourcePaths:
         return user
 
     def test_resource_path_allowed_when_user_has_org(self):
-        """Users with an organization can access resource calendars."""
+        """Users with an organization can access resource calendars.
+
+        Fine-grained org-to-resource authorization is enforced by SabreDAV
+        via the X-CalDAV-Organization header, not here.
+        """
         user = self._make_user(org_id="some-org-uuid")
         path = "/calendars/resources/abc-123/default/"
         assert verify_caldav_access(user, path) is True
-
-    def test_resource_path_denied_when_user_has_no_org(self):
-        """Users without an organization cannot access resource calendars."""
-        user = self._make_user(org_id=None)
-        path = "/calendars/resources/abc-123/default/"
-        assert verify_caldav_access(user, path) is False
 
     def test_user_path_allowed_for_own_email(self):
         """Users can access their own calendar paths."""
@@ -81,6 +80,12 @@ class TestVerifyCaldavAccessResourcePaths:
         assert CALDAV_PATH_PATTERN.match(
             "/calendars/resources/a1b2c3d4-e5f6-7890-abcd-ef1234567890/default/"
         )
+
+    def test_resource_path_denied_when_user_has_no_org(self):
+        """Users without an organization cannot access resource calendars."""
+        user = self._make_user(org_id=None)
+        path = "/calendars/resources/abc-123/default/"
+        assert verify_caldav_access(user, path) is False
 
     def test_user_path_case_insensitive(self):
         """Email comparison in user paths should be case-insensitive."""
@@ -233,31 +238,6 @@ class TestCalDAVProxyOrgHeader:
         assert request.headers["X-CalDAV-Organization"] == str(org.id)
 
     @responses.activate
-    def test_proxy_omits_org_header_when_no_org(self):
-        """CalDAV proxy omits X-CalDAV-Organization for users without an org."""
-        user = factories.UserFactory(email="alice@example.com", organization=None)
-
-        client = APIClient()
-        client.force_login(user)
-
-        caldav_url = settings.CALDAV_URL
-        responses.add(
-            responses.Response(
-                method="PROPFIND",
-                url=f"{caldav_url}/caldav/principals/resources/",
-                status=HTTP_207_MULTI_STATUS,
-                body='<?xml version="1.0"?><multistatus xmlns="DAV:"></multistatus>',
-                headers={"Content-Type": "application/xml"},
-            )
-        )
-
-        client.generic("PROPFIND", "/caldav/principals/resources/")
-
-        assert len(responses.calls) == 1
-        request = responses.calls[0].request
-        assert "X-CalDAV-Organization" not in request.headers
-
-    @responses.activate
     def test_proxy_cannot_spoof_org_header(self):
         """Client-sent X-CalDAV-Organization is overwritten by the proxy."""
         org = factories.OrganizationFactory(external_id="real-org")
@@ -292,13 +272,13 @@ class TestCalDAVProxyOrgHeader:
 
 
 # ---------------------------------------------------------------------------
-# IsEntitled permission — fail-closed
+# IsEntitledToAccess permission — fail-closed
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
-class TestIsEntitledFailClosed:
-    """Tests that IsEntitled permission is fail-closed."""
+class TestIsEntitledToAccessFailClosed:
+    """Tests that IsEntitledToAccess permission is fail-closed."""
 
     def test_import_denied_when_entitlements_unavailable(self):
         """ICS import should be denied when entitlements service is down."""
@@ -371,3 +351,30 @@ class TestNormalizeCaldavPath:
         """Resource paths should pass through unchanged."""
         result = normalize_caldav_path("/calendars/resources/abc-123/default/")
         assert result == "/calendars/resources/abc-123/default/"
+
+
+# ---------------------------------------------------------------------------
+# UserViewSet — user without org gets empty results
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestUserViewSetCrossOrg:
+    """Tests that users from a different org see no users in the list."""
+
+    def test_user_from_other_org_gets_empty_list(self):
+        """A user from a different org should get an empty user list."""
+        org_a = factories.OrganizationFactory(external_id="org-a")
+        org_b = factories.OrganizationFactory(external_id="org-b")
+        factories.UserFactory(email="orguser@example.com", organization=org_a)
+
+        other_org_user = factories.UserFactory(
+            email="other@example.com", organization=org_b
+        )
+
+        client = APIClient()
+        client.force_login(other_org_user)
+
+        response = client.get("/api/v1.0/users/", {"q": "orguser@example.com"})
+        assert response.status_code == HTTP_200_OK
+        assert response.json()["count"] == 0

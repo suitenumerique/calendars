@@ -38,7 +38,16 @@ export default function HomePage() {
       );
       if (attemptedUrl) {
         sessionStorage.removeItem(SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL);
-        window.location.href = attemptedUrl;
+        try {
+          const url = new URL(attemptedUrl, window.location.origin);
+          if (url.origin === window.location.origin) {
+            window.location.href = url.href;
+          } else {
+            window.location.href = "/calendar";
+          }
+        } catch {
+          window.location.href = "/calendar";
+        }
       } else {
         // Redirect authenticated users to calendar page
         window.location.href = "/calendar";

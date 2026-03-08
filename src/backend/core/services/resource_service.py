@@ -2,7 +2,7 @@
 
 import json
 import logging
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from django.conf import settings
 
@@ -52,14 +52,19 @@ class ResourceService:
                 "resource_type must be 'ROOM' or 'RESOURCE'."
             )
 
+        if not settings.CALDAV_INTERNAL_API_KEY:
+            raise ResourceProvisioningError(
+                "CALDAV_INTERNAL_API_KEY is not configured."
+            )
+
         resource_id = str(uuid4())
         email = self._resource_email(resource_id)
-        org_id = str(user.organization_id) if user.organization_id else None
+        org_id = str(user.organization_id)
 
         try:
             response = self._http.request(
                 "POST",
-                user.email,
+                user,
                 "internal-api/resources/",
                 data=self._json_bytes(
                     {
@@ -76,8 +81,9 @@ class ResourceService:
                 },
             )
         except Exception as e:
+            logger.error("Failed to create resource principal: %s", e)
             raise ResourceProvisioningError(
-                f"Failed to create resource principal: {e}"
+                "Failed to create resource principal."
             ) from e
 
         if response.status_code == 409:
@@ -103,6 +109,20 @@ class ResourceService:
             "calendar_uri": calendar_uri,
         }
 
+    @staticmethod
+    def _validate_resource_id(resource_id):
+        """Validate that resource_id is a proper UUID.
+
+        Raises ResourceProvisioningError if the ID is not a valid UUID,
+        preventing path traversal via crafted IDs.
+        """
+        try:
+            UUID(str(resource_id))
+        except (ValueError, AttributeError) as e:
+            raise ResourceProvisioningError(
+                "Invalid resource ID: must be a valid UUID."
+            ) from e
+
     def delete_resource(self, user, resource_id):
         """Delete a resource principal and its calendar.
 
@@ -116,20 +136,25 @@ class ResourceService:
         Raises:
             ResourceProvisioningError on failure.
         """
-        org_id = str(user.organization_id) if user.organization_id else None
+        self._validate_resource_id(resource_id)
+
+        if not settings.CALDAV_INTERNAL_API_KEY:
+            raise ResourceProvisioningError(
+                "CALDAV_INTERNAL_API_KEY is not configured."
+            )
 
         try:
             response = self._http.request(
                 "DELETE",
-                user.email,
+                user,
                 f"internal-api/resources/{resource_id}",
                 extra_headers={
                     "X-Internal-Api-Key": settings.CALDAV_INTERNAL_API_KEY,
-                    **({"X-CalDAV-Organization": org_id} if org_id else {}),
                 },
             )
         except Exception as e:
-            raise ResourceProvisioningError(f"Failed to delete resource: {e}") from e
+            logger.error("Failed to delete resource: %s", e)
+            raise ResourceProvisioningError("Failed to delete resource.") from e
 
         if response.status_code == 404:
             raise ResourceProvisioningError(f"Resource '{resource_id}' not found.")

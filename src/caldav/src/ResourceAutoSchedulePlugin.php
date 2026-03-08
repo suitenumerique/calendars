@@ -110,9 +110,11 @@ class ResourceAutoSchedulePlugin extends ServerPlugin
             : null;
         $resourceOrgId = $recipientPrincipal['org_id'] ?? null;
 
-        if ($requestOrgId && $resourceOrgId && $requestOrgId !== $resourceOrgId) {
-            $this->declineInvitation($message, 'Cross-organization booking not allowed');
-            return;
+        if ($resourceOrgId) {
+            if (!$requestOrgId || $requestOrgId !== $resourceOrgId) {
+                $this->declineInvitation($message, 'Cross-organization booking not allowed');
+                return;
+            }
         }
 
         // Read auto-schedule mode from propertystorage
@@ -308,7 +310,7 @@ class ResourceAutoSchedulePlugin extends ServerPlugin
             return (int)$stmt->fetchColumn() > 0;
         } catch (\Exception $e) {
             error_log("[ResourceAutoSchedulePlugin] Conflict check failed: " . $e->getMessage());
-            return false; // Fail-open: allow booking if check fails
+            return true; // Fail-closed: reject booking if check fails
         }
     }
 

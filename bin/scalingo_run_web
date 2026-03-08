@@ -21,7 +21,7 @@ gunicorn -b :8000 calendars.wsgi:application --log-file - &
 bin/caddy run --config Caddyfile --adapter caddyfile &
 
 # if the current shell is killed, also terminate all its children
-trap "pkill SIGTERM -P $$" SIGTERM
+trap "pkill -SIGTERM -P $$" SIGTERM
 
 # wait for a single child to finish,
 wait -n

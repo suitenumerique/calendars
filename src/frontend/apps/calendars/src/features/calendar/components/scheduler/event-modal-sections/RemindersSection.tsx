@@ -88,7 +88,7 @@ export const RemindersSection = ({
     >
       <div className="reminders-section">
         {alarms.map((alarm, index) => (
-          <div key={index} className="reminders-section__item">
+          <div key={`${alarmToMinutes(alarm)}-${index}`} className="reminders-section__item">
             <Select
               label=""
               value={String(alarmToMinutes(alarm))}

@@ -1,12 +1,3 @@
-# /!\ /!\ /!\ /!\ /!\ /!\ /!\ DISCLAIMER /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\
-#
-# This Makefile is only meant to be used for DEVELOPMENT purpose as we are
-# changing the user id that will run in the container.
-#
-# PLEASE DO NOT USE IT FOR YOUR CI/PRODUCTION/WHATEVER...
-#
-# /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\
-#
 # Note to developers:
 #
 # While editing this file, please respect the following statements:
@@ -26,33 +17,24 @@
 BOLD := \033[1m
 RESET := \033[0m
 GREEN := \033[1;32m
-
-
-# -- Database
-
-DB_HOST                 = postgresql
-DB_PORT                 = 5432
+BLUE := \033[1;34m
 
 # -- Docker
 # Get the current user ID to use for docker run and docker exec commands
-DOCKER_UID              = $(shell id -u)
-DOCKER_GID              = $(shell id -g)
-DOCKER_USER             = $(DOCKER_UID):$(DOCKER_GID)
-COMPOSE                 = DOCKER_USER=$(DOCKER_USER) docker compose
-COMPOSE_EXEC            = $(COMPOSE) exec
-COMPOSE_EXEC_APP        = $(COMPOSE_EXEC) backend-dev
-COMPOSE_RUN             = $(COMPOSE) run --rm
-COMPOSE_RUN_APP         = $(COMPOSE_RUN) backend-dev
-COMPOSE_RUN_APP_NO_DEPS = $(COMPOSE_RUN) --no-deps backend-dev 
+DOCKER_UID          = $(shell id -u)
+DOCKER_GID          = $(shell id -g)
+DOCKER_USER         = $(DOCKER_UID):$(DOCKER_GID)
+COMPOSE             = DOCKER_USER=$(DOCKER_USER) docker compose
+COMPOSE_EXEC        = $(COMPOSE) exec
+COMPOSE_EXEC_APP    = $(COMPOSE_EXEC) backend-dev
+COMPOSE_RUN         = $(COMPOSE) run --rm
+COMPOSE_RUN_APP     = $(COMPOSE_RUN) backend-dev
+COMPOSE_RUN_APP_NO_DEPS = $(COMPOSE_RUN) --no-deps backend-dev
 
 # -- Backend
-MANAGE              	= $(COMPOSE_RUN_APP) python manage.py
-MANAGE_EXEC         	= $(COMPOSE_EXEC_APP) python manage.py
-PSQL_E2E 				= ./bin/postgres_e2e
-
-# -- Frontend
-PATH_FRONT          	= ./src/frontend
-PATH_FRONT_CALENDARS  	= $(PATH_FRONT)/apps/calendars
+MANAGE              = $(COMPOSE_RUN_APP) python manage.py
+MANAGE_EXEC         = $(COMPOSE_EXEC_APP) python manage.py
+PSQL_E2E            = ./bin/postgres_e2e
 
 # ==============================================================================
 # RULES
@@ -81,13 +63,12 @@ env.d/development/%.local:
 	@echo "# Add your local-specific environment variables below:" >> $@
 	@echo "# Example: DJANGO_DEBUG=True" >> $@
 	@echo "" >> $@
-.PHONY: env.d/development/%.local
 
 create-docker-network: ## create the docker network if it doesn't exist
 	@docker network create lasuite-network || true
 .PHONY: create-docker-network
 
-bootstrap: ## Prepare Docker images for the project
+bootstrap: ## Prepare the project for local development
 bootstrap: \
 	data/media \
 	data/static \
@@ -96,83 +77,56 @@ bootstrap: \
 	create-docker-network \
 	migrate \
 	migrate-caldav \
-	back-i18n-compile \
-	run
+	start
 .PHONY: bootstrap
 
+update: ## Update the project with latest changes
+	@$(MAKE) data/media
+	@$(MAKE) data/static
+	@$(MAKE) create-env-files
+	@$(MAKE) build
+	@$(MAKE) migrate
+	@$(MAKE) migrate-caldav
+	@$(MAKE) install-frozen-front
+.PHONY: update
+
 # -- Docker/compose
+
 build: cache ?=  # --no-cache
 build: ## build the project containers
-	@$(MAKE) build-backend cache=$(cache)
-	@$(MAKE) build-frontend cache=$(cache)
-	@$(MAKE) build-caldav cache=$(cache)
+	@$(COMPOSE) build $(cache)
 .PHONY: build
-
-build-backend: cache ?=
-build-backend: ## build the backend-dev container
-	@$(COMPOSE) build backend-dev $(cache)
-.PHONY: build-backend
-
-build-caldav: cache ?=
-build-caldav: ## build the caldav container
-	@$(COMPOSE) build caldav $(cache)
-.PHONY: build-caldav
-
-build-frontend: cache ?=
-build-frontend: ## build the frontend container
-	@$(COMPOSE) build frontend-dev $(cache)
-.PHONY: build-frontend-development
 
 down: ## stop and remove containers, networks, images, and volumes
 	@$(COMPOSE) down
 	rm -rf data/postgresql.*
 .PHONY: down
 
-logs: ## display backend-dev logs (follow mode)
-	@$(COMPOSE) logs -f backend-dev
+logs: ## display all services logs (follow mode)
+	@$(COMPOSE) logs -f
 .PHONY: logs
 
-run-backend: ## start the backend container
-	@$(COMPOSE) up --force-recreate -d celery-dev
-.PHONY: run-backend
+start: ## start all development services
+	@$(COMPOSE) up --force-recreate -d worker-dev frontend-dev
+.PHONY: start
 
-bootstrap-e2e: ## bootstrap the backend container for e2e tests, without frontend
-bootstrap-e2e: \
-	data/media \
-	data/static \
-	create-env-local-files \
-	build-backend \
-	create-docker-network \
-	back-i18n-compile \
-	run-backend-e2e
-.PHONY: bootstrap-e2e
+start-back: ## start backend services only (for local frontend development)
+	@$(COMPOSE) up --force-recreate -d worker-dev
+.PHONY: start-back
 
-clear-db-e2e: ## quickly clears the database for e2e tests, used in the e2e tests
-	$(PSQL_E2E) -c "$$(cat bin/clear_db_e2e.sql)"
-.PHONY: clear-db-e2e
+status: ## an alias for "docker compose ps"
+	@$(COMPOSE) ps
+.PHONY: status
 
-run-backend-e2e: ## start the backend container for e2e tests, always remove the postgresql.e2e volume first
-	@$(MAKE) stop
-	rm -rf data/postgresql.e2e
-	@ENV_OVERRIDE=e2e $(MAKE) run-backend
-	@ENV_OVERRIDE=e2e $(MAKE) migrate
-.PHONY: run-backend-e2e
+stop: ## stop all development services
+	@$(COMPOSE) stop
+.PHONY: stop
 
-run-tests-e2e: ## run the e2e tests, example: make run-tests-e2e -- --project chromium --headed
-	@$(MAKE) run-backend-e2e	
-	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
-	cd src/frontend/apps/e2e && pnpm test $${args:-${1}}
-.PHONY: run-tests-e2e
-
-backend-exec-command: ## execute a command in the backend container
-	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
-	$(MANAGE_EXEC) $${args}
-.PHONY: backend-exec-command
-
-run: ## start the development server and frontend development
-run: 
-	@$(MAKE) run-backend
-	@$(COMPOSE) up --force-recreate -d frontend-dev
+restart: ## restart all development services
+restart: \
+	stop \
+	start
+.PHONY: restart
 
 migrate-caldav: ## Initialize CalDAV server database schema
 	@echo "$(BOLD)Initializing CalDAV server database schema...$(RESET)"
@@ -180,65 +134,57 @@ migrate-caldav: ## Initialize CalDAV server database schema
 	@echo "$(GREEN)CalDAV server initialized$(RESET)"
 .PHONY: migrate-caldav
 
-status: ## an alias for "docker compose ps"
-	@$(COMPOSE) ps
-.PHONY: status
+# -- Linters
 
-stop: ## stop the development server using Docker
-	@$(COMPOSE) stop
-.PHONY: stop
-
-# -- Backend
-
-demo: ## flush db then create a demo for load testing purpose
-	@$(MAKE) resetdb
-	@$(MANAGE) create_demo
-.PHONY: demo
-
-index: ## index all files to remote search
-	@$(MANAGE) index
-.PHONY: index
-
-# Nota bene: Black should come after isort just in case they don't agree...
-lint: ## lint back-end python sources
+lint: ## run all linters
 lint: \
-  lint-ruff-format \
-  lint-ruff-check \
-  lint-pylint
+	lint-back \
+	lint-front
 .PHONY: lint
 
-lint-ruff-format: ## format back-end python sources with ruff
-	@echo 'lint:ruff-format started…'
+lint-back: ## run back-end linters (with auto-fix)
+lint-back: \
+	format-back \
+	check-back \
+	analyze-back
+.PHONY: lint-back
+
+format-back: ## format back-end python sources with ruff
 	@$(COMPOSE_RUN_APP_NO_DEPS) ruff format .
-.PHONY: lint-ruff-format
+.PHONY: format-back
 
-lint-ruff-check: ## lint back-end python sources with ruff
-	@echo 'lint:ruff-check started…'
+check-back: ## check back-end python sources with ruff
 	@$(COMPOSE_RUN_APP_NO_DEPS) ruff check . --fix
-.PHONY: lint-ruff-check
+.PHONY: check-back
 
-lint-pylint: ## lint back-end python sources with pylint only on changed files from main
-	@echo 'lint:pylint started…'
+analyze-back: ## lint back-end python sources with pylint (changed files only)
 	@files=$$(git diff origin/main --name-only --diff-filter=d -- src/backend ':!**/migrations/*.py' | grep -E '^src/backend/.*\.py$$' | sed 's|src/backend/||g'); \
 	if [ -n "$$files" ]; then \
 		$(COMPOSE_RUN_APP_NO_DEPS) pylint $$files; \
 	fi
-.PHONY: lint-pylint
+.PHONY: analyze-back
 
-lint-pylint-all: ## lint all back-end python sources with pylint
-	@echo 'lint:pylint-all started…'
+analyze-back-all: ## lint all back-end python sources with pylint
 	@$(COMPOSE_RUN_APP_NO_DEPS) pylint calendars core
-.PHONY: lint-pylint-all
+.PHONY: analyze-back-all
 
-test: ## run project tests
-	@$(MAKE) test-back-parallel
+lint-front: ## run the frontend linter
+	@$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npm run lint"
+.PHONY: lint-front
+
+typecheck-front: ## run the frontend type checker
+	@$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npx tsc --noEmit"
+.PHONY: typecheck-front
+
+# -- Tests
+
+test: ## run all tests
+test: \
+	test-back-parallel \
+	test-front
 .PHONY: test
 
-test-back: ## run back-end tests (rebuilds and recreates containers)
-	@echo "$(BOLD)Rebuilding containers (using Docker cache)...$(RESET)"
-	@$(MAKE) build-caldav
-	@echo "$(BOLD)Recreating containers...$(RESET)"
-	@$(COMPOSE) up -d --force-recreate postgresql caldav
+test-back: ## run back-end tests
 	@echo "$(BOLD)Running tests...$(RESET)"
 	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
 	bin/pytest $${args:-${1}}
@@ -249,13 +195,49 @@ test-back-parallel: ## run all back-end tests in parallel
 	bin/pytest -n auto $${args:-${1}}
 .PHONY: test-back-parallel
 
-makemigrations:  ## run django makemigrations for the calendar project.
+test-front: ## run the frontend tests
+	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
+	$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npm test -- $${args:-${1}}"
+.PHONY: test-front
+
+# -- E2E Tests
+
+bootstrap-e2e: ## bootstrap the backend for e2e tests, without frontend
+bootstrap-e2e: \
+	data/media \
+	data/static \
+	create-env-files \
+	build \
+	create-docker-network \
+	start-back-e2e
+.PHONY: bootstrap-e2e
+
+clear-db-e2e: ## quickly clears the database for e2e tests
+	$(PSQL_E2E) -c "$$(cat bin/clear_db_e2e.sql)"
+.PHONY: clear-db-e2e
+
+start-back-e2e: ## start the backend for e2e tests
+	@$(MAKE) stop
+	rm -rf data/postgresql.e2e
+	@ENV_OVERRIDE=e2e $(MAKE) start-back
+	@ENV_OVERRIDE=e2e $(MAKE) migrate
+.PHONY: start-back-e2e
+
+test-e2e: ## run the e2e tests, example: make test-e2e -- --project chromium --headed
+	@$(MAKE) start-back-e2e
+	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
+	cd src/frontend/apps/e2e && npm test $${args:-${1}}
+.PHONY: test-e2e
+
+# -- Backend
+
+makemigrations: ## run django makemigrations
 	@echo "$(BOLD)Running makemigrations$(RESET)"
 	@$(COMPOSE) up -d postgresql
 	@$(MANAGE) makemigrations
 .PHONY: makemigrations
 
-migrate:  ## run django migrations for the calendar project.
+migrate: ## run django migrations
 	@echo "$(BOLD)Running migrations$(RESET)"
 	@$(COMPOSE) up -d postgresql
 	@$(MANAGE) migrate
@@ -266,56 +248,57 @@ superuser: ## Create an admin superuser with password "admin"
 	@$(MANAGE) createsuperuser --email admin@example.com --password admin
 .PHONY: superuser
 
+shell-back: ## open a shell in the backend container
+	@$(COMPOSE) run --rm --build backend-dev /bin/sh
+.PHONY: shell-back
 
-back-i18n-compile: ## compile the gettext files
-	@$(MANAGE) compilemessages --ignore=".venv/**/*"
-.PHONY: back-i18n-compile
+exec-back: ## open a shell in the running backend-dev container
+	@$(COMPOSE) exec backend-dev /bin/sh
+.PHONY: exec-back
 
-back-lock: ## regenerate the uv.lock file (uses temporary container)
+shell-back-django: ## connect to django shell
+	@$(MANAGE) shell
+.PHONY: shell-back-django
+
+back-lock: ## regenerate the uv.lock file
 	@echo "$(BOLD)Regenerating uv.lock$(RESET)"
 	@docker run --rm -v $(PWD)/src/backend:/app -w /app ghcr.io/astral-sh/uv:python3.13-alpine uv lock
 .PHONY: back-lock
 
-back-i18n-generate: ## create the .pot files used for i18n
-	@$(MANAGE) makemessages -a --keep-pot --all
-.PHONY: back-i18n-generate
-
-back-shell: ## open a shell in the backend container
-	@$(COMPOSE) run --rm --build backend-dev /bin/sh
-.PHONY: back-shell
-
-shell: ## connect to django shell
-	@$(MANAGE) shell #_plus
-.PHONY: shell
-
 # -- Database
 
-dbshell: ## connect to database shell
-	docker compose exec backend-dev python manage.py dbshell
-.PHONY: dbshell
+shell-db: ## connect to database shell
+	@$(COMPOSE) exec backend-dev python manage.py dbshell
+.PHONY: shell-db
 
-resetdb: FLUSH_ARGS ?=
-resetdb: ## flush database and create a superuser "admin"
+reset-db: FLUSH_ARGS ?=
+reset-db: ## flush database
 	@echo "$(BOLD)Flush database$(RESET)"
 	@$(MANAGE) flush $(FLUSH_ARGS)
-	@${MAKE} superuser
-.PHONY: resetdb
+.PHONY: reset-db
 
-# -- Internationalization
+demo: ## flush db then create a demo
+	@$(MAKE) reset-db
+	@$(MANAGE) create_demo
+.PHONY: demo
 
-i18n-compile: ## compile all translations
-i18n-compile: \
-	back-i18n-compile \
-	frontend-i18n-compile
-.PHONY: i18n-compile
+# -- Frontend
 
-i18n-generate: ## create the .pot files and extract frontend messages
-i18n-generate: \
-	back-i18n-generate \
-	frontend-i18n-generate
-.PHONY: i18n-generate
+install-front: ## install the frontend dependencies
+	@$(COMPOSE) run --rm frontend-dev sh -c "npm install"
+.PHONY: install-front
+
+install-frozen-front: ## install frontend dependencies from lockfile
+	@echo "Installing frontend dependencies..."
+	@$(COMPOSE) run --rm frontend-dev sh -c "npm ci"
+.PHONY: install-frozen-front
+
+shell-front: ## open a shell in the frontend container
+	@$(COMPOSE) run --rm frontend-dev /bin/sh
+.PHONY: shell-front
 
 # -- Misc
+
 clean: ## restore repository state as it was freshly cloned
 	git clean -idx
 .PHONY: clean
@@ -329,30 +312,3 @@ help:
 	@echo "Please use 'make $(BOLD)target$(RESET)' where $(BOLD)target$(RESET) is one of:"
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(firstword $(MAKEFILE_LIST)) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(GREEN)%-30s$(RESET) %s\n", $$1, $$2}'
 .PHONY: help
-
-# Front
-frontend-development-install: ## install the frontend locally
-	cd $(PATH_FRONT_CALENDARS) && pnpm install
-.PHONY: frontend-development-install
-
-frontend-lint: ## run the frontend linter
-	cd $(PATH_FRONT) && pnpm lint
-.PHONY: frontend-lint
-
-run-frontend-development: ## Run the frontend in development mode
-	@$(COMPOSE) stop frontend-dev
-	cd $(PATH_FRONT_CALENDARS) && pnpm dev
-.PHONY: run-frontend-development
-
-frontend-i18n-extract: ## Extract the frontend translation inside a json
-	cd $(PATH_FRONT) && pnpm i18n:extract
-.PHONY: frontend-i18n-extract
-
-frontend-i18n-generate: ## Generate the frontend json files
-frontend-i18n-generate: \
-	frontend-i18n-extract
-.PHONY: frontend-i18n-generate
-
-frontend-i18n-compile: ## Format the crowin json files used deploy to the apps
-	cd $(PATH_FRONT) && pnpm i18n:deploy
-.PHONY: frontend-i18n-compile

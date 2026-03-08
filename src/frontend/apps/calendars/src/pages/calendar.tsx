@@ -2,6 +2,8 @@
  * Calendar page - Main calendar view with sidebar.
  */
 
+import { useEffect } from "react";
+
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
 import Head from "next/head";
 import { useTranslation } from "next-i18next";
@@ -22,19 +24,15 @@ export default function CalendarPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
 
-  // Redirect to login if not authenticated
-  if (!user) {
-    if (typeof window !== "undefined") {
+  useEffect(() => {
+    if (!user) {
       login(window.location.href);
-    }
-    return <SpinnerPage />;
-  }
-
-  // Redirect to no-access if not entitled
-  if (user.can_access === false) {
-    if (typeof window !== "undefined") {
+    } else if (user.can_access === false) {
       window.location.href = "/no-access";
     }
+  }, [user]);
+
+  if (!user || user.can_access === false) {
     return <SpinnerPage />;
   }
 

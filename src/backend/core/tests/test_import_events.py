@@ -640,8 +640,8 @@ class TestImportEventsAPI:
         assert "too large" in response.json()["detail"]
 
     @patch.object(ICSImportService, "import_events")
-    def test_import_events_success(self, mock_import):
-        """Successful import should return result data."""
+    def test_import_events_returns_task_id(self, mock_import):
+        """Successful import should return a task_id for polling."""
         mock_import.return_value = ImportResult(
             total_events=3,
             imported_count=3,
@@ -665,51 +665,19 @@ class TestImportEventsAPI:
             format="multipart",
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 202
         data = response.json()
-        assert data["total_events"] == 3
-        assert data["imported_count"] == 3
-        assert data["skipped_count"] == 0
-        assert "errors" not in data
+        assert "task_id" in data
 
-    @patch.object(ICSImportService, "import_events")
-    def test_import_events_partial_success(self, mock_import):
-        """Partial success should include errors in response."""
-        mock_import.return_value = ImportResult(
-            total_events=3,
-            imported_count=2,
-            duplicate_count=0,
-            skipped_count=1,
-            errors=["Planning session"],
-        )
-
-        user = factories.UserFactory(email="partial@example.com")
-        caldav_path = f"/calendars/users/{user.email}/some-uuid/"
-
-        client = APIClient()
-        client.force_login(user)
-
-        ics_file = SimpleUploadedFile(
-            "events.ics", ICS_MULTIPLE_EVENTS, content_type="text/calendar"
-        )
-        response = client.post(
-            self.IMPORT_URL,
-            {"file": ics_file, "caldav_path": caldav_path},
-            format="multipart",
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["total_events"] == 3
-        assert data["imported_count"] == 2
-        assert data["skipped_count"] == 1
-        assert len(data["errors"]) == 1
+        # With EagerBroker, the task runs synchronously — poll for result
+        task_response = client.get(f"/api/v1.0/tasks/{data['task_id']}/")
+        assert task_response.status_code == 200
+        task_data = task_response.json()
+        assert task_data["status"] == "SUCCESS"
+        assert task_data["result"]["total_events"] == 3
+        assert task_data["result"]["imported_count"] == 3
 
 
-@pytest.mark.skipif(
-    not settings.CALDAV_URL,
-    reason="CalDAV server URL not configured",
-)
 class TestImportEventsE2E:
     """End-to-end tests that import ICS events through the real SabreDAV server."""
 
@@ -830,11 +798,16 @@ class TestImportEventsE2E:
             format="multipart",
         )
 
-        assert response.status_code == 200
-        data = response.json()
-        assert data["total_events"] == 3
-        assert data["imported_count"] == 3
-        assert data["skipped_count"] == 0
+        assert response.status_code == 202
+        task_id = response.json()["task_id"]
+
+        # With EagerBroker, poll for the synchronous result
+        task_response = client.get(f"/api/v1.0/tasks/{task_id}/")
+        assert task_response.status_code == 200
+        data = task_response.json()
+        assert data["status"] == "SUCCESS"
+        assert data["result"]["total_events"] == 3
+        assert data["result"]["imported_count"] == 3
 
         # Verify events actually exist in SabreDAV
         caldav = CalDAVClient()
@@ -1025,10 +998,6 @@ class TestImportEventsE2E:
         assert "..." in raw
 
 
-@pytest.mark.skipif(
-    not settings.CALDAV_URL,
-    reason="CalDAV server URL not configured",
-)
 class TestCalendarSanitizerE2E:
     """E2E tests for CalendarSanitizerPlugin on normal CalDAV PUT operations."""
 

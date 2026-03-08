@@ -15,11 +15,11 @@ mv src/backend/* ./
 
 # Download Caddy binary with checksum verification
 CADDY_VERSION="2.11.2"
-CADDY_SHA512="2513b289054386b76642a9e8bfc10d217df2b5361e4cdd0c72672b0eeab57ae737d57466eb70f1a44233cbcc697ecf21de88137ca45ef4b64f150a32b58f5f14"
+CADDY_SHA256="94391dfefe1f278ac8f387ab86162f0e88d87ff97df367f360e51e3cda3df56f"
 CADDY_TAR="/tmp/caddy.tar.gz"
 curl -fsSL -o "$CADDY_TAR" \
   "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz"
-echo "${CADDY_SHA512}  ${CADDY_TAR}" | sha512sum -c -
+echo "${CADDY_SHA256}  ${CADDY_TAR}" | sha256sum -c -
 tar -xz -C bin/ caddy < "$CADDY_TAR"
 rm "$CADDY_TAR"
 chmod +x bin/caddy
@@ -106,10 +106,13 @@ chmod +x bin/php
 echo "-----> PHP version: $("$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" -v | head -1)"
 echo "-----> PHP modules: $("$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" -m | tr '\n' ' ')"
 
-# Download Composer and install SabreDAV dependencies
+# Download Composer with integrity verification and install SabreDAV dependencies
 echo "-----> Installing SabreDAV dependencies"
+COMPOSER_VERSION="2.9.5"
+COMPOSER_SHA256="c86ce603fe836bf0861a38c93ac566c8f1e69ac44b2445d9b7a6a17ea2e9972a"
 curl -fsSL -o bin/composer.phar \
-  https://getcomposer.org/download/latest-stable/composer.phar
+  "https://getcomposer.org/download/${COMPOSER_VERSION}/composer.phar"
+echo "${COMPOSER_SHA256}  bin/composer.phar" | sha256sum -c -
 cp -r src/caldav sabredav
 cd sabredav
 "../$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" ../bin/composer.phar install \

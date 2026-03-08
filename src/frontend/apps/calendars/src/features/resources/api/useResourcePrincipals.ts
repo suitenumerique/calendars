@@ -14,6 +14,7 @@ export type ResourcePrincipal = {
 };
 
 const RESOURCE_PRINCIPALS_KEY = ["resource-principals"];
+const EMPTY_RESOURCES: ResourcePrincipal[] = [];
 
 async function fetchResourcePrincipals(): Promise<ResourcePrincipal[]> {
   const caldavUrl = `${getOrigin()}/caldav/principals/resources/`;
@@ -93,7 +94,7 @@ export const useResourcePrincipals = () => {
   }, [queryClient]);
 
   return {
-    resources: query.data ?? [],
+    resources: query.data ?? EMPTY_RESOURCES,
     isLoading: query.isLoading,
     error: query.error,
     refresh,

@@ -1,6 +1,4 @@
 import type { Config } from "jest";
-import { pathsToModuleNameMapper } from "ts-jest";
-import tsconfig from "./tsconfig.json";
 
 const config: Config = {
   preset: "ts-jest",
@@ -11,10 +9,8 @@ const config: Config = {
     // Handle static assets FIRST (before path aliases)
     "\\.(css|less|scss|sass|svg|png|jpg|jpeg|gif)$":
       "<rootDir>/__mocks__/fileMock.js",
-    // Then handle path aliases
-    ...pathsToModuleNameMapper(tsconfig.compilerOptions.paths || {}, {
-      prefix: "<rootDir>/",
-    }),
+    // Path aliases (mirrors tsconfig.json paths)
+    "^@/(.*)$": "<rootDir>/src/$1",
   },
   transform: {
     "^.+\\.(ts|tsx)$": [

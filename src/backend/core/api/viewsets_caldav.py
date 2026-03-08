@@ -1,11 +1,14 @@
 """CalDAV proxy views for forwarding requests to CalDAV server."""
 
 import logging
+import re
 import secrets
 
 from django.conf import settings
+from django.core.validators import validate_email
 from django.http import HttpResponse
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
@@ -13,6 +16,7 @@ from django.views.decorators.csrf import csrf_exempt
 import requests
 
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
+from core.models import Channel
 from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy_path
 from core.services.calendar_invitation_service import calendar_invitation_service
 
@@ -30,6 +34,73 @@ class CalDAVProxyView(View):
     Authentication is handled via session cookies instead.
     """
 
+    # HTTP methods allowed per Channel role
+    READER_METHODS = frozenset({"GET", "PROPFIND", "REPORT", "OPTIONS"})
+    EDITOR_METHODS = READER_METHODS | frozenset({"PUT", "POST", "DELETE", "PROPPATCH"})
+    ADMIN_METHODS = EDITOR_METHODS | frozenset({"MKCALENDAR", "MKCOL"})
+
+    ROLE_METHODS = {
+        Channel.ROLE_READER: READER_METHODS,
+        Channel.ROLE_EDITOR: EDITOR_METHODS,
+        Channel.ROLE_ADMIN: ADMIN_METHODS,
+    }
+
+    @staticmethod
+    def _authenticate_channel_token(request):
+        """Try to authenticate via X-Channel-Id + X-Channel-Token headers.
+
+        Returns (channel, user) on success, (None, None) on failure.
+        """
+        channel_id = request.headers.get("X-Channel-Id", "").strip()
+        token = request.headers.get("X-Channel-Token", "").strip()
+        if not channel_id or not token:
+            return None, None
+
+        try:
+            channel = Channel.objects.get(pk=channel_id, is_active=True, type="caldav")
+        except (ValueError, Channel.DoesNotExist):
+            return None, None
+
+        if not channel.verify_token(token):
+            return None, None
+
+        user = channel.user
+        if not user:
+            logger.warning("Channel %s has no user", channel.id)
+            return None, None
+
+        # Update last_used_at (fire-and-forget, no extra query on critical path)
+        Channel.objects.filter(pk=channel.pk).update(last_used_at=timezone.now())
+
+        return channel, user
+
+    @staticmethod
+    def _check_channel_path_access(channel, path):
+        """Check that the CalDAV path is within the channel's scope.
+
+        Returns True if allowed, False if denied.
+        """
+        # Ensure path starts with /
+        full_path = "/" + path.lstrip("/") if path else "/"
+
+        # caldav_path scope: request must be within the scoped calendar
+        # The trailing slash on caldav_path (enforced by serializer) ensures
+        # /cal1/ won't match /cal1-secret/
+        if channel.caldav_path:
+            if not channel.caldav_path.endswith("/"):
+                logger.error(
+                    "caldav_path %r missing trailing slash", channel.caldav_path
+                )
+                return False
+            return full_path.startswith(channel.caldav_path)
+
+        # user scope: request must be under the user's calendars
+        if channel.user:
+            user_prefix = f"/calendars/users/{channel.user.email}/"
+            return full_path.startswith(user_prefix)
+
+        return False
+
     @staticmethod
     def _check_entitlements_for_creation(user):
         """Check if user is entitled to create calendars.
@@ -39,7 +110,7 @@ class CalDAVProxyView(View):
         """
         try:
             entitlements = get_user_entitlements(user.sub, user.email)
-            if not entitlements.get("can_access", True):
+            if not entitlements.get("can_access", False):
                 return HttpResponse(
                     status=403,
                     content="Calendar creation not allowed",
@@ -60,18 +131,31 @@ class CalDAVProxyView(View):
                 "GET, OPTIONS, PROPFIND, PROPPATCH, REPORT, MKCOL, MKCALENDAR, PUT, DELETE, POST"
             )
             response["Access-Control-Allow-Headers"] = (
-                "Content-Type, depth, authorization, if-match, if-none-match, prefer"
+                "Content-Type, depth, x-channel-id, x-channel-token, if-match, if-none-match, prefer"
             )
             return response
 
+        # Try channel token auth first (for external services like Messages)
+        channel = None
+        effective_user = None
         if not request.user.is_authenticated:
-            return HttpResponse(status=401)
+            channel, effective_user = self._authenticate_channel_token(request)
+            if not channel:
+                return HttpResponse(status=401)
+        else:
+            effective_user = request.user
 
-        # Block calendar creation (MKCALENDAR/MKCOL) for non-entitled users.
-        # Other methods (GET, PROPFIND, REPORT, PUT, DELETE, etc.) are allowed
-        # so that users invited to shared calendars can still use them.
+        if channel:
+            # Enforce role-based method restrictions
+            allowed = self.ROLE_METHODS.get(channel.role, self.READER_METHODS)
+            if request.method not in allowed:
+                return HttpResponse(
+                    status=403, content="Method not allowed for this role"
+                )
+
+        # Check entitlements for calendar creation (all auth methods)
         if request.method in ("MKCALENDAR", "MKCOL"):
-            if denied := self._check_entitlements_for_creation(request.user):
+            if denied := self._check_entitlements_for_creation(effective_user):
                 return denied
 
         # Build the CalDAV server URL
@@ -81,8 +165,9 @@ class CalDAVProxyView(View):
         if not validate_caldav_proxy_path(path):
             return HttpResponse(status=400, content="Invalid path")
 
-        # Use user email as the principal (CalDAV server uses email as username)
-        user_principal = request.user.email
+        # Enforce channel path scope
+        if channel and not self._check_channel_path_access(channel, path):
+            return HttpResponse(status=403, content="Path not allowed for this channel")
 
         http = CalDAVHTTPClient()
 
@@ -95,7 +180,7 @@ class CalDAVProxyView(View):
 
         # Prepare headers — start with shared auth headers, add proxy-specific ones
         try:
-            headers = CalDAVHTTPClient.build_base_headers(user_principal)
+            headers = CalDAVHTTPClient.build_base_headers(effective_user)
         except ValueError:
             logger.error("CALDAV_OUTBOUND_API_KEY is not configured")
             return HttpResponse(
@@ -106,10 +191,6 @@ class CalDAVProxyView(View):
         headers["X-Forwarded-For"] = request.META.get("REMOTE_ADDR", "")
         headers["X-Forwarded-Host"] = request.get_host()
         headers["X-Forwarded-Proto"] = request.scheme
-
-        # Forward the user's organization ID for org-scoped CalDAV operations
-        if request.user.organization_id:
-            headers["X-CalDAV-Organization"] = str(request.user.organization_id)
 
         # Add callback URL for CalDAV scheduling (iTip/iMip)
         # The CalDAV server will call this URL when it needs to send invitations
@@ -149,7 +230,7 @@ class CalDAVProxyView(View):
                 "Forwarding %s request to CalDAV server: %s (user: %s)",
                 request.method,
                 target_url,
-                user_principal,
+                effective_user.email,
             )
             response = requests.request(
                 method=request.method,
@@ -165,7 +246,7 @@ class CalDAVProxyView(View):
             if response.status_code == 401:
                 logger.warning(
                     "CalDAV server returned 401 for user %s at %s",
-                    user_principal,
+                    effective_user.email,
                     target_url,
                 )
 
@@ -186,7 +267,7 @@ class CalDAVProxyView(View):
         except requests.exceptions.RequestException as e:
             logger.error("CalDAV server proxy error: %s", str(e))
             return HttpResponse(
-                content=f"CalDAV server error: {str(e)}",
+                content="CalDAV server is unavailable",
                 status=502,
                 content_type="text/plain",
             )
@@ -242,24 +323,25 @@ class CalDAVSchedulingCallbackView(View):
     See: https://sabre.io/dav/scheduling/
     """
 
-    def dispatch(self, request, *args, **kwargs):
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):  # noqa: PLR0911
         """Handle scheduling messages from CalDAV server."""
         # Authenticate via API key
         api_key = request.headers.get("X-Api-Key", "").strip()
         expected_key = settings.CALDAV_INBOUND_API_KEY
 
         if not expected_key or not secrets.compare_digest(api_key, expected_key):
-            logger.warning(
-                "CalDAV scheduling callback request with invalid API key. "
-                "Expected: %s..., Got: %s...",
-                expected_key[:10] if expected_key else "None",
-                api_key[:10] if api_key else "None",
-            )
+            logger.warning("CalDAV scheduling callback request with invalid API key.")
             return HttpResponse(status=401)
 
-        # Extract headers
-        sender = request.headers.get("X-CalDAV-Sender", "")
-        recipient = request.headers.get("X-CalDAV-Recipient", "")
+        # Extract and validate sender/recipient emails
+        sender = re.sub(
+            r"^mailto:", "", request.headers.get("X-CalDAV-Sender", "")
+        ).strip()
+        recipient = re.sub(
+            r"^mailto:", "", request.headers.get("X-CalDAV-Recipient", "")
+        ).strip()
         method = request.headers.get("X-CalDAV-Method", "").upper()
 
         # Validate required fields
@@ -275,6 +357,22 @@ class CalDAVSchedulingCallbackView(View):
                 status=400,
                 content="Missing required headers: X-CalDAV-Sender, "
                 "X-CalDAV-Recipient, X-CalDAV-Method",
+                content_type="text/plain",
+            )
+
+        # Validate email format
+        try:
+            validate_email(sender)
+            validate_email(recipient)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "CalDAV scheduling callback with invalid email: sender=%s, recipient=%s",
+                sender,
+                recipient,
+            )
+            return HttpResponse(
+                status=400,
+                content="Invalid sender or recipient email",
                 content_type="text/plain",
             )
 
@@ -335,6 +433,6 @@ class CalDAVSchedulingCallbackView(View):
             logger.exception("Error processing CalDAV scheduling callback: %s", e)
             return HttpResponse(
                 status=500,
-                content=f"Internal error: {str(e)}",
+                content="Internal server error",
                 content_type="text/plain",
             )

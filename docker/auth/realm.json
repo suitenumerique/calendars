@@ -694,16 +694,16 @@
         "clientAuthenticatorType": "client-secret",
         "secret": "ThisIsAnExampleKeyForDevPurposeOnly",
         "redirectUris": [
-          "http://localhost:8920/*",
-          "http://localhost:8921/*",
-          "http://localhost:8922/*",
-          "http://localhost:8923/*"
+          "http://localhost:8930/*",
+          "http://localhost:8931/*",
+          "http://localhost:8932/*",
+          "http://localhost:8933/*"
         ],
         "webOrigins": [
-          "http://localhost:8920",
-          "http://localhost:8921",
-          "http://localhost:8922",
-          "http://localhost:8923"
+          "http://localhost:8930",
+          "http://localhost:8931",
+          "http://localhost:8932",
+          "http://localhost:8933"
         ],
         "notBefore": 0,
         "bearerOnly": false,
@@ -719,7 +719,7 @@
           "access.token.lifespan": "-1",
           "client.secret.creation.time": "1707820779",
           "user.info.response.signature.alg": "RS256",
-          "post.logout.redirect.uris": "http://localhost:8920/*##http://localhost:8921/*",
+          "post.logout.redirect.uris": "http://localhost:8930/*##http://localhost:8931/*",
           "oauth2.device.authorization.grant.enabled": "false",
           "use.jwks.url": "false",
           "backchannel.logout.revoke.offline.tokens": "false",
@@ -765,16 +765,16 @@
         "clientAuthenticatorType": "client-secret",
         "secret": "ThisIsAnExampleKeyForDevPurposeOnly",
         "redirectUris": [
-          "http://localhost:8920/*",
-          "http://localhost:8921/*",
-          "http://localhost:8922/*",
-          "http://localhost:8923/*"
+          "http://localhost:8930/*",
+          "http://localhost:8931/*",
+          "http://localhost:8932/*",
+          "http://localhost:8933/*"
         ],
         "webOrigins": [
-          "http://localhost:8920",
-          "http://localhost:8921",
-          "http://localhost:8922",
-          "http://localhost:8923"
+          "http://localhost:8930",
+          "http://localhost:8931",
+          "http://localhost:8932",
+          "http://localhost:8933"
         ],
         "notBefore": 0,
         "bearerOnly": false,
@@ -790,7 +790,7 @@
           "access.token.lifespan": "-1",
           "client.secret.creation.time": "1707820779",
           "user.info.response.signature.alg": "RS256",
-          "post.logout.redirect.uris": "http://localhost:8920/*##http://localhost:8921/*",
+          "post.logout.redirect.uris": "http://localhost:8930/*##http://localhost:8931/*",
           "oauth2.device.authorization.grant.enabled": "false",
           "use.jwks.url": "false",
           "backchannel.logout.revoke.offline.tokens": "false",

@@ -61,10 +61,15 @@ class ApiKeyAuthBackend implements BackendInterface
         }
         
         // Validate API key
-        if ($apiKeyHeader !== $this->apiKey) {
+        if (!hash_equals($this->apiKey, $apiKeyHeader)) {
             return [false, 'Invalid API key'];
         }
         
+        // Validate X-Forwarded-User to prevent path traversal
+        if (preg_match('/[\/\\\\]|\.\./', $xForwardedUser)) {
+            throw new \Sabre\DAV\Exception\NotAuthenticated('Invalid X-Forwarded-User header value');
+        }
+
         // Authentication successful
         return [true, 'principals/users/' . $xForwardedUser];
     }

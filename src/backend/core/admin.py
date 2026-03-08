@@ -2,7 +2,6 @@
 
 from django.contrib import admin
 from django.contrib.auth import admin as auth_admin
-from django.utils.translation import gettext_lazy as _
 
 from . import models
 
@@ -23,7 +22,7 @@ class UserAdmin(auth_admin.UserAdmin):
             },
         ),
         (
-            _("Personal info"),
+            "Personal info",
             {
                 "fields": (
                     "sub",
@@ -35,7 +34,7 @@ class UserAdmin(auth_admin.UserAdmin):
             },
         ),
         (
-            _("Permissions"),
+            "Permissions",
             {
                 "fields": (
                     "is_active",
@@ -47,7 +46,7 @@ class UserAdmin(auth_admin.UserAdmin):
                 ),
             },
         ),
-        (_("Important dates"), {"fields": ("created_at", "updated_at")}),
+        ("Important dates", {"fields": ("created_at", "updated_at")}),
     )
     add_fieldsets = (
         (
@@ -91,20 +90,21 @@ class UserAdmin(auth_admin.UserAdmin):
     search_fields = ("id", "sub", "admin_email", "email", "full_name")
 
 
-@admin.register(models.CalendarSubscriptionToken)
-class CalendarSubscriptionTokenAdmin(admin.ModelAdmin):
-    """Admin class for CalendarSubscriptionToken model."""
+@admin.register(models.Channel)
+class ChannelAdmin(admin.ModelAdmin):
+    """Admin class for Channel model."""
 
     list_display = (
-        "calendar_name",
-        "owner",
+        "name",
+        "type",
+        "organization",
+        "user",
         "caldav_path",
-        "token",
         "is_active",
-        "last_accessed_at",
+        "last_used_at",
         "created_at",
     )
-    list_filter = ("is_active",)
-    search_fields = ("calendar_name", "owner__email", "caldav_path", "token")
-    readonly_fields = ("id", "token", "created_at", "last_accessed_at")
-    raw_id_fields = ("owner",)
+    list_filter = ("type", "is_active")
+    search_fields = ("name", "user__email", "caldav_path")
+    readonly_fields = ("id", "created_at", "updated_at", "last_used_at")
+    raw_id_fields = ("user", "organization")

@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
-from django.core.signing import Signer
+from django.core.signing import TimestampSigner
 from django.template.loader import render_to_string
 
 from core.services.translation_service import TranslationService
@@ -463,7 +463,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
 
         # Add RSVP links for REQUEST method (invitations and updates)
         if method == self.METHOD_REQUEST:
-            signer = Signer(salt="rsvp")
+            signer = TimestampSigner(salt="rsvp")
             # Strip mailto: prefix (case-insensitive) for shorter tokens
             organizer = re.sub(
                 r"^mailto:", "", event.organizer_email, flags=re.IGNORECASE

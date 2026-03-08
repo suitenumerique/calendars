@@ -1,7 +1,5 @@
 """Tests for CalDAV service integration."""
 
-from django.conf import settings
-
 import pytest
 
 from core import factories
@@ -30,10 +28,6 @@ class TestCalDAVClient:
         assert "X-Forwarded-User" in dav_client.headers
         assert dav_client.headers["X-Forwarded-User"] == user.email
 
-    @pytest.mark.skipif(
-        not settings.CALDAV_URL,
-        reason="CalDAV server URL not configured",
-    )
     def test_create_calendar_authenticates_with_caldav_server(self):
         """Test that calendar creation authenticates successfully with CalDAV server."""
         user = factories.UserFactory(email="test@example.com")
@@ -65,10 +59,6 @@ class TestCalDAVClient:
         assert isinstance(caldav_path, str)
         assert "calendars/" in caldav_path
 
-    @pytest.mark.skipif(
-        not settings.CALDAV_URL,
-        reason="CalDAV server URL not configured",
-    )
     def test_create_calendar_with_color_persists(self):
         """Test that creating a calendar with a color saves it in CalDAV."""
         user = factories.UserFactory(email="color-test@example.com")
@@ -79,7 +69,7 @@ class TestCalDAVClient:
         caldav_path = service.create_calendar(user, name="Red Calendar", color=color)
 
         # Fetch the calendar info and verify the color was persisted
-        info = service.caldav.get_calendar_info(user, caldav_path)
+        info = service.get_calendar_info(user, caldav_path)
         assert info is not None
         assert info["color"] == color
         assert info["name"] == "Red Calendar"

@@ -1,22 +1,18 @@
-FROM node:22-alpine AS frontend-deps
+FROM node:24-alpine AS frontend-deps
 
 WORKDIR /home/frontend/
 
 COPY ./package.json ./package.json
-COPY ./pnpm-lock.yaml ./pnpm-lock.yaml
-COPY ./pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY ./package-lock.json ./package-lock.json
 COPY ./apps/calendars/package.json ./apps/calendars/package.json
-COPY ./packages/ts-ics/package.json ./packages/ts-ics/package.json
 
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
-RUN pnpm install --frozen-lockfile
+RUN npm ci
 
 COPY .dockerignore ./.dockerignore
 # COPY ./.prettierrc.js ./.prettierrc.js
 #COPY ./packages/eslint-config-calendars ./packages/eslint-config-calendars
 
 COPY ./apps/calendars ./apps/calendars
-COPY ./packages/ts-ics ./packages/ts-ics
 
 # Build open-calendar package
 
@@ -33,10 +29,10 @@ WORKDIR /home/frontend
 
 EXPOSE 3000
 
-RUN cd apps/calendars && pnpm run build-theme
+RUN cd apps/calendars && npm run build-theme
 
 # Build open-calendar package if dist doesn't exist, then start dev server
-CMD ["/bin/sh", "-c", "cd /home/frontend/apps/calendars && pnpm dev"]
+CMD ["/bin/sh", "-c", "cd /home/frontend/apps/calendars && npm run dev"]
 
 # Tilt will rebuild calendars target so, we dissociate calendars and calendars-builder
 # to avoid rebuilding the app at every changes.
@@ -47,7 +43,7 @@ WORKDIR /home/frontend/apps/calendars
 ARG API_ORIGIN
 ENV NEXT_PUBLIC_API_ORIGIN=${API_ORIGIN}
 
-RUN pnpm build
+RUN npm run build
 
 # ---- Front-end image ----
 FROM caddy:2-alpine AS frontend-production

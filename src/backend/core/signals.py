@@ -2,6 +2,7 @@
 Declare and configure the signals for the calendars core application
 """
 
+import json
 import logging
 
 from django.conf import settings
@@ -50,47 +51,38 @@ def provision_default_calendar(sender, instance, created, **kwargs):  # pylint: 
         service = CalendarService()
         service.create_default_calendar(instance)
         logger.info("Created default calendar for user %s", instance.email)
-    except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-        # In tests, CalDAV server may not be available, so fail silently
-        # Check if it's a database error that suggests we're in tests
-        error_str = str(e).lower()
-        if "does not exist" in error_str or "relation" in error_str:
-            # Likely in test environment, fail silently
-            logger.debug(
-                "Skipped calendar creation for user %s (likely test environment): %s",
-                instance.email,
-                str(e),
-            )
-        else:
-            # Real error, log it
-            logger.error(
-                "Failed to create default calendar for user %s: %s",
-                instance.email,
-                str(e),
-            )
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception(
+            "Failed to create default calendar for user %s",
+            instance.email,
+        )
 
 
 @receiver(pre_delete, sender=User)
 def delete_user_caldav_data(sender, instance, **kwargs):  # pylint: disable=unused-argument
-    """Clean up CalDAV data when a user is deleted."""
-    if not instance.email:
+    """Schedule CalDAV data cleanup when a user is deleted.
+
+    Uses on_commit so the external CalDAV call only fires after
+    the DB transaction commits — avoids orphaned state on rollback.
+    """
+    email = instance.email
+    if not email:
         return
 
     if not settings.CALDAV_INTERNAL_API_KEY:
         return
 
-    # Capture values before the callback, since instance may no longer
-    # be available after the transaction commits and the row is gone.
-    email = instance.email
     api_key = settings.CALDAV_INTERNAL_API_KEY
 
-    def _delete_caldav_data():
+    def _cleanup():
         try:
             http = CalDAVHTTPClient()
             http.request(
-                "DELETE",
-                email,
-                f"internal-api/users/{email}",
+                "POST",
+                instance,
+                "internal-api/users/delete",
+                data=json.dumps({"email": email}).encode("utf-8"),
+                content_type="application/json",
                 extra_headers={"X-Internal-Api-Key": api_key},
             )
         except Exception:  # pylint: disable=broad-exception-caught
@@ -99,4 +91,4 @@ def delete_user_caldav_data(sender, instance, **kwargs):  # pylint: disable=unus
                 email,
             )
 
-    transaction.on_commit(_delete_caldav_data)
+    transaction.on_commit(_cleanup)

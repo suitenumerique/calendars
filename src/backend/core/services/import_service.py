@@ -70,14 +70,12 @@ class ICSImportService:
             result.errors.append("Invalid calendar path")
             return result
 
-        # Timeout scales with file size: 60s base + 30s per MB of ICS data.
-        # 8000 events (~4MB) took ~70s in practice.
-        timeout = 60 + int(len(ics_data) / 1024 / 1024) * 30
-
+        # import runs in a background task so we can wait a decent amount of time
+        timeout = 1200  # 20 minutes
         try:
             response = self._http.request(
                 "POST",
-                user.email,
+                user,
                 f"internal-api/import/{principal_user}/{calendar_uri}",
                 data=ics_data,
                 content_type="text/calendar",

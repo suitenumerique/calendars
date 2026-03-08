@@ -56,10 +56,10 @@ Compose](https://docs.docker.com/compose/install) installed on your laptop:
 
 ```bash
 $ docker -v
-  Docker version 27.5.1, build 9f9e405
+  Docker version 27.x
 
 $ docker compose version
-  Docker Compose version v2.32.4
+  Docker Compose version v2.x
 ```
 
 > ⚠️ You may need to run the following commands with `sudo` but this can be
@@ -73,14 +73,14 @@ The easiest way to start working on the project is to use GNU Make:
 $ make bootstrap
 ```
 
-This command builds the `backend-dev` and `frontend-dev` containers, installs dependencies, performs
-database migrations and compile translations. It's a good idea to use this
-command each time you are pulling code from the project repository to avoid
-dependency-related or migration-related issues.
+This command builds the containers, installs dependencies, and runs database
+migrations. It's a good idea to use this command each time you are pulling
+code from the project repository to avoid dependency-related or
+migration-related issues.
 
 Your Docker services should now be up and running! 🎉
 
-You can access the project by going to <http://localhost:8920>.
+You can access the project by going to <http://localhost:8930>.
 
 You will be prompted to log in. The default credentials are:
 
@@ -92,7 +92,7 @@ password: calendars
 Note that if you need to run them afterward, you can use the eponym Make rule:
 
 ```bash
-$ make run
+$ make start
 ```
 
 You can check all available Make rules using:
@@ -101,30 +101,30 @@ You can check all available Make rules using:
 $ make help
 ```
 
-⚠️ For the frontend developer, it is often better to run the frontend in development mode locally.
+⚠️ For frontend developers, it is often better to run the frontend in development mode locally.
 
-To do so, install the frontend dependencies with the following command:
+First, install the frontend dependencies:
 
-```shellscript
-$ make frontend-development-install
+```bash
+$ make install-front
 ```
 
-And run the frontend locally in development mode with the following command:
+Then start the backend services:
 
-```shellscript
-$ make run-frontend-development
+```bash
+$ make start-back
 ```
 
-To start all the services, except the frontend container, you can use the following command:
+And run the frontend locally in development mode:
 
-```shellscript
-$ make run-backend
+```bash
+$ cd src/frontend/apps/calendars && npm run dev
 ```
 
 ### Django admin
 
 You can access the Django admin site at
-[http://localhost:8921/admin](http://localhost:8921/admin).
+[http://localhost:8931/admin](http://localhost:8931/admin).
 
 You first need to create a superuser account:
 

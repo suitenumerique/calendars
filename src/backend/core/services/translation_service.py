@@ -2,6 +2,7 @@
 
 import json
 import logging
+import threading
 from datetime import datetime
 from typing import Optional
 
@@ -40,6 +41,7 @@ class TranslationService:
     """Lightweight translation service backed by translations.json."""
 
     _translations = None
+    _load_lock = threading.Lock()
 
     @classmethod
     def _load(cls):
@@ -47,12 +49,17 @@ class TranslationService:
         if cls._translations is not None:
             return
 
-        path = settings.TRANSLATIONS_JSON_PATH
-        if not path:
-            raise RuntimeError("TRANSLATIONS_JSON_PATH setting is not configured")
+        with cls._load_lock:
+            # Double-check after acquiring lock
+            if cls._translations is not None:
+                return
 
-        with open(path, encoding="utf-8") as f:
-            cls._translations = json.load(f)
+            path = settings.TRANSLATIONS_JSON_PATH
+            if not path:
+                raise RuntimeError("TRANSLATIONS_JSON_PATH setting is not configured")
+
+            with open(path, encoding="utf-8") as f:
+                cls._translations = json.load(f)
 
     @classmethod
     def _get_nested(cls, data: dict, dotted_key: str):

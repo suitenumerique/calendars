@@ -107,10 +107,6 @@ class TestCalDAVProxy:
             "X-Forwarded-User should NOT use client-sent header value"
         )
 
-    @pytest.mark.skipif(
-        not settings.CALDAV_URL,
-        reason="CalDAV server URL not configured - integration test requires real server",
-    )
     def test_proxy_propfind_response_contains_prefixed_urls(self):
         """PROPFIND responses should contain URLs with proxy prefix.
 

@@ -74,7 +74,7 @@ class InternalApiPlugin extends ServerPlugin
 
         // Verify the dedicated internal API key header
         $headerValue = $request->getHeader('X-Internal-Api-Key');
-        if (!$headerValue || $headerValue !== $this->apiKey) {
+        if (!$headerValue || !hash_equals($this->apiKey, $headerValue)) {
             $response->setStatus(403);
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(json_encode([
@@ -97,9 +97,17 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
-        // Route: DELETE /internal-api/users/{email}
-        if ($method === 'DELETE' && preg_match('#^internal-api/users/([^/]+)$#', $path, $matches)) {
-            $this->handleDeleteUser($request, $response, urldecode($matches[1]));
+        // Route: POST /internal-api/users/delete
+        if ($method === 'POST' && preg_match('#^internal-api/users/delete/?$#', $path)) {
+            $body = json_decode($request->getBodyAsString(), true);
+            $email = $body['email'] ?? null;
+            if (!$email) {
+                $response->setStatus(400);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode(['error' => 'email is required']));
+                return false;
+            }
+            $this->handleDeleteUser($request, $response, $email);
             return false;
         }
 
@@ -148,8 +156,10 @@ class InternalApiPlugin extends ServerPlugin
 
         $principalUri = 'principals/resources/' . $resourceId;
 
-        // Insert principal with ON CONFLICT DO NOTHING
+        // Wrap principal + calendar creation in a transaction for atomicity
+        $this->pdo->beginTransaction();
         try {
+            // Insert principal with ON CONFLICT DO NOTHING
             $stmt = $this->pdo->prepare(
                 'INSERT INTO principals (uri, email, displayname, calendar_user_type, org_id)'
                 . ' VALUES (?, ?, ?, ?, ?)'
@@ -158,6 +168,7 @@ class InternalApiPlugin extends ServerPlugin
             $stmt->execute([$principalUri, $email, $name, $resourceType, $orgId]);
 
             if ($stmt->rowCount() === 0) {
+                $this->pdo->rollBack();
                 $response->setStatus(409);
                 $response->setHeader('Content-Type', 'application/json');
                 $response->setBody(json_encode([
@@ -165,19 +176,9 @@ class InternalApiPlugin extends ServerPlugin
                 ]));
                 return false;
             }
-        } catch (\Exception $e) {
-            error_log("[InternalApiPlugin] Failed to create principal: " . $e->getMessage());
-            $response->setStatus(500);
-            $response->setHeader('Content-Type', 'application/json');
-            $response->setBody(json_encode([
-                'error' => 'Failed to create resource principal',
-            ]));
-            return false;
-        }
 
-        // Create default calendar
-        $calendarUri = 'default';
-        try {
+            // Create default calendar
+            $calendarUri = 'default';
             $this->caldavBackend->createCalendar(
                 $principalUri,
                 $calendarUri,
@@ -187,14 +188,15 @@ class InternalApiPlugin extends ServerPlugin
                         => new \Sabre\CalDAV\Xml\Property\SupportedCalendarComponentSet(['VEVENT']),
                 ]
             );
+
+            $this->pdo->commit();
         } catch (\Exception $e) {
-            error_log("[InternalApiPlugin] Failed to create calendar: " . $e->getMessage());
-            // Roll back principal creation
-            $this->deletePrincipalRows($principalUri);
+            $this->pdo->rollBack();
+            error_log("[InternalApiPlugin] Failed to create resource: " . $e->getMessage());
             $response->setStatus(500);
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(json_encode([
-                'error' => 'Failed to create resource calendar',
+                'error' => 'Failed to create resource',
             ]));
             return false;
         }
@@ -303,17 +305,19 @@ class InternalApiPlugin extends ServerPlugin
     }
 
     /**
-     * DELETE /internal-api/users/{email}
+     * POST /internal-api/users/delete
      * Delete a user principal and all their calendar data.
+     * Body: {"email": "user@example.com"}
      */
     private function handleDeleteUser($request, $response, $email)
     {
         $principalUri = 'principals/users/' . $email;
+        $orgId = $request->getHeader('X-CalDAV-Organization');
 
         // Look up the principal
         try {
             $stmt = $this->pdo->prepare(
-                'SELECT id FROM principals WHERE uri = ?'
+                'SELECT id, org_id FROM principals WHERE uri = ?'
             );
             $stmt->execute([$principalUri]);
             $row = $stmt->fetch(\PDO::FETCH_ASSOC);
@@ -331,6 +335,18 @@ class InternalApiPlugin extends ServerPlugin
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(json_encode(['deleted' => true, 'existed' => false]));
             return false;
+        }
+
+        // Verify org scoping — reject if orgs don't match or either is missing
+        if ($row['org_id']) {
+            if (!$orgId || $orgId !== $row['org_id']) {
+                $response->setStatus(403);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode([
+                    'error' => 'Cannot delete a user from a different organization',
+                ]));
+                return false;
+            }
         }
 
         // Delete calendars and their objects

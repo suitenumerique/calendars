@@ -15,7 +15,8 @@
         "button": "Logout"
       },
       "common": {
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "close": "Close"
       },
       "clipboard": {
         "success": "Copied to clipboard",
@@ -436,7 +437,9 @@
           "eventNotFound": "The event was not found. It may have been deleted.",
           "eventPast": "This event has already passed.",
           "notAttendee": "You are not listed as an attendee of this event.",
-          "updateFailed": "An error occurred while updating. Please try again."
+          "updateFailed": "An error occurred while updating. Please try again.",
+          "tokenExpired": "This link has expired. Please ask the organizer for a new invitation.",
+          "rateLimited": "Too many requests. Please wait a moment and try again."
         }
       },
       "resources": {
@@ -469,6 +472,47 @@
           "confirm": "Delete",
           "success": "Resource deleted successfully.",
           "error": "Failed to delete resource."
+        }
+      },
+      "integrations": {
+        "title": "Integrations",
+        "description": "Manage integration channels for external services to access your calendars.",
+        "loading": "Loading integrations...",
+        "empty": "No integrations have been created yet.",
+        "roles": {
+          "reader": "Reader",
+          "editor": "Editor",
+          "admin": "Admin"
+        },
+        "lastUsed": "Last used: {{date}}",
+        "create": {
+          "button": "Add integration",
+          "title": "Create integration",
+          "nameLabel": "Name",
+          "roleLabel": "Role",
+          "submit": "Create",
+          "success": "Integration created successfully.",
+          "error": "Failed to create integration.",
+          "tokenTitle": "Integration token",
+          "tokenWarning": "Copy this token now. It will not be shown again."
+        },
+        "delete": {
+          "button": "Delete",
+          "title": "Delete integration",
+          "message": "Are you sure you want to delete \"{{name}}\"? This cannot be undone.",
+          "confirm": "Delete",
+          "success": "Integration deleted successfully.",
+          "error": "Failed to delete integration."
+        },
+        "regenerate": {
+          "button": "Regenerate token",
+          "success": "Token regenerated successfully.",
+          "error": "Failed to regenerate token.",
+          "tokenWarning": "Copy this new token now. It will not be shown again."
+        },
+        "token": {
+          "copy": "Copy token",
+          "copied": "Token copied to clipboard."
         }
       }
     }
@@ -528,7 +572,8 @@
         }
       },
       "common": {
-        "cancel": "Annuler"
+        "cancel": "Annuler",
+        "close": "Fermer"
       },
       "clipboard": {
         "success": "Copié dans le presse-papiers",
@@ -1213,7 +1258,9 @@
           "eventNotFound": "L'événement n'a pas été trouvé. Il a peut-être été supprimé.",
           "eventPast": "Cet événement est déjà passé.",
           "notAttendee": "Vous ne figurez pas parmi les participants de cet événement.",
-          "updateFailed": "Une erreur est survenue lors de la mise à jour. Veuillez réessayer."
+          "updateFailed": "Une erreur est survenue lors de la mise à jour. Veuillez réessayer.",
+          "tokenExpired": "Ce lien a expiré. Veuillez demander une nouvelle invitation à l'organisateur.",
+          "rateLimited": "Trop de requêtes. Veuillez patienter un instant et réessayer."
         }
       },
       "resources": {
@@ -1246,6 +1293,47 @@
           "confirm": "Supprimer",
           "success": "Ressource supprimée avec succès.",
           "error": "Échec de la suppression de la ressource."
+        }
+      },
+      "integrations": {
+        "title": "Intégrations",
+        "description": "Gérer les canaux d'intégration pour que les services externes puissent accéder à vos agendas.",
+        "loading": "Chargement des intégrations...",
+        "empty": "Aucune intégration n'a encore été créée.",
+        "roles": {
+          "reader": "Lecteur",
+          "editor": "Éditeur",
+          "admin": "Admin"
+        },
+        "lastUsed": "Dernière utilisation : {{date}}",
+        "create": {
+          "button": "Ajouter une intégration",
+          "title": "Créer une intégration",
+          "nameLabel": "Nom",
+          "roleLabel": "Rôle",
+          "submit": "Créer",
+          "success": "Intégration créée avec succès.",
+          "error": "Échec de la création de l'intégration.",
+          "tokenTitle": "Jeton d'intégration",
+          "tokenWarning": "Copiez ce jeton maintenant. Il ne sera plus affiché."
+        },
+        "delete": {
+          "button": "Supprimer",
+          "title": "Supprimer l'intégration",
+          "message": "Êtes-vous sûr de vouloir supprimer « {{name}} » ? Cette action est irréversible.",
+          "confirm": "Supprimer",
+          "success": "Intégration supprimée avec succès.",
+          "error": "Échec de la suppression de l'intégration."
+        },
+        "regenerate": {
+          "button": "Regénérer le jeton",
+          "success": "Jeton regénéré avec succès.",
+          "error": "Échec de la regénération du jeton.",
+          "tokenWarning": "Copiez ce nouveau jeton maintenant. Il ne sera plus affiché."
+        },
+        "token": {
+          "copy": "Copier le jeton",
+          "copied": "Jeton copié dans le presse-papiers."
         }
       }
     }
@@ -1300,7 +1388,8 @@
         }
       },
       "common": {
-        "cancel": "Annuleren"
+        "cancel": "Annuleren",
+        "close": "Sluiten"
       },
       "clipboard": {
         "success": "Gekopieërd naar klembord",
@@ -1732,7 +1821,9 @@
           "eventNotFound": "Het evenement is niet gevonden. Het is mogelijk verwijderd.",
           "eventPast": "Dit evenement is al voorbij.",
           "notAttendee": "U staat niet vermeld als deelnemer van dit evenement.",
-          "updateFailed": "Er is een fout opgetreden bij het bijwerken. Probeer het opnieuw."
+          "updateFailed": "Er is een fout opgetreden bij het bijwerken. Probeer het opnieuw.",
+          "tokenExpired": "Deze link is verlopen. Vraag de organisator om een nieuwe uitnodiging.",
+          "rateLimited": "Te veel verzoeken. Wacht even en probeer het opnieuw."
         }
       },
       "resources": {
@@ -1765,6 +1856,47 @@
           "confirm": "Verwijderen",
           "success": "Middel succesvol verwijderd.",
           "error": "Middel verwijderen mislukt."
+        }
+      },
+      "integrations": {
+        "title": "Integraties",
+        "description": "Beheer integratiekanalen zodat externe diensten toegang hebben tot uw agenda's.",
+        "loading": "Integraties laden...",
+        "empty": "Er zijn nog geen integraties aangemaakt.",
+        "roles": {
+          "reader": "Lezer",
+          "editor": "Bewerker",
+          "admin": "Admin"
+        },
+        "lastUsed": "Laatst gebruikt: {{date}}",
+        "create": {
+          "button": "Integratie toevoegen",
+          "title": "Integratie aanmaken",
+          "nameLabel": "Naam",
+          "roleLabel": "Rol",
+          "submit": "Aanmaken",
+          "success": "Integratie succesvol aangemaakt.",
+          "error": "Integratie aanmaken mislukt.",
+          "tokenTitle": "Integratietoken",
+          "tokenWarning": "Kopieer dit token nu. Het wordt niet meer getoond."
+        },
+        "delete": {
+          "button": "Verwijderen",
+          "title": "Integratie verwijderen",
+          "message": "Weet u zeker dat u \"{{name}}\" wilt verwijderen? Dit kan niet ongedaan worden gemaakt.",
+          "confirm": "Verwijderen",
+          "success": "Integratie succesvol verwijderd.",
+          "error": "Integratie verwijderen mislukt."
+        },
+        "regenerate": {
+          "button": "Token opnieuw genereren",
+          "success": "Token succesvol opnieuw gegenereerd.",
+          "error": "Token opnieuw genereren mislukt.",
+          "tokenWarning": "Kopieer dit nieuwe token nu. Het wordt niet meer getoond."
+        },
+        "token": {
+          "copy": "Token kopiëren",
+          "copied": "Token gekopieerd naar klembord."
         }
       }
     }

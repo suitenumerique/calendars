@@ -386,7 +386,7 @@ export const useSchedulerHandlers = ({
         }
       } else {
         // Option 3: Delete all occurrences OR non-recurring event
-        const result = await caldavService.deleteEvent(modalState.eventUrl);
+        const result = await caldavService.deleteEvent(modalState.eventUrl, modalState.etag);
 
         if (!result.success) {
           throw new Error(result.error || "Failed to delete event");

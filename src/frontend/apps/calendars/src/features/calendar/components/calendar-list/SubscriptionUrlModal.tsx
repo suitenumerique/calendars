@@ -8,9 +8,9 @@ import { useTranslation } from "react-i18next";
 import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
 
 import {
-  useCreateSubscriptionToken,
-  useDeleteSubscriptionToken,
-  useSubscriptionToken,
+  useCreateICalFeedChannel,
+  useDeleteICalFeedChannel,
+  useICalFeedChannel,
 } from "../../hooks/useCalendars";
 
 interface SubscriptionUrlModalProps {
@@ -31,21 +31,24 @@ export const SubscriptionUrlModal = ({
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
   const [hasTriedCreate, setHasTriedCreate] = useState(false);
 
-  const { token, tokenError, isLoading } = useSubscriptionToken(caldavPath);
-  const createToken = useCreateSubscriptionToken();
-  const deleteToken = useDeleteSubscriptionToken();
+  const { channel, channelError, isLoading } = useICalFeedChannel(caldavPath);
+  const createChannel = useCreateICalFeedChannel();
+  const deleteChannelMutation = useDeleteICalFeedChannel();
 
-  // Use token from query or from mutation result (whichever is available)
-  const displayToken = token || createToken.data;
-  // Show error from token fetch or from creation failure
-  const hasRealError = tokenError || (createToken.error && hasTriedCreate);
-  const isRegenerating = deleteToken.isPending || createToken.isPending;
-  const showLoading = isLoading || createToken.isPending;
+  // Use channel from query or from mutation result (whichever is available)
+  const displayChannel = channel || createChannel.data;
+  const displayUrl = displayChannel?.url;
+  // Show error from channel fetch or from creation failure
+  const hasRealError =
+    channelError || (createChannel.error && hasTriedCreate);
+  const isRegenerating =
+    deleteChannelMutation.isPending || createChannel.isPending;
+  const showLoading = isLoading || createChannel.isPending;
 
   // Get appropriate error message based on error type
   const getErrorMessage = (): string => {
-    if (tokenError) {
-      switch (tokenError.type) {
+    if (channelError) {
+      switch (channelError.type) {
         case "permission_denied":
           return t("calendar.subscription.errorPermission");
         case "network_error":
@@ -66,33 +69,39 @@ export const SubscriptionUrlModal = ({
     }
   }, [isOpen]);
 
-  // Create token on first open if none exists (only try once)
-  // We also try to create if there was an error (404 means no token exists)
+  // Create channel on first open if none exists (only try once)
   useEffect(() => {
     if (
       isOpen &&
-      !token &&
+      !channel &&
       !isLoading &&
-      !createToken.isPending &&
+      !createChannel.isPending &&
       !hasTriedCreate
     ) {
       setHasTriedCreate(true);
-      createToken.mutate({ caldavPath, calendarName });
+      createChannel.mutate({ caldavPath, calendarName });
     }
-  }, [isOpen, token, isLoading, createToken, caldavPath, calendarName, hasTriedCreate]);
+  }, [
+    isOpen,
+    channel,
+    isLoading,
+    createChannel,
+    caldavPath,
+    calendarName,
+    hasTriedCreate,
+  ]);
 
   const handleCopy = async () => {
-    const url = displayToken?.url;
-    if (!url) return;
+    if (!displayUrl) return;
 
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(displayUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Fallback for older browsers
       const textArea = document.createElement("textarea");
-      textArea.value = url;
+      textArea.value = displayUrl;
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand("copy");
@@ -104,8 +113,10 @@ export const SubscriptionUrlModal = ({
 
   const handleRegenerate = async () => {
     setShowRegenerateConfirm(false);
-    await deleteToken.mutateAsync(caldavPath);
-    await createToken.mutateAsync({ caldavPath, calendarName });
+    const channelId = displayChannel?.id;
+    if (!channelId) return;
+    await deleteChannelMutation.mutateAsync(channelId);
+    await createChannel.mutateAsync({ caldavPath, calendarName });
   };
 
   return (
@@ -130,17 +141,17 @@ export const SubscriptionUrlModal = ({
             <div className="subscription-modal__loading">
               {t("calendar.subscription.loading")}
             </div>
-          ) : hasRealError && !displayToken ? (
+          ) : hasRealError && !displayUrl ? (
             <div className="subscription-modal__error">
               {getErrorMessage()}
             </div>
-          ) : displayToken?.url ? (
+          ) : displayUrl ? (
             <>
               <div className="subscription-modal__url-container">
                 <input
                   type="text"
                   readOnly
-                  value={displayToken.url}
+                  value={displayUrl}
                   className="subscription-modal__url-input"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
                 />

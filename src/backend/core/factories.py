@@ -2,6 +2,9 @@
 Core application factories
 """
 
+import secrets
+import uuid
+
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
 
@@ -35,17 +38,30 @@ class UserFactory(factory.django.DjangoModelFactory):
     full_name = factory.Faker("name")
     language = factory.fuzzy.FuzzyChoice([lang[0] for lang in settings.LANGUAGES])
     password = make_password("password")
+    organization = factory.SubFactory(OrganizationFactory)
 
 
-class CalendarSubscriptionTokenFactory(factory.django.DjangoModelFactory):
-    """A factory to create calendar subscription tokens for testing purposes."""
+class ChannelFactory(factory.django.DjangoModelFactory):
+    """A factory to create channels for testing purposes."""
 
     class Meta:
-        model = models.CalendarSubscriptionToken
+        model = models.Channel
 
-    owner = factory.SubFactory(UserFactory)
-    caldav_path = factory.LazyAttribute(
-        lambda obj: f"/calendars/users/{obj.owner.email}/{fake.uuid4()}/"
+    name = factory.Faker("sentence", nb_words=3)
+    user = factory.SubFactory(UserFactory)
+    settings = factory.LazyFunction(lambda: {"role": "reader"})
+    encrypted_settings = factory.LazyFunction(
+        lambda: {"token": secrets.token_urlsafe(16)}
     )
-    calendar_name = factory.Faker("sentence", nb_words=3)
-    is_active = True
+
+
+class ICalFeedChannelFactory(ChannelFactory):
+    """A factory to create ical-feed channels."""
+
+    type = "ical-feed"
+    caldav_path = factory.LazyAttribute(
+        lambda obj: f"/calendars/users/{obj.user.email}/{fake.uuid4()}/"
+    )
+    settings = factory.LazyAttribute(
+        lambda obj: {"role": "reader", "calendar_name": fake.sentence(nb_words=3)}
+    )

@@ -2,18 +2,23 @@
 
 import logging
 
+from django.core.cache import cache
 from django.http import Http404, HttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
+from django.utils.text import slugify
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 import requests
 
-from core.models import CalendarSubscriptionToken
+from core.models import Channel, urlsafe_to_uuid
 from core.services.caldav_service import CalDAVHTTPClient
 
 logger = logging.getLogger(__name__)
+
+ICAL_RATE_LIMIT = 5  # requests per minute per channel
+ICAL_RATE_WINDOW = 60  # seconds
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -22,40 +27,49 @@ class ICalExportView(View):
     Public endpoint for iCal calendar exports.
 
     This view serves calendar data in iCal format without requiring authentication.
-    The token in the URL path acts as the authentication mechanism.
+    The channel_id in the URL is used for lookup, and the token for authentication.
 
-    URL format: /ical/<uuid:token>.ics
+    URL format: /ical/<short_id>/<token>/<slug>.ics
 
-    The view proxies the request to SabreDAV's ICSExportPlugin, which generates
-    RFC 5545 compliant iCal data.
+    Looks up a Channel by base64url-encoded ID, verifies the token, then
+    proxies the request to SabreDAV's ICSExportPlugin.
     """
 
-    def get(self, request, token):
+    def get(self, request, short_id, token):
         """Handle GET requests for iCal export."""
-        # Lookup token
-        subscription = (
-            CalendarSubscriptionToken.objects.filter(token=token, is_active=True)
-            .select_related("owner")
-            .first()
-        )
+        try:
+            channel_id = urlsafe_to_uuid(short_id)
+            channel = Channel.objects.get(pk=channel_id, is_active=True)
+        except (ValueError, Channel.DoesNotExist):
+            raise Http404("Calendar not found")  # noqa: B904
 
-        if not subscription:
-            logger.warning("Invalid or inactive subscription token: %s", token)
+        if channel.type != "ical-feed":
             raise Http404("Calendar not found")
 
-        # Update last_accessed_at atomically to avoid race conditions
-        # when multiple calendar clients poll simultaneously
-        CalendarSubscriptionToken.objects.filter(token=token, is_active=True).update(
-            last_accessed_at=timezone.now()
-        )
+        if not channel.verify_token(token):
+            raise Http404("Calendar not found")
+
+        if not channel.user:
+            logger.warning("ical-feed channel %s has no user", channel.id)
+            raise Http404("Calendar not found")
+
+        # Rate limit: 5 requests per minute per channel
+        rate_key = f"ical_rate:{channel_id}"
+        hits = cache.get(rate_key, 0)
+        if hits >= ICAL_RATE_LIMIT:
+            return HttpResponse(status=429, content="Too many requests")
+        cache.set(rate_key, hits + 1, ICAL_RATE_WINDOW)
+
+        # Update last_used_at
+        Channel.objects.filter(pk=channel.pk).update(last_used_at=timezone.now())
 
         # Proxy to SabreDAV
         http = CalDAVHTTPClient()
         try:
-            caldav_path = subscription.caldav_path.lstrip("/")
+            caldav_path = channel.caldav_path.lstrip("/")
             response = http.request(
                 "GET",
-                subscription.owner.email,
+                channel.user,
                 caldav_path,
                 query="export",
             )
@@ -88,15 +102,12 @@ class ICalExportView(View):
             status=200,
             content_type="text/calendar; charset=utf-8",
         )
-        # Set filename for download (use calendar_name or fallback to "calendar")
-        display_name = subscription.calendar_name or "calendar"
-        safe_name = display_name.replace('"', '\\"')
+        calendar_name = channel.settings.get("calendar_name", "")
+        filename = slugify(calendar_name)[:50] or "feed"
         django_response["Content-Disposition"] = (
-            f'attachment; filename="{safe_name}.ics"'
+            f'attachment; filename="{filename}.ics"'
         )
-        # Prevent caching of potentially sensitive data
         django_response["Cache-Control"] = "no-store, private"
-        # Prevent token leakage via referrer
         django_response["Referrer-Policy"] = "no-referrer"
 
         return django_response

@@ -15,6 +15,46 @@ from core.models import DuplicateEmailError, Organization
 logger = logging.getLogger(__name__)
 
 
+def _resolve_org_external_id(claims, email=None):
+    """Extract the organization external_id from OIDC claims or email domain."""
+    claim_key = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
+    if claim_key:
+        return claims.get(claim_key)
+    email = email or claims.get("email")
+    return email.split("@")[-1] if email and "@" in email else None
+
+
+def resolve_organization(user, claims, entitlements=None):
+    """Resolve and assign the user's organization.
+
+    The org identifier (external_id) comes from the OIDC claim configured via
+    OIDC_USERINFO_ORGANIZATION_CLAIM, or falls back to the email domain.
+    The org name comes from the entitlements response.
+    """
+    entitlements = entitlements or {}
+    external_id = _resolve_org_external_id(claims, email=user.email)
+    if not external_id:
+        logger.error(
+            "Cannot resolve organization for user %s: no org claim or email domain",
+            user.email,
+        )
+        return
+
+    org_name = entitlements.get("organization_name", "") or external_id
+
+    org, created = Organization.objects.get_or_create(
+        external_id=external_id,
+        defaults={"name": org_name},
+    )
+    if not created and org_name and org.name != org_name:
+        org.name = org_name
+        org.save(update_fields=["name"])
+
+    if user.organization_id != org.id:
+        user.organization = org
+        user.save(update_fields=["organization"])
+
+
 class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
     """Custom OpenID Connect (OIDC) Authentication Backend.
 
@@ -23,18 +63,7 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
     """
 
     def get_extra_claims(self, user_info):
-        """
-        Return extra claims from user_info.
-
-        Args:
-          user_info (dict): The user information dictionary.
-
-        Returns:
-          dict: A dictionary of extra claims.
-        """
-
-        # We need to add the claims that we want to store so that they are
-        # available in the post_get_or_create_user method.
+        """Return extra claims from user_info."""
         claims_to_store = {
             claim: user_info.get(claim) for claim in settings.OIDC_STORE_CLAIMS
         }
@@ -45,11 +74,29 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
 
     def get_existing_user(self, sub, email):
         """Fetch existing user by sub or email."""
-
         try:
             return self.UserModel.objects.get_user_by_sub_or_email(sub, email)
         except DuplicateEmailError as err:
             raise SuspiciousOperation(err.message) from err
+
+    def create_user(self, claims):
+        """Create a new user, resolving their organization first.
+
+        Organization is NOT NULL, so we must resolve it before the initial save.
+        """
+        external_id = _resolve_org_external_id(claims)
+        if not external_id:
+            raise SuspiciousOperation(
+                "Cannot create user without an organization "
+                "(no org claim and no email domain)"
+            )
+
+        org, _ = Organization.objects.get_or_create(
+            external_id=external_id,
+            defaults={"name": external_id},
+        )
+        claims["organization"] = org
+        return super().create_user(claims)
 
     def post_get_or_create_user(self, user, claims, is_new_user):
         """Warm the entitlements cache and resolve organization on login."""
@@ -67,38 +114,4 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
                 user.email,
             )
 
-        self._resolve_organization(user, claims, entitlements)
-
-    @staticmethod
-    def _resolve_organization(user, claims, entitlements):
-        """Resolve and assign the user's organization.
-
-        The org identifier (external_id) comes from the OIDC claim
-        configured via OIDC_USERINFO_ORGANIZATION_CLAIM, or falls back to the
-        email domain. The org name comes from the entitlements response.
-        """
-        claim_key = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
-        if claim_key:
-            external_id = claims.get(claim_key)
-        else:
-            # Default: derive org from email domain
-            external_id = (
-                user.email.split("@")[-1] if user.email and "@" in user.email else None
-            )
-
-        if not external_id:
-            return
-
-        org_name = entitlements.get("organization_name", "") or external_id
-
-        org, created = Organization.objects.get_or_create(
-            external_id=external_id,
-            defaults={"name": org_name},
-        )
-        if not created and org_name and org.name != org_name:
-            org.name = org_name
-            org.save(update_fields=["name"])
-
-        if user.organization_id != org.id:
-            user.organization = org
-            user.save(update_fields=["organization"])
+        resolve_organization(user, claims, entitlements)

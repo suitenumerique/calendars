@@ -510,6 +510,7 @@ export class CalDavService {
       if (existingIndex >= 0 && icsCalendar.events) {
         const updatedEvent = { ...params.event }
         updatedEvent.sequence = (updatedEvent.sequence ?? 0) + 1
+        icsCalendar.events = [...icsCalendar.events]
         icsCalendar.events[existingIndex] = updatedEvent
       } else {
         icsCalendar.events = [params.event]
@@ -546,21 +547,26 @@ export class CalDavService {
     }, 'Failed to update event')
   }
 
-  async deleteEvent(eventUrl: string): Promise<CalDavResponse> {
+  async deleteEvent(eventUrl: string, etag?: string): Promise<CalDavResponse> {
     const cachedEvent = this._events.get(eventUrl)
     const calendarUrl = cachedEvent?.calendarUrl ?? getCalendarUrlFromEventUrl(eventUrl)
     const calendar = this._calendars.get(calendarUrl)
 
     return withErrorHandling(async () => {
+      const resolvedEtag = etag ?? cachedEvent?.etag
+
       const davObject: DAVCalendarObject = {
         url: eventUrl,
-        etag: cachedEvent?.etag,
+        etag: resolvedEtag,
         data: cachedEvent?.data ? generateIcsCalendar(cachedEvent.data) : '',
       }
 
       const response = await davDeleteCalendarObject({
         calendarObject: davObject,
-        headers: calendar?.headers,
+        headers: {
+          ...(resolvedEtag ? { 'If-Match': resolvedEtag } : {}),
+          ...calendar?.headers,
+        },
         fetchOptions: calendar?.fetchOptions,
       })
 

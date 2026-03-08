@@ -1,12 +1,15 @@
 """Client serializers for the calendars core app."""
 
+import secrets
+
 from django.conf import settings
-from django.utils.translation import gettext_lazy as _
+from django.utils.text import slugify
 
 from rest_framework import serializers
 
 from core import models
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
+from core.models import uuid_to_urlsafe
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
@@ -54,6 +57,10 @@ class UserMeSerializer(UserSerializer):
     can_admin = serializers.SerializerMethodField(read_only=True)
     organization = OrganizationSerializer(read_only=True)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._entitlements_cache = {}
+
     class Meta:
         model = models.User
         fields = [
@@ -71,8 +78,6 @@ class UserMeSerializer(UserSerializer):
 
     def _get_entitlements(self, user):
         """Get cached entitlements for the user, keyed by user.sub."""
-        if not hasattr(self, "_entitlements_cache"):
-            self._entitlements_cache = {}
         if user.sub not in self._entitlements_cache:
             try:
                 self._entitlements_cache[user.sub] = get_user_entitlements(
@@ -97,61 +102,94 @@ class UserMeSerializer(UserSerializer):
         return entitlements.get("can_admin", False)
 
 
-class CalendarSubscriptionTokenSerializer(serializers.ModelSerializer):
-    """Serializer for CalendarSubscriptionToken model."""
+class ChannelSerializer(serializers.ModelSerializer):
+    """Read serializer for Channel model."""
 
+    role = serializers.SerializerMethodField()
     url = serializers.SerializerMethodField()
 
     class Meta:
-        model = models.CalendarSubscriptionToken
+        model = models.Channel
         fields = [
-            "token",
-            "url",
+            "id",
+            "name",
+            "type",
+            "organization",
+            "user",
             "caldav_path",
-            "calendar_name",
+            "role",
             "is_active",
-            "last_accessed_at",
-            "created_at",
-        ]
-        read_only_fields = [
-            "token",
+            "settings",
             "url",
-            "caldav_path",
-            "calendar_name",
-            "is_active",
-            "last_accessed_at",
+            "last_used_at",
             "created_at",
+            "updated_at",
         ]
+        read_only_fields = fields
 
-    def get_url(self, obj) -> str:
-        """Build the full subscription URL, enforcing HTTPS in production."""
+    def get_role(self, obj):
+        """Get role from settings."""
+        return obj.role
+
+    def get_url(self, obj) -> str | None:
+        """Build iCal subscription URL for ical-feed channels, None otherwise."""
+        if obj.type != "ical-feed":
+            return None
+
+        token = obj.encrypted_settings.get("token", "")
+        if not token:
+            return None
+
+        short_id = uuid_to_urlsafe(obj.pk)
+        calendar_name = obj.settings.get("calendar_name", "")
+        filename = slugify(calendar_name)[:50] or "feed"
+        ical_path = f"/ical/{short_id}/{token}/{filename}.ics"
+
         request = self.context.get("request")
         if request:
-            url = request.build_absolute_uri(f"/ical/{obj.token}.ics")
+            url = request.build_absolute_uri(ical_path)
         else:
-            # Fallback to APP_URL if no request context
             app_url = settings.APP_URL
-            url = f"{app_url.rstrip('/')}/ical/{obj.token}.ics"
+            url = f"{app_url.rstrip('/')}{ical_path}"
 
-        # Force HTTPS in production to protect the token in transit
         if not settings.DEBUG and url.startswith("http://"):
             url = url.replace("http://", "https://", 1)
 
         return url
 
 
-class CalendarSubscriptionTokenCreateSerializer(serializers.Serializer):  # pylint: disable=abstract-method
-    """Serializer for creating a CalendarSubscriptionToken."""
+class ChannelCreateSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """Write serializer for creating a Channel."""
 
-    caldav_path = serializers.CharField(max_length=512)
+    name = serializers.CharField(max_length=255)
+    type = serializers.CharField(max_length=255, default="caldav")
+    caldav_path = serializers.CharField(max_length=512, required=False, default="")
     calendar_name = serializers.CharField(max_length=255, required=False, default="")
+    role = serializers.ChoiceField(
+        choices=[(r, r) for r in models.Channel.VALID_ROLES],
+        default=models.Channel.ROLE_READER,
+    )
 
     def validate_caldav_path(self, value):
-        """Validate and normalize the caldav_path."""
-        # Normalize path to always have trailing slash
-        if not value.endswith("/"):
-            value = value + "/"
-        # Normalize path to always start with /
-        if not value.startswith("/"):
-            value = "/" + value
+        """Normalize caldav_path if provided."""
+        if value:
+            if not value.endswith("/"):
+                value = value + "/"
+            if not value.startswith("/"):
+                value = "/" + value
         return value
+
+    def validate_type(self, value):
+        """Validate channel type."""
+        if value == "ical-feed":
+            return value
+        return "caldav"
+
+
+class ChannelWithTokenSerializer(ChannelSerializer):
+    """Serializer that includes the plaintext token (used only on creation)."""
+
+    token = serializers.CharField(read_only=True)
+
+    class Meta(ChannelSerializer.Meta):
+        fields = [*ChannelSerializer.Meta.fields, "token"]

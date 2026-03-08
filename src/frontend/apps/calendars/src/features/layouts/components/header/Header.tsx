@@ -54,6 +54,11 @@ const ApplicationMenu = () => {
           icon: <Icon name="meeting_room" type={IconType.OUTLINED} />,
           callback: () => void router.push("/resources"),
         },
+        {
+          label: t("integrations.title"),
+          icon: <Icon name="integration_instructions" type={IconType.OUTLINED} />,
+          callback: () => void router.push("/integrations"),
+        },
       ]}
     >
       <Button

@@ -2,8 +2,8 @@
 
 import base64
 
+from django.conf import settings
 from django.core.cache import cache
-from django.db import connection
 
 import pytest
 import responses
@@ -16,34 +16,33 @@ USER = "user"
 
 @pytest.fixture(autouse=True)
 def truncate_caldav_tables(django_db_setup, django_db_blocker):  # pylint: disable=unused-argument
-    """Fixture to truncate CalDAV server tables at the start of each test.
+    """Truncate CalDAV tables in the SabreDAV database before each test.
 
-    CalDAV server tables are created by the CalDAV server container migrations, not Django.
-    We just truncate them to ensure clean state for each test.
+    SabreDAV uses the 'calendars' database (not Django's test database),
+    so we connect directly via psycopg to truncate.
     """
-    with django_db_blocker.unblock():
-        with connection.cursor() as cursor:
-            # Truncate CalDAV server tables if they exist (created by CalDAV server container)
-            cursor.execute("""
-                DO $$ 
-                BEGIN
-                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'principals') THEN
-                        TRUNCATE TABLE principals CASCADE;
-                    END IF;
-                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users') THEN
-                        TRUNCATE TABLE users CASCADE;
-                    END IF;
-                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'calendars') THEN
-                        TRUNCATE TABLE calendars CASCADE;
-                    END IF;
-                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'calendarinstances') THEN
-                        TRUNCATE TABLE calendarinstances CASCADE;
-                    END IF;
-                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'calendarobjects') THEN
-                        TRUNCATE TABLE calendarobjects CASCADE;
-                    END IF;
-                END $$;
-            """)
+    import psycopg  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+
+    db_settings = settings.DATABASES["default"]
+    conn = psycopg.connect(
+        host=db_settings["HOST"],
+        port=db_settings["PORT"],
+        dbname="calendars",  # SabreDAV always uses this DB
+        user=db_settings["USER"],
+        password=db_settings["PASSWORD"],
+    )
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cur:  # pylint: disable=no-member
+            for table in [
+                "calendarobjects",
+                "calendarinstances",
+                "calendars",
+                "principals",
+            ]:
+                cur.execute(f"TRUNCATE TABLE {table} CASCADE")
+    finally:
+        conn.close()  # pylint: disable=no-member
     yield
 
 
@@ -55,7 +54,7 @@ def clear_cache():
     # Clear functools.cache for functions decorated with @functools.cache
 
 
-def resource_server_backend_setup(settings):
+def resource_server_backend_setup(settings):  # pylint: disable=redefined-outer-name
     """
     A fixture to create a user token for testing.
     """
@@ -79,7 +78,7 @@ def resource_server_backend_setup(settings):
 
 
 @pytest.fixture
-def resource_server_backend_conf(settings):
+def resource_server_backend_conf(settings):  # pylint: disable=redefined-outer-name
     """
     A fixture to create a user token for testing.
     """
@@ -88,7 +87,7 @@ def resource_server_backend_conf(settings):
 
 
 @pytest.fixture
-def resource_server_backend(settings):
+def resource_server_backend(settings):  # pylint: disable=redefined-outer-name
     """
     A fixture to create a user token for testing.
     Including a mocked introspection endpoint.

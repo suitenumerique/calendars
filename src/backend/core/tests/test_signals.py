@@ -1,5 +1,6 @@
 """Tests for Django signals (CalDAV cleanup on user/org deletion)."""
 
+import json
 from unittest import mock
 
 from django.test import TestCase, override_settings
@@ -17,7 +18,7 @@ class TestDeleteUserCaldavData(TestCase):
     """Tests for the delete_user_caldav_data pre_delete signal."""
 
     def test_deleting_user_calls_internal_api(self):
-        """Deleting a user triggers a DELETE to the SabreDAV internal API."""
+        """Deleting a user triggers a POST to the SabreDAV internal API."""
         user = factories.UserFactory(email="alice@example.com")
 
         with mock.patch(
@@ -27,14 +28,17 @@ class TestDeleteUserCaldavData(TestCase):
             mock_response.status_code = 200
             mock_request.return_value = mock_response
 
-            user.delete()
+            with self.captureOnCommitCallbacks(execute=True):
+                user.delete()
 
         # Verify the internal API was called to clean up CalDAV data
         mock_request.assert_called_once()
         call_kwargs = mock_request.call_args
-        assert call_kwargs.kwargs["method"] == "DELETE"
+        assert call_kwargs.kwargs["method"] == "POST"
         url = call_kwargs.kwargs.get("url", "")
-        assert "internal-api/users/alice@example.com" in url
+        assert "internal-api/users/delete" in url
+        body = json.loads(call_kwargs.kwargs.get("data", b"{}"))
+        assert body["email"] == "alice@example.com"
         headers = call_kwargs.kwargs.get("headers", {})
         assert headers.get("X-Internal-Api-Key") == "test-internal-key"
 
@@ -70,7 +74,8 @@ class TestDeleteUserCaldavData(TestCase):
             side_effect=Exception("Connection refused"),
         ):
             # Should not raise — the signal catches exceptions
-            user.delete()
+            with self.captureOnCommitCallbacks(execute=True):
+                user.delete()
 
         assert not User.objects.filter(email="alice@example.com").exists()
 
@@ -88,7 +93,8 @@ class TestDeleteOrganizationCaldavData(TestCase):
 
         cleanup_organization_caldav_data calls DELETE for each member,
         then members.delete() triggers the user pre_delete signal which
-        also calls DELETE. So we expect 2 calls per member = 4 total.
+        schedules on_commit callbacks. So we expect 2 calls from org
+        cleanup + 2 from user signals = 4 total.
         """
         org = factories.OrganizationFactory(external_id="doomed-org")
         factories.UserFactory(email="alice@example.com", organization=org)
@@ -101,13 +107,18 @@ class TestDeleteOrganizationCaldavData(TestCase):
             mock_response.status_code = 200
             mock_request.return_value = mock_response
 
-            org.delete()
+            with self.captureOnCommitCallbacks(execute=True):
+                org.delete()
 
-        # 2 members x 2 DELETE calls each (org cleanup + user signal)
+        # 2 members x 2 POST calls each (org cleanup + user signal on_commit)
         assert mock_request.call_count == 4
-        urls = [call.kwargs.get("url", "") for call in mock_request.call_args_list]
-        assert any("alice@example.com" in url for url in urls)
-        assert any("bob@example.com" in url for url in urls)
+        bodies = [
+            json.loads(call.kwargs.get("data", b"{}"))
+            for call in mock_request.call_args_list
+        ]
+        emails = [b.get("email", "") for b in bodies]
+        assert "alice@example.com" in emails
+        assert "bob@example.com" in emails
 
     def test_deleting_org_deletes_member_users(self):
         """Deleting an org also deletes member Django User objects."""
@@ -122,7 +133,8 @@ class TestDeleteOrganizationCaldavData(TestCase):
             mock_response.status_code = 200
             mock_request.return_value = mock_response
 
-            org.delete()
+            with self.captureOnCommitCallbacks(execute=True):
+                org.delete()
 
         assert not User.objects.filter(email="alice@example.com").exists()
         assert not User.objects.filter(email="bob@example.com").exists()
@@ -160,7 +172,8 @@ class TestDeleteOrganizationCaldavData(TestCase):
             "core.services.caldav_service.requests.request",
             side_effect=side_effect,
         ):
-            org.delete()
+            with self.captureOnCommitCallbacks(execute=True):
+                org.delete()
 
         # Org cleanup: 2 calls (1 fails, 1 succeeds), then user signal: 2 more
         assert call_count == 4

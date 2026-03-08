@@ -5,7 +5,7 @@ services:
   postgresql:
     image: postgres:15
     ports:
-      - "8926:5432"
+      - "8936:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 1s
@@ -18,12 +18,12 @@ services:
   redis:
     image: redis:5
     ports:
-      - "8924:6379"
+      - "8934:6379"
 
   mailcatcher:
     image: sj26/mailcatcher:latest
     ports:
-      - "8927:1080"
+      - "8937:1080"
 
   backend-dev:
     build:
@@ -40,7 +40,7 @@ services:
       - env.d/development/backend.defaults
       - env.d/development/backend.local
     ports:
-      - "8921:8000"
+      - "8931:8000"
     volumes:
       - ./src/backend:/app
       - ./data/static:/data/static
@@ -57,18 +57,18 @@ services:
         condition: service_started
       redis:
         condition: service_started
-      celery-dev:
+      worker-dev:
         condition: service_started
       caldav:
         condition: service_started
 
-  celery-dev:
+  worker-dev:
     user: ${DOCKER_USER:-1000}
     image: calendars:backend-development
     networks:
       - default
       - lasuite
-    command: [ "celery", "-A", "calendars.celery_app", "worker", "-l", "DEBUG" ]
+    command: [ "python", "worker.py", "-v", "2" ]
     environment:
       - DJANGO_CONFIGURATION=Development
     env_file:
@@ -86,7 +86,7 @@ services:
       context: src/frontend
       target: calendars-dev
       args:
-        API_ORIGIN: "http://localhost:8921"
+        API_ORIGIN: "http://localhost:8931"
     image: calendars:frontend-development
     env_file:
       - env.d/development/frontend.defaults
@@ -96,10 +96,10 @@ services:
       - /home/frontend/node_modules
       - /home/frontend/apps/calendars/node_modules
     ports:
-      - "8920:3000"
+      - "8930:3000"
 
   node:
-    image: node:22
+    image: node:24
     user: "${DOCKER_USER:-1000}"
     environment:
       HOME: /tmp
@@ -111,7 +111,7 @@ services:
     build:
       context: src/caldav
     ports:
-      - "8922:80"
+      - "8932:80"
     env_file:
       - env.d/development/caldav.defaults
       - env.d/development/caldav.local
@@ -141,13 +141,13 @@ services:
       - start-dev
       - --features=preview
       - --import-realm
-      - --hostname=http://localhost:8925
+      - --hostname=http://localhost:8935
       - --hostname-strict=false
     env_file:
       - env.d/development/keycloak.defaults
       - env.d/development/keycloak.local
     ports:
-      - "8925:8080"
+      - "8935:8080"
     depends_on:
       postgresql:
         condition: service_healthy

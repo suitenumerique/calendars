@@ -49,7 +49,7 @@ jobs:
           context: ./src/backend
           target: backend-production
           platforms: ${{ github.event_name != 'pull_request' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
-          build-args: DOCKER_USER=${{ env.DOCKER_USER }}:-1000
+          build-args: DOCKER_USER=${{ env.DOCKER_USER }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

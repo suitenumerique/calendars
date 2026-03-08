@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
 import Head from "next/head";
 import { useTranslation } from "next-i18next";
@@ -18,17 +20,15 @@ export default function ResourcesPage() {
   const { user } = useAuth();
   const { resources, isLoading, refresh } = useResourcePrincipals();
 
-  if (!user) {
-    if (typeof window !== "undefined") {
+  useEffect(() => {
+    if (!user) {
       login(window.location.href);
-    }
-    return <SpinnerPage />;
-  }
-
-  if (user.can_access === false) {
-    if (typeof window !== "undefined") {
+    } else if (user.can_access === false) {
       window.location.href = "/no-access";
     }
+  }, [user]);
+
+  if (!user || user.can_access === false) {
     return <SpinnerPage />;
   }
 

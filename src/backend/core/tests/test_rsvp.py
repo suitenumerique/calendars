@@ -8,7 +8,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.core import mail
-from django.core.signing import BadSignature, SignatureExpired, Signer, TimestampSigner
+from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.template.loader import render_to_string
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
@@ -16,7 +16,8 @@ from django.utils import timezone
 import icalendar
 import pytest
 
-from core.api.viewsets_rsvp import RSVPView
+from core import factories
+from core.api.viewsets_rsvp import RSVPConfirmView, RSVPProcessView
 from core.services.caldav_service import CalDAVHTTPClient
 from core.services.calendar_invitation_service import (
     CalendarInvitationService,
@@ -71,8 +72,8 @@ SAMPLE_CALDAV_RESPONSE = """\
 def _make_token(
     uid="test-uid-123", email="bob@example.com", organizer="alice@example.com"
 ):
-    """Create a valid signed RSVP token."""
-    signer = Signer(salt="rsvp")
+    """Create a valid signed RSVP token using TimestampSigner."""
+    signer = TimestampSigner(salt="rsvp")
     return signer.sign_object(
         {
             "uid": uid,
@@ -88,7 +89,7 @@ class TestRSVPTokenGeneration:
     def test_token_roundtrip(self):
         """A generated token can be unsigned to recover the payload."""
         token = _make_token()
-        signer = Signer(salt="rsvp")
+        signer = TimestampSigner(salt="rsvp")
         payload = signer.unsign_object(token)
         assert payload["uid"] == "test-uid-123"
         assert payload["email"] == "bob@example.com"
@@ -97,7 +98,7 @@ class TestRSVPTokenGeneration:
     def test_tampered_token_fails(self):
         """A tampered token raises BadSignature."""
         token = _make_token() + "tampered"
-        signer = Signer(salt="rsvp")
+        signer = TimestampSigner(salt="rsvp")
         with pytest.raises(BadSignature):
             signer.unsign_object(token)
 
@@ -194,7 +195,7 @@ class TestRSVPEmailTemplateRendering:
 
 
 class TestUpdateAttendeePartstat:
-    """Tests for the _update_attendee_partstat function."""
+    """Tests for the update_attendee_partstat function."""
 
     def test_update_existing_partstat(self):
         result = CalDAVHTTPClient.update_attendee_partstat(
@@ -232,28 +233,54 @@ class TestUpdateAttendeePartstat:
         assert "CN=Bob" in result
         assert "mailto:bob@example.com" in result
 
+    def test_substring_email_does_not_match(self):
+        """Emails that are substrings of the target should NOT match."""
+        # Create ICS with a similar-but-different email
+        ics = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:test-substring\r\n"
+            "DTSTART:20260401T100000Z\r\n"
+            "DTEND:20260401T110000Z\r\n"
+            "SUMMARY:Test\r\n"
+            "ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:notbob@example.com\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR"
+        )
+        # "bob@example.com" should NOT match "notbob@example.com"
+        result = CalDAVHTTPClient.update_attendee_partstat(
+            ics, "bob@example.com", "ACCEPTED"
+        )
+        assert result is None
+
 
 @override_settings(
     CALDAV_URL="http://caldav:80",
     CALDAV_OUTBOUND_API_KEY="test-api-key",
-    APP_URL="http://localhost:8921",
+    APP_URL="http://localhost:8931",
+    API_VERSION="v1.0",
 )
-class TestRSVPView(TestCase):
-    """Tests for the RSVPView."""
+class TestRSVPConfirmView(TestCase):
+    """Tests for the RSVPConfirmView (GET handler)."""
 
     def setUp(self):
         self.factory = RequestFactory()
-        self.view = RSVPView.as_view()
+        self.view = RSVPConfirmView.as_view()
+
+    def test_valid_token_renders_confirm_page(self):
+        token = _make_token()
+        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
+        response = self.view(request)
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'method="post"' in content
+        assert token in content
 
     def test_invalid_action_returns_400(self):
         token = _make_token()
         request = self.factory.get("/rsvp/", {"token": token, "action": "invalid"})
-        response = self.view(request)
-        assert response.status_code == 400
-
-    def test_missing_action_returns_400(self):
-        token = _make_token()
-        request = self.factory.get("/rsvp/", {"token": token})
         response = self.view(request)
         assert response.status_code == 400
 
@@ -264,8 +291,46 @@ class TestRSVPView(TestCase):
         response = self.view(request)
         assert response.status_code == 400
 
+
+@override_settings(
+    CALDAV_URL="http://caldav:80",
+    CALDAV_OUTBOUND_API_KEY="test-api-key",
+    APP_URL="http://localhost:8931",
+    API_VERSION="v1.0",
+)
+class TestRSVPProcessView(TestCase):
+    """Tests for the RSVPProcessView (POST handler)."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.view = RSVPProcessView.as_view()
+        # RSVP view looks up organizer from DB
+        self.organizer = factories.UserFactory(email="alice@example.com")
+
+    def _post(self, token, action):
+        request = self.factory.post(
+            "/api/v1.0/rsvp/",
+            {"token": token, "action": action},
+        )
+        return self.view(request)
+
+    def test_invalid_action_returns_400(self):
+        token = _make_token()
+        response = self._post(token, "invalid")
+        assert response.status_code == 400
+
+    def test_missing_action_returns_400(self):
+        token = _make_token()
+        request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
+        response = self.view(request)
+        assert response.status_code == 400
+
+    def test_invalid_token_returns_400(self):
+        response = self._post("bad-token", "accepted")
+        assert response.status_code == 400
+
     def test_missing_token_returns_400(self):
-        request = self.factory.get("/rsvp/", {"action": "accepted"})
+        request = self.factory.post("/api/v1.0/rsvp/", {"action": "accepted"})
         response = self.view(request)
         assert response.status_code == 400
 
@@ -276,32 +341,36 @@ class TestRSVPView(TestCase):
         mock_find.return_value = (
             SAMPLE_ICS,
             "/caldav/calendars/users/alice%40example.com/cal/event.ics",
+            '"etag-123"',
         )
         mock_put.return_value = True
 
         token = _make_token()
-        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
-        response = self.view(request)
+        response = self._post(token, "accepted")
 
         assert response.status_code == 200
         assert "accepted the invitation" in response.content.decode()
 
         # Verify CalDAV calls
-        mock_find.assert_called_once_with("alice@example.com", "test-uid-123")
+        mock_find.assert_called_once()
+        find_args = mock_find.call_args[0]
+        assert find_args[0].email == "alice@example.com"
+        assert find_args[1] == "test-uid-123"
         mock_put.assert_called_once()
         # Check the updated data contains ACCEPTED
         put_args = mock_put.call_args
         assert "PARTSTAT=ACCEPTED" in put_args[0][2]
+        # Check ETag is passed
+        assert put_args[1]["etag"] == '"etag-123"'
 
     @patch.object(CalDAVHTTPClient, "put_event")
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_decline_flow(self, mock_find, mock_put):
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
+        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
         mock_put.return_value = True
 
         token = _make_token()
-        request = self.factory.get("/rsvp/", {"token": token, "action": "declined"})
-        response = self.view(request)
+        response = self._post(token, "declined")
 
         assert response.status_code == 200
         assert "declined the invitation" in response.content.decode()
@@ -311,12 +380,11 @@ class TestRSVPView(TestCase):
     @patch.object(CalDAVHTTPClient, "put_event")
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_tentative_flow(self, mock_find, mock_put):
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
+        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
         mock_put.return_value = True
 
         token = _make_token()
-        request = self.factory.get("/rsvp/", {"token": token, "action": "tentative"})
-        response = self.view(request)
+        response = self._post(token, "tentative")
 
         assert response.status_code == 200
         content = response.content.decode()
@@ -326,11 +394,10 @@ class TestRSVPView(TestCase):
 
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_event_not_found_returns_400(self, mock_find):
-        mock_find.return_value = (None, None)
+        mock_find.return_value = (None, None, None)
 
         token = _make_token()
-        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
-        response = self.view(request)
+        response = self._post(token, "accepted")
 
         assert response.status_code == 400
         assert "not found" in response.content.decode().lower()
@@ -338,12 +405,11 @@ class TestRSVPView(TestCase):
     @patch.object(CalDAVHTTPClient, "put_event")
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_put_failure_returns_400(self, mock_find, mock_put):
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
+        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
         mock_put.return_value = False
 
         token = _make_token()
-        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
-        response = self.view(request)
+        response = self._post(token, "accepted")
 
         assert response.status_code == 400
         assert "error occurred" in response.content.decode().lower()
@@ -351,12 +417,11 @@ class TestRSVPView(TestCase):
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_attendee_not_in_event_returns_400(self, mock_find):
         """If the attendee email is not in the event, return error."""
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
+        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
 
         # Token with an email that's not in the event
         token = _make_token(email="stranger@example.com")
-        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
-        response = self.view(request)
+        response = self._post(token, "accepted")
 
         assert response.status_code == 400
         assert "not listed" in response.content.decode().lower()
@@ -364,11 +429,10 @@ class TestRSVPView(TestCase):
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_past_event_returns_400(self, mock_find):
         """Cannot RSVP to an event that has already ended."""
-        mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics")
+        mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics", None)
 
         token = _make_token(uid="test-uid-past")
-        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
-        response = self.view(request)
+        response = self._post(token, "accepted")
 
         assert response.status_code == 400
         assert "already passed" in response.content.decode().lower()
@@ -430,28 +494,29 @@ class TestItipSetting:
     CALDAV_URL="http://caldav:80",
     CALDAV_OUTBOUND_API_KEY="test-api-key",
     CALDAV_INBOUND_API_KEY="test-inbound-key",
-    APP_URL="http://localhost:8921",
+    APP_URL="http://localhost:8931",
+    API_VERSION="v1.0",
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
 )
 class TestRSVPEndToEndFlow(TestCase):
     """
-    Integration test: scheduling callback sends email → extract RSVP links
-    → follow link → verify event is updated.
-
-    This tests the full flow from CalDAV scheduling callback to RSVP response,
-    using Django's in-memory email backend to intercept sent emails.
+    Integration test: scheduling callback sends email -> extract RSVP links
+    -> follow link (GET confirm -> POST process) -> verify event is updated.
     """
 
     def setUp(self):
         self.factory = RequestFactory()
-        self.rsvp_view = RSVPView.as_view()
+        self.confirm_view = RSVPConfirmView.as_view()
+        self.process_view = RSVPProcessView.as_view()
+        self.organizer = factories.UserFactory(email="alice@example.com")
 
     def test_email_to_rsvp_accept_flow(self):
         """
         1. CalDAV scheduling callback sends an invitation email
         2. Extract RSVP accept link from the email HTML
-        3. Follow the RSVP link
-        4. Verify the event PARTSTAT is updated to ACCEPTED
+        3. GET the RSVP link (renders auto-submit form)
+        4. POST to process the RSVP
+        5. Verify the event PARTSTAT is updated to ACCEPTED
         """
         # Step 1: Send invitation via the CalendarInvitationService
         service = CalendarInvitationService()
@@ -488,7 +553,16 @@ class TestRSVPEndToEndFlow(TestCase):
         assert "token" in params
         assert params["action"] == ["accepted"]
 
-        # Step 4: Follow the RSVP link (mock CalDAV interactions)
+        # Step 3b: GET the confirm page
+        request = self.factory.get(
+            "/rsvp/",
+            {"token": params["token"][0], "action": "accepted"},
+        )
+        response = self.confirm_view(request)
+        assert response.status_code == 200
+        assert 'method="post"' in response.content.decode()
+
+        # Step 4: POST to process the RSVP (mock CalDAV interactions)
         with (
             patch.object(CalDAVHTTPClient, "find_event_by_uid") as mock_find,
             patch.object(CalDAVHTTPClient, "put_event") as mock_put,
@@ -496,14 +570,15 @@ class TestRSVPEndToEndFlow(TestCase):
             mock_find.return_value = (
                 SAMPLE_ICS,
                 "/caldav/calendars/users/alice%40example.com/cal/event.ics",
+                '"etag-abc"',
             )
             mock_put.return_value = True
 
-            request = self.factory.get(
-                "/rsvp/",
+            request = self.factory.post(
+                "/api/v1.0/rsvp/",
                 {"token": params["token"][0], "action": "accepted"},
             )
-            response = self.rsvp_view(request)
+            response = self.process_view(request)
 
         # Step 5: Verify success
         assert response.status_code == 200
@@ -511,7 +586,10 @@ class TestRSVPEndToEndFlow(TestCase):
         assert "accepted the invitation" in content
 
         # Verify CalDAV was called with the right data
-        mock_find.assert_called_once_with("alice@example.com", "test-uid-123")
+        mock_find.assert_called_once()
+        find_args = mock_find.call_args[0]
+        assert find_args[0].email == "alice@example.com"
+        assert find_args[1] == "test-uid-123"
         mock_put.assert_called_once()
         put_data = mock_put.call_args[0][2]
         assert "PARTSTAT=ACCEPTED" in put_data
@@ -542,14 +620,14 @@ class TestRSVPEndToEndFlow(TestCase):
             patch.object(CalDAVHTTPClient, "find_event_by_uid") as mock_find,
             patch.object(CalDAVHTTPClient, "put_event") as mock_put,
         ):
-            mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
+            mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
             mock_put.return_value = True
 
-            request = self.factory.get(
-                "/rsvp/",
+            request = self.factory.post(
+                "/api/v1.0/rsvp/",
                 {"token": params["token"][0], "action": "declined"},
             )
-            response = self.rsvp_view(request)
+            response = self.process_view(request)
 
         assert response.status_code == 200
         assert "declined the invitation" in response.content.decode()
@@ -612,13 +690,13 @@ class TestRSVPEndToEndFlow(TestCase):
         params = parse_qs(parsed.query)
 
         # The event is in the past
-        mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics")
+        mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics", None)
 
-        request = self.factory.get(
-            "/rsvp/",
+        request = self.factory.post(
+            "/api/v1.0/rsvp/",
             {"token": params["token"][0], "action": "accepted"},
         )
-        response = self.rsvp_view(request)
+        response = self.process_view(request)
 
         assert response.status_code == 400
         assert "already passed" in response.content.decode().lower()
@@ -652,55 +730,81 @@ def _make_recurring_ics(
 @override_settings(
     CALDAV_URL="http://caldav:80",
     CALDAV_OUTBOUND_API_KEY="test-api-key",
-    APP_URL="http://localhost:8921",
+    APP_URL="http://localhost:8931",
+    API_VERSION="v1.0",
     RSVP_TOKEN_MAX_AGE_RECURRING=7776000,  # 90 days
 )
 class TestRSVPRecurringTokenExpiry(TestCase):
     """Tests for RSVP token max_age enforcement on recurring events.
 
-    Tokens are signed with Signer (not TimestampSigner). The RSVP view
-    first unsigns with Signer, then for recurring events tries a secondary
-    check with TimestampSigner. If the token isn't TimestampSigner-compatible,
-    the BadSignature is caught and the request is allowed through.
+    Tokens are signed with TimestampSigner so that the max_age check
+    works correctly for recurring events.
     """
 
     def setUp(self):
         self.factory = RequestFactory()
-        self.view = RSVPView.as_view()
+        self.view = RSVPProcessView.as_view()
+        self.organizer = factories.UserFactory(email="alice@example.com")
+
+    def _post(self, token, action):
+        request = self.factory.post(
+            "/api/v1.0/rsvp/",
+            {"token": token, "action": action},
+        )
+        return self.view(request)
 
     @patch.object(CalDAVHTTPClient, "put_event")
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_recurring_event_with_fresh_token_succeeds(self, mock_find, mock_put):
         """A fresh token for a recurring event should be accepted."""
         ics = _make_recurring_ics()
-        mock_find.return_value = (ics, "/path/to/event.ics")
+        mock_find.return_value = (ics, "/path/to/event.ics", None)
         mock_put.return_value = True
 
-        # Signer-signed tokens pass through since TimestampSigner.unsign_object
-        # raises BadSignature (caught as pass in the view)
         token = _make_token(uid="recurring-uid-1")
-        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
-        response = self.view(request)
+        response = self._post(token, "accepted")
 
         assert response.status_code == 200
 
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_recurring_event_with_expired_token_rejected(self, mock_find):
-        """Token for a recurring event should be rejected when TimestampSigner
-        raises SignatureExpired (simulating an aged token)."""
+        """An expired token for a recurring event should be rejected."""
         ics = _make_recurring_ics()
-        mock_find.return_value = (ics, "/path/to/event.ics")
+        mock_find.return_value = (ics, "/path/to/event.ics", None)
 
         token = _make_token(uid="recurring-uid-1")
 
-        # Patch TimestampSigner to always raise SignatureExpired when max_age is set
-        with patch.object(
-            TimestampSigner,
-            "unsign_object",
-            side_effect=SignatureExpired("Signature age exceeds max_age"),
-        ):
-            request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
-            response = self.view(request)
+        # Simulate time passing beyond max_age by patching unsign_object
+        # to raise SignatureExpired on the second call (with max_age)
+        original_unsign = TimestampSigner.unsign_object
+
+        def side_effect(value, **kwargs):
+            if kwargs.get("max_age") is not None:
+                raise SignatureExpired("Signature age exceeds max_age")
+            return original_unsign(TimestampSigner(), value, **kwargs)
+
+        with patch.object(TimestampSigner, "unsign_object", side_effect=side_effect):
+            response = self._post(token, "accepted")
+
+        assert response.status_code == 400
+        content = response.content.decode().lower()
+        assert "expired" in content or "new invitation" in content
+
+    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
+    def test_recurring_event_token_expired_via_freeze_time(self, mock_find):
+        """Token created now should be rejected after max_age seconds."""
+        from freezegun import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+            freeze_time,
+        )
+
+        ics = _make_recurring_ics()
+        mock_find.return_value = (ics, "/path/to/event.ics", None)
+
+        token = _make_token(uid="recurring-uid-1")
+
+        # Advance time beyond RSVP_TOKEN_MAX_AGE_RECURRING (90 days = 7776000s)
+        with freeze_time(timezone.now() + timedelta(days=91)):
+            response = self._post(token, "accepted")
 
         assert response.status_code == 400
         content = response.content.decode().lower()
@@ -710,11 +814,10 @@ class TestRSVPRecurringTokenExpiry(TestCase):
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_non_recurring_event_ignores_token_age(self, mock_find, mock_put):
         """Non-recurring events should not enforce token max_age."""
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics")
+        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
         mock_put.return_value = True
 
         token = _make_token()
-        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
-        response = self.view(request)
+        response = self._post(token, "accepted")
 
         assert response.status_code == 200

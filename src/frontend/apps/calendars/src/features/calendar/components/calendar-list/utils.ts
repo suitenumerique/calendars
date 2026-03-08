@@ -1,7 +1,7 @@
 /**
  * Extract the CalDAV path from a full calendar URL.
  *
- * URL format: http://localhost:8921/api/v1.0/caldav/calendars/user@example.com/uuid/
+ * URL format: http://localhost:8931/api/v1.0/caldav/calendars/user@example.com/uuid/
  * Returns: /calendars/user@example.com/uuid/
  */
 export const extractCaldavPath = (calendarUrl: string): string | null => {

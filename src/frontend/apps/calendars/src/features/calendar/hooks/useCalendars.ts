@@ -5,87 +5,87 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  createSubscriptionToken,
-  deleteSubscriptionToken,
-  getSubscriptionToken,
-  GetSubscriptionTokenResult,
-  importEventsApi,
+  Channel,
+  ChannelError,
+  createICalFeedChannel,
+  deleteChannel,
+  getICalFeedChannel,
+  GetICalFeedResult,
+  startImportTask,
+  pollImportTask,
   ImportEventsResult,
-  SubscriptionToken,
-  SubscriptionTokenError,
-  SubscriptionTokenParams,
 } from "../api";
 
 /**
- * Result type for useSubscriptionToken hook.
+ * Result type for useICalFeedChannel hook.
  */
-export interface UseSubscriptionTokenResult {
-  token: SubscriptionToken | null;
-  tokenError: SubscriptionTokenError | null;
+export interface UseICalFeedChannelResult {
+  channel: Channel | null;
+  channelError: ChannelError | null;
   isLoading: boolean;
   refetch: () => void;
 }
 
 /**
- * Hook to get subscription token for a calendar by CalDAV path.
- * Handles the result/error pattern from getSubscriptionToken.
+ * Hook to get the ical-feed channel for a calendar by CalDAV path.
  */
-export const useSubscriptionToken = (caldavPath: string): UseSubscriptionTokenResult => {
-  const query = useQuery<GetSubscriptionTokenResult>({
-    queryKey: ["subscription-token", caldavPath],
-    queryFn: () => getSubscriptionToken(caldavPath),
+export const useICalFeedChannel = (
+  caldavPath: string,
+): UseICalFeedChannelResult => {
+  const query = useQuery<GetICalFeedResult>({
+    queryKey: ["ical-feed-channel", caldavPath],
+    queryFn: () => getICalFeedChannel(caldavPath),
     enabled: !!caldavPath,
     retry: false,
   });
 
-  // Extract token and error from the result using proper type narrowing
-  const result = query.data;
-  let token: SubscriptionToken | null = null;
-  let tokenError: SubscriptionTokenError | null = null;
+  let channel: Channel | null = null;
+  let channelError: ChannelError | null = null;
 
+  const result = query.data;
   if (result) {
     if (result.success) {
-      token = result.token;
+      channel = result.channel;
     } else {
-      tokenError = result.error;
+      channelError = result.error;
     }
   }
 
   return {
-    token,
-    tokenError,
+    channel,
+    channelError,
     isLoading: query.isLoading,
     refetch: query.refetch,
   };
 };
 
 /**
- * Hook to create a subscription token.
+ * Hook to create an ical-feed channel.
  */
-export const useCreateSubscriptionToken = () => {
+export const useCreateICalFeedChannel = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: createSubscriptionToken,
-    onSuccess: (_data, params: SubscriptionTokenParams) => {
-      queryClient.invalidateQueries({
-        queryKey: ["subscription-token", params.caldavPath],
+    mutationFn: createICalFeedChannel,
+    onSuccess: (_data, params) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["ical-feed-channel", params.caldavPath],
       });
     },
   });
 };
 
 /**
- * Hook to delete (revoke) a subscription token.
+ * Hook to delete a channel by ID. Invalidates ical-feed queries.
  */
-export const useDeleteSubscriptionToken = () => {
+export const useDeleteICalFeedChannel = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deleteSubscriptionToken,
-    onSuccess: (_data, caldavPath: string) => {
-      queryClient.invalidateQueries({
-        queryKey: ["subscription-token", caldavPath],
+    mutationFn: deleteChannel,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["ical-feed-channel"],
       });
     },
   });
@@ -100,6 +100,9 @@ export const useImportEvents = () => {
     Error,
     { caldavPath: string; file: File }
   >({
-    mutationFn: ({ caldavPath, file }) => importEventsApi(caldavPath, file),
+    mutationFn: async ({ caldavPath, file }) => {
+      const taskId = await startImportTask(caldavPath, file);
+      return pollImportTask(taskId);
+    },
   });
 };

@@ -16,6 +16,7 @@ from rest_framework.test import APIClient
 
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
+from core.services.resource_service import ResourceProvisioningError, ResourceService
 
 # -- Permission checks --
 
@@ -235,71 +236,67 @@ def test_delete_resource_sends_user_org_id():
     get_entitlements_backend.cache_clear()
 
 
-@pytest.mark.django_db
-@override_settings(
-    ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
-    ENTITLEMENTS_BACKEND_PARAMETERS={},
-)
-def test_create_resource_without_org_sends_null_org():
-    """A user without an org sends null org_id — SabreDAV will store it as NULL."""
-    get_entitlements_backend.cache_clear()
-    admin = factories.UserFactory(organization=None)
-
-    client = APIClient()
-    client.force_authenticate(user=admin)
-
-    with mock.patch("core.services.caldav_service.requests.request") as mock_request:
-        mock_response = mock.Mock()
-        mock_response.status_code = 201
-        mock_response.text = '{"principal_uri": "principals/resources/x"}'
-        mock_request.return_value = mock_response
-
-        client.post(
-            "/api/v1.0/resources/",
-            {"name": "Orphan Room"},
-            format="json",
-        )
-
-    call_kwargs = mock_request.call_args
-    body = json.loads(call_kwargs.kwargs.get("data", b"{}"))
-    assert body["org_id"] is None
-
-    get_entitlements_backend.cache_clear()
+# -- Path traversal tests --
 
 
-@pytest.mark.django_db
-@override_settings(
-    ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
-    ENTITLEMENTS_BACKEND_PARAMETERS={},
-)
-def test_delete_resource_without_org_blocked():
-    """A user without an org cannot delete resources (SabreDAV returns 403)."""
-    get_entitlements_backend.cache_clear()
-    admin = factories.UserFactory(organization=None)
+class TestResourceIdValidation:
+    """Tests that resource_id is validated as a UUID to prevent path traversal."""
 
-    client = APIClient()
-    client.force_authenticate(user=admin)
+    @pytest.fixture(autouse=True)
+    def _internal_api_key(self, settings):
+        settings.CALDAV_INTERNAL_API_KEY = "test-internal-key"
 
-    resource_id = "a1b2c3d4-0000-0000-0000-000000000002"
+    def test_delete_rejects_path_traversal(self):
+        """A malicious resource_id like ../../users/victim is rejected."""
+        user = mock.Mock()
+        user.organization_id = "some-org"
+        service = ResourceService()
 
-    with mock.patch("core.services.caldav_service.requests.request") as mock_request:
-        mock_response = mock.Mock()
-        mock_response.status_code = 403
-        mock_response.json.return_value = {
-            "error": "Cannot delete a resource from a different organization"
-        }
-        mock_response.text = (
-            '{"error": "Cannot delete a resource from a different organization"}'
-        )
-        mock_request.return_value = mock_response
+        with pytest.raises(ResourceProvisioningError, match="Invalid resource ID"):
+            service.delete_resource(user, "../../users/victim@example.com")
 
-        response = client.delete(f"/api/v1.0/resources/{resource_id}/")
+    def test_delete_rejects_non_uuid_string(self):
+        """A non-UUID resource_id is rejected."""
+        user = mock.Mock()
+        user.organization_id = "some-org"
+        service = ResourceService()
 
-    # Verify no org header was sent (user has no org)
-    call_kwargs = mock_request.call_args
-    headers = call_kwargs.kwargs.get("headers", {})
-    assert "X-CalDAV-Organization" not in headers
+        with pytest.raises(ResourceProvisioningError, match="Invalid resource ID"):
+            service.delete_resource(user, "not-a-uuid")
 
-    assert response.status_code == HTTP_400_BAD_REQUEST
+    def test_delete_accepts_valid_uuid(self):
+        """A valid UUID resource_id passes validation."""
+        user = mock.Mock()
+        user.email = "admin@example.com"
+        user.organization_id = "some-org"
+        service = ResourceService()
 
-    get_entitlements_backend.cache_clear()
+        with mock.patch(
+            "core.services.caldav_service.requests.request"
+        ) as mock_request:
+            mock_response = mock.Mock()
+            mock_response.status_code = 200
+            mock_request.return_value = mock_response
+
+            # Should not raise
+            service.delete_resource(user, "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+
+    def test_create_resource_rejects_missing_api_key(self, settings):
+        """create_resource raises when CALDAV_INTERNAL_API_KEY is empty."""
+        settings.CALDAV_INTERNAL_API_KEY = ""
+        user = mock.Mock()
+        user.organization_id = "some-org"
+        service = ResourceService()
+
+        with pytest.raises(ResourceProvisioningError, match="CALDAV_INTERNAL_API_KEY"):
+            service.create_resource(user, "Room 1", "ROOM")
+
+    def test_delete_resource_rejects_missing_api_key(self, settings):
+        """delete_resource raises when CALDAV_INTERNAL_API_KEY is empty."""
+        settings.CALDAV_INTERNAL_API_KEY = ""
+        user = mock.Mock()
+        user.organization_id = "some-org"
+        service = ResourceService()
+
+        with pytest.raises(ResourceProvisioningError, match="CALDAV_INTERNAL_API_KEY"):
+            service.delete_resource(user, "a1b2c3d4-e5f6-7890-abcd-ef1234567890")

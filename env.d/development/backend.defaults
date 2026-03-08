@@ -17,11 +17,11 @@ PYTHONPATH=/app
 
 # Media
 STORAGES_STATICFILES_BACKEND=django.contrib.staticfiles.storage.StaticFilesStorage
-MEDIA_BASE_URL=http://localhost:8923
+MEDIA_BASE_URL=http://localhost:8933
 
-# OIDC - Keycloak on dedicated port 8925
+# OIDC - Keycloak on dedicated port 8935
 OIDC_OP_JWKS_ENDPOINT=http://keycloak:8080/realms/calendars/protocol/openid-connect/certs
-OIDC_OP_AUTHORIZATION_ENDPOINT=http://localhost:8925/realms/calendars/protocol/openid-connect/auth
+OIDC_OP_AUTHORIZATION_ENDPOINT=http://localhost:8935/realms/calendars/protocol/openid-connect/auth
 OIDC_OP_TOKEN_ENDPOINT=http://keycloak:8080/realms/calendars/protocol/openid-connect/token
 OIDC_OP_USER_ENDPOINT=http://keycloak:8080/realms/calendars/protocol/openid-connect/userinfo
 
@@ -30,15 +30,15 @@ OIDC_RP_CLIENT_SECRET=ThisIsAnExampleKeyForDevPurposeOnly
 OIDC_RP_SIGN_ALGO=RS256
 OIDC_RP_SCOPES="openid email"
 
-LOGIN_REDIRECT_URL=http://localhost:8920
-LOGIN_REDIRECT_URL_FAILURE=http://localhost:8920
-LOGOUT_REDIRECT_URL=http://localhost:8920
+LOGIN_REDIRECT_URL=http://localhost:8930
+LOGIN_REDIRECT_URL_FAILURE=http://localhost:8930
+LOGOUT_REDIRECT_URL=http://localhost:8930
 
-OIDC_REDIRECT_ALLOWED_HOSTS="http://localhost:8923,http://localhost:8920"
+OIDC_REDIRECT_ALLOWED_HOSTS="http://localhost:8933,http://localhost:8930"
 OIDC_AUTH_REQUEST_EXTRA_PARAMS={"acr_values": "eidas1"}
 
 # Resource Server Backend
-OIDC_OP_URL=http://localhost:8925/realms/calendars
+OIDC_OP_URL=http://localhost:8935/realms/calendars
 OIDC_OP_INTROSPECTION_ENDPOINT=http://keycloak:8080/realms/calendars/protocol/openid-connect/token/introspect
 OIDC_RESOURCE_SERVER_ENABLED=False
 OIDC_RS_CLIENT_ID=calendars

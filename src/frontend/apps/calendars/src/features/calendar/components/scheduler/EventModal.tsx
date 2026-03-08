@@ -68,7 +68,7 @@ export const EventModal = ({
   const isInvited = !!(
     event?.organizer &&
     currentUserAttendee &&
-    event.organizer.email !== user?.email
+    event.organizer.email?.toLowerCase() !== user?.email?.toLowerCase()
   );
   const currentParticipationStatus =
     currentUserAttendee?.partstat || "NEEDS-ACTION";

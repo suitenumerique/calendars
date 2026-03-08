@@ -18,36 +18,39 @@ In this project, you can create events, invite people to events, create calendar
 ### Development Setup
 ```bash
 make bootstrap          # Initial setup: builds containers, runs migrations, starts services
-make run                # Start all services (backend + frontend containers)
-make run-backend        # Start backend services only (for local frontend development)
+make start              # Start all services (backend + frontend containers)
+make start-back         # Start backend services only (for local frontend development)
 make stop               # Stop all containers
 make down               # Stop and remove containers, networks, volumes
+make update             # Update project after pulling changes
 ```
 
 ### Backend Development
 ```bash
 make test-back -- path/to/test.py::TestClass::test_method  # Run specific test
 make test-back-parallel                                     # Run all tests in parallel
-make lint                                                   # Run ruff + pylint
+make lint                                                   # Run all linters (back + front)
+make lint-back                                              # Run back-end linters only
 make migrate                                                # Run Django migrations
 make makemigrations                                         # Create new migrations
-make shell                                                  # Django shell
-make dbshell                                                # PostgreSQL shell
+make shell-back-django                                      # Django shell
+make shell-db                                               # PostgreSQL shell
 ```
 
 ### Frontend Development
 ```bash
-make frontend-development-install   # Install frontend dependencies locally
-make run-frontend-development       # Run frontend locally (after run-backend)
-make frontend-lint                  # Run ESLint on frontend
-cd src/frontend/apps/calendars && pnpm test              # Run frontend tests
-cd src/frontend/apps/calendars && pnpm test:watch        # Watch mode
+make install-front      # Install frontend dependencies
+make lint-front         # Run ESLint on frontend
+make typecheck-front    # Run TypeScript type checker
+make test-front         # Run frontend tests
+cd src/frontend/apps/calendars && npm test              # Run frontend tests (local)
+cd src/frontend/apps/calendars && npm run test:watch    # Watch mode (local)
 ```
 
 ### E2E Tests
 ```bash
-make run-tests-e2e                           # Run all e2e tests
-make run-tests-e2e -- --project chromium --headed  # Run with specific browser
+make test-e2e                                    # Run all e2e tests
+make test-e2e -- --project chromium --headed     # Run with specific browser
 ```
 
 ## Architecture
@@ -62,7 +65,7 @@ make run-tests-e2e -- --project chromium --headed  # Run with specific browser
   - `tests/` - pytest test files
 
 ### Frontend Structure (`src/frontend/`)
-pnpm workspaces monorepo:
+npm workspaces:
 - `apps/calendars/` - Main Next.js application
   - `src/features/` - Feature modules (calendar, auth, api, i18n, etc.)
   - `src/pages/` - Next.js pages
@@ -78,13 +81,13 @@ PHP SabreDAV server providing CalDAV protocol support, running against the share
 
 | Service | URL / Port | Description |
 |---------|------------|-------------|
-| **Frontend** | [http://localhost:8920](http://localhost:8920) | Next.js Calendar frontend |
-| **Backend API** | [http://localhost:8921](http://localhost:8921) | Django REST API |
-| **CalDAV** | [http://localhost:8922](http://localhost:8922) | SabreDAV CalDAV server |
-| **Redis** | 8924 | Cache and Celery broker |
-| **Keycloak** | [http://localhost:8925](http://localhost:8925) | OIDC identity provider |
-| **PostgreSQL** | 8926 | Database server |
-| **Mailcatcher** | [http://localhost:8927](http://localhost:8927) | Email testing interface |
+| **Frontend** | [http://localhost:8930](http://localhost:8930) | Next.js Calendar frontend |
+| **Backend API** | [http://localhost:8931](http://localhost:8931) | Django REST API |
+| **CalDAV** | [http://localhost:8932](http://localhost:8932) | SabreDAV CalDAV server |
+| **Redis** | 8934 | Cache and Celery broker |
+| **Keycloak** | [http://localhost:8935](http://localhost:8935) | OIDC identity provider |
+| **PostgreSQL** | 8936 | Database server |
+| **Mailcatcher** | [http://localhost:8937](http://localhost:8937) | Email testing interface |
 
 ## Key Technologies
 

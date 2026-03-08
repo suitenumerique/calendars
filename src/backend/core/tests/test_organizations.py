@@ -7,7 +7,7 @@ from rest_framework.status import HTTP_200_OK
 from rest_framework.test import APIClient
 
 from core import factories
-from core.authentication.backends import OIDCAuthenticationBackend
+from core.authentication.backends import resolve_organization
 from core.entitlements.factory import get_entitlements_backend
 from core.models import Organization
 
@@ -44,9 +44,7 @@ def test_resolve_org_from_email_domain():
     """Without OIDC_USERINFO_ORGANIZATION_CLAIM, org is derived from email domain."""
     user = factories.UserFactory(email="alice@ministry.gouv.fr")
 
-    OIDCAuthenticationBackend._resolve_organization(  # pylint: disable=protected-access
-        user, claims={}, entitlements={}
-    )
+    resolve_organization(user, claims={}, entitlements={})
 
     user.refresh_from_db()
     assert user.organization is not None
@@ -60,7 +58,7 @@ def test_resolve_org_from_oidc_claim():
     """With OIDC_USERINFO_ORGANIZATION_CLAIM, org is derived from the claim."""
     user = factories.UserFactory(email="alice@ministry.gouv.fr")
 
-    OIDCAuthenticationBackend._resolve_organization(  # pylint: disable=protected-access
+    resolve_organization(
         user,
         claims={"siret": "13002526500013"},
         entitlements={"organization_name": "Ministere X"},
@@ -78,7 +76,7 @@ def test_resolve_org_updates_name():
     org = factories.OrganizationFactory(external_id="example.com", name="Old Name")
     user = factories.UserFactory(email="alice@example.com", organization=org)
 
-    OIDCAuthenticationBackend._resolve_organization(  # pylint: disable=protected-access
+    resolve_organization(
         user,
         claims={},
         entitlements={"organization_name": "New Name"},
@@ -94,9 +92,7 @@ def test_resolve_org_reuses_existing():
     org = factories.OrganizationFactory(external_id="example.com")
     user = factories.UserFactory(email="bob@example.com")
 
-    OIDCAuthenticationBackend._resolve_organization(  # pylint: disable=protected-access
-        user, claims={}, entitlements={}
-    )
+    resolve_organization(user, claims={}, entitlements={})
 
     user.refresh_from_db()
     assert user.organization_id == org.id

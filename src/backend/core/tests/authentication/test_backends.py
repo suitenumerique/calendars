@@ -1,6 +1,5 @@
 """Unit tests for the Authentication Backends."""
 
-import random
 import re
 from unittest import mock
 
@@ -20,8 +19,8 @@ pytestmark = pytest.mark.django_db
 
 # Patch org resolution out by default in this module.
 # Tests for org resolution are in test_organizations.py.
-_no_org_resolve = mock.patch.object(
-    OIDCAuthenticationBackend, "_resolve_organization", lambda *a, **kw: None
+_no_org_resolve = mock.patch(
+    "core.authentication.backends.resolve_organization", lambda *a, **kw: None
 )
 
 
@@ -66,7 +65,7 @@ def test_authentication_getter_existing_user_via_email(
 
     monkeypatch.setattr(OIDCAuthenticationBackend, "get_userinfo", get_userinfo_mocked)
 
-    with django_assert_num_queries(4):  # user by sub, user by mail, update sub
+    with django_assert_num_queries(5):  # user by sub, user by mail, update sub, org
         user = klass.get_or_create_user(
             access_token="test-token", id_token=None, payload=None
         )
@@ -74,30 +73,24 @@ def test_authentication_getter_existing_user_via_email(
     assert user == db_user
 
 
-def test_authentication_getter_email_none(monkeypatch):
+def test_authentication_getter_email_none_rejected(monkeypatch):
     """
-    If no user is found with the sub and no email is provided, a new user should be created.
+    If no user is found with the sub and no email is provided,
+    user creation is rejected (organization requires email domain).
     """
 
     klass = OIDCAuthenticationBackend()
-    db_user = UserFactory(email=None)
+    UserFactory()  # existing user with different sub
 
     def get_userinfo_mocked(*args):
-        user_info = {"sub": "123"}
-        if random.choice([True, False]):
-            user_info["email"] = None
-        return user_info
+        return {"sub": "123"}
 
     monkeypatch.setattr(OIDCAuthenticationBackend, "get_userinfo", get_userinfo_mocked)
 
-    user = klass.get_or_create_user(
-        access_token="test-token", id_token=None, payload=None
-    )
-
-    # Since the sub and email didn't match, it should create a new user
-    assert models.User.objects.count() == 2
-    assert user != db_user
-    assert user.sub == "123"
+    with pytest.raises(
+        SuspiciousOperation, match="Cannot create user without an organization"
+    ):
+        klass.get_or_create_user(access_token="test-token", id_token=None, payload=None)
 
 
 def test_authentication_getter_existing_user_no_fallback_to_email_allow_duplicate(
@@ -222,8 +215,7 @@ def test_authentication_getter_existing_user_change_fields_sub(
 
     monkeypatch.setattr(OIDCAuthenticationBackend, "get_userinfo", get_userinfo_mocked)
 
-    # One and only one additional update query when a field has changed
-    with django_assert_num_queries(3):
+    with django_assert_num_queries(4):
         authenticated_user = klass.get_or_create_user(
             access_token="test-token", id_token=None, payload=None
         )
@@ -262,8 +254,7 @@ def test_authentication_getter_existing_user_change_fields_email(
 
     monkeypatch.setattr(OIDCAuthenticationBackend, "get_userinfo", get_userinfo_mocked)
 
-    # One and only one additional update query when a field has changed
-    with django_assert_num_queries(4):
+    with django_assert_num_queries(5):
         authenticated_user = klass.get_or_create_user(
             access_token="test-token", id_token=None, payload=None
         )
@@ -274,10 +265,10 @@ def test_authentication_getter_existing_user_change_fields_email(
     assert user.full_name == f"{first_name:s} {last_name:s}"
 
 
-def test_authentication_getter_new_user_no_email(monkeypatch):
+def test_authentication_getter_new_user_no_email_rejected(monkeypatch):
     """
-    If no user matches the user's info sub, a user should be created.
-    User's info doesn't contain an email, created user's email should be empty.
+    If no user matches the sub and no email is provided,
+    user creation is rejected (organization requires email domain).
     """
     klass = OIDCAuthenticationBackend()
 
@@ -286,16 +277,10 @@ def test_authentication_getter_new_user_no_email(monkeypatch):
 
     monkeypatch.setattr(OIDCAuthenticationBackend, "get_userinfo", get_userinfo_mocked)
 
-    user = klass.get_or_create_user(
-        access_token="test-token", id_token=None, payload=None
-    )
-
-    assert user.sub == "123"
-    assert user.email is None
-    assert user.full_name is None
-
-    assert user.has_usable_password() is False
-    assert models.User.objects.count() == 1
+    with pytest.raises(
+        SuspiciousOperation, match="Cannot create user without an organization"
+    ):
+        klass.get_or_create_user(access_token="test-token", id_token=None, payload=None)
 
 
 def test_authentication_getter_new_user_with_email(monkeypatch):
@@ -505,7 +490,7 @@ def test_authentication_session_tokens(
         status=200,
     )
 
-    with django_assert_num_queries(6):
+    with django_assert_num_queries(13):
         user = klass.authenticate(
             request,
             code="test-code",

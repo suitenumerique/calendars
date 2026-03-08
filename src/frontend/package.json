@@ -3,25 +3,15 @@
   "version": "0.10.1",
   "private": true,
   "engines": {
-    "node": ">=22.0.0 <25.0.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=24.0.0 <25.0.0"
   },
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "pnpm -F calendars run dev",
-    "build": "pnpm -F calendars run build",
-    "lint": "pnpm -F calendars run lint",
-    "build-theme": "pnpm -F calendars build-theme"
-  },
-  "pnpm": {
-    "overrides": {
-      "ts-ics": "workspace:*",
-      "@gouvfr-lasuite/cunningham-react": "4.2.0",
-      "@types/node": "24.10.1"
-    }
-  },
-  "devDependencies": {
-    "@types/minimatch": "^6.0.0",
-    "turbo": "2.6.1"
-  },
-  "packageManager": "pnpm@9.15.9"
+    "dev": "npm run dev -w calendars",
+    "build": "npm run build -w calendars",
+    "lint": "npm run lint -w calendars",
+    "build-theme": "npm run build-theme -w calendars"
+  }
 }

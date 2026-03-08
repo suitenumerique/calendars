@@ -21,22 +21,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22.x"
+          node-version: "24.x"
       - name: Restore the frontend cache
         uses: actions/cache@v5
         with:
           path: "src/frontend/**/node_modules"
-          key: front-node_modules-${{ hashFiles('src/frontend/**/pnpm-lock.yaml') }}
+          key: front-node_modules-${{ hashFiles('src/frontend/**/package-lock.json') }}
           fail-on-cache-miss: true
 
       - name: Check linting
-        run: cd src/frontend/ && pnpm lint
+        run: cd src/frontend/ && npm run lint
 
   test-unit:
     runs-on: ubuntu-latest
@@ -45,22 +42,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22.x"
+          node-version: "24.x"
 
       - name: Restore the frontend cache
         uses: actions/cache@v5
         with:
           path: "src/frontend/**/node_modules"
-          key: front-node_modules-${{ hashFiles('src/frontend/**/pnpm-lock.yaml') }}
+          key: front-node_modules-${{ hashFiles('src/frontend/**/package-lock.json') }}
           fail-on-cache-miss: true
 
       - name: Run unit tests
         run: |
           cd src/frontend/apps/calendars
-          TZ=Europe/Paris pnpm test
+          TZ=Europe/Paris npm test

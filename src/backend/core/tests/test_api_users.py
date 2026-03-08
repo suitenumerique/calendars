@@ -49,11 +49,14 @@ def test_api_users_list_authenticated():
 def test_api_users_list_query_inactive():
     """Inactive users should not be listed."""
     user = factories.UserFactory()
+    org = user.organization
     client = APIClient()
     client.force_login(user)
 
-    factories.UserFactory(email="john.doe@example.com", is_active=False)
-    lennon = factories.UserFactory(email="john.lennon@example.com")
+    factories.UserFactory(
+        email="john.doe@example.com", is_active=False, organization=org
+    )
+    lennon = factories.UserFactory(email="john.lennon@example.com", organization=org)
 
     # Use email query to get exact match
     response = client.get("/api/v1.0/users/?q=john.lennon@example.com")
@@ -101,6 +104,7 @@ def test_api_users_list_limit(settings):
     should be limited to 10.
     """
     user = factories.UserFactory()
+    org = user.organization
 
     client = APIClient()
     client.force_login(user)
@@ -108,7 +112,7 @@ def test_api_users_list_limit(settings):
     # Use a base name with a length equal 5 to test that the limit is applied
     base_name = "alice"
     for i in range(15):
-        factories.UserFactory(email=f"{base_name}.{i}@example.com")
+        factories.UserFactory(email=f"{base_name}.{i}@example.com", organization=org)
 
     # Non-email queries (without @) return empty
     response = client.get(
@@ -157,12 +161,13 @@ def test_api_users_list_query_email(settings):
     settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["user_list_burst"] = "9999/minute"
 
     user = factories.UserFactory()
+    org = user.organization
 
     client = APIClient()
     client.force_login(user)
 
-    dave = factories.UserFactory(email="david.bowman@work.com")
-    factories.UserFactory(email="nicole.bowman@work.com")
+    dave = factories.UserFactory(email="david.bowman@work.com", organization=org)
+    factories.UserFactory(email="nicole.bowman@work.com", organization=org)
 
     # Exact match works
     response = client.get(
@@ -199,16 +204,21 @@ def test_api_users_list_query_email(settings):
 def test_api_users_list_query_email_matching():
     """Email queries return exact matches only (case-insensitive)."""
     user = factories.UserFactory()
+    org = user.organization
 
     client = APIClient()
     client.force_login(user)
 
-    user1 = factories.UserFactory(email="alice.johnson@example.gouv.fr")
-    factories.UserFactory(email="alice.johnnson@example.gouv.fr")
-    factories.UserFactory(email="alice.kohlson@example.gouv.fr")
-    user4 = factories.UserFactory(email="alicia.johnnson@example.gouv.fr")
-    factories.UserFactory(email="alicia.johnnson@example.gov.uk")
-    factories.UserFactory(email="alice.thomson@example.gouv.fr")
+    user1 = factories.UserFactory(
+        email="alice.johnson@example.gouv.fr", organization=org
+    )
+    factories.UserFactory(email="alice.johnnson@example.gouv.fr", organization=org)
+    factories.UserFactory(email="alice.kohlson@example.gouv.fr", organization=org)
+    user4 = factories.UserFactory(
+        email="alicia.johnnson@example.gouv.fr", organization=org
+    )
+    factories.UserFactory(email="alicia.johnnson@example.gov.uk", organization=org)
+    factories.UserFactory(email="alice.thomson@example.gouv.fr", organization=org)
 
     # Exact match returns only that user
     response = client.get(
@@ -263,7 +273,10 @@ def test_api_users_retrieve_me_authenticated():
         "language": user.language,
         "can_access": True,
         "can_admin": True,
-        "organization": None,
+        "organization": {
+            "id": str(user.organization.id),
+            "name": user.organization.name,
+        },
     }
 
 
