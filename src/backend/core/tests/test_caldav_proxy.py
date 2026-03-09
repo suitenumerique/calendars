@@ -373,3 +373,15 @@ class TestValidateCaldavProxyPath:
     def test_internal_api_with_leading_slash_is_rejected(self):
         """Internal API paths with leading slash should be blocked."""
         assert validate_caldav_proxy_path("/internal-api/import/user/cal") is False
+
+    def test_encoded_traversal_is_rejected(self):
+        """URL-encoded directory traversal should be rejected."""
+        assert validate_caldav_proxy_path("calendars/%2e%2e/%2e%2e/etc/passwd") is False
+
+    def test_encoded_internal_api_is_rejected(self):
+        """URL-encoded internal-api path should be blocked."""
+        assert validate_caldav_proxy_path("%69nternal-api/resources/") is False
+
+    def test_encoded_null_byte_is_rejected(self):
+        """URL-encoded null byte should be rejected."""
+        assert validate_caldav_proxy_path("calendars/user%00/") is False

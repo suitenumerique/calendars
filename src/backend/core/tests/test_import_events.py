@@ -678,6 +678,7 @@ class TestImportEventsAPI:
         assert task_data["result"]["imported_count"] == 3
 
 
+@pytest.mark.xdist_group("caldav")
 class TestImportEventsE2E:
     """End-to-end tests that import ICS events through the real SabreDAV server."""
 
@@ -998,6 +999,7 @@ class TestImportEventsE2E:
         assert "..." in raw
 
 
+@pytest.mark.xdist_group("caldav")
 class TestCalendarSanitizerE2E:
     """E2E tests for CalendarSanitizerPlugin on normal CalDAV PUT operations."""
 

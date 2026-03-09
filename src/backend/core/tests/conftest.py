@@ -14,13 +14,25 @@ from core.tests.utils.urls import reload_urls
 USER = "user"
 
 
-@pytest.fixture(autouse=True)
-def truncate_caldav_tables(django_db_setup, django_db_blocker):  # pylint: disable=unused-argument
-    """Truncate CalDAV tables in the SabreDAV database before each test.
+def _has_caldav_marker(request):
+    """Check if the test has the xdist_group('caldav') marker."""
+    marker = request.node.get_closest_marker("xdist_group")
+    return marker is not None and marker.args and marker.args[0] == "caldav"
 
-    SabreDAV uses the 'calendars' database (not Django's test database),
-    so we connect directly via psycopg to truncate.
+
+@pytest.fixture(autouse=True)
+def truncate_caldav_tables(request, django_db_setup, django_db_blocker):  # pylint: disable=unused-argument
+    """Truncate CalDAV tables before each CalDAV E2E test.
+
+    Only runs for tests marked with @pytest.mark.xdist_group("caldav").
+    Non-CalDAV tests don't touch the SabreDAV database, so truncating
+    from their worker would corrupt state for CalDAV tests running
+    concurrently on another xdist worker.
     """
+    if not _has_caldav_marker(request):
+        yield
+        return
+
     import psycopg  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
 
     db_settings = settings.DATABASES["default"]
@@ -44,6 +56,40 @@ def truncate_caldav_tables(django_db_setup, django_db_blocker):  # pylint: disab
     finally:
         conn.close()  # pylint: disable=no-member
     yield
+
+
+@pytest.fixture(autouse=True)
+def disconnect_caldav_signals_for_unit_tests(request):
+    """Disconnect CalDAV signal handlers for non-CalDAV tests.
+
+    Prevents non-CalDAV tests from hitting the real SabreDAV server
+    (e.g. via post_save signal when UserFactory creates a user),
+    which would interfere with CalDAV E2E tests running concurrently
+    on another xdist worker.
+    """
+    if _has_caldav_marker(request):
+        yield
+        return
+
+    from django.contrib.auth import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+        get_user_model,
+    )
+    from django.db.models.signals import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+        post_save,
+        pre_delete,
+    )
+
+    from core.signals import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+        delete_user_caldav_data,
+        provision_default_calendar,
+    )
+
+    user_model = get_user_model()
+    post_save.disconnect(provision_default_calendar, sender=user_model)
+    pre_delete.disconnect(delete_user_caldav_data, sender=user_model)
+    yield
+    post_save.connect(provision_default_calendar, sender=user_model)
+    pre_delete.connect(delete_user_caldav_data, sender=user_model)
 
 
 @pytest.fixture(autouse=True)

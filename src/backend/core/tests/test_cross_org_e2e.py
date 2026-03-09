@@ -29,6 +29,7 @@ from core.services.resource_service import ResourceProvisioningError, ResourceSe
 
 pytestmark = [
     pytest.mark.django_db,
+    pytest.mark.xdist_group("caldav"),
 ]
 
 

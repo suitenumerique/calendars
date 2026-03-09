@@ -7,6 +7,7 @@ from core.services.caldav_service import CalDAVClient, CalendarService
 
 
 @pytest.mark.django_db
+@pytest.mark.xdist_group("caldav")
 class TestCalDAVClient:
     """Tests for CalDAVClient authentication and communication."""
 

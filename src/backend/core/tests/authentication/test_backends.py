@@ -490,7 +490,7 @@ def test_authentication_session_tokens(
         status=200,
     )
 
-    with django_assert_num_queries(13):
+    with django_assert_num_queries(12):
         user = klass.authenticate(
             request,
             code="test-code",

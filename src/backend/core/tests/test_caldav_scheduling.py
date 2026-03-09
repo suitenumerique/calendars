@@ -72,6 +72,7 @@ def create_test_server() -> tuple:
 
 
 @pytest.mark.django_db
+@pytest.mark.xdist_group("caldav")
 class TestCalDAVScheduling:
     """Tests for CalDAV scheduling callback when creating events with attendees."""
 

@@ -300,7 +300,7 @@ export const EventModal = ({
             <AttendeesSection
               attendees={form.attendees}
               onChange={form.setAttendees}
-              organizerEmail={user?.email ?? undefined}
+              organizerEmail={organizer?.email ?? user?.email}
               organizer={organizer}
               alwaysOpen
             />

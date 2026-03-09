@@ -5,8 +5,15 @@ from unittest import mock
 
 from django.test import TestCase, override_settings
 
+import pytest
+
 from core import factories
 from core.models import Organization, User
+
+# Signal tests need real signal handlers (they mock at the requests.request
+# level), so they must be in the caldav xdist group to skip the conftest
+# fixture that disconnects signals for non-CalDAV tests.
+pytestmark = pytest.mark.xdist_group("caldav")
 
 
 @override_settings(

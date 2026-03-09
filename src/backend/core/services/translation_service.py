@@ -119,7 +119,7 @@ class TranslationService:
                 if user and user.language:
                     return cls.normalize_lang(user.language)
             except Exception:  # pylint: disable=broad-exception-caught
-                logger.exception("Failed to resolve language for email %s", email)
+                logger.exception("Failed to resolve language for recipient")
 
         return "fr"
 

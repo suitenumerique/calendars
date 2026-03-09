@@ -209,6 +209,7 @@ class TestIsOrgAdminPermission:
 
 
 @pytest.mark.django_db
+@pytest.mark.xdist_group("caldav")
 class TestCalDAVProxyOrgHeader:
     """Tests that the CalDAV proxy forwards the org header correctly."""
 

@@ -292,6 +292,7 @@ export const useEventForm = ({
         );
         return {
           email: r.email!,
+          name: r.name,
           partstat: existing?.partstat ?? "NEEDS-ACTION",
           rsvp: false,
           role: "NON-PARTICIPANT" as const,

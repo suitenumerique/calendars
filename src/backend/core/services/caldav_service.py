@@ -290,38 +290,31 @@ class CalDAVClient:
         principal = client.principal()
 
         try:
-            # Create calendar using caldav library.
-            # Pass cal_id so the library and SabreDAV agree on the path,
-            # preventing UUID mismatch on subsequent PROPPATCH calls.
+            # Pass cal_id so the library uses our UUID for the path.
             calendar = principal.make_calendar(name=calendar_name, cal_id=calendar_id)
 
-            # Set calendar color if provided
             if color:
                 calendar.set_properties([CalendarColor(color)])
 
-            # CalDAV server calendar path format: /calendars/{username}/{calendar_id}/
-            # The caldav library returns a URL object, convert to string and extract path
+            # Extract CalDAV-relative path from the calendar URL
             calendar_url = str(calendar.url)
-            # Extract path from full URL (strip base_url and BASE_URI_PATH prefix)
             if calendar_url.startswith(self.base_url):
                 path = calendar_url[len(self.base_url) :]
             else:
-                # Fallback: construct path manually based on standard CalDAV structure
                 path = f"/calendars/users/{user.email}/{calendar_id}/"
 
-            # Strip the BASE_URI_PATH prefix so the returned path
-            # is a CalDAV-relative path like /calendars/users/{email}/{id}/
             base_prefix = CalDAVHTTPClient.BASE_URI_PATH
             if path.startswith(base_prefix):
                 path = path[len(base_prefix) :]
                 if not path.startswith("/"):
                     path = "/" + path
 
-            # URL-decode the path (e.g. %40 → @)
             path = unquote(path)
 
             logger.info(
-                "Created calendar in CalDAV server: %s at %s", calendar_name, path
+                "Created calendar in CalDAV server: %s at %s",
+                calendar_name,
+                path,
             )
             return path
         except Exception as e:
@@ -665,9 +658,15 @@ def validate_caldav_proxy_path(path):
     - Directory traversal sequences (../)
     - Null bytes
     - Paths that don't start with expected prefixes
+
+    URL-decodes the path first so that encoded payloads like
+    ``%2e%2e`` or ``%00`` cannot bypass the checks.
     """
     if not path:
         return True  # Empty path is fine (root request)
+
+    # Decode percent-encoded characters before validation
+    path = unquote(path)
 
     # Block directory traversal
     if ".." in path:

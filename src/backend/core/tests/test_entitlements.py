@@ -369,6 +369,7 @@ def test_user_me_serializer_can_access_fail_closed():
 # -- Signals integration --
 
 
+@pytest.mark.xdist_group("caldav")
 @override_settings(
     CALDAV_URL="http://caldav:80",
     ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
@@ -392,6 +393,7 @@ def test_signal_skips_calendar_when_not_entitled():
     get_entitlements_backend.cache_clear()
 
 
+@pytest.mark.xdist_group("caldav")
 @override_settings(
     CALDAV_URL="http://caldav:80",
     ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
@@ -414,6 +416,7 @@ def test_signal_skips_calendar_when_entitlements_unavailable():
     get_entitlements_backend.cache_clear()
 
 
+@pytest.mark.xdist_group("caldav")
 @override_settings(
     CALDAV_URL="http://caldav:80",
     ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",

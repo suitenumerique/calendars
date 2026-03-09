@@ -139,6 +139,9 @@ addopts = [
     "term-missing",
     # Allow test files to have the same name in different directories.
     "--import-mode=importlib",
+    # Group CalDAV E2E tests on a single worker to avoid concurrent
+    # access issues with the shared SabreDAV server.
+    "--dist=loadgroup",
 ]
 python_files = [
     "test_*.py",
