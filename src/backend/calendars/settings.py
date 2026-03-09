@@ -561,7 +561,7 @@ class Base(Configuration):
         "BACKEND_OPTIONS": {
             "url": values.Value(
                 "redis://redis:6379/1",
-                environ_name="DRAMATIQ_BROKER_URL",
+                environ_name="DRAMATIQ_RESULT_BACKEND_URL",
                 environ_prefix=None,
             ),
         },

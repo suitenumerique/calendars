@@ -50,11 +50,11 @@ def provision_default_calendar(sender, instance, created, **kwargs):  # pylint: 
     try:
         service = CalendarService()
         service.create_default_calendar(instance)
-        logger.info("Created default calendar for user %s", instance.email)
+        logger.info("Created default calendar for user %s", instance.pk)
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception(
             "Failed to create default calendar for user %s",
-            instance.email,
+            instance.pk,
         )
 
 

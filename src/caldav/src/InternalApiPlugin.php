@@ -420,65 +420,67 @@ class InternalApiPlugin extends ServerPlugin
         $skippedCount = 0;
         $errors = [];
 
-        while ($splitVcal = $splitter->getNext()) {
-            $totalEvents++;
+        try {
+            while ($splitVcal = $splitter->getNext()) {
+                $totalEvents++;
 
-            try {
-                // Extract UID from the first VEVENT
-                $uid = null;
-                foreach ($splitVcal->VEVENT as $vevent) {
-                    if (isset($vevent->UID)) {
-                        $uid = (string)$vevent->UID;
-                        break;
+                try {
+                    // Extract UID from the first VEVENT
+                    $uid = null;
+                    foreach ($splitVcal->VEVENT as $vevent) {
+                        if (isset($vevent->UID)) {
+                            $uid = (string)$vevent->UID;
+                            break;
+                        }
                     }
-                }
 
-                if (!$uid) {
-                    $uid = \Sabre\DAV\UUIDUtil::getUUID();
-                }
-
-                // Sanitize event data (strip attachments, truncate descriptions)
-                $this->sanitizeAndCheckSize($splitVcal);
-
-                $objectUri = $uid . '.ics';
-                $data = $splitVcal->serialize();
-
-                $this->caldavBackend->createCalendarObject(
-                    $calendarId,
-                    $objectUri,
-                    $data
-                );
-                $importedCount++;
-            } catch (\Exception $e) {
-                $msg = $e->getMessage();
-                $summary = '';
-                if (isset($splitVcal->VEVENT) && isset($splitVcal->VEVENT->SUMMARY)) {
-                    $summary = (string)$splitVcal->VEVENT->SUMMARY;
-                }
-
-                if (strpos($msg, '23505') !== false) {
-                    $duplicateCount++;
-                } elseif (strpos($msg, 'valid instances') !== false) {
-                    $skippedCount++;
-                } else {
-                    $skippedCount++;
-                    if (count($errors) < 10) {
-                        $errors[] = [
-                            'uid' => $uid ?? 'unknown',
-                            'summary' => $summary,
-                            'error' => $msg,
-                        ];
+                    if (!$uid) {
+                        $uid = \Sabre\DAV\UUIDUtil::getUUID();
                     }
-                    error_log(
-                        "[InternalApiPlugin] Failed to import event "
-                        . "uid=" . ($uid ?? 'unknown')
-                        . " summary={$summary}: {$msg}"
+
+                    // Sanitize event data (strip attachments, truncate descriptions)
+                    $this->sanitizeAndCheckSize($splitVcal);
+
+                    $objectUri = $uid . '.ics';
+                    $data = $splitVcal->serialize();
+
+                    $this->caldavBackend->createCalendarObject(
+                        $calendarId,
+                        $objectUri,
+                        $data
                     );
+                    $importedCount++;
+                } catch (\Exception $e) {
+                    $msg = $e->getMessage();
+                    $summary = '';
+                    if (isset($splitVcal->VEVENT) && isset($splitVcal->VEVENT->SUMMARY)) {
+                        $summary = (string)$splitVcal->VEVENT->SUMMARY;
+                    }
+
+                    if (strpos($msg, '23505') !== false) {
+                        $duplicateCount++;
+                    } elseif (strpos($msg, 'valid instances') !== false) {
+                        $skippedCount++;
+                    } else {
+                        $skippedCount++;
+                        if (count($errors) < 10) {
+                            $errors[] = [
+                                'uid' => $uid ?? 'unknown',
+                                'summary' => $summary,
+                                'error' => $msg,
+                            ];
+                        }
+                        error_log(
+                            "[InternalApiPlugin] Failed to import event "
+                            . "uid=" . ($uid ?? 'unknown')
+                            . " summary={$summary}: {$msg}"
+                        );
+                    }
                 }
             }
+        } finally {
+            fclose($stream);
         }
-
-        fclose($stream);
 
         error_log(
             "[InternalApiPlugin] Import complete: "
