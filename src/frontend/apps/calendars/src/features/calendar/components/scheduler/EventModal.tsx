@@ -322,7 +322,7 @@ export const EventModal = ({
                   .filter((r) => r.email)
                   .map((r) => [r.email!.toLowerCase(), r.name]),
               )}
-              organizerEmail={organizer?.email ?? user?.email}
+              organizerEmail={user?.email}
               startDateTime={form.startDateTime}
               endDateTime={form.endDateTime}
               onStartChange={form.setStartDateTime}

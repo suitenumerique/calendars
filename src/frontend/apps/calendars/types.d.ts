@@ -25,7 +25,6 @@ declare module "@event-calendar/core" {
     updateEvent: (event: unknown) => void;
     removeEventById: (id: string) => void;
     unselect: () => void;
-    $destroy?: () => void;
   }
 
   export function createCalendar(
@@ -33,6 +32,8 @@ declare module "@event-calendar/core" {
     plugins: unknown[],
     options: Record<string, unknown>
   ): Calendar;
+
+  export function destroyCalendar(calendar: Calendar): void;
 
   export const TimeGrid: unknown;
   export const DayGrid: unknown;

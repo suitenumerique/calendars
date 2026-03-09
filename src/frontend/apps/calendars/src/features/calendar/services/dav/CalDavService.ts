@@ -1277,6 +1277,11 @@ function parseScheduleFreeBusyResponse(
   for (let i = 0; i < responseElements.length; i++) {
     const responseEl = responseElements[i]
 
+    // Check request-status — skip unknown users (3.x = error)
+    const statusEl = responseEl.getElementsByTagNameNS(CAL_NS, 'request-status')[0]
+    const status = statusEl?.textContent ?? ''
+    if (status.startsWith('3.')) continue
+
     // Extract recipient email
     const recipientEl = responseEl.getElementsByTagNameNS(CAL_NS, 'recipient')[0]
     const hrefEl = recipientEl?.getElementsByTagNameNS(DAV_NS, 'href')[0]
@@ -1289,14 +1294,6 @@ function parseScheduleFreeBusyResponse(
 
     const periods = parseFreeBusyPeriods(icsText)
     results.push({ attendee: email, periods })
-  }
-
-  // Add empty results for attendees not in the response
-  for (const attendee of requestedAttendees) {
-    const lower = attendee.toLowerCase()
-    if (!results.some((r) => r.attendee === lower)) {
-      results.push({ attendee: lower, periods: [] })
-    }
   }
 
   return results

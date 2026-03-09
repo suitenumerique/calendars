@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
 import Head from "next/head";
 import { useTranslation } from "next-i18next";
+import { useRouter } from "next/router";
 
 import { login, useAuth } from "@/features/auth/Auth";
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";
@@ -17,14 +18,15 @@ import { WorkingHoursSettings } from "@/features/settings/components/WorkingHour
 export default function SettingsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     if (!user) {
       login(window.location.href);
     } else if (user.can_access === false) {
-      window.location.href = "/no-access";
+      void router.push("/no-access");
     }
-  }, [user]);
+  }, [user, router]);
 
   if (!user || user.can_access === false) {
     return <SpinnerPage />;

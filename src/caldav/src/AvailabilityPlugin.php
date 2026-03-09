@@ -193,12 +193,24 @@ class AvailabilityPlugin extends ServerPlugin
     /**
      * Get the calendar-availability property for a user.
      *
+     * Resolves the calendar home path from the principal URI via the
+     * CalDAV plugin rather than hardcoding the path structure.
+     *
      * @param string $email
      * @return string|null The VCALENDAR string or null
      */
     private function getCalendarAvailability($email)
     {
-        $calendarHomePath = 'calendars/users/' . $email . '/';
+        $caldavPlugin = $this->server->getPlugin('caldav');
+        if (!$caldavPlugin) {
+            return null;
+        }
+
+        $principalUri = 'principals/users/' . $email;
+        $calendarHomePath = $caldavPlugin->getCalendarHomeForPrincipal($principalUri);
+        if (!$calendarHomePath) {
+            return null;
+        }
 
         try {
             $properties = $this->server->getProperties(
@@ -210,7 +222,7 @@ class AvailabilityPlugin extends ServerPlugin
                 return $properties[self::AVAILABILITY_PROP];
             }
         } catch (\Exception $e) {
-            error_log("[AvailabilityPlugin] Failed to get availability for {$email}: "
+            error_log("[AvailabilityPlugin] Failed to get availability for user: "
                 . $e->getMessage());
         }
 
@@ -224,6 +236,7 @@ class AvailabilityPlugin extends ServerPlugin
      * - 'startTime': time string "HH:MM:SS"
      * - 'endTime': time string "HH:MM:SS"
      * - 'days': array of day-of-week integers (1=Monday .. 7=Sunday, ISO-8601)
+     * - 'specificDate': string "Y-m-d" if this is a specific-date window (no RRULE)
      *
      * @param string $vcalendarStr
      * @return array
@@ -261,6 +274,7 @@ class AvailabilityPlugin extends ServerPlugin
 
                 // Parse RRULE to get BYDAY
                 $days = [];
+                $specificDate = null;
                 if (isset($available->RRULE)) {
                     $rrule = (string)$available->RRULE;
                     if (preg_match('/BYDAY=([A-Z,]+)/', $rrule, $matches)) {
@@ -279,17 +293,17 @@ class AvailabilityPlugin extends ServerPlugin
                             }
                         }
                     }
-                }
-
-                // If no RRULE/BYDAY, this AVAILABLE applies to all days
-                if (empty($days)) {
-                    $days = [1, 2, 3, 4, 5, 6, 7];
+                } else {
+                    // No RRULE: specific-date availability, scoped to DTSTART date
+                    $specificDate = $dtstart->format('Y-m-d');
+                    $days = [(int)$dtstart->format('N')];
                 }
 
                 $windows[] = [
                     'startTime' => $startTime,
                     'endTime' => $endTime,
                     'days' => $days,
+                    'specificDate' => $specificDate,
                 ];
             }
         }
@@ -378,7 +392,12 @@ class AvailabilityPlugin extends ServerPlugin
 
             // Collect available slots for this day of the week
             $availableSlots = [];
+            $dateStr = $currentDay->format('Y-m-d');
             foreach ($windows as $window) {
+                // Skip specific-date windows that don't match this day
+                if ($window['specificDate'] !== null && $window['specificDate'] !== $dateStr) {
+                    continue;
+                }
                 if (in_array($dayOfWeek, $window['days'], true)) {
                     $slotStart = new \DateTimeImmutable(
                         $currentDay->format('Y-m-d') . 'T' . $window['startTime'],

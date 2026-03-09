@@ -5,6 +5,7 @@ import logging
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db.models import Q
 from django.utils.text import slugify
 
 from rest_framework import mixins, pagination, response, status, views, viewsets
@@ -116,14 +117,9 @@ class UserViewSet(
             return queryset.none()
 
         # Search by email (partial, case-insensitive) or full name
-        from django.db.models import Q  # noqa: PLC0415
-
-        return (
-            queryset.filter(
-                Q(email__icontains=query) | Q(full_name__icontains=query)
-            )
-            .order_by("full_name", "email")[:50]
-        )
+        return queryset.filter(
+            Q(email__icontains=query) | Q(full_name__icontains=query)
+        ).order_by("full_name", "email")[:50]
 
     @action(
         detail=False,
@@ -139,7 +135,6 @@ class UserViewSet(
         return response.Response(
             self.get_serializer(request.user, context=context).data
         )
-
 
 
 class ConfigView(views.APIView):

@@ -1,4 +1,4 @@
-import type { DayOfWeek, AvailabilitySlot, AvailabilitySlots } from "./types";
+import type { DayOfWeek, AvailabilitySlots } from "./types";
 import { generateSlotId } from "./types";
 
 /** Map day names to iCal BYDAY abbreviations */

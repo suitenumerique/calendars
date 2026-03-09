@@ -131,7 +131,6 @@ export interface CalendarApi {
   addEvent: (event: unknown) => void;
   unselect: () => void;
   refetchEvents: () => void;
-  $destroy?: () => void;
 }
 
 /**

@@ -35,9 +35,7 @@ export interface AvailabilitySlot {
 
 export type AvailabilitySlots = AvailabilitySlot[];
 
-let slotCounter = 0;
-export const generateSlotId = (): string =>
-  `slot-${Date.now()}-${++slotCounter}`;
+export const generateSlotId = (): string => crypto.randomUUID();
 
 export const DEFAULT_AVAILABILITY: AvailabilitySlots = [
   { id: "d-mon", when: { type: "recurring", day: "monday" }, start: "09:00", end: "18:00" },

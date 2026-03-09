@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { createCalendar, ResourceTimeline } from "@event-calendar/core";
+import { createCalendar, destroyCalendar, ResourceTimeline } from "@event-calendar/core";
 import type { FreeBusyResponse } from "../../services/dav/types/caldav-service";
 
 interface FreeBusyTimelineProps {
@@ -86,21 +86,8 @@ export const FreeBusyTimeline = ({
       })),
     );
 
-    // Only show proposed event overlay if the event is on the displayed date
-    const eventOnThisDay = eventStart.toDateString() === date.toDateString();
-    if (eventOnThisDay && resources.length > 0) {
-      allEvents.push({
-        id: "proposed-event",
-        resourceIds: resources.map((r) => r.id),
-        start: eventStart,
-        end: eventEnd,
-        backgroundColor: "rgba(26, 115, 232, 0.25)",
-        title: "",
-      });
-    }
-
     return allEvents;
-  }, [attendees, eventStart, eventEnd, date, resources]);
+  }, [attendees, date, resources]);
 
   // Count conflicts
   const eventOnThisDay = eventStart.toDateString() === date.toDateString();
@@ -140,44 +127,69 @@ export const FreeBusyTimeline = ({
     const GRID_WIDTH = 1100;
     requestAnimationFrame(() => {
       if (!containerRef.current) return;
-      const headerMain = containerRef.current.querySelector(
-        ".ec-header .ec-main",
+      // Structure: .ec-main > .ec-header, .ec-main > .ec-body
+      const header = containerRef.current.querySelector(
+        ".ec-header",
       ) as HTMLElement | null;
-      const bodyMain = containerRef.current.querySelector(
-        ".ec-body .ec-main",
+      const body = containerRef.current.querySelector(
+        ".ec-body",
       ) as HTMLElement | null;
-      if (!headerMain || !bodyMain) return;
+      if (!header || !body) return;
 
-      // Force inner content wider than the visible area
-      for (const el of headerMain.children) {
-        (el as HTMLElement).style.minWidth = `${GRID_WIDTH}px`;
-      }
-      for (const el of bodyMain.children) {
-        (el as HTMLElement).style.minWidth = `${GRID_WIDTH}px`;
-      }
-      headerMain.style.overflowX = "auto";
-      bodyMain.style.overflowX = "auto";
-      // Hide header scrollbar — body scroll drives both
-      headerMain.style.overflowX = "hidden";
+      // The grid inside header/body holds the time slots
+      const headerGrid = header.querySelector(".ec-grid") as HTMLElement | null;
+      const bodyGrid = body.querySelector(".ec-grid") as HTMLElement | null;
+      if (!headerGrid || !bodyGrid) return;
+
+      headerGrid.style.minWidth = `${GRID_WIDTH}px`;
+      bodyGrid.style.minWidth = `${GRID_WIDTH}px`;
+
+      // Make the body scrollable, hide header scrollbar
+      body.style.overflowX = "auto";
+      header.style.overflowX = "hidden";
 
       // Sync header scroll when body scrolls
       const onBodyScroll = () => {
-        headerMain.scrollLeft = bodyMain.scrollLeft;
+        header.scrollLeft = body.scrollLeft;
       };
-      bodyMain.addEventListener("scroll", onBodyScroll);
+      body.addEventListener("scroll", onBodyScroll);
 
       // Scroll to ~8 AM (1 hour into the 7:00-24:00 range)
       const scrollPos = (1 / 17) * GRID_WIDTH;
-      bodyMain.scrollLeft = scrollPos;
-      headerMain.scrollLeft = scrollPos;
+      body.scrollLeft = scrollPos;
+      header.scrollLeft = scrollPos;
+
+      // Inject a single proposed-time overlay spanning all rows
+      const eventOnDay = eventStart.toDateString() === date.toDateString();
+      if (eventOnDay && resources.length > 0) {
+        const SLOT_MIN = 7; // slotMinTime hours
+        const SLOT_MAX = 24; // slotMaxTime hours
+        const totalHours = SLOT_MAX - SLOT_MIN;
+        const startH = eventStart.getHours() + eventStart.getMinutes() / 60;
+        const endH = eventEnd.getHours() + eventEnd.getMinutes() / 60;
+        const leftPct = ((Math.max(startH, SLOT_MIN) - SLOT_MIN) / totalHours) * 100;
+        const rightPct = ((Math.min(endH, SLOT_MAX) - SLOT_MIN) / totalHours) * 100;
+
+        if (rightPct > leftPct) {
+          const overlay = document.createElement("div");
+          overlay.className = "freebusy-proposed-overlay";
+          overlay.style.position = "absolute";
+          overlay.style.top = "0";
+          overlay.style.bottom = "0";
+          overlay.style.left = `${leftPct}%`;
+          overlay.style.width = `${rightPct - leftPct}%`;
+          overlay.style.pointerEvents = "none";
+          overlay.style.zIndex = "5";
+
+          bodyGrid.style.position = "relative";
+          bodyGrid.appendChild(overlay);
+        }
+      }
     });
 
     return () => {
       if (calendarRef.current) {
-        const cal = calendarRef.current as { $destroy?: () => void };
-        if (typeof cal.$destroy === "function") {
-          cal.$destroy();
-        }
+        destroyCalendar(calendarRef.current);
         calendarRef.current = null;
       }
       if (containerRef.current) {
@@ -185,7 +197,7 @@ export const FreeBusyTimeline = ({
       }
     };
     // Recreate when data changes
-  }, [date, resources, events]);
+  }, [date, resources, events, eventStart, eventEnd]);
 
   const handlePrev = useCallback(() => {
     const prev = new Date(date);

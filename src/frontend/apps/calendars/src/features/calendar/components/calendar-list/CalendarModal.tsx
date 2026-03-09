@@ -10,7 +10,6 @@ import {
   Input,
   Modal,
   ModalSize,
-  TextArea,
 } from "@gouvfr-lasuite/cunningham-react";
 
 import { DEFAULT_COLORS } from "./constants";
@@ -26,7 +25,6 @@ export const CalendarModal = ({
   const { t } = useTranslation();
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLORS[0]);
-  const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,11 +34,9 @@ export const CalendarModal = ({
       if (mode === "edit" && calendar) {
         setName(calendar.displayName || "");
         setColor(calendar.color || DEFAULT_COLORS[0]);
-        setDescription(calendar.description || "");
       } else {
         setName("");
         setColor(DEFAULT_COLORS[0]);
-        setDescription("");
       }
       setError(null);
     }
@@ -55,7 +51,7 @@ export const CalendarModal = ({
     setIsLoading(true);
     setError(null);
     try {
-      await onSave(name.trim(), color, description.trim() || undefined);
+      await onSave(name.trim(), color);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : t('api.error.unexpected'));
@@ -67,7 +63,6 @@ export const CalendarModal = ({
   const handleClose = () => {
     setName("");
     setColor(DEFAULT_COLORS[0]);
-    setDescription("");
     setError(null);
     onClose();
   };
@@ -133,13 +128,6 @@ export const CalendarModal = ({
           </div>
         </div>
 
-        <TextArea
-          label={t('calendar.createCalendar.description')}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={2}
-          fullWidth
-        />
       </div>
     </Modal>
   );

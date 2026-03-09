@@ -47,7 +47,7 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
         $body = $request->getBodyAsString();
         $request->setBody($body); // Reset stream for subsequent reads
 
-        if (strpos($body, 'VFREEBUSY') !== false) {
+        if (stripos($body, 'VFREEBUSY') !== false) {
             throw new DAV\Exception\Forbidden(
                 'Free/busy queries are not allowed when organization sharing is disabled'
             );

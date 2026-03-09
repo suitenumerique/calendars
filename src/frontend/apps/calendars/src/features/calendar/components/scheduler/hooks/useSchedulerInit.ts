@@ -7,6 +7,7 @@ import { useEffect, useRef, MutableRefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
   createCalendar,
+  destroyCalendar,
   TimeGrid,
   DayGrid,
   List,
@@ -252,13 +253,9 @@ export const useSchedulerInit = ({
     calendarRef.current = ec as unknown as CalendarApi;
 
     return () => {
-      // @event-calendar/core is Svelte-based and uses $destroy
-      // Always call $destroy before clearing the container to avoid memory leaks
       if (calendarRef.current) {
-        const calendar = calendarRef.current as CalendarApi;
-        if (typeof calendar.$destroy === 'function') {
-          calendar.$destroy();
-        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        destroyCalendar(calendarRef.current as any);
         calendarRef.current = null;
       }
       // Clear the container only after calendar is destroyed

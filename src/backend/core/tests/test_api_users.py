@@ -90,7 +90,7 @@ def test_api_users_list_query_short_queries():
     assert response.json()["results"] == []
 
 
-def test_api_users_list_limit(settings):
+def test_api_users_list_limit(settings):  # pylint: disable=unused-argument
     """Results should be bounded even with many matching users."""
     user = factories.UserFactory()
     org = user.organization
@@ -272,11 +272,9 @@ def test_api_users_list_cross_org_isolation():
     assert response.json()["results"] == []
 
 
-def test_api_users_list_excludes_self():
+def test_api_users_list_includes_self():
     """Search should include the requesting user if they match."""
-    user = factories.UserFactory(
-        email="alice@example.com", full_name="Alice Test"
-    )
+    user = factories.UserFactory(email="alice@example.com", full_name="Alice Test")
 
     client = APIClient()
     client.force_login(user)

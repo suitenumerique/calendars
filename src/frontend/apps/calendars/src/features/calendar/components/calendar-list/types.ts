@@ -12,7 +12,7 @@ export interface CalendarModalProps {
   mode: "create" | "edit";
   calendar?: CalDavCalendar | null;
   onClose: () => void;
-  onSave: (name: string, color: string, description?: string) => Promise<void>;
+  onSave: (name: string, color: string) => Promise<void>;
 }
 
 /**

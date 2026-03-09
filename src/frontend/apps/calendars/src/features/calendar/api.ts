@@ -140,11 +140,7 @@ interface ImportTaskResponse {
  */
 export interface TaskStatus {
   status: "PENDING" | "PROGRESS" | "SUCCESS" | "FAILURE";
-  result: {
-    status: string;
-    result: ImportEventsResult | null;
-    error: string | null;
-  } | null;
+  result: ImportEventsResult | null;
   error: string | null;
   progress?: number;
   message?: string;
@@ -202,14 +198,14 @@ export const pollImportTask = async (
           return;
         }
 
-        if (status.status === "SUCCESS" && status.result?.result) {
-          resolve(status.result.result);
+        if (status.status === "SUCCESS" && status.result) {
+          resolve(status.result);
           return;
         }
 
         reject(
           new Error(
-            status.result?.error ?? status.error ?? "Import failed",
+            status.error ?? "Import failed",
           ),
         );
       } catch (error) {

@@ -558,9 +558,7 @@ class TestCalDAVFreeBusy:
         )
 
         forwarded = responses.calls[0].request
-        assert forwarded.headers["X-CalDAV-Organization"] == str(
-            user.organization_id
-        )
+        assert forwarded.headers["X-CalDAV-Organization"] == str(user.organization_id)
 
 
 class TestValidateCaldavProxyPath:

@@ -41,7 +41,9 @@ export const useWorkingHours = () => {
           setIsConnected(true);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Failed to connect to CalDAV:", err);
+      });
 
     return () => {
       cancelled = true;

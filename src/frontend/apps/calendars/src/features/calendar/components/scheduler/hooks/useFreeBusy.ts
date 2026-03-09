@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 import type { FreeBusyResponse } from "../../../services/dav/types/caldav-service";
 import type { CalDavService } from "../../../services/dav/CalDavService";
 
@@ -28,51 +29,50 @@ export function useFreeBusy({
   date,
   enabled,
 }: UseFreeBusyOptions): UseFreeBusyResult {
-  const [data, setData] = useState<FreeBusyResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef(0);
+  const queryClient = useQueryClient();
 
-  const fetchFreeBusy = useCallback(async () => {
-    if (!enabled || attendees.length === 0) {
-      setData([]);
-      return;
-    }
+  // Stable key: sort attendees so order doesn't trigger refetch
+  const attendeesKey = useMemo(
+    () => [...attendees].sort().join(","),
+    [attendees],
+  );
+  const dateKey = date.toISOString().slice(0, 10);
 
-    const requestId = ++abortRef.current;
-    setIsLoading(true);
-    setError(null);
+  const queryKey = ["freebusy", attendeesKey, organizerEmail, dateKey];
 
-    // Query for the full day
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
+  const query = useQuery({
+    queryKey,
+    queryFn: async (): Promise<FreeBusyResponse[]> => {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
 
-    const result = await caldavService.queryFreeBusy({
-      attendees,
-      timeRange: { start, end },
-      organizer: organizerEmail
-        ? { email: organizerEmail, name: organizerEmail.split("@")[0] }
-        : undefined,
-    });
+      const result = await caldavService.queryFreeBusy({
+        attendees,
+        timeRange: { start, end },
+        organizer: organizerEmail
+          ? { email: organizerEmail, name: organizerEmail.split("@")[0] }
+          : undefined,
+      });
 
-    // Ignore if a newer request was started
-    if (requestId !== abortRef.current) return;
+      if (result.success && result.data) {
+        return result.data;
+      }
+      throw new Error(result.error ?? "Failed to query availability");
+    },
+    enabled: enabled && attendees.length > 0,
+    retry: false,
+  });
 
-    if (result.success && result.data) {
-      setData(result.data);
-    } else {
-      setError(result.error ?? "Failed to query availability");
-      setData([]);
-    }
-    setIsLoading(false);
-  }, [caldavService, attendees, organizerEmail, date, enabled]);
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey });
+  }, [queryClient, queryKey]);
 
-  // Auto-fetch when deps change
-  useEffect(() => {
-    fetchFreeBusy();
-  }, [fetchFreeBusy]);
-
-  return { data, isLoading, error, refresh: fetchFreeBusy };
+  return {
+    data: query.data ?? [],
+    isLoading: query.isLoading,
+    error: query.error?.message ?? null,
+    refresh,
+  };
 }
