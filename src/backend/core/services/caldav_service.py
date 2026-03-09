@@ -290,8 +290,10 @@ class CalDAVClient:
         principal = client.principal()
 
         try:
-            # Create calendar using caldav library
-            calendar = principal.make_calendar(name=calendar_name)
+            # Create calendar using caldav library.
+            # Pass cal_id so the library and SabreDAV agree on the path,
+            # preventing UUID mismatch on subsequent PROPPATCH calls.
+            calendar = principal.make_calendar(name=calendar_name, cal_id=calendar_id)
 
             # Set calendar color if provided
             if color:
