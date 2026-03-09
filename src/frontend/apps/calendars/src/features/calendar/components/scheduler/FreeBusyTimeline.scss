@@ -1,0 +1,141 @@
+.freebusy-timeline {
+  padding: 0.25rem 0;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.25rem;
+  }
+
+  &__nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    color: #5f6368;
+    padding: 0;
+
+    &:hover {
+      background-color: #f1f3f4;
+    }
+
+    .material-icons {
+      font-size: 18px;
+    }
+  }
+
+  &__date {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #202124;
+    min-width: 100px;
+    text-align: center;
+  }
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+  }
+
+  &__spinner {
+    font-size: 14px;
+    color: #5f6368;
+    animation: freebusy-spin 1.5s linear infinite;
+  }
+
+  &__status {
+    font-size: 0.6875rem;
+    margin-left: auto;
+    padding: 0.0625rem 0.375rem;
+    border-radius: 8px;
+
+    &--ok {
+      color: #137333;
+      background-color: #e6f4ea;
+    }
+
+    &--conflict {
+      color: #c5221f;
+      background-color: #fce8e6;
+    }
+  }
+
+  &__calendar {
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+
+    // Hide the day name row (e.g. "Monday") — redundant with our nav header
+    .ec-col-head {
+      display: none;
+    }
+
+    // Shrink the resource label column
+    .ec-sidebar {
+      width: 90px !important;
+      min-width: 90px !important;
+      max-width: 90px !important;
+      flex-shrink: 0;
+    }
+
+    .ec-resource {
+      font-size: 0.625rem;
+      padding: 0 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    // Compact row heights
+    .ec-body .ec-resource {
+      height: 24px !important;
+    }
+
+    // Smaller time header labels
+    .ec-header .ec-time {
+      font-size: 0.5625rem;
+      padding: 2px 0;
+    }
+
+    .ec-header {
+      height: auto !important;
+      min-height: unset !important;
+    }
+
+    // Hide the proposed event text content (we only want the colored block)
+    .ec-event:not(.ec-bg-event) {
+      .ec-event-body {
+        display: none;
+      }
+      border: none;
+      opacity: 0.7;
+      border-left: 2px solid #1a73e8;
+      border-right: 2px solid #1a73e8;
+    }
+  }
+
+  &__empty {
+    padding: 0.75rem;
+    text-align: center;
+    font-size: 0.75rem;
+    color: #5f6368;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+  }
+}
+
+@keyframes freebusy-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

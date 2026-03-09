@@ -66,6 +66,15 @@ class BaseModel(models.Model):
         super().save(*args, **kwargs)
 
 
+class SharingLevel(models.TextChoices):
+    """Calendar sharing visibility levels within an organization."""
+
+    NONE = "none", "No sharing"
+    FREEBUSY = "freebusy", "Free/Busy only"
+    READ = "read", "Read access"
+    WRITE = "write", "Read/Write access"
+
+
 class Organization(BaseModel):
     """Organization model, populated from OIDC claims and entitlements.
 
@@ -81,6 +90,16 @@ class Organization(BaseModel):
         db_index=True,
         help_text="Organization identifier from OIDC claim or email domain.",
     )
+    default_sharing_level = models.CharField(
+        max_length=10,
+        choices=SharingLevel.choices,
+        null=True,
+        blank=True,
+        help_text=(
+            "Default calendar sharing level for org members. "
+            "Null means use the server-wide default (ORG_DEFAULT_SHARING_LEVEL)."
+        ),
+    )
 
     class Meta:
         db_table = "calendars_organization"
@@ -89,6 +108,13 @@ class Organization(BaseModel):
 
     def __str__(self):
         return self.name or self.external_id
+
+    @property
+    def effective_sharing_level(self):
+        """Return the effective sharing level, falling back to server default."""
+        if self.default_sharing_level:
+            return self.default_sharing_level
+        return settings.ORG_DEFAULT_SHARING_LEVEL
 
     def delete(self, *args, **kwargs):
         """Delete org after cleaning up members' CalDAV data.

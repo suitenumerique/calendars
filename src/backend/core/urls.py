@@ -20,6 +20,11 @@ router.register("users", viewsets.UserViewSet, basename="users")
 router.register("calendars", viewsets.CalendarViewSet, basename="calendars")
 router.register("resources", viewsets.ResourceViewSet, basename="resources")
 router.register("channels", ChannelViewSet, basename="channels")
+router.register(
+    "organization-settings",
+    viewsets.OrganizationSettingsViewSet,
+    basename="organization-settings",
+)
 
 urlpatterns = [
     path(

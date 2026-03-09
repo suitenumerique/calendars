@@ -43,13 +43,10 @@ const ApplicationMenu = () => {
   const router = useRouter();
   const { user } = useAuth();
 
-  if (!user?.can_admin) return null;
+  if (!user) return null;
 
-  return (
-    <DropdownMenu
-      isOpen={isOpen}
-      onOpenChange={setIsOpen}
-      options={[
+  const adminOptions = user.can_admin
+    ? [
         {
           label: t("resources.title"),
           icon: <Icon name="meeting_room" type={IconType.OUTLINED} />,
@@ -60,12 +57,26 @@ const ApplicationMenu = () => {
           icon: <Icon name="integration_instructions" type={IconType.OUTLINED} />,
           callback: () => void router.push("/integrations"),
         },
+      ]
+    : [];
+
+  return (
+    <DropdownMenu
+      isOpen={isOpen}
+      onOpenChange={setIsOpen}
+      options={[
+        {
+          label: t("settings.workingHours.title"),
+          icon: <Icon name="schedule" type={IconType.OUTLINED} />,
+          callback: () => void router.push("/settings"),
+        },
+        ...adminOptions,
       ]}
     >
       <Button
         onClick={() => setIsOpen(true)}
         icon={<Icon name="settings" type={IconType.OUTLINED} />}
-        aria-label={t("settings")}
+        aria-label={t("settings.label")}
         color="brand"
         variant="tertiary"
       />

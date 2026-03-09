@@ -11,6 +11,8 @@ services:
       interval: 1s
       timeout: 2s
       retries: 300
+    volumes:
+      - ./docker/postgresql/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
     env_file:
       - env.d/development/postgresql.defaults
       - env.d/development/postgresql.local

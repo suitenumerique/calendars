@@ -21,6 +21,7 @@ import { AttendeesSection } from "./event-modal-sections/AttendeesSection";
 import { ResourcesSection } from "./event-modal-sections/ResourcesSection";
 import { DescriptionSection } from "./event-modal-sections/DescriptionSection";
 import { InvitationResponseSection } from "./event-modal-sections/InvitationResponseSection";
+import { FreeBusySection } from "./event-modal-sections/FreeBusySection";
 import { SectionPills } from "./event-modal-sections/SectionPills";
 import { useResourcePrincipals } from "@/features/resources/api/useResourcePrincipals";
 import type { EventModalProps, RecurringDeleteOption } from "./types";
@@ -176,6 +177,11 @@ export const EventModal = ({
             },
           ]
         : []),
+      {
+        id: "scheduling" as const,
+        icon: "event_available",
+        label: t("scheduling.findATime"),
+      },
     ],
     [t, visioBaseUrl, availableResources.length],
   );
@@ -302,6 +308,25 @@ export const EventModal = ({
               onChange={form.setAttendees}
               organizerEmail={organizer?.email ?? user?.email}
               organizer={organizer}
+              alwaysOpen
+            />
+          )}
+          {form.isSectionExpanded("scheduling") && (
+            <FreeBusySection
+              attendees={form.attendees}
+              resourceEmails={form.resources
+                .map((r) => r.email)
+                .filter((e): e is string => !!e)}
+              resourceNames={Object.fromEntries(
+                form.resources
+                  .filter((r) => r.email)
+                  .map((r) => [r.email!.toLowerCase(), r.name]),
+              )}
+              organizerEmail={organizer?.email ?? user?.email}
+              startDateTime={form.startDateTime}
+              endDateTime={form.endDateTime}
+              onStartChange={form.setStartDateTime}
+              onEndChange={form.setEndDateTime}
               alwaysOpen
             />
           )}

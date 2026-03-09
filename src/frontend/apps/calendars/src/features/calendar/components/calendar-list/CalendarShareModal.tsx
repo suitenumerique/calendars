@@ -3,7 +3,7 @@
  * Wraps the UI Kit ShareModal for managing calendar sharing via CalDAV.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ShareModal } from "@gouvfr-lasuite/ui-kit";
 
@@ -14,6 +14,7 @@ import {
   ToasterItem,
 } from "../../../ui/components/toaster/Toaster";
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
+import { fetchAPI } from "@/features/api/fetchApi";
 
 interface CalendarShareModalProps {
   isOpen: boolean;
@@ -100,16 +101,67 @@ export const CalendarShareModal = ({
     }
   }, [isOpen, calendar, fetchSharees]);
 
-  const handleSearchUsers = useCallback((query: string) => {
-    if (EMAIL_REGEX.test(query.trim())) {
-      const email = query.trim();
-      setSearchResults([
-        { id: email, email, full_name: email },
-      ]);
-    } else {
-      setSearchResults([]);
-    }
-  }, []);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const handleSearchUsers = useCallback(
+    (query: string) => {
+      clearTimeout(searchTimerRef.current);
+      const trimmed = query.trim();
+
+      if (trimmed.length < 3) {
+        // For very short queries, fall back to email-only matching
+        if (EMAIL_REGEX.test(trimmed)) {
+          setSearchResults([
+            { id: trimmed, email: trimmed, full_name: trimmed },
+          ]);
+        } else {
+          setSearchResults([]);
+        }
+        return;
+      }
+
+      // Debounce the API call
+      searchTimerRef.current = setTimeout(async () => {
+        try {
+          const response = await fetchAPI("users/", {
+            params: { q: trimmed },
+          });
+          const data = await response.json();
+          const results: ShareUser[] = (data.results ?? []).map(
+            (u: { id: string; email: string; full_name: string }) => ({
+              id: u.id,
+              email: u.email,
+              full_name: u.full_name || u.email,
+            }),
+          );
+          // Always allow raw email entry too
+          if (
+            EMAIL_REGEX.test(trimmed) &&
+            !results.some(
+              (r) => r.email.toLowerCase() === trimmed.toLowerCase(),
+            )
+          ) {
+            results.push({
+              id: trimmed,
+              email: trimmed,
+              full_name: trimmed,
+            });
+          }
+          setSearchResults(results);
+        } catch {
+          // Fallback to email-only on API error
+          if (EMAIL_REGEX.test(trimmed)) {
+            setSearchResults([
+              { id: trimmed, email: trimmed, full_name: trimmed },
+            ]);
+          } else {
+            setSearchResults([]);
+          }
+        }
+      }, 300);
+    },
+    [],
+  );
 
   const handleInviteUser = useCallback(
     async (users: ShareUser[]) => {

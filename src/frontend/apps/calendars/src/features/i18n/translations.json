@@ -28,7 +28,28 @@
       "logout": "Logout",
       "login": "Login",
       "my_account": "My Account",
-      "settings": "Settings",
+      "settings": {
+        "label": "Settings",
+        "workingHours": {
+          "title": "Working Hours",
+          "description": "Set your available hours for scheduling",
+          "when": "When",
+          "everyMonday": "Every Monday",
+          "everyTuesday": "Every Tuesday",
+          "everyWednesday": "Every Wednesday",
+          "everyThursday": "Every Thursday",
+          "everyFriday": "Every Friday",
+          "everySaturday": "Every Saturday",
+          "everySunday": "Every Sunday",
+          "specificDate": "Specific date...",
+          "start": "Start",
+          "end": "End",
+          "addAvailability": "Add availability",
+          "removeAvailability": "Remove",
+          "save": "Save",
+          "saved": "Working hours saved"
+        }
+      },
       "api": {
         "error": {
           "unexpected": "An unexpected error occurred."
@@ -331,7 +352,8 @@
           "participants": "Participants",
           "organizer": "Organizer",
           "viewProfile": "View profile",
-          "cannotRemoveOrganizer": "Cannot remove organizer"
+          "cannotRemoveOrganizer": "Cannot remove organizer",
+          "noResults": "No users found"
         },
         "resources": {
           "placeholder": "Select a resource...",
@@ -514,6 +536,14 @@
           "copy": "Copy token",
           "copied": "Token copied to clipboard."
         }
+      },
+      "scheduling": {
+        "findATime": "Find a time",
+        "previousDay": "Previous day",
+        "nextDay": "Next day",
+        "noConflicts": "No conflicts",
+        "conflicts": "{{count}} conflict(s)",
+        "addAttendeesToSeeAvailability": "Add attendees to see availability"
       }
     }
   },
@@ -585,7 +615,28 @@
       "logout": "Déconnexion",
       "login": "Connexion",
       "my_account": "Mon Compte",
-      "settings": "Paramètres",
+      "settings": {
+        "label": "Paramètres",
+        "workingHours": {
+          "title": "Heures de travail",
+          "description": "Définissez vos heures de disponibilité pour la planification",
+          "when": "Quand",
+          "everyMonday": "Chaque lundi",
+          "everyTuesday": "Chaque mardi",
+          "everyWednesday": "Chaque mercredi",
+          "everyThursday": "Chaque jeudi",
+          "everyFriday": "Chaque vendredi",
+          "everySaturday": "Chaque samedi",
+          "everySunday": "Chaque dimanche",
+          "specificDate": "Date spécifique...",
+          "start": "Début",
+          "end": "Fin",
+          "addAvailability": "Ajouter une disponibilité",
+          "removeAvailability": "Supprimer",
+          "save": "Enregistrer",
+          "saved": "Heures de travail enregistrées"
+        }
+      },
       "api": {
         "error": {
           "unexpected": "Une erreur inattendue est survenue."
@@ -1152,7 +1203,8 @@
           "participants": "Participants",
           "organizer": "Organisateur",
           "viewProfile": "Voir le profil",
-          "cannotRemoveOrganizer": "Impossible de retirer l'organisateur"
+          "cannotRemoveOrganizer": "Impossible de retirer l'organisateur",
+          "noResults": "Aucun utilisateur trouvé"
         },
         "resources": {
           "placeholder": "Sélectionner une ressource...",
@@ -1335,6 +1387,14 @@
           "copy": "Copier le jeton",
           "copied": "Jeton copié dans le presse-papiers."
         }
+      },
+      "scheduling": {
+        "findATime": "Trouver un créneau",
+        "previousDay": "Jour précédent",
+        "nextDay": "Jour suivant",
+        "noConflicts": "Aucun conflit",
+        "conflicts": "{{count}} conflit(s)",
+        "addAttendeesToSeeAvailability": "Ajoutez des participants pour voir les disponibilités"
       }
     }
   },
@@ -1401,7 +1461,28 @@
       "logout": "Uitloggen",
       "login": "Inloggen",
       "my_account": "Mijn account",
-      "settings": "Instellingen",
+      "settings": {
+        "label": "Instellingen",
+        "workingHours": {
+          "title": "Werkuren",
+          "description": "Stel uw beschikbare uren in voor planning",
+          "when": "Wanneer",
+          "everyMonday": "Elke maandag",
+          "everyTuesday": "Elke dinsdag",
+          "everyWednesday": "Elke woensdag",
+          "everyThursday": "Elke donderdag",
+          "everyFriday": "Elke vrijdag",
+          "everySaturday": "Elke zaterdag",
+          "everySunday": "Elke zondag",
+          "specificDate": "Specifieke datum...",
+          "start": "Start",
+          "end": "Einde",
+          "addAvailability": "Beschikbaarheid toevoegen",
+          "removeAvailability": "Verwijderen",
+          "save": "Opslaan",
+          "saved": "Werkuren opgeslagen"
+        }
+      },
       "api": {
         "error": {
           "unexpected": "Er is een onverwachte fout opgetreden."
@@ -1715,7 +1796,8 @@
           "participants": "Deelnemers",
           "organizer": "Organisator",
           "viewProfile": "Profiel bekijken",
-          "cannotRemoveOrganizer": "Kan organisator niet verwijderen"
+          "cannotRemoveOrganizer": "Kan organisator niet verwijderen",
+          "noResults": "Geen gebruikers gevonden"
         },
         "resources": {
           "placeholder": "Selecteer een middel...",
@@ -1898,6 +1980,14 @@
           "copy": "Token kopiëren",
           "copied": "Token gekopieerd naar klembord."
         }
+      },
+      "scheduling": {
+        "findATime": "Zoek een tijdstip",
+        "previousDay": "Vorige dag",
+        "nextDay": "Volgende dag",
+        "noConflicts": "Geen conflicten",
+        "conflicts": "{{count}} conflict(en)",
+        "addAttendeesToSeeAvailability": "Voeg deelnemers toe om beschikbaarheid te zien"
       }
     }
   }

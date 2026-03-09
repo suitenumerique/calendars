@@ -194,3 +194,100 @@ def test_user_list_same_org_visible():
     assert len(data) == 1
     assert data[0]["email"] == "carol@example.com"
     get_entitlements_backend.cache_clear()
+
+
+# -- Sharing level --
+
+
+@pytest.mark.django_db
+def test_effective_sharing_level_defaults_to_server_setting():
+    """Organization without override returns server-wide default."""
+    org = factories.OrganizationFactory(default_sharing_level=None)
+    assert org.effective_sharing_level == "freebusy"
+
+
+@pytest.mark.django_db
+@override_settings(ORG_DEFAULT_SHARING_LEVEL="none")
+def test_effective_sharing_level_follows_server_override():
+    """Organization without override returns overridden server default."""
+    org = factories.OrganizationFactory(default_sharing_level=None)
+    assert org.effective_sharing_level == "none"
+
+
+@pytest.mark.django_db
+def test_effective_sharing_level_org_override():
+    """Organization with explicit level ignores server default."""
+    org = factories.OrganizationFactory(default_sharing_level="read")
+    assert org.effective_sharing_level == "read"
+
+
+# -- Organization settings API --
+
+
+@pytest.mark.django_db
+@override_settings(
+    ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
+    ENTITLEMENTS_BACKEND_PARAMETERS={},
+)
+def test_org_settings_retrieve():
+    """GET /organization-settings/current/ returns org sharing level."""
+    get_entitlements_backend.cache_clear()
+    org = factories.OrganizationFactory(external_id="test-org")
+    user = factories.UserFactory(organization=org)
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.get("/api/v1.0/organization-settings/current/")
+
+    assert response.status_code == HTTP_200_OK
+    assert response.json()["sharing_level"] == "freebusy"
+    get_entitlements_backend.cache_clear()
+
+
+@pytest.mark.django_db
+@override_settings(
+    ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
+    ENTITLEMENTS_BACKEND_PARAMETERS={},
+)
+def test_org_settings_update_sharing_level():
+    """PATCH /organization-settings/current/ updates sharing level."""
+    get_entitlements_backend.cache_clear()
+    org = factories.OrganizationFactory(external_id="test-org")
+    user = factories.UserFactory(organization=org)
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.patch(
+        "/api/v1.0/organization-settings/current/",
+        {"default_sharing_level": "none"},
+        format="json",
+    )
+
+    assert response.status_code == HTTP_200_OK
+    org.refresh_from_db()
+    assert org.default_sharing_level == "none"
+    assert response.json()["sharing_level"] == "none"
+    get_entitlements_backend.cache_clear()
+
+
+@pytest.mark.django_db
+@override_settings(
+    ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
+    ENTITLEMENTS_BACKEND_PARAMETERS={},
+)
+def test_org_settings_update_rejects_invalid_level():
+    """PATCH with invalid sharing level returns 400."""
+    get_entitlements_backend.cache_clear()
+    org = factories.OrganizationFactory(external_id="test-org")
+    user = factories.UserFactory(organization=org)
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+    response = client.patch(
+        "/api/v1.0/organization-settings/current/",
+        {"default_sharing_level": "superadmin"},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    get_entitlements_backend.cache_clear()

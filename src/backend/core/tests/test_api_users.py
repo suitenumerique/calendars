@@ -73,61 +73,39 @@ def test_api_users_list_query_inactive():
 
 
 def test_api_users_list_query_short_queries():
-    """
-    Queries shorter than 5 characters should return an empty result set.
-    """
-
+    """Queries shorter than 3 characters should return an empty result set."""
     user = factories.UserFactory()
+    org = user.organization
     client = APIClient()
     client.force_login(user)
 
-    factories.UserFactory(email="john.doe@example.com")
-    factories.UserFactory(email="john.lennon@example.com")
+    factories.UserFactory(email="john.doe@example.com", organization=org)
 
     response = client.get("/api/v1.0/users/?q=jo")
     assert response.status_code == 200
     assert response.json()["results"] == []
 
-    response = client.get("/api/v1.0/users/?q=john")
-    assert response.status_code == 200
-    assert response.json()["results"] == []
-
-    # Non-email queries (without @) return empty
-    response = client.get("/api/v1.0/users/?q=john.")
+    response = client.get("/api/v1.0/users/?q=j")
     assert response.status_code == 200
     assert response.json()["results"] == []
 
 
 def test_api_users_list_limit(settings):
-    """
-    Authenticated users should be able to list users and the number of results
-    should be limited to 10.
-    """
+    """Results should be bounded even with many matching users."""
     user = factories.UserFactory()
     org = user.organization
 
     client = APIClient()
     client.force_login(user)
 
-    # Use a base name with a length equal 5 to test that the limit is applied
-    base_name = "alice"
     for i in range(15):
-        factories.UserFactory(email=f"{base_name}.{i}@example.com", organization=org)
+        factories.UserFactory(email=f"alice.{i}@example.com", organization=org)
 
-    # Non-email queries (without @) return empty
-    response = client.get(
-        "/api/v1.0/users/?q=alice",
-    )
+    # Partial match returns results (capped at page size)
+    response = client.get("/api/v1.0/users/?q=alice")
     assert response.status_code == 200
-    assert response.json()["results"] == []
-
-    # Email queries require exact match
-    settings.API_USERS_LIST_LIMIT = 100
-    response = client.get(
-        "/api/v1.0/users/?q=alice.0@example.com",
-    )
-    assert response.status_code == 200
-    assert len(response.json()["results"]) == 1
+    assert len(response.json()["results"]) > 0
+    assert len(response.json()["results"]) <= 15
 
 
 def test_api_users_list_throttling_authenticated(settings):
@@ -154,8 +132,7 @@ def test_api_users_list_throttling_authenticated(settings):
 
 def test_api_users_list_query_email(settings):
     """
-    Authenticated users should be able to list users and filter by email.
-    Only exact email matches are returned (case-insensitive).
+    Authenticated users should be able to search users by partial email.
     """
 
     settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["user_list_burst"] = "9999/minute"
@@ -167,42 +144,35 @@ def test_api_users_list_query_email(settings):
     client.force_login(user)
 
     dave = factories.UserFactory(email="david.bowman@work.com", organization=org)
-    factories.UserFactory(email="nicole.bowman@work.com", organization=org)
+    nicole = factories.UserFactory(email="nicole.bowman@work.com", organization=org)
 
     # Exact match works
-    response = client.get(
-        "/api/v1.0/users/?q=david.bowman@work.com",
-    )
+    response = client.get("/api/v1.0/users/?q=david.bowman@work.com")
     assert response.status_code == 200
-    user_ids = [user["id"] for user in response.json()["results"]]
-    assert user_ids == [str(dave.id)]
+    user_ids = [u["id"] for u in response.json()["results"]]
+    assert str(dave.id) in user_ids
+
+    # Partial email match works
+    response = client.get("/api/v1.0/users/?q=bowman@work")
+    assert response.status_code == 200
+    user_ids = [u["id"] for u in response.json()["results"]]
+    assert str(dave.id) in user_ids
+    assert str(nicole.id) in user_ids
 
     # Case-insensitive match works
-    response = client.get(
-        "/api/v1.0/users/?q=David.Bowman@Work.COM",
-    )
+    response = client.get("/api/v1.0/users/?q=David.Bowman@Work.COM")
     assert response.status_code == 200
-    user_ids = [user["id"] for user in response.json()["results"]]
-    assert user_ids == [str(dave.id)]
+    user_ids = [u["id"] for u in response.json()["results"]]
+    assert str(dave.id) in user_ids
 
-    # Typos don't match (exact match only)
-    response = client.get(
-        "/api/v1.0/users/?q=davig.bovman@worm.com",
-    )
+    # Typos don't match
+    response = client.get("/api/v1.0/users/?q=davig.bovman@worm.com")
     assert response.status_code == 200
-    user_ids = [user["id"] for user in response.json()["results"]]
-    assert user_ids == []
-
-    response = client.get(
-        "/api/v1.0/users/?q=davig.bovman@worm.cop",
-    )
-    assert response.status_code == 200
-    user_ids = [user["id"] for user in response.json()["results"]]
-    assert user_ids == []
+    assert response.json()["results"] == []
 
 
-def test_api_users_list_query_email_matching():
-    """Email queries return exact matches only (case-insensitive)."""
+def test_api_users_list_query_email_partial_matching():
+    """Partial email queries return matching users."""
     user = factories.UserFactory()
     org = user.organization
 
@@ -212,27 +182,110 @@ def test_api_users_list_query_email_matching():
     user1 = factories.UserFactory(
         email="alice.johnson@example.gouv.fr", organization=org
     )
-    factories.UserFactory(email="alice.johnnson@example.gouv.fr", organization=org)
+    user2 = factories.UserFactory(
+        email="alice.johnnson@example.gouv.fr", organization=org
+    )
     factories.UserFactory(email="alice.kohlson@example.gouv.fr", organization=org)
     user4 = factories.UserFactory(
         email="alicia.johnnson@example.gouv.fr", organization=org
     )
-    factories.UserFactory(email="alicia.johnnson@example.gov.uk", organization=org)
+    # Different org user should not appear
+    factories.UserFactory(email="alice.johnnson@example.gov.uk")
     factories.UserFactory(email="alice.thomson@example.gouv.fr", organization=org)
 
-    # Exact match returns only that user
-    response = client.get(
-        "/api/v1.0/users/?q=alice.johnson@example.gouv.fr",
-    )
+    # Partial match on "alice.john" returns alice.johnson and alice.johnnson
+    response = client.get("/api/v1.0/users/?q=alice.john")
     assert response.status_code == 200
-    user_ids = [user["id"] for user in response.json()["results"]]
-    assert user_ids == [str(user1.id)]
+    user_ids = [u["id"] for u in response.json()["results"]]
+    assert str(user1.id) in user_ids
+    assert str(user2.id) in user_ids
 
-    # Different email returns different user
-    response = client.get("/api/v1.0/users/?q=alicia.johnnson@example.gouv.fr")
+    # Partial match on "alicia" returns alicia.johnnson (same org only)
+    response = client.get("/api/v1.0/users/?q=alicia")
     assert response.status_code == 200
-    user_ids = [user["id"] for user in response.json()["results"]]
+    user_ids = [u["id"] for u in response.json()["results"]]
     assert user_ids == [str(user4.id)]
+
+
+def test_api_users_list_query_by_name():
+    """Users should be searchable by full name (partial, case-insensitive)."""
+    user = factories.UserFactory()
+    org = user.organization
+
+    client = APIClient()
+    client.force_login(user)
+
+    alice = factories.UserFactory(
+        email="alice@example.com", full_name="Alice Johnson", organization=org
+    )
+    bob = factories.UserFactory(
+        email="bob@example.com", full_name="Bob Smith", organization=org
+    )
+    factories.UserFactory(
+        email="charlie@example.com", full_name="Charlie Johnson", organization=org
+    )
+
+    # Search by first name
+    response = client.get("/api/v1.0/users/?q=Alice")
+    assert response.status_code == 200
+    user_ids = [u["id"] for u in response.json()["results"]]
+    assert str(alice.id) in user_ids
+    assert str(bob.id) not in user_ids
+
+    # Search by last name matches multiple users
+    response = client.get("/api/v1.0/users/?q=Johnson")
+    assert response.status_code == 200
+    assert len(response.json()["results"]) == 2
+
+    # Case-insensitive
+    response = client.get("/api/v1.0/users/?q=bob")
+    assert response.status_code == 200
+    user_ids = [u["id"] for u in response.json()["results"]]
+    assert str(bob.id) in user_ids
+
+
+def test_api_users_list_cross_org_isolation():
+    """Users from different organizations should not see each other."""
+    org1 = factories.OrganizationFactory(name="Org One")
+    org2 = factories.OrganizationFactory(name="Org Two")
+
+    user1 = factories.UserFactory(
+        email="user1@org1.com", full_name="Shared Name", organization=org1
+    )
+    factories.UserFactory(
+        email="user2@org2.com", full_name="Shared Name", organization=org2
+    )
+
+    client = APIClient()
+    client.force_login(user1)
+
+    # Search by shared name - should only return same-org user
+    response = client.get("/api/v1.0/users/?q=Shared")
+    assert response.status_code == 200
+    user_ids = [u["id"] for u in response.json()["results"]]
+    assert str(user1.id) in user_ids
+    assert len(user_ids) == 1
+
+    # Search by cross-org email - should return nothing
+    response = client.get("/api/v1.0/users/?q=user2@org2.com")
+    assert response.status_code == 200
+    assert response.json()["results"] == []
+
+
+def test_api_users_list_excludes_self():
+    """Search should include the requesting user if they match."""
+    user = factories.UserFactory(
+        email="alice@example.com", full_name="Alice Test"
+    )
+
+    client = APIClient()
+    client.force_login(user)
+
+    # User should find themselves
+    response = client.get("/api/v1.0/users/?q=alice")
+    assert response.status_code == 200
+    user_ids = [u["id"] for u in response.json()["results"]]
+    assert str(user.id) in user_ids
 
 
 def test_api_users_retrieve_me_anonymous():
@@ -271,11 +324,13 @@ def test_api_users_retrieve_me_authenticated():
         "email": user.email,
         "full_name": user.full_name,
         "language": user.language,
+        "timezone": str(user.timezone),
         "can_access": True,
         "can_admin": True,
         "organization": {
             "id": str(user.organization.id),
             "name": user.organization.name,
+            "sharing_level": "freebusy",
         },
     }
 
@@ -440,8 +495,8 @@ def test_api_users_update_anonymous():
 
 def test_api_users_update_authenticated_self():
     """
-    Authenticated users should be able to update their own user but only "language"
-    and "timezone" fields.
+    Authenticated users should be able to update their own user but only "language",
+    "timezone" fields.
     """
     user = factories.UserFactory()
 
@@ -528,8 +583,8 @@ def test_api_users_patch_anonymous():
 
 def test_api_users_patch_authenticated_self():
     """
-    Authenticated users should be able to patch their own user but only "language"
-    and "timezone" fields.
+    Authenticated users should be able to patch their own user but only "language",
+    "timezone" fields.
     """
     user = factories.UserFactory()
 

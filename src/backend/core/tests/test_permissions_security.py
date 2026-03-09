@@ -272,6 +272,34 @@ class TestCalDAVProxyOrgHeader:
         assert request.headers["X-CalDAV-Organization"] == str(org.id)
         assert request.headers["X-CalDAV-Organization"] != "spoofed-org-id"
 
+    @responses.activate
+    def test_proxy_sends_sharing_level_header(self):
+        """CalDAV proxy sends X-CalDAV-Sharing-Level from org's effective level."""
+        org = factories.OrganizationFactory(
+            external_id="org-fb", default_sharing_level="none"
+        )
+        user = factories.UserFactory(email="alice@example.com", organization=org)
+
+        client = APIClient()
+        client.force_login(user)
+
+        caldav_url = settings.CALDAV_URL
+        responses.add(
+            responses.Response(
+                method="PROPFIND",
+                url=f"{caldav_url}/caldav/principals/resources/",
+                status=HTTP_207_MULTI_STATUS,
+                body='<?xml version="1.0"?><multistatus xmlns="DAV:"></multistatus>',
+                headers={"Content-Type": "application/xml"},
+            )
+        )
+
+        client.generic("PROPFIND", "/caldav/principals/resources/")
+
+        assert len(responses.calls) == 1
+        request = responses.calls[0].request
+        assert request.headers["X-CalDAV-Sharing-Level"] == "none"
+
 
 # ---------------------------------------------------------------------------
 # IsEntitledToAccess permission — fail-closed

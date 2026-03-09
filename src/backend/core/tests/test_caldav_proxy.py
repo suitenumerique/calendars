@@ -335,6 +335,234 @@ class TestCalDAVProxy:
         assert response.status_code == HTTP_400_BAD_REQUEST
 
 
+@pytest.mark.django_db
+class TestCalDAVFreeBusy:
+    """Tests for free/busy queries via CalDAV outbox POST."""
+
+    FREEBUSY_REQUEST = (
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//Test//EN\r\n"
+        "METHOD:REQUEST\r\n"
+        "BEGIN:VFREEBUSY\r\n"
+        "DTSTART:20260309T000000Z\r\n"
+        "DTEND:20260310T000000Z\r\n"
+        "ORGANIZER:mailto:{organizer}\r\n"
+        "ATTENDEE:mailto:{attendee}\r\n"
+        "END:VFREEBUSY\r\n"
+        "END:VCALENDAR"
+    )
+
+    FREEBUSY_RESPONSE = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<cal:schedule-response xmlns:d="DAV:" '
+        'xmlns:cal="urn:ietf:params:xml:ns:caldav">\n'
+        "  <cal:response>\n"
+        "    <cal:recipient><d:href>mailto:{attendee}</d:href></cal:recipient>\n"
+        "    <cal:request-status>2.0;Success</cal:request-status>\n"
+        "    <cal:calendar-data>"
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//SabreDAV//EN\r\n"
+        "BEGIN:VFREEBUSY\r\n"
+        "DTSTART:20260309T000000Z\r\n"
+        "DTEND:20260310T000000Z\r\n"
+        "FREEBUSY:20260309T100000Z/20260309T110000Z\r\n"
+        "END:VFREEBUSY\r\n"
+        "END:VCALENDAR"
+        "</cal:calendar-data>\n"
+        "  </cal:response>\n"
+        "</cal:schedule-response>"
+    )
+
+    @responses.activate
+    def test_freebusy_post_forwarded_with_correct_content_type(self):
+        """POST to outbox should forward text/calendar content-type to CalDAV."""
+        user = factories.UserFactory(email="alice@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        caldav_url = settings.CALDAV_URL
+        outbox_path = f"calendars/users/{user.email}/outbox/"
+        responses.add(
+            responses.Response(
+                method="POST",
+                url=f"{caldav_url}/caldav/{outbox_path}",
+                status=HTTP_200_OK,
+                body=self.FREEBUSY_RESPONSE.format(attendee="bob@example.com"),
+                headers={"Content-Type": "application/xml"},
+            )
+        )
+
+        body = self.FREEBUSY_REQUEST.format(
+            organizer=user.email, attendee="bob@example.com"
+        )
+        response = client.generic(
+            "POST",
+            f"/caldav/{outbox_path}",
+            data=body,
+            content_type="text/calendar; charset=utf-8",
+        )
+
+        assert response.status_code == HTTP_200_OK
+        assert len(responses.calls) == 1
+
+        # Verify content-type is forwarded (not overwritten to application/xml)
+        forwarded = responses.calls[0].request
+        assert "text/calendar" in forwarded.headers["Content-Type"]
+
+    @responses.activate
+    def test_freebusy_post_forwards_body(self):
+        """POST to outbox should forward the iCalendar body unchanged."""
+        user = factories.UserFactory(email="alice@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        caldav_url = settings.CALDAV_URL
+        outbox_path = f"calendars/users/{user.email}/outbox/"
+        responses.add(
+            responses.Response(
+                method="POST",
+                url=f"{caldav_url}/caldav/{outbox_path}",
+                status=HTTP_200_OK,
+                body=self.FREEBUSY_RESPONSE.format(attendee="bob@example.com"),
+                headers={"Content-Type": "application/xml"},
+            )
+        )
+
+        body = self.FREEBUSY_REQUEST.format(
+            organizer=user.email, attendee="bob@example.com"
+        )
+        client.generic(
+            "POST",
+            f"/caldav/{outbox_path}",
+            data=body,
+            content_type="text/calendar; charset=utf-8",
+        )
+
+        # Verify the body was forwarded
+        forwarded = responses.calls[0].request
+        assert b"BEGIN:VCALENDAR" in forwarded.body
+        assert b"VFREEBUSY" in forwarded.body
+        assert b"bob@example.com" in forwarded.body
+
+    @responses.activate
+    def test_freebusy_post_forwards_auth_headers(self):
+        """POST to outbox should include X-Forwarded-User and X-Api-Key."""
+        user = factories.UserFactory(email="alice@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        caldav_url = settings.CALDAV_URL
+        outbox_path = f"calendars/users/{user.email}/outbox/"
+        responses.add(
+            responses.Response(
+                method="POST",
+                url=f"{caldav_url}/caldav/{outbox_path}",
+                status=HTTP_200_OK,
+                body=self.FREEBUSY_RESPONSE.format(attendee="bob@example.com"),
+                headers={"Content-Type": "application/xml"},
+            )
+        )
+
+        body = self.FREEBUSY_REQUEST.format(
+            organizer=user.email, attendee="bob@example.com"
+        )
+        client.generic(
+            "POST",
+            f"/caldav/{outbox_path}",
+            data=body,
+            content_type="text/calendar; charset=utf-8",
+        )
+
+        forwarded = responses.calls[0].request
+        assert forwarded.headers["X-Forwarded-User"] == user.email
+        assert forwarded.headers["X-Api-Key"] == settings.CALDAV_OUTBOUND_API_KEY
+
+    @responses.activate
+    def test_freebusy_post_returns_schedule_response(self):
+        """POST to outbox should return the CalDAV schedule-response XML."""
+        user = factories.UserFactory(email="alice@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        caldav_url = settings.CALDAV_URL
+        outbox_path = f"calendars/users/{user.email}/outbox/"
+        response_body = self.FREEBUSY_RESPONSE.format(attendee="bob@example.com")
+        responses.add(
+            responses.Response(
+                method="POST",
+                url=f"{caldav_url}/caldav/{outbox_path}",
+                status=HTTP_200_OK,
+                body=response_body,
+                headers={"Content-Type": "application/xml"},
+            )
+        )
+
+        body = self.FREEBUSY_REQUEST.format(
+            organizer=user.email, attendee="bob@example.com"
+        )
+        response = client.generic(
+            "POST",
+            f"/caldav/{outbox_path}",
+            data=body,
+            content_type="text/calendar; charset=utf-8",
+        )
+
+        assert response.status_code == HTTP_200_OK
+        # Verify the schedule-response is returned to the client
+        root = ET.fromstring(response.content)
+        ns = {"cal": "urn:ietf:params:xml:ns:caldav", "d": "DAV:"}
+        status = root.find(".//cal:request-status", ns)
+        assert status is not None
+        assert "2.0" in status.text
+
+    def test_freebusy_post_requires_authentication(self):
+        """POST to outbox should require authentication."""
+        client = APIClient()
+        response = client.generic(
+            "POST",
+            "/caldav/calendars/users/alice@example.com/outbox/",
+            data="BEGIN:VCALENDAR\r\nEND:VCALENDAR",
+            content_type="text/calendar",
+        )
+        assert response.status_code == HTTP_401_UNAUTHORIZED
+
+    @responses.activate
+    def test_freebusy_post_includes_organization_header(self):
+        """POST to outbox should include X-CalDAV-Organization header."""
+        user = factories.UserFactory(email="alice@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        caldav_url = settings.CALDAV_URL
+        outbox_path = f"calendars/users/{user.email}/outbox/"
+        responses.add(
+            responses.Response(
+                method="POST",
+                url=f"{caldav_url}/caldav/{outbox_path}",
+                status=HTTP_200_OK,
+                body=self.FREEBUSY_RESPONSE.format(attendee="bob@example.com"),
+                headers={"Content-Type": "application/xml"},
+            )
+        )
+
+        body = self.FREEBUSY_REQUEST.format(
+            organizer=user.email, attendee="bob@example.com"
+        )
+        client.generic(
+            "POST",
+            f"/caldav/{outbox_path}",
+            data=body,
+            content_type="text/calendar; charset=utf-8",
+        )
+
+        forwarded = responses.calls[0].request
+        assert forwarded.headers["X-CalDAV-Organization"] == str(
+            user.organization_id
+        )
+
+
 class TestValidateCaldavProxyPath:
     """Tests for validate_caldav_proxy_path utility."""
 

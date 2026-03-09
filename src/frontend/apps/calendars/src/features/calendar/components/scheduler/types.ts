@@ -83,7 +83,8 @@ export type EventFormSectionId =
   | "recurrence"
   | "attendees"
   | "resources"
-  | "videoConference";
+  | "videoConference"
+  | "scheduling";
 
 /**
  * Attachment metadata (UI only, no actual file upload).

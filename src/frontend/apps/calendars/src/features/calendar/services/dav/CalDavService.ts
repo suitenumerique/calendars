@@ -62,6 +62,7 @@ import {
   buildSyncCollectionXml,
   buildPrincipalSearchXml,
   executeDavRequest,
+  escapeXml,
   CALENDAR_PROPS,
   parseCalendarComponents,
   parseSharePrivilege,
@@ -793,20 +794,22 @@ export class CalDavService {
         throw new Error('Scheduling outbox not found')
       }
 
-      // Construct full URL - outboxUrl is relative to serverUrl
+      // Construct full URL - outboxUrl from PROPFIND is an absolute path (e.g. /caldav/calendars/...)
+      // so we only need to prepend the origin, not the full serverUrl (which already has /caldav/)
       const fullOutboxUrl = outboxUrl.startsWith('http')
         ? outboxUrl
-        : `${this._account!.serverUrl}${outboxUrl.startsWith('/') ? outboxUrl.slice(1) : outboxUrl}`
+        : `${new URL(this._account!.serverUrl).origin}${outboxUrl}`
 
       // Use fetch directly to avoid davRequest URL construction issues in dev mode
+      // Note: fetchOptions is spread first so its headers don't override our Content-Type
       const response = await fetch(fullOutboxUrl, {
+        ...this._account!.fetchOptions,
         method: 'POST',
         headers: {
-          'Content-Type': 'text/calendar; charset=utf-8; method=' + request.method,
           ...this._account!.headers,
+          'Content-Type': 'text/calendar; charset=utf-8; method=' + request.method,
         },
         body: iCalString,
-        ...this._account!.fetchOptions,
       })
 
       if (!response.ok) {
@@ -910,29 +913,89 @@ ${attendeeLines}
 END:VFREEBUSY
 END:VCALENDAR`
 
-      const responses = await davRequest({
-        url: outboxUrl,
-        init: {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'text/calendar; charset=utf-8',
-            ...this._account!.headers,
-          },
-          body: fbRequest,
+      // Construct full URL - outboxUrl from PROPFIND is an absolute path (e.g. /caldav/calendars/...)
+      // so we only need to prepend the origin, not the full serverUrl (which already has /caldav/)
+      const fullOutboxUrl = outboxUrl.startsWith('http')
+        ? outboxUrl
+        : `${new URL(this._account!.serverUrl).origin}${outboxUrl}`
+
+      // Note: fetchOptions is spread first so its headers don't override our Content-Type
+      const response = await fetch(fullOutboxUrl, {
+        ...this._account!.fetchOptions,
+        method: 'POST',
+        headers: {
+          ...this._account!.headers,
+          'Content-Type': 'text/calendar; charset=utf-8',
         },
-        fetchOptions: this._account!.fetchOptions,
+        body: fbRequest,
       })
 
-      const response = responses[0]
-      if (!response?.ok) {
-        throw new Error(`Failed to query free/busy: ${response?.status}`)
+      if (!response.ok) {
+        throw new Error(`Failed to query free/busy: ${response.status}`)
       }
 
-      return request.attendees.map((email) => ({
-        attendee: email,
-        periods: [],
-      }))
+      const xmlText = await response.text()
+      return parseScheduleFreeBusyResponse(xmlText, request.attendees)
     }, 'Failed to query free/busy')
+  }
+
+  // ============================================================================
+  // Availability (Working Hours)
+  // ============================================================================
+
+  /**
+   * Get the user's calendar availability (working hours).
+   * Reads the {urn:ietf:params:xml:ns:caldav}calendar-availability property
+   * from the calendar home via PROPFIND.
+   */
+  async getAvailability(): Promise<CalDavResponse<string | null>> {
+    if (!this._account?.homeUrl) {
+      return { success: false, error: 'Not connected' }
+    }
+
+    return withErrorHandling(async () => {
+      const response = await propfind({
+        url: this._account!.homeUrl!,
+        props: {
+          [`${DAVNamespaceShort.CALDAV}:calendar-availability`]: {},
+        },
+        headers: this._account!.headers,
+        fetchOptions: this._account!.fetchOptions,
+        depth: '0',
+      })
+
+      return response[0]?.props?.['calendarAvailability'] ?? null
+    }, 'Failed to get availability')
+  }
+
+  /**
+   * Set the user's calendar availability (working hours).
+   * Stores a VCALENDAR with VAVAILABILITY/AVAILABLE components
+   * on the calendar home via PROPPATCH.
+   */
+  async setAvailability(
+    vcalendarText: string,
+  ): Promise<CalDavResponse> {
+    if (!this._account?.homeUrl) {
+      return { success: false, error: 'Not connected' }
+    }
+
+    const body = `<?xml version="1.0" encoding="utf-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-availability>${escapeXml(vcalendarText)}</C:calendar-availability>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>`
+
+    return executeDavRequest({
+      url: this._account.homeUrl,
+      method: 'PROPPATCH',
+      body,
+      headers: this._account.headers,
+      fetchOptions: this._account.fetchOptions,
+    })
   }
 
   // ============================================================================
@@ -1188,4 +1251,132 @@ END:VCALENDAR`
 
 export function createCalDavService(): CalDavService {
   return new CalDavService()
+}
+
+// ============================================================================
+// FreeBusy Response Parsing
+// ============================================================================
+
+/**
+ * Parse a CalDAV schedule-response XML containing VFREEBUSY data.
+ * Response format defined in RFC 6638.
+ */
+function parseScheduleFreeBusyResponse(
+  xmlText: string,
+  requestedAttendees: string[],
+): FreeBusyResponse[] {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(xmlText, 'application/xml')
+
+  const results: FreeBusyResponse[] = []
+  const CAL_NS = 'urn:ietf:params:xml:ns:caldav'
+  const DAV_NS = 'DAV:'
+
+  const responseElements = doc.getElementsByTagNameNS(CAL_NS, 'response')
+
+  for (let i = 0; i < responseElements.length; i++) {
+    const responseEl = responseElements[i]
+
+    // Extract recipient email
+    const recipientEl = responseEl.getElementsByTagNameNS(CAL_NS, 'recipient')[0]
+    const hrefEl = recipientEl?.getElementsByTagNameNS(DAV_NS, 'href')[0]
+    const href = hrefEl?.textContent ?? ''
+    const email = href.replace(/^mailto:/i, '').toLowerCase()
+
+    // Extract calendar-data (ICS text containing VFREEBUSY)
+    const calDataEl = responseEl.getElementsByTagNameNS(CAL_NS, 'calendar-data')[0]
+    const icsText = calDataEl?.textContent ?? ''
+
+    const periods = parseFreeBusyPeriods(icsText)
+    results.push({ attendee: email, periods })
+  }
+
+  // Add empty results for attendees not in the response
+  for (const attendee of requestedAttendees) {
+    const lower = attendee.toLowerCase()
+    if (!results.some((r) => r.attendee === lower)) {
+      results.push({ attendee: lower, periods: [] })
+    }
+  }
+
+  return results
+}
+
+/**
+ * Parse FREEBUSY lines from a VFREEBUSY ICS component.
+ * Format: FREEBUSY;FBTYPE=BUSY:20260310T090000Z/20260310T100000Z
+ */
+function parseFreeBusyPeriods(icsText: string): FreeBusyResponse['periods'] {
+  const periods: FreeBusyResponse['periods'] = []
+  const lines = icsText.split(/\r?\n/)
+
+  for (const line of lines) {
+    if (!line.startsWith('FREEBUSY')) continue
+
+    // Split into params and value: FREEBUSY;FBTYPE=BUSY:start/end
+    const colonIdx = line.indexOf(':')
+    if (colonIdx === -1) continue
+
+    const params = line.substring(0, colonIdx)
+    const value = line.substring(colonIdx + 1)
+
+    // Parse FBTYPE (default BUSY)
+    let fbType: 'BUSY' | 'BUSY-UNAVAILABLE' | 'BUSY-TENTATIVE' | 'FREE' = 'BUSY'
+    const typeMatch = params.match(/FBTYPE=([A-Z-]+)/i)
+    if (typeMatch) {
+      fbType = typeMatch[1].toUpperCase() as typeof fbType
+    }
+
+    // Parse comma-separated periods
+    const periodStrs = value.split(',')
+    for (const periodStr of periodStrs) {
+      const [startStr, endStr] = periodStr.split('/')
+      if (!startStr || !endStr) continue
+
+      const start = parseIcsDateTime(startStr)
+      if (!start) continue
+
+      let end: Date | null
+      if (endStr.startsWith('P')) {
+        // Duration format (e.g., PT1H)
+        end = addIsoDuration(start, endStr)
+      } else {
+        end = parseIcsDateTime(endStr)
+      }
+      if (!end) continue
+
+      periods.push({ start, end, type: fbType })
+    }
+  }
+
+  return periods
+}
+
+/** Parse an ICS datetime string like 20260310T090000Z into a Date. */
+function parseIcsDateTime(str: string): Date | null {
+  const m = str.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/)
+  if (!m) return null
+  return new Date(
+    Date.UTC(
+      parseInt(m[1]),
+      parseInt(m[2]) - 1,
+      parseInt(m[3]),
+      parseInt(m[4]),
+      parseInt(m[5]),
+      parseInt(m[6]),
+    ),
+  )
+}
+
+/** Add an ISO 8601 duration (e.g., PT1H30M) to a Date. */
+function addIsoDuration(date: Date, duration: string): Date {
+  const m = duration.match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!m) return date
+  const ms =
+    (parseInt(m[1] || '0') * 86400 +
+      parseInt(m[2] || '0') * 3600 +
+      parseInt(m[3] || '0') * 60 +
+      parseInt(m[4] || '0')) *
+    1000
+  return new Date(date.getTime() + ms)
 }

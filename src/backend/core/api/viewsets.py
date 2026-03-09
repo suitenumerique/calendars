@@ -98,9 +98,9 @@ class UserViewSet(
 
     def get_queryset(self):
         """
-        Limit listed users by querying the email field.
+        Limit listed users by querying email or full_name.
         Scoped to the requesting user's organization.
-        If query contains "@", search exactly. Otherwise return empty.
+        Minimum 3 characters required.
         """
         queryset = self.queryset
 
@@ -112,15 +112,18 @@ class UserViewSet(
             return queryset.none()
         queryset = queryset.filter(organization_id=self.request.user.organization_id)
 
-        if not (query := self.request.query_params.get("q", "")) or len(query) < 5:
+        if not (query := self.request.query_params.get("q", "")) or len(query) < 3:
             return queryset.none()
 
-        # For emails, match exactly
-        if "@" in query:
-            return queryset.filter(email__iexact=query).order_by("email")
+        # Search by email (partial, case-insensitive) or full name
+        from django.db.models import Q  # noqa: PLC0415
 
-        # For non-email queries, return empty (no fuzzy search)
-        return queryset.none()
+        return (
+            queryset.filter(
+                Q(email__icontains=query) | Q(full_name__icontains=query)
+            )
+            .order_by("full_name", "email")[:50]
+        )
 
     @action(
         detail=False,
@@ -136,6 +139,7 @@ class UserViewSet(
         return response.Response(
             self.get_serializer(request.user, context=context).data
         )
+
 
 
 class ConfigView(views.APIView):
@@ -208,6 +212,57 @@ class ConfigView(views.APIView):
             )
 
         return theme_customization
+
+
+class OrganizationSettingsViewSet(viewsets.ViewSet):
+    """ViewSet for organization settings (sharing level, etc.).
+
+    Only org admins can update settings; all org members can read them.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def retrieve(self, request, pk=None):  # pylint: disable=unused-argument
+        """GET /api/v1.0/organization-settings/current/"""
+        org = request.user.organization
+        if not org:
+            return response.Response(
+                {"detail": "User has no organization."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return response.Response(serializers.OrganizationSerializer(org).data)
+
+    def partial_update(self, request, pk=None):  # pylint: disable=unused-argument
+        """PATCH /api/v1.0/organization-settings/current/"""
+        if not request.user.organization:
+            return response.Response(
+                {"detail": "User has no organization."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Check admin permission
+        perm = permissions.IsOrgAdmin()
+        if not perm.has_permission(request, self):
+            return response.Response(
+                {"detail": "Only org admins can update settings."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        org = request.user.organization
+        sharing_level = request.data.get("default_sharing_level")
+        if sharing_level is not None:
+            valid = {c[0] for c in models.SharingLevel.choices}
+            if sharing_level not in valid:
+                return response.Response(
+                    {
+                        "detail": f"Invalid sharing level. Must be one of: {', '.join(valid)}"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            org.default_sharing_level = sharing_level
+            org.save(update_fields=["default_sharing_level", "updated_at"])
+
+        return response.Response(serializers.OrganizationSerializer(org).data)
 
 
 class CalendarViewSet(viewsets.GenericViewSet):

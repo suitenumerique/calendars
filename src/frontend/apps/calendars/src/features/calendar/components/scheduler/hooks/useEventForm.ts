@@ -426,6 +426,7 @@ export const useEventForm = ({
     location,
     setLocation,
     startDateTime,
+    setStartDateTime,
     endDateTime,
     setEndDateTime,
     selectedCalendarUrl,

@@ -51,15 +51,71 @@
     "failureFactor": 30,
     "users": [
       {
-        "username": "calendars",
-        "email": "calendars@calendars.world",
-        "firstName": "John",
-        "lastName": "Doe",
+        "username": "user1",
+        "email": "user1@example.local",
+        "firstName": "User",
+        "lastName": "One",
         "enabled": true,
         "credentials": [
           {
             "type": "password",
-            "value": "calendars"
+            "value": "user1"
+          }
+        ],
+        "realmRoles": ["user"]
+      },
+      {
+        "username": "user2",
+        "email": "user2@example.local",
+        "firstName": "User",
+        "lastName": "Two",
+        "enabled": true,
+        "credentials": [
+          {
+            "type": "password",
+            "value": "user2"
+          }
+        ],
+        "realmRoles": ["user"]
+      },
+      {
+        "username": "user3",
+        "email": "user3@example.local",
+        "firstName": "User",
+        "lastName": "Three",
+        "enabled": true,
+        "credentials": [
+          {
+            "type": "password",
+            "value": "user3"
+          }
+        ],
+        "realmRoles": ["user"]
+      },
+      {
+        "username": "user1.2",
+        "email": "user1.2@example2.local",
+        "firstName": "User",
+        "lastName": "One-Bis",
+        "enabled": true,
+        "credentials": [
+          {
+            "type": "password",
+            "value": "user1.2"
+          }
+        ],
+        "realmRoles": ["user"]
+      },
+      {
+        "username": "user2.2",
+        "email": "user2.2@example2.local",
+        "firstName": "User",
+        "lastName": "Two-Bis",
+        "enabled": true,
+        "credentials": [
+          {
+            "type": "password",
+            "value": "user2.2"
           }
         ],
         "realmRoles": ["user"]

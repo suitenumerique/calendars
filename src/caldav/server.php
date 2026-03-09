@@ -17,6 +17,8 @@ use Calendars\SabreDav\AttendeeNormalizerPlugin;
 use Calendars\SabreDav\InternalApiPlugin;
 use Calendars\SabreDav\ResourceAutoSchedulePlugin;
 use Calendars\SabreDav\ResourceMkCalendarBlockPlugin;
+use Calendars\SabreDav\FreeBusyOrgScopePlugin;
+use Calendars\SabreDav\AvailabilityPlugin;
 use Calendars\SabreDav\CalendarsRoot;
 use Calendars\SabreDav\CustomCalDAVPlugin;
 use Calendars\SabreDav\PrincipalsRoot;
@@ -88,7 +90,12 @@ $principalBackend->setServer($server);
 $server->addPlugin($authPlugin);
 $server->addPlugin(new CustomCalDAVPlugin());
 $server->addPlugin(new CardDAV\Plugin());
-$server->addPlugin(new DAVACL\Plugin());
+// PrincipalsRoot is a plain DAV\Collection (not IPrincipalCollection), so the
+// default principalCollectionSet ['principals'] would skip it during principal
+// search. Point directly to the child IPrincipalCollection nodes instead.
+$aclPlugin = new DAVACL\Plugin();
+$aclPlugin->principalCollectionSet = ['principals/users', 'principals/resources'];
+$server->addPlugin($aclPlugin);
 $server->addPlugin(new DAV\Browser\Plugin());
 
 // Add ICS export plugin for iCal subscription URLs
@@ -169,6 +176,10 @@ if ($defaultCallbackUrl) {
 $imipPlugin = new HttpCallbackIMipPlugin($callbackApiKey, $defaultCallbackUrl);
 $server->addPlugin($imipPlugin);
 
+// Enforce org-level freebusy sharing settings
+// Blocks VFREEBUSY queries when X-CalDAV-Sharing-Level is "none"
+$server->addPlugin(new FreeBusyOrgScopePlugin());
+
 // Add CalDAV scheduling support
 // See https://sabre.io/dav/scheduling/
 // The Schedule\Plugin will automatically find and use the IMipPlugin we just added
@@ -182,6 +193,10 @@ $server->addPlugin(new ResourceAutoSchedulePlugin($pdo, $caldavBackend));
 
 // Block MKCALENDAR on resource principals (each resource has exactly one calendar)
 $server->addPlugin(new ResourceMkCalendarBlockPlugin());
+
+// Add availability integration for freebusy responses
+// Reads calendar-availability property and adds BUSY-UNAVAILABLE periods
+$server->addPlugin(new AvailabilityPlugin());
 
 // Add property storage plugin for custom properties (resource metadata, etc.)
 $server->addPlugin(new DAV\PropertyStorage\Plugin(

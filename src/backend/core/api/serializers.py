@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils.text import slugify
 
 from rest_framework import serializers
+from timezone_field.rest_framework import TimeZoneSerializerField
 
 from core import models
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
@@ -13,10 +14,16 @@ from core.models import uuid_to_urlsafe
 class OrganizationSerializer(serializers.ModelSerializer):
     """Serialize organizations."""
 
+    sharing_level = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = models.Organization
-        fields = ["id", "name"]
-        read_only_fields = ["id", "name"]
+        fields = ["id", "name", "sharing_level"]
+        read_only_fields = ["id", "name", "sharing_level"]
+
+    def get_sharing_level(self, org) -> str:
+        """Return the effective sharing level (org override or server default)."""
+        return org.effective_sharing_level
 
 
 class UserLiteSerializer(serializers.ModelSerializer):
@@ -32,6 +39,7 @@ class UserSerializer(serializers.ModelSerializer):
     """Serialize users."""
 
     email = serializers.SerializerMethodField(read_only=True)
+    timezone = TimeZoneSerializerField(use_pytz=False)
 
     class Meta:
         model = models.User
@@ -40,6 +48,7 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "full_name",
             "language",
+            "timezone",
         ]
         read_only_fields = ["id", "email", "full_name"]
 

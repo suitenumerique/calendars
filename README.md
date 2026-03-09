@@ -82,12 +82,20 @@ Your Docker services should now be up and running! 🎉
 
 You can access the project by going to <http://localhost:8930>.
 
-You will be prompted to log in. The default credentials are:
+You will be prompted to log in. The following test users are
+pre-configured in Keycloak (password = username prefix):
 
-```
-username: calendars
-password: calendars
-```
+| Email | Password | Org domain |
+|---|---|---|
+| `user1@example.local` | `user1` | `example.local` |
+| `user2@example.local` | `user2` | `example.local` |
+| `user3@example.local` | `user3` | `example.local` |
+| `user1.2@example2.local` | `user1.2` | `example2.local` |
+| `user2.2@example2.local` | `user2.2` | `example2.local` |
+
+Users sharing the same domain are placed in the same organization
+automatically on first login. Use users from different domains
+(`example.local` vs `example2.local`) to test cross-org isolation.
 
 Note that if you need to run them afterward, you can use the eponym Make rule:
 

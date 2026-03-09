@@ -58,11 +58,15 @@ class CalDAVHTTPClient:
         """
         if not user.email:
             raise ValueError("User has no email address")
-        return {
+        headers = {
             "X-Api-Key": cls.get_api_key(),
             "X-Forwarded-User": user.email,
             "X-CalDAV-Organization": str(user.organization_id),
         }
+        org = getattr(user, "organization", None)
+        if org and hasattr(org, "effective_sharing_level"):
+            headers["X-CalDAV-Sharing-Level"] = org.effective_sharing_level
+        return headers
 
     def build_url(self, path: str, query: str = "") -> str:
         """Build a full CalDAV URL from a resource path.

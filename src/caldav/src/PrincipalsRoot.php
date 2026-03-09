@@ -77,29 +77,46 @@ class NamedPrincipalCollection extends CalDAV\Principal\Collection
     {
         return $this->nodeName;
     }
+
+    /**
+     * Return SchedulablePrincipal nodes that allow authenticated users to
+     * read principal properties (required for CalDAV scheduling / freebusy).
+     */
+    public function getChildForPrincipal(array $principal)
+    {
+        return new SchedulablePrincipal($this->principalBackend, $principal);
+    }
 }
 
 /**
- * Principal collection for resources that returns ResourcePrincipal nodes.
+ * Principal collection for resources.
  *
  * Resource principals have no DAV owner, so the default ACL (which only
  * grants {DAV:}all to {DAV:}owner) blocks all property reads with 403.
- * This collection returns ResourcePrincipal nodes that additionally grant
- * {DAV:}read to {DAV:}authenticated, allowing any logged-in user to
- * discover resource names, types, and emails via PROPFIND.
+ * This collection returns SchedulablePrincipal nodes that additionally grant
+ * {DAV:}read to {DAV:}authenticated.
  */
 class ResourcePrincipalCollection extends NamedPrincipalCollection
 {
     public function getChildForPrincipal(array $principal)
     {
-        return new ResourcePrincipal($this->principalBackend, $principal);
+        return new SchedulablePrincipal($this->principalBackend, $principal);
     }
 }
 
 /**
- * A principal node with a permissive read ACL for resource discovery.
+ * A principal node with read ACL for authenticated users.
+ *
+ * Required for CalDAV scheduling: the Schedule\Plugin looks up other users'
+ * calendar-home-set and schedule-inbox-URL via principalSearch(), which
+ * triggers a propFind that is subject to ACL. Without read access, the
+ * properties return 403 and freebusy queries fail with "Could not find
+ * calendar-home-set".
+ *
+ * Also used for resource discovery (any logged-in user can discover resource
+ * names, types, and emails via PROPFIND).
  */
-class ResourcePrincipal extends CalDAV\Principal\User
+class SchedulablePrincipal extends CalDAV\Principal\User
 {
     public function getACL()
     {

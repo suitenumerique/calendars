@@ -83,6 +83,15 @@ class Base(Configuration):
     CALDAV_INTERNAL_API_KEY = SecretFileValue(
         None, environ_name="CALDAV_INTERNAL_API_KEY", environ_prefix=None
     )
+
+    # Default calendar sharing level for new organizations.
+    # Controls what colleagues in the same org can see by default.
+    # Values: "none", "freebusy", "read", "write"
+    ORG_DEFAULT_SHARING_LEVEL = values.Value(
+        "freebusy",
+        environ_name="ORG_DEFAULT_SHARING_LEVEL",
+        environ_prefix=None,
+    )
     # Salt for django-fernet-encrypted-fields (Channel tokens, etc.)
     # Used with SECRET_KEY to derive Fernet encryption keys via PBKDF2
     SALT_KEY = values.Value(
@@ -931,8 +940,8 @@ class Development(Base):
     EMAIL_PORT = 1025
     EMAIL_USE_TLS = False
     EMAIL_USE_SSL = False
-    DEFAULT_FROM_EMAIL = "calendars@calendars.world"
-    CALENDAR_INVITATION_FROM_EMAIL = "calendars@calendars.world"
+    DEFAULT_FROM_EMAIL = "noreply@example.local"
+    CALENDAR_INVITATION_FROM_EMAIL = "noreply@example.local"
     APP_NAME = "Calendars (dev)"
     APP_URL = "http://localhost:8931"
 
