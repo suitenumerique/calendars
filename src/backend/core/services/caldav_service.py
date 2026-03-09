@@ -599,6 +599,30 @@ def normalize_caldav_path(caldav_path):
     return caldav_path
 
 
+def _resource_belongs_to_org(resource_id: str, org_id: str) -> bool:
+    """Check whether a resource principal belongs to the given organization.
+
+    Queries the CalDAV internal API. Returns False on any error (fail-closed).
+    """
+    api_key = settings.CALDAV_INTERNAL_API_KEY
+    caldav_url = settings.CALDAV_URL
+    if not api_key or not caldav_url:
+        return False
+    try:
+        resp = requests.get(
+            f"{caldav_url.rstrip('/')}/caldav/internal-api/resources/{resource_id}",
+            headers={"X-Internal-Api-Key": api_key},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return False
+        data = resp.json()
+        return data.get("org_id") == org_id
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("Failed to verify resource org for %s", resource_id)
+        return False
+
+
 def verify_caldav_access(user, caldav_path):
     """Verify that the user has access to the CalDAV calendar.
 
@@ -623,8 +647,10 @@ def verify_caldav_access(user, caldav_path):
         path_email = unquote(parts[2])
         return path_email.lower() == user.email.lower()
     # Resource calendars: calendars/resources/<resource-id>/<calendar-id>
-    # Org-to-resource mapping is enforced by SabreDAV; here we require
-    # that the user belongs to an organization.
+    # Org membership is required. Fine-grained org-to-resource authorization
+    # is enforced by SabreDAV via the X-CalDAV-Organization header on every
+    # proxied request. For subscription tokens / imports, callers should
+    # additionally use _resource_belongs_to_org() to verify ownership.
     if parts[1] == "resources":
         return bool(getattr(user, "organization_id", None))
     return False

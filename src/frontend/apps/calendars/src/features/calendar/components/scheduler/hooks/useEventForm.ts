@@ -84,37 +84,6 @@ export const useEventForm = ({
     setAlarms(event?.alarms || []);
     setAttachments([]);
 
-    // Initialize attendees – split resource attendees from people
-    let hasResourceAttendees = false;
-    if (event?.attendees && event.attendees.length > 0) {
-      const resourceEmails = new Set(
-        availableResources
-          .filter((r) => r.email)
-          .map((r) => r.email!.toLowerCase()),
-      );
-      const peopleAttendees: IcsAttendee[] = [];
-      const matchedResources: ResourcePrincipal[] = [];
-
-      for (const att of event.attendees) {
-        const email = att.email.toLowerCase();
-        const resource = availableResources.find(
-          (r) => r.email && r.email.toLowerCase() === email,
-        );
-        if (resource && resourceEmails.has(email)) {
-          matchedResources.push(resource);
-        } else {
-          peopleAttendees.push(att);
-        }
-      }
-
-      setAttendees(peopleAttendees);
-      setResources(matchedResources);
-      hasResourceAttendees = matchedResources.length > 0;
-    } else {
-      setAttendees([]);
-      setResources([]);
-    }
-
     // Initialize recurrence
     if (event?.recurrenceRule) {
       setRecurrence(event.recurrenceRule);
@@ -141,10 +110,6 @@ export const useEventForm = ({
       )
     ) {
       initialExpanded.add("attendees");
-    }
-
-    if (hasResourceAttendees) {
-      initialExpanded.add("resources");
     }
 
     setExpandedSections(initialExpanded);
@@ -205,7 +170,43 @@ export const useEventForm = ({
     if (!eventIsAllDay) {
       savedDateTimesRef.current = { start: initStart, end: initEnd };
     }
-  }, [event, calendarUrl, mode, organizer?.email, availableResources]);
+  }, [event, calendarUrl, mode, organizer?.email]);
+
+  // Separate effect for resource/attendee splitting — only depends on
+  // event.attendees and availableResources, avoids resetting the entire
+  // form when the resource list loads asynchronously.
+  useEffect(() => {
+    if (event?.attendees && event.attendees.length > 0) {
+      const resourceEmails = new Set(
+        availableResources
+          .filter((r) => r.email)
+          .map((r) => r.email!.toLowerCase()),
+      );
+      const peopleAttendees: IcsAttendee[] = [];
+      const matchedResources: ResourcePrincipal[] = [];
+
+      for (const att of event.attendees) {
+        const email = att.email.toLowerCase();
+        const resource = availableResources.find(
+          (r) => r.email && r.email.toLowerCase() === email,
+        );
+        if (resource && resourceEmails.has(email)) {
+          matchedResources.push(resource);
+        } else {
+          peopleAttendees.push(att);
+        }
+      }
+
+      setAttendees(peopleAttendees);
+      setResources(matchedResources);
+      if (matchedResources.length > 0) {
+        setExpandedSections((prev) => new Set([...prev, "resources"]));
+      }
+    } else {
+      setAttendees([]);
+      setResources([]);
+    }
+  }, [event?.attendees, availableResources]);
 
   const toggleSection = useCallback((sectionId: EventFormSectionId) => {
     setExpandedSections((prev) => {

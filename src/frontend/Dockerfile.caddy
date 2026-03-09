@@ -4,8 +4,10 @@ RUN apk update && \
   apk upgrade && \
   rm -rf /var/cache/apk/*
 
-COPY out /srv
+COPY --chown=65534:65534 out /srv
 
-COPY ./Caddyfile /etc/caddy/Caddyfile
+COPY --chown=65534:65534 ./Caddyfile /etc/caddy/Caddyfile
+
+USER nobody
 
 CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

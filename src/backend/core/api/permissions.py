@@ -44,6 +44,10 @@ class IsEntitledToAccess(IsAuthenticated):
             entitlements = get_user_entitlements(request.user.sub, request.user.email)
             return entitlements.get("can_access", False)
         except EntitlementsUnavailableError:
+            logger.warning(
+                "Entitlements unavailable, denying access for user %s",
+                request.user.pk,
+            )
             return False
 
 
@@ -61,4 +65,8 @@ class IsOrgAdmin(IsAuthenticated):
             entitlements = get_user_entitlements(request.user.sub, request.user.email)
             return entitlements.get("can_admin", False)
         except EntitlementsUnavailableError:
+            logger.warning(
+                "Entitlements unavailable, denying admin for user %s",
+                request.user.pk,
+            )
             return False

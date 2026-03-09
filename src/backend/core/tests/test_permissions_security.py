@@ -106,6 +106,7 @@ class TestIsOrgAdminPermission:
     @override_settings(
         ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
         ENTITLEMENTS_BACKEND_PARAMETERS={},
+        CALDAV_INTERNAL_API_KEY="test-internal-key",
     )
     def test_admin_user_can_create_resource(self):
         """Users with can_admin=True can create resources."""

@@ -20,17 +20,18 @@ export const HeaderIcon = () => {
   const router = useRouter();
 
   return (
-    <div
-      className="calendars__header__left"
-      onClick={() => void router.push("/calendar")}
-      style={{ cursor: "pointer" }}
-      role="link"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") void router.push("/calendar");
-      }}
-    >
-      <DynamicCalendarLogo variant="header" />
+    <div className="calendars__header__left">
+      <div
+        onClick={() => void router.push("/calendar")}
+        style={{ cursor: "pointer" }}
+        role="link"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void router.push("/calendar");
+        }}
+      >
+        <DynamicCalendarLogo variant="header" />
+      </div>
       <Feedback />
     </div>
   );

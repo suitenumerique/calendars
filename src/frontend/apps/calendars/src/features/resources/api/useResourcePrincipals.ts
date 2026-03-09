@@ -49,8 +49,10 @@ async function fetchResourcePrincipals(): Promise<ResourcePrincipal[]> {
     const props = item.props || {};
     const displayName =
       props.displayname?._cdata ?? props.displayname ?? id;
-    const calendarUserType =
+    const rawCutype =
       props.calendarUserType || props["calendar-user-type"] || "ROOM";
+    const calendarUserType: ResourceType =
+      rawCutype === "ROOM" || rawCutype === "RESOURCE" ? rawCutype : "ROOM";
 
     // Extract email from calendar-user-address-set
     let email: string | undefined;
@@ -71,7 +73,7 @@ async function fetchResourcePrincipals(): Promise<ResourcePrincipal[]> {
       id,
       name: typeof displayName === "string" ? displayName : id,
       email,
-      resourceType: calendarUserType as ResourceType,
+      resourceType: calendarUserType,
     });
   }
 

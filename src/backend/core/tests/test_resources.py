@@ -43,6 +43,7 @@ def test_create_resource_requires_auth():
 @override_settings(
     ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
     ENTITLEMENTS_BACKEND_PARAMETERS={},
+    CALDAV_INTERNAL_API_KEY="test-internal-key",
 )
 def test_create_resource_success():
     """POST /resources/ creates a resource principal via the internal API."""
@@ -97,6 +98,7 @@ def test_create_resource_success():
 @override_settings(
     ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
     ENTITLEMENTS_BACKEND_PARAMETERS={},
+    CALDAV_INTERNAL_API_KEY="test-internal-key",
 )
 def test_delete_resource():
     """DELETE /resources/{resource_id}/ deletes the resource via internal API."""
@@ -137,6 +139,7 @@ def test_delete_resource():
 @override_settings(
     ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
     ENTITLEMENTS_BACKEND_PARAMETERS={},
+    CALDAV_INTERNAL_API_KEY="test-internal-key",
 )
 def test_delete_resource_cross_org_blocked():
     """Cannot delete a resource from another organization."""
@@ -175,6 +178,7 @@ def test_delete_resource_cross_org_blocked():
 @override_settings(
     ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
     ENTITLEMENTS_BACKEND_PARAMETERS={},
+    CALDAV_INTERNAL_API_KEY="test-internal-key",
 )
 def test_create_resource_sends_user_org_id():
     """Create resource always sends the authenticated user's org_id, not a caller-supplied one."""
@@ -191,12 +195,13 @@ def test_create_resource_sends_user_org_id():
         mock_response.text = '{"principal_uri": "principals/resources/x"}'
         mock_request.return_value = mock_response
 
-        client.post(
+        response = client.post(
             "/api/v1.0/resources/",
             {"name": "Room 1"},
             format="json",
         )
 
+    assert response.status_code == HTTP_201_CREATED
     # Verify the JSON body sent to internal API contains the user's org
     call_kwargs = mock_request.call_args
     body = json.loads(call_kwargs.kwargs.get("data", b"{}"))
@@ -209,6 +214,7 @@ def test_create_resource_sends_user_org_id():
 @override_settings(
     ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
     ENTITLEMENTS_BACKEND_PARAMETERS={},
+    CALDAV_INTERNAL_API_KEY="test-internal-key",
 )
 def test_delete_resource_sends_user_org_id():
     """Delete resource sends the authenticated user's org_id in the header."""
@@ -227,8 +233,9 @@ def test_delete_resource_sends_user_org_id():
         mock_response.text = '{"deleted": true}'
         mock_request.return_value = mock_response
 
-        client.delete(f"/api/v1.0/resources/{resource_id}/")
+        response = client.delete(f"/api/v1.0/resources/{resource_id}/")
 
+    assert response.status_code == HTTP_204_NO_CONTENT
     call_kwargs = mock_request.call_args
     headers = call_kwargs.kwargs.get("headers", {})
     assert headers.get("X-CalDAV-Organization") == str(org.id)

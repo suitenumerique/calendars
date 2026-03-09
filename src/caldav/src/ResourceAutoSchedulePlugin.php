@@ -293,12 +293,16 @@ class ResourceAutoSchedulePlugin extends ServerPlugin
     private function hasOverlappingEvents($calendarId, $startTs, $endTs, $excludeUid = null)
     {
         try {
+            // Normalize calendarId: SabreDAV may return an array [id, instanceId]
+            // or a scalar integer depending on the version/backend.
+            $calId = is_array($calendarId) ? $calendarId[0] : $calendarId;
+
             // Use calendarobjects table directly for conflict check
             // firstoccurence and lastoccurence are Unix timestamps stored by SabreDAV
             $sql = 'SELECT COUNT(*) FROM calendarobjects'
                 . ' WHERE calendarid = ?'
                 . ' AND firstoccurence < ? AND lastoccurence > ?';
-            $params = [$calendarId[0], $endTs, $startTs];
+            $params = [$calId, $endTs, $startTs];
 
             if ($excludeUid) {
                 $sql .= ' AND uid != ?';

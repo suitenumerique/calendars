@@ -75,7 +75,11 @@ class UserMeSerializer(UserSerializer):
         ]
 
     def _get_entitlements(self, user):
-        """Get cached entitlements for the user, keyed by user.sub."""
+        """Get cached entitlements for the user, keyed by user.sub.
+
+        Cache is per-serializer-instance (request-scoped) to avoid
+        duplicate calls when both can_access and can_admin are serialized.
+        """
         if user.sub not in self._entitlements_cache:
             try:
                 self._entitlements_cache[user.sub] = get_user_entitlements(

@@ -36,6 +36,7 @@ type ExtendedAttendee = {
   role?: IcsAttendee['role']
   status?: string
   rsvp?: boolean
+  cutype?: string
 }
 
 type ExtendedOrganizer = {
@@ -245,6 +246,7 @@ export class EventCalendarAdapter {
         role: att.role as ExtendedAttendee['role'],
         status: att.partstat as ExtendedAttendee['status'],
         rsvp: att.rsvp,
+        cutype: att.cutype,
       }))),
       categories: icsEvent.categories,
       priority: icsEvent.priority != null ? Number(icsEvent.priority) : undefined,
@@ -416,6 +418,7 @@ export class EventCalendarAdapter {
         role: att.role,
         partstat: (att.status as IcsAttendee['partstat']) ?? 'NEEDS-ACTION',
         rsvp: att.rsvp,
+        cutype: att.cutype,
       }))
     }
 
