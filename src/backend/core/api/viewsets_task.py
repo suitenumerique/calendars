@@ -19,7 +19,7 @@ class TaskDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, task_id):  # noqa: PLR0911
+    def get(self, request, task_id):  # noqa: PLR0911  # pylint: disable=too-many-return-statements
         """Get the status of a task."""
         try:
             uuid.UUID(task_id)

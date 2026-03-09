@@ -1,5 +1,7 @@
 """Background tasks for the calendars core application."""
 
+# pylint: disable=import-outside-toplevel
+
 import logging
 from dataclasses import asdict
 

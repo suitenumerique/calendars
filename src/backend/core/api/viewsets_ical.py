@@ -40,8 +40,8 @@ class ICalExportView(View):
         try:
             channel_id = urlsafe_to_uuid(short_id)
             channel = Channel.objects.get(pk=channel_id, is_active=True)
-        except (ValueError, Channel.DoesNotExist):
-            raise Http404("Calendar not found")  # noqa: B904
+        except (ValueError, Channel.DoesNotExist) as exc:
+            raise Http404("Calendar not found") from exc
 
         if channel.type != "ical-feed":
             raise Http404("Calendar not found")

@@ -1,5 +1,7 @@
 """Tests for the Channel model and API."""
 
+# pylint: disable=redefined-outer-name,missing-function-docstring,no-member
+
 import uuid
 from unittest.mock import patch
 
@@ -17,6 +19,7 @@ CHANNELS_URL = "/api/v1.0/channels/"
 
 @pytest.fixture
 def authenticated_client():
+    """Return an (APIClient, User) pair with forced authentication."""
     user = factories.UserFactory()
     client = APIClient()
     client.force_authenticate(user=user)
@@ -111,7 +114,7 @@ class TestChannelAPI:
         assert response.status_code == 403
 
     def test_list_channels(self, authenticated_client):
-        client, user = authenticated_client
+        client, _user = authenticated_client
         # Create 2 channels
         for i in range(2):
             client.post(
@@ -135,7 +138,7 @@ class TestChannelAPI:
         assert len(response.json()) == 0
 
     def test_retrieve_channel(self, authenticated_client):
-        client, user = authenticated_client
+        client, _user = authenticated_client
         create_resp = client.post(
             CHANNELS_URL,
             {"name": "Retrieve Me"},
@@ -149,7 +152,7 @@ class TestChannelAPI:
         assert "token" not in response.json()  # token NOT in retrieve
 
     def test_delete_channel(self, authenticated_client):
-        client, user = authenticated_client
+        client, _user = authenticated_client
         create_resp = client.post(
             CHANNELS_URL,
             {"name": "Delete Me"},
@@ -162,7 +165,7 @@ class TestChannelAPI:
         assert not models.Channel.objects.filter(pk=channel_id).exists()
 
     def test_regenerate_token(self, authenticated_client):
-        client, user = authenticated_client
+        client, _user = authenticated_client
         create_resp = client.post(
             CHANNELS_URL,
             {"name": "Regen"},
@@ -229,7 +232,7 @@ class TestCalDAVProxyChannelAuth:
         assert response.status_code == 207
 
     @patch("core.api.viewsets_caldav.CalDAVHTTPClient")
-    def test_channel_token_reader_cannot_put(self, mock_http_cls):
+    def test_channel_token_reader_cannot_put(self, _mock_http_cls):
         """A reader channel should NOT allow PUT."""
         user = factories.UserFactory()
         channel = factories.ChannelFactory(

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# pylint: disable=import-outside-toplevel
 """
 Background task worker with sensible queue defaults.
 

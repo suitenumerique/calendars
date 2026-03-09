@@ -1,7 +1,8 @@
 """Tests for the task system: task functions, polling endpoint, and async dispatch."""
 
+# pylint: disable=import-outside-toplevel
+
 import uuid
-from dataclasses import asdict
 from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
@@ -11,7 +12,6 @@ from rest_framework.test import APIClient
 
 from core import factories
 from core.services.import_service import ImportResult
-from core.task_utils import set_task_progress
 
 pytestmark = pytest.mark.django_db
 

@@ -342,7 +342,7 @@ class Channel(BaseModel):
 
     def clean(self):
         """Validate that at least one scope is set."""
-        from django.core.exceptions import ValidationError  # noqa: PLC0415
+        from django.core.exceptions import ValidationError  # noqa: PLC0415, I001  # pylint: disable=C0415
 
         if not self.organization and not self.user and not self.caldav_path:
             raise ValidationError(

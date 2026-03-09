@@ -1,7 +1,5 @@
 """Client serializers for the calendars core app."""
 
-import secrets
-
 from django.conf import settings
 from django.utils.text import slugify
 

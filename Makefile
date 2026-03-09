@@ -157,16 +157,9 @@ check-back: ## check back-end python sources with ruff
 	@$(COMPOSE_RUN_APP_NO_DEPS) ruff check . --fix
 .PHONY: check-back
 
-analyze-back: ## lint back-end python sources with pylint (changed files only)
-	@files=$$(git diff origin/main --name-only --diff-filter=d -- src/backend ':!**/migrations/*.py' | grep -E '^src/backend/.*\.py$$' | sed 's|src/backend/||g'); \
-	if [ -n "$$files" ]; then \
-		$(COMPOSE_RUN_APP_NO_DEPS) pylint $$files; \
-	fi
+analyze-back: ## lint all back-end python sources with pylint
+	@$(COMPOSE_RUN_APP_NO_DEPS) pylint .
 .PHONY: analyze-back
-
-analyze-back-all: ## lint all back-end python sources with pylint
-	@$(COMPOSE_RUN_APP_NO_DEPS) pylint calendars core
-.PHONY: analyze-back-all
 
 lint-front: ## run the frontend linter
 	@$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npm run lint"

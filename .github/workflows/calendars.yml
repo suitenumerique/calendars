@@ -109,13 +109,10 @@ jobs:
       - name: Install the dependencies
         run: uv sync --locked --all-extras
 
-      - name: Install gettext (required to compile messages) and MIME support
+      - name: Install MIME support
         run: |
           sudo apt-get update
-          sudo apt-get install -y gettext pandoc shared-mime-info media-types
-
-      - name: Generate a MO file from strings extracted from the project
-        run: uv run python manage.py compilemessages
+          sudo apt-get install -y pandoc shared-mime-info media-types
 
       - name: Run tests
         run: uv run pytest -n 2

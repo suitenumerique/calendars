@@ -60,6 +60,7 @@ class CeleryCompatActor(dramatiq.Actor):
     """Actor subclass that adds a .delay() method returning a Task."""
 
     def delay(self, *args, **kwargs):
+        """Dispatch the task asynchronously, returning a Task wrapper."""
         message = self.send(*args, **kwargs)
         return Task(message)
 
@@ -146,7 +147,7 @@ class EagerBroker(StubBroker):
     """
 
     def enqueue(self, message, *, delay=None):
-        from dramatiq.results import Results  # noqa: PLC0415
+        from dramatiq.results import Results  # noqa: PLC0415  # pylint: disable=C0415
 
         actor = self.get_actor(message.actor_name)
         cm = next(

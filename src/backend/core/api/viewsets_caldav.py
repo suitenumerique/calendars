@@ -122,16 +122,18 @@ class CalDAVProxyView(View):
             )
         return None
 
-    def dispatch(self, request, *args, **kwargs):  # noqa: PLR0912, PLR0911, PLR0915  # pylint: disable=too-many-branches,too-many-return-statements,too-many-statements
+    def dispatch(self, request, *args, **kwargs):  # noqa: PLR0912, PLR0911, PLR0915  # pylint: disable=too-many-branches,too-many-return-statements,too-many-statements,too-many-locals
         """Forward all HTTP methods to CalDAV server."""
         # Handle CORS preflight requests
         if request.method == "OPTIONS":
             response = HttpResponse(status=200)
             response["Access-Control-Allow-Methods"] = (
-                "GET, OPTIONS, PROPFIND, PROPPATCH, REPORT, MKCOL, MKCALENDAR, PUT, DELETE, POST"
+                "GET, OPTIONS, PROPFIND, PROPPATCH, REPORT,"
+                " MKCOL, MKCALENDAR, PUT, DELETE, POST"
             )
             response["Access-Control-Allow-Headers"] = (
-                "Content-Type, depth, x-channel-id, x-channel-token, if-match, if-none-match, prefer"
+                "Content-Type, depth, x-channel-id, x-channel-token,"
+                " if-match, if-none-match, prefer"
             )
             return response
 
@@ -325,7 +327,7 @@ class CalDAVSchedulingCallbackView(View):
 
     http_method_names = ["post"]
 
-    def post(self, request, *args, **kwargs):  # noqa: PLR0911
+    def post(self, request, *args, **kwargs):  # noqa: PLR0911  # pylint: disable=too-many-return-statements
         """Handle scheduling messages from CalDAV server."""
         # Authenticate via API key
         api_key = request.headers.get("X-Api-Key", "").strip()
@@ -364,7 +366,7 @@ class CalDAVSchedulingCallbackView(View):
         try:
             validate_email(sender)
             validate_email(recipient)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             logger.warning(
                 "CalDAV scheduling callback with invalid email: sender=%s, recipient=%s",
                 sender,

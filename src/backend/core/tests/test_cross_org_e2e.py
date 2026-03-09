@@ -7,6 +7,8 @@ server (no mocks) to validate the full stack: Django -> SabreDAV -> DB.
 Requires: CalDAV server running (skipped otherwise).
 """
 
+# pylint: disable=no-member,broad-exception-caught,unused-variable
+
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
@@ -23,7 +25,7 @@ from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.models import Organization, User
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
-from core.services.resource_service import ResourceService
+from core.services.resource_service import ResourceProvisioningError, ResourceService
 
 pytestmark = [
     pytest.mark.django_db,
@@ -384,11 +386,6 @@ class TestResourceAutoScheduleCrossOrgE2E:
         resource = _create_resource_via_internal_api(admin_b, "Org B Room")
 
         # Attempt delete from org A — should fail
-        from core.services.resource_service import (  # noqa: PLC0415
-            ResourceProvisioningError,
-            ResourceService,
-        )
-
         service = ResourceService()
         with pytest.raises(ResourceProvisioningError, match="different organization"):
             service.delete_resource(admin_a, resource["id"])

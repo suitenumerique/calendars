@@ -1,16 +1,12 @@
 """Tests for iCal feed channel creation via the channels API."""
 
-from urllib.parse import quote
-
 import pytest
 from rest_framework.status import (
     HTTP_200_OK,
     HTTP_201_CREATED,
     HTTP_204_NO_CONTENT,
-    HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
     HTTP_403_FORBIDDEN,
-    HTTP_404_NOT_FOUND,
 )
 from rest_framework.test import APIClient
 
@@ -160,7 +156,7 @@ class TestICalFeedChannels:
 
     def test_non_owner_cannot_list_others_channels(self):
         """Test that users only see their own channels."""
-        channel = factories.ICalFeedChannelFactory()
+        factories.ICalFeedChannelFactory()
         other_user = factories.UserFactory()
         client = APIClient()
         client.force_login(other_user)

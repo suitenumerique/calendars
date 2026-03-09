@@ -972,6 +972,11 @@ class Test(Base):
             "dramatiq.middleware.CurrentMessage",
         ],
     }
+    DRAMATIQ_RESULT_BACKEND = {
+        "BACKEND": "dramatiq.results.backends.stub.StubBackend",
+        "BACKEND_OPTIONS": {},
+        "MIDDLEWARE_OPTIONS": {"result_ttl": 1000 * 60 * 10},
+    }
 
     OIDC_STORE_ACCESS_TOKEN = False
     OIDC_STORE_REFRESH_TOKEN = False
