@@ -90,7 +90,10 @@ export const FreeBusyTimeline = ({
   }, [attendees, date, resources]);
 
   // Count conflicts
-  const eventOnThisDay = eventStart.toDateString() === date.toDateString();
+  const eventOnThisDay =
+    eventStart.toDateString() === date.toDateString() ||
+    eventEnd.toDateString() === date.toDateString() ||
+    (eventStart < date && eventEnd > date);
   const conflictCount = eventOnThisDay
     ? attendees.filter((a) =>
         a.periods.some((p) => p.start < eventEnd && p.end > eventStart),
@@ -160,13 +163,19 @@ export const FreeBusyTimeline = ({
       header.scrollLeft = scrollPos;
 
       // Inject a single proposed-time overlay spanning all rows
-      const eventOnDay = eventStart.toDateString() === date.toDateString();
-      if (eventOnDay && resources.length > 0) {
+      const startsOnDay = eventStart.toDateString() === date.toDateString();
+      const endsOnDay = eventEnd.toDateString() === date.toDateString();
+      const spansDay = eventStart < date && eventEnd > date;
+      if ((startsOnDay || endsOnDay || spansDay) && resources.length > 0) {
         const SLOT_MIN = 7; // slotMinTime hours
         const SLOT_MAX = 24; // slotMaxTime hours
         const totalHours = SLOT_MAX - SLOT_MIN;
-        const startH = eventStart.getHours() + eventStart.getMinutes() / 60;
-        const endH = eventEnd.getHours() + eventEnd.getMinutes() / 60;
+        const startH = startsOnDay
+          ? eventStart.getHours() + eventStart.getMinutes() / 60
+          : SLOT_MIN;
+        const endH = endsOnDay
+          ? eventEnd.getHours() + eventEnd.getMinutes() / 60
+          : SLOT_MAX;
         const leftPct = ((Math.max(startH, SLOT_MIN) - SLOT_MIN) / totalHours) * 100;
         const rightPct = ((Math.min(endH, SLOT_MAX) - SLOT_MIN) / totalHours) * 100;
 

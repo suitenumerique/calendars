@@ -98,14 +98,13 @@ def test_api_users_list_limit(settings):  # pylint: disable=unused-argument
     client = APIClient()
     client.force_login(user)
 
-    for i in range(15):
+    for i in range(55):
         factories.UserFactory(email=f"alice.{i}@example.com", organization=org)
 
-    # Partial match returns results (capped at page size)
+    # Partial match returns results (capped at 50)
     response = client.get("/api/v1.0/users/?q=alice")
     assert response.status_code == 200
-    assert len(response.json()["results"]) > 0
-    assert len(response.json()["results"]) <= 15
+    assert len(response.json()["results"]) == 50
 
 
 def test_api_users_list_throttling_authenticated(settings):
@@ -190,7 +189,7 @@ def test_api_users_list_query_email_partial_matching():
         email="alicia.johnnson@example.gouv.fr", organization=org
     )
     # Different org user should not appear
-    factories.UserFactory(email="alice.johnnson@example.gov.uk")
+    other_org_user = factories.UserFactory(email="alice.johnnson@example.gov.uk")
     factories.UserFactory(email="alice.thomson@example.gouv.fr", organization=org)
 
     # Partial match on "alice.john" returns alice.johnson and alice.johnnson
@@ -199,6 +198,7 @@ def test_api_users_list_query_email_partial_matching():
     user_ids = [u["id"] for u in response.json()["results"]]
     assert str(user1.id) in user_ids
     assert str(user2.id) in user_ids
+    assert str(other_org_user.id) not in user_ids
 
     # Partial match on "alicia" returns alicia.johnnson (same org only)
     response = client.get("/api/v1.0/users/?q=alicia")

@@ -935,7 +935,7 @@ END:VCALENDAR`
       }
 
       const xmlText = await response.text()
-      return parseScheduleFreeBusyResponse(xmlText, request.attendees)
+      return parseScheduleFreeBusyResponse(xmlText)
     }, 'Failed to query free/busy')
   }
 
@@ -1263,7 +1263,6 @@ export function createCalDavService(): CalDavService {
  */
 function parseScheduleFreeBusyResponse(
   xmlText: string,
-  requestedAttendees: string[],
 ): FreeBusyResponse[] {
   const parser = new DOMParser()
   const doc = parser.parseFromString(xmlText, 'application/xml')
