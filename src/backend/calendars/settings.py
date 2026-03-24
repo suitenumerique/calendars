@@ -525,9 +525,31 @@ class Base(Configuration):
     FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH = values.Value(
         None, environ_name="FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH", environ_prefix=None
     )
-    FRONTEND_HIDE_GAUFRE = values.BooleanValue(
-        default=False, environ_name="FRONTEND_HIDE_GAUFRE", environ_prefix=None
+    FRONTEND_LAGAUFRE_ENABLED = values.BooleanValue(
+        default=False, environ_name="FRONTEND_LAGAUFRE_ENABLED", environ_prefix=None
     )
+    FRONTEND_LAGAUFRE_WIDGET_PATH = values.Value(
+        None, environ_name="FRONTEND_LAGAUFRE_WIDGET_PATH", environ_prefix=None
+    )
+    FRONTEND_LAGAUFRE_WIDGET_API_URL = values.Value(
+        None, environ_name="FRONTEND_LAGAUFRE_WIDGET_API_URL", environ_prefix=None
+    )
+
+    FRONTEND_MEET_BASE_URL = values.Value(
+        None, environ_name="FRONTEND_MEET_BASE_URL", environ_prefix=None
+    )
+
+    # Feature flags
+    FEATURE_ADMIN_CHANNELS = values.BooleanValue(
+        default=True, environ_name="FEATURE_ADMIN_CHANNELS", environ_prefix=None
+    )
+    FEATURE_ADMIN_AVAILABILITIES = values.BooleanValue(
+        default=True, environ_name="FEATURE_ADMIN_AVAILABILITIES", environ_prefix=None
+    )
+    FEATURE_ADMIN_RESOURCES = values.BooleanValue(
+        default=True, environ_name="FEATURE_ADMIN_RESOURCES", environ_prefix=None
+    )
+
     THEME_CUSTOMIZATION_FILE_PATH = values.Value(
         os.path.join(BASE_DIR, "calendars/configuration/theme/default.json"),
         environ_name="THEME_CUSTOMIZATION_FILE_PATH",

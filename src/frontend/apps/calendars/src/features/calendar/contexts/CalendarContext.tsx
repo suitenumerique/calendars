@@ -15,6 +15,7 @@ import { caldavServerUrl, headers, fetchOptions } from "../utils/DavClient";
 import type {
   CalDavCalendar,
   CalDavCalendarCreate,
+  SharePrivilege,
 } from "../services/dav/types/caldav-service";
 import type { CalendarApi } from "../components/scheduler/types";
 import {
@@ -76,6 +77,7 @@ export interface CalendarContextType {
   shareCalendar: (
     calendarUrl: string,
     email: string,
+    privilege?: SharePrivilege,
   ) => Promise<{ success: boolean; error?: string }>;
   goToDate: (date: Date) => void;
 }
@@ -271,6 +273,7 @@ export const CalendarContextProvider = ({
     async (
       calendarUrl: string,
       email: string,
+      privilege: SharePrivilege = "read-write",
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         const result = await caldavService.shareCalendar({
@@ -278,7 +281,7 @@ export const CalendarContextProvider = ({
           sharees: [
             {
               href: `mailto:${email}`,
-              privilege: "read-write", // Same rights as principal
+              privilege,
             },
           ],
         });

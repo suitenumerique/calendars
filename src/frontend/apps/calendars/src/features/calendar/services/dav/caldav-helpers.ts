@@ -111,24 +111,36 @@ export function buildProppatchXml(props: CalendarProps): string {
 // Sharing XML Builders
 // ============================================================================
 
-/** Convert SharePrivilege to XML element */
+/** Freebusy access is stored as read at CalDAV level with a summary marker */
+const FREEBUSY_SUMMARY_MARKER = 'access:freebusy'
+
+/** Convert SharePrivilege to CalDAV XML element (freebusy maps to read) */
 export function sharePrivilegeToXml(privilege: SharePrivilege): string {
   const map: Record<SharePrivilege, string> = {
+    freebusy: '<CS:read/>',
     read: '<CS:read/>',
     'read-write': '<CS:read-write/>',
-    'read-write-noacl': '<CS:read-write-noacl/>',
     admin: '<CS:admin/>',
   }
   return map[privilege] ?? '<CS:read/>'
 }
 
-/** Parse access object to SharePrivilege */
-export function parseSharePrivilege(access: unknown): SharePrivilege {
+/** Get the summary string to store with a share (encodes freebusy marker) */
+export function sharePrivilegeToSummary(privilege: SharePrivilege): string | undefined {
+  return privilege === 'freebusy' ? FREEBUSY_SUMMARY_MARKER : undefined
+}
+
+/** Parse access object to SharePrivilege, using summary to distinguish freebusy from read.
+ *
+ * Note: tsdav's XML parser camelCases element names (e.g. cs:read-write -> readWrite),
+ * so we check both kebab-case and camelCase variants.
+ */
+export function parseSharePrivilege(access: unknown, summary?: string): SharePrivilege {
   if (!access) return 'read'
   const accessObj = access as Record<string, unknown>
-  if (accessObj['read-write']) return 'read-write'
+  if (accessObj['read-write'] || accessObj['readWrite']) return 'read-write'
   if (accessObj['admin']) return 'admin'
-  if (accessObj['read-write-noacl']) return 'read-write-noacl'
+  if (summary === FREEBUSY_SUMMARY_MARKER) return 'freebusy'
   return 'read'
 }
 
@@ -145,7 +157,8 @@ export function buildShareeSetXml(params: ShareeXmlParams): string {
   const commonName = params.displayName
     ? `<CS:common-name>${escapeXml(params.displayName)}</CS:common-name>`
     : ''
-  const summary = params.summary ? `<CS:summary>${escapeXml(params.summary)}</CS:summary>` : ''
+  const summaryValue = params.summary ?? sharePrivilegeToSummary(params.privilege)
+  const summary = summaryValue ? `<CS:summary>${escapeXml(summaryValue)}</CS:summary>` : ''
 
   return `
     <CS:set>

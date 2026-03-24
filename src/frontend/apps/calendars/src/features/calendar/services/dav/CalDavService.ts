@@ -1225,7 +1225,7 @@ export class CalDavService {
       return users.map((user: Record<string, unknown>) => ({
         href: (user.href as string) || '',
         displayName: user['common-name'] as string | undefined,
-        privilege: parseSharePrivilege(user.access),
+        privilege: parseSharePrivilege(user.access, user.summary as string | undefined),
         status: parseShareStatus(user['invite-accepted'], user['invite-noresponse']),
       }))
     }, 'Failed to get sharees')

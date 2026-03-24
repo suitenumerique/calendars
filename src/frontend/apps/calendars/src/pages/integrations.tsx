@@ -10,12 +10,23 @@ import {
 } from "@/features/layouts/components/header/Header";
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
 import { ChannelList } from "@/features/integrations/components/ChannelList";
+import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
+import { useRouter } from "next/router";
+import { useEffect } from "react";
 
 export default function IntegrationsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const isEnabled = useFeatureFlag(FeatureFlag.ADMIN_CHANNELS);
+  const router = useRouter();
 
-  if (!user) return null;
+  useEffect(() => {
+    if (!isEnabled) {
+      void router.replace("/");
+    }
+  }, [isEnabled, router]);
+
+  if (!user || !isEnabled) return null;
 
   return (
     <>

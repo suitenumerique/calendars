@@ -10,6 +10,7 @@ import {
   buildMkCalendarXml,
   buildProppatchXml,
   sharePrivilegeToXml,
+  sharePrivilegeToSummary,
   parseSharePrivilege,
   buildShareeSetXml,
   buildShareRequestXml,
@@ -169,8 +170,30 @@ describe('caldav-helpers', () => {
         expect(sharePrivilegeToXml('admin')).toBe('<CS:admin/>')
       })
 
+      it('converts freebusy privilege to read (CalDAV level)', () => {
+        expect(sharePrivilegeToXml('freebusy')).toBe('<CS:read/>')
+      })
+
       it('defaults to read for unknown', () => {
         expect(sharePrivilegeToXml('unknown' as SharePrivilege)).toBe('<CS:read/>')
+      })
+    })
+
+    describe('sharePrivilegeToSummary', () => {
+      it('returns freebusy marker for freebusy privilege', () => {
+        expect(sharePrivilegeToSummary('freebusy')).toBe('access:freebusy')
+      })
+
+      it('returns undefined for read privilege', () => {
+        expect(sharePrivilegeToSummary('read')).toBeUndefined()
+      })
+
+      it('returns undefined for read-write privilege', () => {
+        expect(sharePrivilegeToSummary('read-write')).toBeUndefined()
+      })
+
+      it('returns undefined for admin privilege', () => {
+        expect(sharePrivilegeToSummary('admin')).toBeUndefined()
       })
     })
 
@@ -183,9 +206,30 @@ describe('caldav-helpers', () => {
         expect(parseSharePrivilege({ admin: true })).toBe('admin')
       })
 
+      it('returns read-write when camelCase key from tsdav (readWrite)', () => {
+        expect(parseSharePrivilege({ readWrite: true })).toBe('read-write')
+      })
+
       it('returns read as default', () => {
         expect(parseSharePrivilege({})).toBe('read')
         expect(parseSharePrivilege(null)).toBe('read')
+      })
+
+      it('returns freebusy when access is read and summary is freebusy marker', () => {
+        expect(parseSharePrivilege({}, 'access:freebusy')).toBe('freebusy')
+      })
+
+      it('returns read when access is read and summary is not freebusy marker', () => {
+        expect(parseSharePrivilege({}, 'some other summary')).toBe('read')
+        expect(parseSharePrivilege({}, undefined)).toBe('read')
+      })
+
+      it('ignores freebusy summary when access is read-write', () => {
+        expect(parseSharePrivilege({ 'read-write': true }, 'access:freebusy')).toBe('read-write')
+      })
+
+      it('ignores freebusy summary when access is admin', () => {
+        expect(parseSharePrivilege({ admin: true }, 'access:freebusy')).toBe('admin')
       })
     })
 
@@ -216,6 +260,33 @@ describe('caldav-helpers', () => {
           privilege: 'read',
         })
         expect(result).toContain('<CS:summary>Shared calendar</CS:summary>')
+      })
+
+      it('auto-injects freebusy summary marker for freebusy privilege', () => {
+        const result = buildShareeSetXml({
+          href: 'mailto:user@example.com',
+          privilege: 'freebusy',
+        })
+        expect(result).toContain('<CS:read/>')
+        expect(result).toContain('<CS:summary>access:freebusy</CS:summary>')
+      })
+
+      it('does not inject summary for non-freebusy privileges', () => {
+        const result = buildShareeSetXml({
+          href: 'mailto:user@example.com',
+          privilege: 'read-write',
+        })
+        expect(result).not.toContain('<CS:summary>')
+      })
+
+      it('explicit summary takes precedence over freebusy auto-summary', () => {
+        const result = buildShareeSetXml({
+          href: 'mailto:user@example.com',
+          summary: 'Custom summary',
+          privilege: 'freebusy',
+        })
+        expect(result).toContain('<CS:summary>Custom summary</CS:summary>')
+        expect(result).not.toContain('access:freebusy')
       })
     })
 

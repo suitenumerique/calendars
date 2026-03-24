@@ -13,7 +13,10 @@ import {
   addToast,
   ToasterItem,
 } from "../../../ui/components/toaster/Toaster";
-import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
+import type {
+  CalDavCalendar,
+  SharePrivilege,
+} from "../../services/dav/types/caldav-service";
 import { fetchAPI } from "@/features/api/fetchApi";
 
 interface CalendarShareModalProps {
@@ -36,6 +39,13 @@ type ShareAccess = {
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const SHARE_ROLES: SharePrivilege[] = [
+  "freebusy",
+  "read",
+  "read-write",
+  "admin",
+];
 
 export const CalendarShareModal = ({
   isOpen,
@@ -77,7 +87,7 @@ export const CalendarShareModal = ({
         const email = sharee.href.replace(/^mailto:/, "");
         return {
           id: sharee.href,
-          role: "read-write",
+          role: sharee.privilege,
           user: {
             id: sharee.href,
             full_name: sharee.displayName || email,
@@ -164,18 +174,25 @@ export const CalendarShareModal = ({
   );
 
   const handleInviteUser = useCallback(
-    async (users: ShareUser[]) => {
+    async (users: ShareUser[], role: string) => {
       if (!calendar || users.length === 0) return;
 
       setLoading(true);
       try {
-        const user = users[0];
-        const result = await shareCalendar(calendar.url, user.email);
+        const invitedUser = users[0];
+        const privilege = (
+          SHARE_ROLES.includes(role as SharePrivilege) ? role : "read-write"
+        ) as SharePrivilege;
+        const result = await shareCalendar(
+          calendar.url,
+          invitedUser.email,
+          privilege,
+        );
         if (result.success) {
           addToast(
             <ToasterItem>
               {t("calendar.shareCalendar.success", {
-                email: user.email,
+                email: invitedUser.email,
               })}
             </ToasterItem>,
           );
@@ -196,6 +213,39 @@ export const CalendarShareModal = ({
       } finally {
         setLoading(false);
         setSearchResults([]);
+      }
+    },
+    [calendar, shareCalendar, fetchSharees, t],
+  );
+
+  const handleUpdateAccess = useCallback(
+    async (access: ShareAccess, role: string) => {
+      if (!calendar) return;
+
+      setLoading(true);
+      try {
+        const privilege = (
+          SHARE_ROLES.includes(role as SharePrivilege) ? role : "read-write"
+        ) as SharePrivilege;
+        const email = access.user.email;
+        const result = await shareCalendar(calendar.url, email, privilege);
+        if (result.success) {
+          await fetchSharees();
+        } else {
+          addToast(
+            <ToasterItem type="error">
+              {result.error || t("calendar.shareCalendar.error")}
+            </ToasterItem>,
+          );
+        }
+      } catch {
+        addToast(
+          <ToasterItem type="error">
+            {t("calendar.shareCalendar.error")}
+          </ToasterItem>,
+        );
+      } finally {
+        setLoading(false);
       }
     },
     [calendar, shareCalendar, fetchSharees, t],
@@ -237,7 +287,10 @@ export const CalendarShareModal = ({
   );
 
   const invitationRoles = [
+    { label: t("roles.freebusy"), value: "freebusy" },
+    { label: t("roles.reader"), value: "read" },
     { label: t("roles.editor"), value: "read-write" },
+    { label: t("roles.administrator"), value: "admin" },
   ];
 
   const getAccessRoles = useCallback(
@@ -245,7 +298,12 @@ export const CalendarShareModal = ({
       if (access.role === "owner") {
         return [{ label: t("roles.owner"), value: "owner" }];
       }
-      return [{ label: t("roles.editor"), value: "read-write" }];
+      return [
+        { label: t("roles.freebusy"), value: "freebusy" },
+        { label: t("roles.reader"), value: "read" },
+        { label: t("roles.editor"), value: "read-write" },
+        { label: t("roles.administrator"), value: "admin" },
+      ];
     },
     [t],
   );
@@ -258,6 +316,7 @@ export const CalendarShareModal = ({
       accesses={accesses}
       getAccessRoles={getAccessRoles}
       onDeleteAccess={handleDeleteAccess}
+      onUpdateAccess={handleUpdateAccess}
       searchUsersResult={searchResults}
       onSearchUsers={handleSearchUsers}
       onInviteUser={handleInviteUser}

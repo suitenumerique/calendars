@@ -26,6 +26,7 @@ import { FreeBusySection } from "./event-modal-sections/FreeBusySection";
 import { SectionPills } from "./event-modal-sections/SectionPills";
 import { useResourcePrincipals } from "@/features/resources/api/useResourcePrincipals";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { useConfig } from "@/features/config/ConfigProvider";
 import type {
   EventModalProps,
   RecurringDeleteOption,
@@ -160,11 +161,12 @@ export const EventModal = ({
     }
   };
 
-  const visioBaseUrl = process.env.NEXT_PUBLIC_VISIO_BASE_URL;
+  const { config } = useConfig();
+  const meetBaseUrl = config?.FRONTEND_MEET_BASE_URL;
 
   const pills = useMemo(
     () => [
-      ...(visioBaseUrl
+      ...(meetBaseUrl
         ? [
             {
               id: "videoConference" as const,
@@ -208,7 +210,7 @@ export const EventModal = ({
         label: t("scheduling.findATime"),
       },
     ],
-    [t, visioBaseUrl, availableResources.length],
+    [t, meetBaseUrl, availableResources.length],
   );
 
   return (
@@ -241,7 +243,7 @@ export const EventModal = ({
             <Button
               color="brand"
               onClick={handleSave}
-              disabled={isLoading || !form.title.trim()}
+              disabled={isLoading || !form.title.trim() || !form.selectedCalendarUrl}
             >
               {isLoading ? "..." : t("calendar.event.save")}
             </Button>
@@ -316,6 +318,7 @@ export const EventModal = ({
             <VideoConferenceSection
               url={form.videoConferenceUrl}
               onChange={form.setVideoConferenceUrl}
+              baseUrl={meetBaseUrl || ""}
               alwaysOpen
             />
           )}

@@ -9,12 +9,16 @@ import { useAppContext } from "@/pages/_app";
 export const Gaufre = () => {
   const { config } = useConfig();
   const { theme: themeName } = useAppContext();
-  const hideGaufre = config?.FRONTEND_HIDE_GAUFRE;
+  const isEnabled = config?.FRONTEND_LAGAUFRE_ENABLED ?? false;
   const theme = useCunninghamTheme();
-  const widgetPath = removeQuotes(theme.components.gaufre.widgetPath);
-  const apiUrl = removeQuotes(theme.components.gaufre.apiUrl);
+  const widgetPath =
+    config?.FRONTEND_LAGAUFRE_WIDGET_PATH ||
+    removeQuotes(theme.components.gaufre.widgetPath);
+  const apiUrl =
+    config?.FRONTEND_LAGAUFRE_WIDGET_API_URL ||
+    removeQuotes(theme.components.gaufre.apiUrl);
 
-  if (hideGaufre) {
+  if (!isEnabled) {
     return null;
   }
 

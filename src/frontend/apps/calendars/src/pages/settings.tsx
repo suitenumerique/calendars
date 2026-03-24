@@ -10,12 +10,23 @@ import {
 } from "@/features/layouts/components/header/Header";
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
 import { WorkingHoursSettings } from "@/features/settings/components/WorkingHoursSettings";
+import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
+import { useRouter } from "next/router";
+import { useEffect } from "react";
 
 export default function SettingsPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const isEnabled = useFeatureFlag(FeatureFlag.ADMIN_AVAILABILITIES);
+  const router = useRouter();
 
-  if (!user) return null;
+  useEffect(() => {
+    if (!isEnabled) {
+      void router.replace("/");
+    }
+  }, [isEnabled, router]);
+
+  if (!user || !isEnabled) return null;
 
   return (
     <>

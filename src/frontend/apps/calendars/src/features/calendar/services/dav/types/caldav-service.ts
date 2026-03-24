@@ -120,7 +120,7 @@ export type EventFilter = {
 // Sharing Types (CalDAV Scheduling & ACL)
 // ============================================================================
 
-export type SharePrivilege = 'read' | 'read-write' | 'read-write-noacl' | 'admin'
+export type SharePrivilege = 'freebusy' | 'read' | 'read-write' | 'admin'
 
 export type ShareStatus = 'pending' | 'accepted' | 'declined'
 

@@ -6,6 +6,7 @@ import { generateVisioRoomId } from "./generateVisioRoomId";
 interface VideoConferenceSectionProps {
   url: string;
   onChange: (url: string) => void;
+  baseUrl: string;
   alwaysOpen?: boolean;
   isExpanded?: boolean;
   onToggle?: () => void;
@@ -14,6 +15,7 @@ interface VideoConferenceSectionProps {
 export const VideoConferenceSection = ({
   url,
   onChange,
+  baseUrl,
   alwaysOpen,
   isExpanded,
   onToggle,
@@ -21,7 +23,6 @@ export const VideoConferenceSection = ({
   const { t } = useTranslation();
 
   const handleCreateVisio = () => {
-    const baseUrl = process.env.NEXT_PUBLIC_VISIO_BASE_URL;
     if (!baseUrl) return;
     const roomId = generateVisioRoomId();
     onChange(`${baseUrl}/${roomId}`);

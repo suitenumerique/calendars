@@ -101,6 +101,7 @@
         "administrator": "Administrator",
         "editor": "Editor",
         "reader": "Reader",
+        "freebusy": "Free/Busy",
         "owner": "Owner"
       },
       "time": {
@@ -711,6 +712,7 @@
         "administrator": "Administrateur",
         "editor": "Éditeur",
         "reader": "Lecteur",
+        "freebusy": "Disponibilité",
         "owner": "Propriétaire"
       },
       "time": {
@@ -1569,6 +1571,7 @@
         "administrator": "Beheerder",
         "editor": "Redacteur",
         "reader": "Lezer",
+        "freebusy": "Beschikbaarheid",
         "owner": "Eigenaar"
       },
       "time": {

@@ -11,13 +11,24 @@ import {
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
 import { ResourceList } from "@/features/resources/components/ResourceList";
 import { useResourcePrincipals } from "@/features/resources/api/useResourcePrincipals";
+import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
+import { useRouter } from "next/router";
+import { useEffect } from "react";
 
 export default function ResourcesPage() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { resources, isLoading, refresh } = useResourcePrincipals();
+  const isEnabled = useFeatureFlag(FeatureFlag.ADMIN_RESOURCES);
+  const router = useRouter();
 
-  if (!user) return null;
+  useEffect(() => {
+    if (!isEnabled) {
+      void router.replace("/");
+    }
+  }, [isEnabled, router]);
+
+  if (!user || !isEnabled) return null;
 
   return (
     <>

@@ -48,9 +48,7 @@ def test_api_users_list_authenticated():
 
 def test_api_users_list_query_inactive():
     """Inactive users should not be listed."""
-    user = factories.UserFactory(
-        email="testuser@example.com", full_name="Test User"
-    )
+    user = factories.UserFactory(email="testuser@example.com", full_name="Test User")
     org = user.organization
     client = APIClient()
     client.force_login(user)
@@ -138,9 +136,7 @@ def test_api_users_list_query_email(settings):
 
     settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["user_list_burst"] = "9999/minute"
 
-    user = factories.UserFactory(
-        email="testuser@example.com", full_name="Test User"
-    )
+    user = factories.UserFactory(email="testuser@example.com", full_name="Test User")
     org = user.organization
 
     client = APIClient()
@@ -176,9 +172,7 @@ def test_api_users_list_query_email(settings):
 
 def test_api_users_list_query_email_partial_matching():
     """Partial email queries return matching users."""
-    user = factories.UserFactory(
-        email="testuser@example.com", full_name="Test User"
-    )
+    user = factories.UserFactory(email="testuser@example.com", full_name="Test User")
     org = user.organization
 
     client = APIClient()
@@ -215,9 +209,7 @@ def test_api_users_list_query_email_partial_matching():
 
 def test_api_users_list_query_by_name():
     """Users should be searchable by full name (partial, case-insensitive)."""
-    user = factories.UserFactory(
-        email="testuser@example.com", full_name="Test User"
-    )
+    user = factories.UserFactory(email="testuser@example.com", full_name="Test User")
     org = user.organization
 
     client = APIClient()

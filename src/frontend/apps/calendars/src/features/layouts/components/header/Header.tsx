@@ -15,6 +15,7 @@ import { Feedback } from "@/features/feedback/Feedback";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
+import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 
 export const HeaderIcon = () => {
   const router = useRouter();
@@ -43,35 +44,62 @@ const ApplicationMenu = () => {
   const router = useRouter();
   const { user } = useAuth();
 
+  const isResourcesEnabled = useFeatureFlag(FeatureFlag.ADMIN_RESOURCES);
+  const isChannelsEnabled = useFeatureFlag(FeatureFlag.ADMIN_CHANNELS);
+  const isAvailabilitiesEnabled = useFeatureFlag(
+    FeatureFlag.ADMIN_AVAILABILITIES,
+  );
+
   if (!user) return null;
 
   const adminOptions = user.can_admin
     ? [
-        {
-          label: t("resources.title"),
-          icon: <Icon name="meeting_room" type={IconType.OUTLINED} />,
-          callback: () => void router.push("/resources"),
-        },
-        {
-          label: t("integrations.title"),
-          icon: <Icon name="integration_instructions" type={IconType.OUTLINED} />,
-          callback: () => void router.push("/integrations"),
-        },
+        ...(isResourcesEnabled
+          ? [
+              {
+                label: t("resources.title"),
+                icon: <Icon name="meeting_room" type={IconType.OUTLINED} />,
+                callback: () => void router.push("/resources"),
+              },
+            ]
+          : []),
+        ...(isChannelsEnabled
+          ? [
+              {
+                label: t("integrations.title"),
+                icon: (
+                  <Icon
+                    name="integration_instructions"
+                    type={IconType.OUTLINED}
+                  />
+                ),
+                callback: () => void router.push("/integrations"),
+              },
+            ]
+          : []),
       ]
     : [];
+
+  const options = [
+    ...(isAvailabilitiesEnabled
+      ? [
+          {
+            label: t("settings.workingHours.title"),
+            icon: <Icon name="schedule" type={IconType.OUTLINED} />,
+            callback: () => void router.push("/settings"),
+          },
+        ]
+      : []),
+    ...adminOptions,
+  ];
+
+  if (options.length === 0) return null;
 
   return (
     <DropdownMenu
       isOpen={isOpen}
       onOpenChange={setIsOpen}
-      options={[
-        {
-          label: t("settings.workingHours.title"),
-          icon: <Icon name="schedule" type={IconType.OUTLINED} />,
-          callback: () => void router.push("/settings"),
-        },
-        ...adminOptions,
-      ]}
+      options={options}
     >
       <Button
         onClick={() => setIsOpen(true)}

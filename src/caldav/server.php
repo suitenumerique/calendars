@@ -18,6 +18,7 @@ use Calendars\SabreDav\InternalApiPlugin;
 use Calendars\SabreDav\ResourceAutoSchedulePlugin;
 use Calendars\SabreDav\ResourceMkCalendarBlockPlugin;
 use Calendars\SabreDav\FreeBusyOrgScopePlugin;
+use Calendars\SabreDav\SharedCalendarPrivacyPlugin;
 use Calendars\SabreDav\AvailabilityPlugin;
 use Calendars\SabreDav\CalendarsRoot;
 use Calendars\SabreDav\CustomCalDAVPlugin;
@@ -99,7 +100,8 @@ $server->addPlugin(new CardDAV\Plugin());
 $aclPlugin = new DAVACL\Plugin();
 $aclPlugin->principalCollectionSet = ['principals/users', 'principals/resources'];
 $server->addPlugin($aclPlugin);
-$server->addPlugin(new DAV\Browser\Plugin());
+// Browser plugin disabled — it's a debug tool that exposes properties in HTML.
+// $server->addPlugin(new DAV\Browser\Plugin());
 
 // Add ICS export plugin for iCal subscription URLs
 // Allows exporting calendars as .ics files via ?export query parameter
@@ -205,6 +207,9 @@ $server->addPlugin(new AvailabilityPlugin());
 $server->addPlugin(new DAV\PropertyStorage\Plugin(
     new DAV\PropertyStorage\Backend\PDO($pdo)
 ));
+
+// Shared calendar privacy: CLASS enforcement, freebusy shares, VALARM stripping
+$server->addPlugin(new SharedCalendarPrivacyPlugin($pdo));
 
 // Start server
 $server->start();

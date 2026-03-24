@@ -1,6 +1,8 @@
 export interface ApiConfig {
   FRONTEND_THEME?: string;
-  FRONTEND_HIDE_GAUFRE?: boolean;
+  FRONTEND_LAGAUFRE_ENABLED?: boolean;
+  FRONTEND_LAGAUFRE_WIDGET_PATH?: string;
+  FRONTEND_LAGAUFRE_WIDGET_API_URL?: string;
   FRONTEND_FEEDBACK_BUTTON_SHOW?: boolean;
   FRONTEND_FEEDBACK_BUTTON_IDLE?: boolean;
   FRONTEND_FEEDBACK_ITEMS?: Record<string, { url: string }>;
@@ -9,6 +11,10 @@ export interface ApiConfig {
   FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL?: string;
   FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH?: string;
   FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL?: string;
+  FRONTEND_MEET_BASE_URL?: string;
+  FEATURE_ADMIN_CHANNELS?: boolean;
+  FEATURE_ADMIN_AVAILABILITIES?: boolean;
+  FEATURE_ADMIN_RESOURCES?: boolean;
   theme_customization?: ThemeCustomization;
 }
 
