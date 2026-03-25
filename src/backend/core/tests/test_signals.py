@@ -3,6 +3,7 @@
 import json
 from unittest import mock
 
+from django.db.models import ProtectedError
 from django.test import TestCase, override_settings
 
 import pytest
@@ -197,9 +198,7 @@ class TestDeleteOrganizationCaldavData(TestCase):
         ) as mock_request:
             # Without the API key, the signal skips CalDAV cleanup but
             # also doesn't delete members, so PROTECT FK blocks deletion.
-            try:
+            with pytest.raises(ProtectedError):
                 org.delete()
-            except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-                pass
 
         mock_request.assert_not_called()

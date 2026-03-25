@@ -466,7 +466,8 @@ class TestUserDeletionCleanupE2E:
                 f"Expected 0 calendars after deletion, found {len(cals)}"
             )
         except Exception:  # noqa: BLE001
-            # Principal not found — expected
+            # Principal not found after deletion — this is the expected
+            # outcome when SabreDAV data was properly cleaned up.
             pass
 
 
@@ -511,7 +512,9 @@ class TestOrgDeletionCleanupE2E:
                 cals = dav.principal().calendars()
                 assert len(cals) == 0
             except Exception:  # noqa: BLE001
-                pass  # Principal not found — expected
+                # Principal not found after org deletion — this is the
+                # expected outcome when SabreDAV data was properly cleaned up.
+                pass
 
         assert not User.objects.filter(
             email__in=[
@@ -570,7 +573,10 @@ class TestCalendarCreationIsolationE2E:
             cal_names_b = [c.name for c in dav_b.principal().calendars()]
             assert "E2E Test Calendar" not in cal_names_b
         except Exception:  # noqa: BLE001
-            pass  # User B has no principal — that's fine
+            # User B has no principal — this is acceptable because we
+            # only need to verify User A's calendar was not created
+            # under User B's namespace.
+            pass
 
     def test_cannot_create_calendar_under_other_user(self):
         """User A cannot MKCALENDAR under user B's principal."""

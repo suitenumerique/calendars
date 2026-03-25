@@ -185,7 +185,7 @@ class TestRSVPEmailTemplateRendering:
     def test_cancel_html_has_no_rsvp_buttons(self):
         context = self._build_context(SAMPLE_ICS, method="CANCEL")
         html = render_to_string("emails/calendar_invitation_cancel.html", context)
-        assert "rsvp" not in html.lower() or "Accepter" not in html
+        assert "rsvp" not in html.lower() and "Accepter" not in html
 
     def test_invitation_html_no_rsvp_for_cancel(self):
         """Cancel templates don't have RSVP buttons."""

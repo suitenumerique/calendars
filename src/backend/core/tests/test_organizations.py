@@ -1,9 +1,11 @@
 """Tests for the organizations feature."""
 
+from unittest.mock import patch
+
 from django.test import override_settings
 
 import pytest
-from rest_framework.status import HTTP_200_OK
+from rest_framework.status import HTTP_200_OK, HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
 from rest_framework.test import APIClient
 
 from core import factories
@@ -290,4 +292,41 @@ def test_org_settings_update_rejects_invalid_level():
     )
 
     assert response.status_code == 400
+    get_entitlements_backend.cache_clear()
+
+
+@pytest.mark.django_db
+def test_org_settings_anonymous_cannot_access():
+    """Unauthenticated GET /organization-settings/current/ returns 401."""
+    client = APIClient()
+    response = client.get("/api/v1.0/organization-settings/current/")
+
+    assert response.status_code == HTTP_401_UNAUTHORIZED
+
+
+@pytest.mark.django_db
+@override_settings(
+    ENTITLEMENTS_BACKEND="core.entitlements.backends.local.LocalEntitlementsBackend",
+    ENTITLEMENTS_BACKEND_PARAMETERS={},
+)
+def test_org_settings_non_admin_cannot_update():
+    """User with can_admin=False cannot PATCH the org settings (403)."""
+    get_entitlements_backend.cache_clear()
+    org = factories.OrganizationFactory(external_id="test-org")
+    user = factories.UserFactory(organization=org)
+
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    with patch(
+        "core.api.permissions.get_user_entitlements",
+        return_value={"can_access": True, "can_admin": False},
+    ):
+        response = client.patch(
+            "/api/v1.0/organization-settings/current/",
+            {"default_sharing_level": "none"},
+            format="json",
+        )
+
+    assert response.status_code == HTTP_403_FORBIDDEN
     get_entitlements_backend.cache_clear()

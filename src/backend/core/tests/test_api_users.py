@@ -625,7 +625,7 @@ def test_api_users_patch_authenticated_other():
     )
 
     for key, new_value in new_user_values.items():
-        response = client.put(
+        response = client.patch(
             f"/api/v1.0/users/{user.id!s}/",
             {key: new_value},
             format="json",

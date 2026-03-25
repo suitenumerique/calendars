@@ -180,6 +180,47 @@ class TestChannelAPI:
         assert new_token != old_token
         assert len(new_token) >= 20
 
+    def test_delete_channel_by_other_user_forbidden(self):
+        """User B cannot delete user A's channel."""
+        user_a = factories.UserFactory()
+        client_a = APIClient()
+        client_a.force_authenticate(user=user_a)
+
+        create_resp = client_a.post(
+            CHANNELS_URL,
+            {"name": "A's Channel"},
+            format="json",
+        )
+        channel_id = create_resp.json()["id"]
+
+        user_b = factories.UserFactory()
+        client_b = APIClient()
+        client_b.force_authenticate(user=user_b)
+
+        response = client_b.delete(f"{CHANNELS_URL}{channel_id}/")
+        assert response.status_code in (403, 404)
+        assert models.Channel.objects.filter(pk=channel_id).exists()
+
+    def test_regenerate_token_by_other_user_forbidden(self):
+        """User B cannot regenerate user A's channel token."""
+        user_a = factories.UserFactory()
+        client_a = APIClient()
+        client_a.force_authenticate(user=user_a)
+
+        create_resp = client_a.post(
+            CHANNELS_URL,
+            {"name": "A's Channel"},
+            format="json",
+        )
+        channel_id = create_resp.json()["id"]
+
+        user_b = factories.UserFactory()
+        client_b = APIClient()
+        client_b.force_authenticate(user=user_b)
+
+        response = client_b.post(f"{CHANNELS_URL}{channel_id}/regenerate-token/")
+        assert response.status_code in (403, 404)
+
     def test_unauthenticated(self):
         client = APIClient()
         response = client.get(CHANNELS_URL)

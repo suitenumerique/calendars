@@ -143,19 +143,16 @@ class TestCalDAVProxy:
         href_elems = root.findall(".//{DAV:}href")
         assert len(href_elems) > 0, "PROPFIND response should contain href elements"
 
-        # Verify all URLs that start with /principals/ or /calendars/ include the proxy prefix
-        # This verifies that sabre/dav's BaseUriPlugin is working correctly
+        # Verify all hrefs start with /caldav/ (BaseUriPlugin uses
+        # X-Forwarded-Prefix correctly).
         for href_elem in href_elems:
             href = href_elem.text
-            if href and (
-                href.startswith("/principals/") or href.startswith("/calendars/")
-            ):
-                assert href.startswith("/caldav/"), (
-                    f"Expected URL to start with /caldav/, "
-                    f"got {href}. BaseUriPlugin is not using "
-                    f"X-Forwarded-Prefix correctly. Full response: "
-                    f"{response.content.decode('utf-8', errors='ignore')}"
-                )
+            assert href and href.startswith("/caldav/"), (
+                f"Expected URL to start with /caldav/, "
+                f"got {href}. BaseUriPlugin is not using "
+                f"X-Forwarded-Prefix correctly. Full response: "
+                f"{response.content.decode('utf-8', errors='ignore')}"
+            )
 
     @responses.activate
     def test_proxy_passes_through_calendar_urls(self):

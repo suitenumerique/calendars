@@ -158,19 +158,25 @@ class TestClassConfidentialEnforcement:
 
         shared_cal = _share_and_find(owner_client, owner, cal_id, sharee, "read")
 
-        for ev in shared_cal.events():
+        events = shared_cal.events()
+        assert len(events) > 0, "Shared calendar should have events"
+        found_target = False
+        for ev in events:
             data = str(ev.data)
-            assert "Secret Board Meeting" not in data, (
-                "SECURITY: CONFIDENTIAL event SUMMARY visible to sharee"
-            )
-            assert "Discussing layoffs" not in data, (
-                "SECURITY: CONFIDENTIAL event DESCRIPTION visible to sharee"
-            )
-            assert "CEO Suite" not in data, (
-                "SECURITY: CONFIDENTIAL event LOCATION visible to sharee"
-            )
-            assert "Busy" in data, "CONFIDENTIAL event should show as 'Busy'"
-            assert "DTSTART" in data, "Time info should be preserved"
+            if "conf-event" in data:
+                found_target = True
+                assert "Secret Board Meeting" not in data, (
+                    "SECURITY: CONFIDENTIAL event SUMMARY visible to sharee"
+                )
+                assert "Discussing layoffs" not in data, (
+                    "SECURITY: CONFIDENTIAL event DESCRIPTION visible to sharee"
+                )
+                assert "CEO Suite" not in data, (
+                    "SECURITY: CONFIDENTIAL event LOCATION visible to sharee"
+                )
+                assert "Busy" in data, "CONFIDENTIAL event should show as 'Busy'"
+                assert "DTSTART" in data, "Time info should be preserved"
+        assert found_target, "Target CONFIDENTIAL event not found in shared calendar"
 
     def test_confidential_event_visible_to_owner(self):
         """Owner should still see full details of their CONFIDENTIAL events."""
@@ -225,11 +231,18 @@ class TestClassPrivateEnforcement:
         shared_cal = _share_and_find(owner_client, owner, cal_id, sharee, "read")
 
         events = shared_cal.events()
+        # PUBLIC event should be visible, PRIVATE should be hidden
+        found_public = False
         for ev in events:
             data = str(ev.data)
             assert "Top Secret Private" not in data, (
                 "SECURITY: PRIVATE event visible to sharee"
             )
+            if "Visible Meeting" in data:
+                found_public = True
+        assert found_public, (
+            "PUBLIC control event missing — test may be vacuously passing"
+        )
 
     def test_private_event_visible_to_owner(self):
         """Owner should still see their own PRIVATE events."""
@@ -313,15 +326,19 @@ class TestValarmStripping:
 
         shared_cal = _share_and_find(owner_client, owner, cal_id, sharee, "read")
 
-        for ev in shared_cal.events():
+        events = shared_cal.events()
+        found = False
+        for ev in events:
             data = str(ev.data)
             if "Meeting with Alarm" in data:
+                found = True
                 assert "VALARM" not in data, (
                     "VALARM should be stripped from shared calendar events"
                 )
                 assert "TRIGGER" not in data, (
                     "TRIGGER (part of VALARM) should be stripped"
                 )
+        assert found, "Target event not found in shared calendar"
 
     def test_valarm_preserved_for_owner(self):
         """Owner should still see their own VALARM reminders."""

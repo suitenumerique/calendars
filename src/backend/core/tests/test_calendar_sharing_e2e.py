@@ -994,17 +994,16 @@ class TestFreebusyEnforcement:
             if shared_uri:
                 break
 
-        if shared_uri:
-            # Try the ICS export endpoint via the Django proxy
-            response = sharee_client.generic(
-                "GET",
-                f"/caldav/calendars/users/{shared_uri}/?export",
+        assert shared_uri is not None, "Shared calendar URI must be discoverable"
+        response = sharee_client.generic(
+            "GET",
+            f"/caldav/calendars/users/{shared_uri}/?export",
+        )
+        if response.status_code == 200:
+            content = response.content.decode("utf-8", errors="ignore")
+            assert "Export Secret Meeting" not in content, (
+                "SECURITY: ICS export leaks event details for freebusy sharee!"
             )
-            if response.status_code == 200:
-                content = response.content.decode("utf-8", errors="ignore")
-                assert "Export Secret Meeting" not in content, (
-                    "SECURITY: ICS export leaks event details for freebusy sharee!"
-                )
 
     def test_freebusy_sharee_propfind_calendar_data_does_not_leak(self):
         """Freebusy details MUST NOT leak via PROPFIND with calendar-data."""
@@ -1087,21 +1086,19 @@ class TestFreebusyEnforcement:
             if event_url:
                 break
 
-        if not event_url:
-            return  # Event not found — share model doesn't expose URL
+        assert event_url is not None, "Shared event URL must be discoverable"
 
         # Try to COPY to the sharee's own calendar via proxy
         src_path = event_url
         if "/caldav/" in src_path:
             src_path = src_path.split("/caldav/", 1)[1]
-        dest_url = (
-            f"http://localhost:8931/caldav/calendars/users/"
-            f"{sharee.email}/{sharee_cal_id}/copied-event.ics"
+        dest_path = (
+            f"/caldav/calendars/users/{sharee.email}/{sharee_cal_id}/copied-event.ics"
         )
         response = sharee_client.generic(
             "COPY",
             f"/caldav/{src_path}",
-            HTTP_DESTINATION=dest_url,
+            HTTP_DESTINATION=dest_path,
         )
         assert response.status_code in (403, 409), (
             f"SECURITY: COPY from freebusy calendar should be blocked, "

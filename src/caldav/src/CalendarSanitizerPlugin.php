@@ -197,11 +197,20 @@ class CalendarSanitizerPlugin extends ServerPlugin
                     $hasCount = stripos($rruleStr, 'COUNT=') !== false;
                     $hasUntil = stripos($rruleStr, 'UNTIL=') !== false;
 
-                    if (!$hasCount && !$hasUntil) {
-                        // Calculate UNTIL as 10 years from DTSTART
-                        $dtstart = isset($component->DTSTART) ? $component->DTSTART->getDateTime() : new \DateTimeImmutable();
-                        $until = $dtstart->modify('+10 years');
-                        $untilStr = $until->format('Ymd\THis\Z');
+                    if (!$hasCount && !$hasUntil && isset($component->DTSTART)) {
+                        // Calculate UNTIL as 10 years from DTSTART, preserving date type.
+                        // All-day events (VALUE=DATE) need date-only UNTIL (Ymd),
+                        // timed events need date-time UNTIL matching DTSTART format.
+                        $dtstart = $component->DTSTART;
+                        $until = $dtstart->getDateTime()->modify('+10 years');
+                        $valueParam = $dtstart->offsetGet('VALUE');
+                        $isDateOnly = $valueParam && strtoupper((string)$valueParam) === 'DATE';
+
+                        if ($isDateOnly) {
+                            $untilStr = $until->format('Ymd');
+                        } else {
+                            $untilStr = $until->format('Ymd\THis\Z');
+                        }
                         $rrule->setValue($rruleStr . ';UNTIL=' . $untilStr);
                         $wasModified = true;
                     }

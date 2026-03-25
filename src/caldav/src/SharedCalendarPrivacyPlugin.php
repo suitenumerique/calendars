@@ -229,12 +229,9 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
         try {
             $vcal = Reader::read($icalData);
         } catch (\Exception $e) {
-            if ($freebusy) {
-                // Fail closed for freebusy
-                return "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
-                     . "PRODID:-//Calendars//EN\r\nEND:VCALENDAR\r\n";
-            }
-            return $icalData;
+            // Fail closed: never leak unparseable data to sharees
+            return "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+                 . "PRODID:-//Calendars//EN\r\nEND:VCALENDAR\r\n";
         }
 
         $modified = false;
