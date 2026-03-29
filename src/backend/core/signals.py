@@ -2,7 +2,6 @@
 Declare and configure the signals for the calendars core application
 """
 
-import json
 import logging
 
 from django.conf import settings
@@ -71,18 +70,14 @@ def delete_user_caldav_data(sender, instance, **kwargs):  # pylint: disable=unus
     if not settings.CALDAV_INTERNAL_API_KEY:
         return
 
-    api_key = settings.CALDAV_INTERNAL_API_KEY
-
     def _cleanup():
         try:
             http = CalDAVHTTPClient()
-            http.request(
+            http.internal_request(
                 "POST",
                 instance,
                 "internal-api/users/delete",
-                data=json.dumps({"email": email}).encode("utf-8"),
-                content_type="application/json",
-                extra_headers={"X-Internal-Api-Key": api_key},
+                json={"email": email},
             )
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception(

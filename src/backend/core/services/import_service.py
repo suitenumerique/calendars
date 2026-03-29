@@ -40,7 +40,13 @@ class ICSImportService:
     def __init__(self):
         self._http = CalDAVHTTPClient()
 
-    def import_events(self, user, caldav_path: str, ics_data: bytes) -> ImportResult:
+    def import_events(
+        self,
+        user,
+        caldav_path: str,
+        ics_data: bytes,
+        channel_id: str = "",
+    ) -> ImportResult:
         """Import events from ICS data into a calendar.
 
         Sends the raw ICS bytes to the SabreDAV internal API import
@@ -52,11 +58,11 @@ class ICSImportService:
             caldav_path: CalDAV path of the calendar
                 (e.g. /calendars/users/user@example.com/uuid/).
             ics_data: Raw ICS file content.
+            channel_id: Optional channel UUID for audit tracking.
         """
         result = ImportResult()
 
-        api_key = settings.CALDAV_INTERNAL_API_KEY
-        if not api_key:
+        if not settings.CALDAV_INTERNAL_API_KEY:
             result.errors.append("CALDAV_INTERNAL_API_KEY is not configured")
             return result
 
@@ -72,14 +78,17 @@ class ICSImportService:
 
         # import runs in a background task so we can wait a decent amount of time
         timeout = 1200  # 20 minutes
+        extra_headers = {}
+        if channel_id:
+            extra_headers["X-CalDAV-Channel-Id"] = channel_id
         try:
-            response = self._http.request(
+            response = self._http.internal_request(
                 "POST",
                 user,
                 f"internal-api/import/{principal_user}/{calendar_uri}",
                 data=ics_data,
                 content_type="text/calendar",
-                extra_headers={"X-Internal-Api-Key": api_key},
+                extra_headers=extra_headers or None,
                 timeout=timeout,
             )
         except requests.RequestException as exc:

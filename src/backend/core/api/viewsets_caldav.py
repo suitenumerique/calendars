@@ -189,6 +189,10 @@ class CalDAVProxyView(View):
                 status=500, content="CalDAV authentication not configured"
             )
 
+        # Pass channel ID for audit tracking on CalDAV writes
+        if channel:
+            headers["X-CalDAV-Channel-Id"] = str(channel.pk)
+
         headers["Content-Type"] = request.content_type or "application/xml"
         headers["X-Forwarded-For"] = request.META.get("REMOTE_ADDR", "")
         headers["X-Forwarded-Host"] = request.get_host()

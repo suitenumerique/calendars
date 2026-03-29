@@ -20,6 +20,8 @@ use Calendars\SabreDav\ResourceMkCalendarBlockPlugin;
 use Calendars\SabreDav\FreeBusyOrgScopePlugin;
 use Calendars\SabreDav\SharedCalendarPrivacyPlugin;
 use Calendars\SabreDav\AvailabilityPlugin;
+use Calendars\SabreDav\AuditCalDAVBackend;
+use Calendars\SabreDav\AuditContextPlugin;
 use Calendars\SabreDav\CalendarsRoot;
 use Calendars\SabreDav\CustomCalDAVPlugin;
 use Calendars\SabreDav\PrincipalsRoot;
@@ -64,8 +66,8 @@ $authBackend = new ApiKeyAuthBackend($apiKey);
 // Create authentication plugin
 $authPlugin = new Auth\Plugin($authBackend);
 
-// Create CalDAV backend
-$caldavBackend = new CalDAV\Backend\PDO($pdo);
+// Create CalDAV backend with audit tracking (channel_id, created_by, modified_by)
+$caldavBackend = new AuditCalDAVBackend($pdo);
 
 // Create CardDAV backend (optional, for future use)
 $carddavBackend = new CardDAV\Backend\PDO($pdo);
@@ -140,6 +142,10 @@ $server->on('exception', function($e) {
     error_log("[sabre/dav] Exception: " . get_class($e) . " - " . $e->getMessage());
     error_log("[sabre/dav] Exception trace: " . $e->getTraceAsString());
 }, 50);
+
+// Add audit context plugin (priority 70, runs before sanitizer/normalizer)
+// Sets principal email and channel ID on the backend before each write
+$server->addPlugin(new AuditContextPlugin($caldavBackend));
 
 // Add calendar sanitizer plugin (priority 85, runs before all other calendar plugins)
 // Strips inline binary attachments (Outlook/Exchange base64 images) and truncates

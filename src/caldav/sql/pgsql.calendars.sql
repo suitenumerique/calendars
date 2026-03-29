@@ -9,7 +9,12 @@ CREATE TABLE calendarobjects (
     componenttype VARCHAR(8),
     firstoccurence BIGINT,
     lastoccurence BIGINT,
-    uid VARCHAR(200)
+    uid VARCHAR(200),
+    channel_id UUID,
+    created_by VARCHAR(255),
+    modified_by VARCHAR(255),
+    created_at BIGINT,
+    modified_by_at BIGINT
 );
 
 ALTER TABLE ONLY calendarobjects
@@ -17,6 +22,12 @@ ALTER TABLE ONLY calendarobjects
 
 CREATE UNIQUE INDEX calendarobjects_ukey
     ON calendarobjects USING btree (calendarid, uri);
+
+CREATE INDEX idx_calendarobjects_channel_id
+    ON calendarobjects USING btree (channel_id);
+
+CREATE INDEX idx_calendarobjects_created_by
+    ON calendarobjects USING btree (created_by);
 
 
 CREATE TABLE calendars (

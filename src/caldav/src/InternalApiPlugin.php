@@ -117,6 +117,24 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
+        // Route: GET /internal-api/channel-events/{channel_id}
+        if ($method === 'GET' && preg_match('#^internal-api/channel-events/([0-9a-f-]+)$#i', $path, $matches)) {
+            $this->handleListChannelEvents($response, $matches[1]);
+            return false;
+        }
+
+        // Route: GET /internal-api/channel-events/{channel_id}/count
+        if ($method === 'GET' && preg_match('#^internal-api/channel-events/([0-9a-f-]+)/count$#i', $path, $matches)) {
+            $this->handleCountChannelEvents($response, $matches[1]);
+            return false;
+        }
+
+        // Route: DELETE /internal-api/channel-events/{channel_id}
+        if ($method === 'DELETE' && preg_match('#^internal-api/channel-events/([0-9a-f-]+)$#i', $path, $matches)) {
+            $this->handleDeleteChannelEvents($response, $matches[1]);
+            return false;
+        }
+
         $response->setStatus(404);
         $response->setHeader('Content-Type', 'application/json');
         $response->setBody(json_encode([
@@ -420,6 +438,16 @@ class InternalApiPlugin extends ServerPlugin
         $skippedCount = 0;
         $errors = [];
 
+        // Set audit context once before the import loop
+        if ($this->caldavBackend instanceof AuditCalDAVBackend) {
+            $user = $request->getHeader('X-Forwarded-User');
+            if ($user) {
+                $this->caldavBackend->setCurrentPrincipal($user);
+            }
+            $channelId = $request->getHeader('X-CalDAV-Channel-Id');
+            $this->caldavBackend->setCurrentChannelId($channelId ?: null);
+        }
+
         try {
             while ($splitVcal = $splitter->getNext()) {
                 $totalEvents++;
@@ -513,6 +541,115 @@ class InternalApiPlugin extends ServerPlugin
             $sanitizer->sanitizeVCalendar($vcal);
             $sanitizer->checkResourceSize($vcal);
         }
+    }
+
+    /**
+     * GET /internal-api/channel-events/{channel_id}
+     * List events associated with a channel.
+     */
+    private function handleListChannelEvents($response, string $channelId)
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT co.uid, co.uri, co.calendarid, co.created_by, co.created_at, '
+                . "ci.principaluri, '/' || 'calendars/' || "
+                . "CASE WHEN ci.principaluri LIKE 'principals/users/%' THEN 'users' ELSE 'resources' END "
+                . "|| '/' || SPLIT_PART(ci.principaluri, '/', 3) || '/' || ci.uri || '/' AS calendar_path "
+                . 'FROM calendarobjects co '
+                . 'JOIN calendarinstances ci ON ci.calendarid = co.calendarid AND ci.access = 1 '
+                . 'WHERE co.channel_id = ?::uuid '
+                . 'ORDER BY co.created_at DESC'
+            );
+            $stmt->execute([$channelId]);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] Failed to list channel events: ' . $e->getMessage());
+            $response->setStatus(500);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Failed to list events']));
+            return;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode(['events' => $rows]));
+    }
+
+    /**
+     * GET /internal-api/channel-events/{channel_id}/count
+     * Count events associated with a channel.
+     */
+    private function handleCountChannelEvents($response, string $channelId)
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT COUNT(*) FROM calendarobjects WHERE channel_id = ?::uuid'
+            );
+            $stmt->execute([$channelId]);
+            $count = (int) $stmt->fetchColumn();
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] Failed to count channel events: ' . $e->getMessage());
+            $response->setStatus(500);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Failed to count events']));
+            return;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode(['count' => $count]));
+    }
+
+    /**
+     * DELETE /internal-api/channel-events/{channel_id}
+     * Delete all events associated with a channel.
+     *
+     * Uses the CalDAV backend's deleteCalendarObject() so that sync tokens
+     * are properly updated. Does NOT trigger scheduling side-effects.
+     */
+    private function handleDeleteChannelEvents($response, string $channelId)
+    {
+        try {
+            // Join calendarinstances to get the instanceId required by
+            // deleteCalendarObject([$calendarId, $instanceId], $uri).
+            $stmt = $this->pdo->prepare(
+                'SELECT co.uri, co.calendarid, ci.id AS instanceid '
+                . 'FROM calendarobjects co '
+                . 'JOIN calendarinstances ci ON ci.calendarid = co.calendarid AND ci.access = 1 '
+                . 'WHERE co.channel_id = ?::uuid'
+            );
+            $stmt->execute([$channelId]);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] Failed to query channel events for delete: ' . $e->getMessage());
+            $response->setStatus(500);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Failed to query events']));
+            return;
+        }
+
+        $deleted = 0;
+        $errors = [];
+        foreach ($rows as $row) {
+            try {
+                $this->caldavBackend->deleteCalendarObject(
+                    [(int) $row['calendarid'], (int) $row['instanceid']],
+                    $row['uri']
+                );
+                $deleted++;
+            } catch (\Exception $e) {
+                $errors[] = $row['uri'];
+                error_log('[InternalApiPlugin] Failed to delete event ' . $row['uri'] . ': ' . $e->getMessage());
+            }
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'deleted_count' => $deleted,
+            'total' => count($rows),
+            'errors' => $errors,
+        ]));
     }
 
     /**

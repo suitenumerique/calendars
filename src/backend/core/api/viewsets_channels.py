@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from core import models
 from core.api import serializers
 from core.services.caldav_service import verify_caldav_access
+from core.services.channel_event_service import ChannelEventService
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,35 @@ class ChannelViewSet(viewsets.GenericViewSet):
             channel, context={"request": request}
         )
         return Response(serializer.data)
+
+    @action(detail=True, methods=["get", "delete"], url_path="events")
+    def events(self, request, pk=None):
+        """List or delete events created by this channel."""
+        channel = self._get_owned_channel(pk)
+        if channel is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        service = ChannelEventService()
+        channel_id = str(channel.pk)
+
+        if request.method == "DELETE":
+            result = service.delete_events(request.user, channel_id)
+            return Response(result)
+
+        # GET: list events
+        events = service.list_events(request.user, channel_id)
+        return Response({"events": events})
+
+    @action(detail=True, methods=["get"], url_path="events/count")
+    def events_count(self, request, pk=None):
+        """Count events created by this channel."""
+        channel = self._get_owned_channel(pk)
+        if channel is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        service = ChannelEventService()
+        count = service.count_events(request.user, str(channel.pk))
+        return Response({"count": count})
 
     def _get_owned_channel(self, pk):
         """Get a channel owned by the current user, or None."""

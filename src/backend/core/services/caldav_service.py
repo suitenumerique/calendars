@@ -1,6 +1,5 @@
 """Services for CalDAV integration."""
 
-import json
 import logging
 import re
 from datetime import date, datetime, timedelta
@@ -109,6 +108,53 @@ class CalDAVHTTPClient:
             headers=headers,
             data=data,
             timeout=timeout or self.DEFAULT_TIMEOUT,
+        )
+
+    def internal_request(  # noqa: PLR0913  # pylint: disable=too-many-arguments
+        self,
+        method: str,
+        user,
+        path: str,
+        *,
+        data=None,
+        json: dict | None = None,  # pylint: disable=redefined-outer-name
+        extra_headers: dict | None = None,
+        timeout: int | None = None,
+        content_type: str | None = None,
+    ) -> requests.Response:
+        """Make an internal API request to the CalDAV server.
+
+        Automatically adds the X-Internal-Api-Key header. Additional
+        headers can be passed via *extra_headers*.
+
+        Pass *json* to send a JSON body — it will be serialized
+        and the content type set automatically. Mutually exclusive
+        with *data* and *content_type*.
+
+        Raises:
+            ValueError: If CALDAV_INTERNAL_API_KEY is not configured.
+        """
+        import json as json_lib  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+
+        api_key = settings.CALDAV_INTERNAL_API_KEY
+        if not api_key:
+            raise ValueError("CALDAV_INTERNAL_API_KEY is not configured")
+
+        if json is not None:
+            data = json_lib.dumps(json).encode("utf-8")
+            content_type = "application/json"
+
+        headers = {"X-Internal-Api-Key": api_key}
+        if extra_headers:
+            headers.update(extra_headers)
+        return self.request(
+            method,
+            user,
+            path,
+            data=data,
+            timeout=timeout,
+            content_type=content_type,
+            extra_headers=headers,
         )
 
     def get_dav_client(self, user) -> DAVClient:
@@ -725,15 +771,11 @@ def cleanup_organization_caldav_data(org):
         if not user.email:
             continue
         try:
-            http.request(
+            http.internal_request(
                 "POST",
                 user,
                 "internal-api/users/delete",
-                data=json.dumps({"email": user.email}).encode("utf-8"),
-                content_type="application/json",
-                extra_headers={
-                    "X-Internal-Api-Key": settings.CALDAV_INTERNAL_API_KEY,
-                },
+                json={"email": user.email},
             )
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception(

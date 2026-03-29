@@ -1,6 +1,5 @@
 """Service for managing calendar resource provisioning via CalDAV."""
 
-import json
 import logging
 from uuid import UUID, uuid4
 
@@ -62,22 +61,16 @@ class ResourceService:
         org_id = str(user.organization_id)
 
         try:
-            response = self._http.request(
+            response = self._http.internal_request(
                 "POST",
                 user,
                 "internal-api/resources/",
-                data=self._json_bytes(
-                    {
-                        "resource_id": resource_id,
-                        "name": name,
-                        "email": email,
-                        "resource_type": resource_type,
-                        "org_id": org_id,
-                    }
-                ),
-                content_type="application/json",
-                extra_headers={
-                    "X-Internal-Api-Key": settings.CALDAV_INTERNAL_API_KEY,
+                json={
+                    "resource_id": resource_id,
+                    "name": name,
+                    "email": email,
+                    "resource_type": resource_type,
+                    "org_id": org_id,
                 },
             )
         except Exception as e:
@@ -144,13 +137,10 @@ class ResourceService:
             )
 
         try:
-            response = self._http.request(
+            response = self._http.internal_request(
                 "DELETE",
                 user,
                 f"internal-api/resources/{resource_id}",
-                extra_headers={
-                    "X-Internal-Api-Key": settings.CALDAV_INTERNAL_API_KEY,
-                },
             )
         except Exception as e:
             logger.error("Failed to delete resource: %s", e)
@@ -175,8 +165,3 @@ class ResourceService:
                 response.text[:500],
             )
             raise ResourceProvisioningError("Failed to delete resource.")
-
-    @staticmethod
-    def _json_bytes(data):
-        """Serialize a dict to JSON bytes."""
-        return json.dumps(data).encode("utf-8")

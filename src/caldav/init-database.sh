@@ -48,6 +48,19 @@ TABLES_EXIST=$(psql -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE t
 
 if [ "$TABLES_EXIST" -gt "0" ]; then
   echo "sabre/dav tables already exist, skipping table creation"
+
+  # Run incremental migrations on existing databases
+  MIGRATIONS_DIR="${SQL_DIR}/migrations"
+  if [ -d "$MIGRATIONS_DIR" ]; then
+    for migration in "$MIGRATIONS_DIR"/*.sql; do
+      if [ -f "$migration" ]; then
+        echo "Running migration: $(basename "$migration")"
+        psql -f "$migration"
+      fi
+    done
+    echo "Migrations complete."
+  fi
+
   exit 0
 fi
 
