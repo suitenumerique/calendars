@@ -2,6 +2,10 @@
 
 import logging
 import secrets
+from xml.sax.saxutils import escape as xml_escape
+
+from django.conf import settings
+from django.utils import timezone
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -10,10 +14,14 @@ from rest_framework.response import Response
 
 from core import models
 from core.api import serializers
-from core.services.caldav_service import verify_caldav_access
+from core.services.caldav_service import CalDAVClient, verify_caldav_access
 from core.services.channel_event_service import ChannelEventService
+from core.services.url_validation import URLValidationError, fetch_ics
 
 logger = logging.getLogger(__name__)
+
+# Custom property namespace for subscription source
+SUBSCRIPTION_SOURCE_PROP = "{http://lasuite.numerique.gouv.fr/ns/}subscription-source"
 
 
 class ChannelViewSet(viewsets.GenericViewSet):
@@ -41,7 +49,11 @@ class ChannelViewSet(viewsets.GenericViewSet):
         channel_type = request.query_params.get("type")
         if channel_type:
             queryset = queryset.filter(type=channel_type)
-        serializer = self.get_serializer(queryset, many=True)
+
+        if channel_type == "ical-subscription":
+            serializer = serializers.ChannelSubscriptionSerializer(queryset, many=True)
+        else:
+            serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     def create(self, request):
@@ -49,7 +61,13 @@ class ChannelViewSet(viewsets.GenericViewSet):
 
         For type="ical-feed", returns an existing channel if one already
         exists for the same user + caldav_path (get-or-create semantics).
+        For type="ical-subscription", creates a SabreDAV calendar and
+        enqueues an initial sync task.
         """
+        # Dispatch to subscription-specific flow
+        if request.data.get("type") == "ical-subscription":
+            return self._create_subscription(request)
+
         create_serializer = serializers.ChannelCreateSerializer(data=request.data)
         create_serializer.is_valid(raise_exception=True)
         data = create_serializer.validated_data
@@ -105,6 +123,277 @@ class ChannelViewSet(viewsets.GenericViewSet):
         )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    def _create_subscription(self, request):
+        """Create an ical-subscription channel with a SabreDAV calendar."""
+        # Enforce per-user subscription limit
+        current_count = models.Channel.objects.filter(
+            user=request.user, type="ical-subscription"
+        ).count()
+        if current_count >= settings.MAX_SUBSCRIPTIONS_PER_USER:
+            return Response(
+                {
+                    "detail": (
+                        f"Maximum number of subscriptions reached"
+                        f" ({settings.MAX_SUBSCRIPTIONS_PER_USER})."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sub_serializer = serializers.ChannelSubscriptionCreateSerializer(
+            data=request.data
+        )
+        sub_serializer.is_valid(raise_exception=True)
+        data = sub_serializer.validated_data
+
+        source_url = data["source_url"]
+        name = data["name"]
+
+        # Test fetch to verify URL works
+        try:
+            _status_code, ics_data, etag, last_modified = fetch_ics(source_url)
+        except URLValidationError as exc:
+            return Response(
+                {"source_url": [str(exc)]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not ics_data:
+            return Response(
+                {"source_url": ["URL did not return calendar data"]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Create SabreDAV calendar
+        caldav_client = CalDAVClient()
+        try:
+            caldav_path = caldav_client.create_calendar(
+                request.user, calendar_name=name
+            )
+        except Exception:
+            logger.exception("Failed to create SabreDAV calendar for subscription")
+            return Response(
+                {"detail": "Failed to create calendar"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Set custom properties via PROPPATCH (subscription-source + color)
+        color = data.get("color", "")
+        try:
+            http = caldav_client._http  # noqa: SLF001
+            color_prop = ""
+            if color:
+                color_prop = (
+                    f"<a:calendar-color xmlns:a="
+                    f'"http://apple.com/ns/ical/">'
+                    f"{xml_escape(color)}</a:calendar-color>"
+                )
+            proppatch_body = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<d:propertyupdate xmlns:d="DAV:" '
+                'xmlns:ls="http://lasuite.numerique.gouv.fr/ns/">'
+                "<d:set><d:prop>"
+                f"<ls:subscription-source>{xml_escape(source_url)}</ls:subscription-source>"
+                f"{color_prop}"
+                "</d:prop></d:set>"
+                "</d:propertyupdate>"
+            )
+            http.request(
+                "PROPPATCH",
+                request.user,
+                caldav_path,
+                data=proppatch_body.encode("utf-8"),
+                content_type="application/xml; charset=utf-8",
+            )
+        except Exception:
+            logger.exception("Failed to set subscription-source property")
+            # Non-fatal: the channel settings still track the source URL
+
+        # Create channel
+        channel = models.Channel(
+            name=name,
+            type="ical-subscription",
+            user=request.user,
+            caldav_path=caldav_path,
+            organization=request.user.organization,
+            settings={
+                "source_url": source_url,
+                "sync_interval": settings.SUBSCRIPTION_SYNC_INTERVAL,
+                "last_sync_status": "pending",
+                "last_sync_error": "",
+                "error_count": 0,
+                "etag": "",
+                "last_modified": "",
+            },
+        )
+        try:
+            channel.save()
+        except Exception:
+            logger.exception("Failed to save channel, cleaning up SabreDAV calendar")
+            try:
+                caldav_client._http.request(  # noqa: SLF001
+                    "DELETE", request.user, caldav_path
+                )
+            except Exception:
+                logger.exception("Failed to clean up SabreDAV calendar %s", caldav_path)
+            raise
+
+        # Sync events immediately using the ICS data we already fetched
+        try:
+            from core.services.subscription_sync_service import (  # noqa: PLC0415  # pylint: disable=C0415
+                SubscriptionSyncService,
+            )
+
+            service = SubscriptionSyncService()
+            service.sync_events(request.user, caldav_path, ics_data)
+            channel.settings["last_sync_status"] = "ok"
+            channel.settings["last_sync_at"] = timezone.now().isoformat()
+            channel.settings["etag"] = etag
+            channel.settings["last_modified"] = last_modified
+            channel.save(update_fields=["settings", "updated_at"])
+        except Exception:
+            logger.exception("Initial sync failed for channel %s", channel.pk)
+
+        serializer = serializers.ChannelSubscriptionSerializer(channel)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, pk=None):
+        """Update a subscription channel (name and/or source_url)."""
+        channel = self._get_owned_channel(pk)
+        if channel is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if channel.type != "ical-subscription":
+            return Response(
+                {"detail": "Only subscription channels can be updated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        update_serializer = serializers.ChannelSubscriptionUpdateSerializer(
+            data=request.data
+        )
+        update_serializer.is_valid(raise_exception=True)
+        data = update_serializer.validated_data
+
+        if "name" in data:
+            channel.name = data["name"]
+
+        new_source_url = data.get("source_url")
+        ics_data = None
+        new_etag = ""
+        new_last_modified = ""
+        if new_source_url and new_source_url != channel.settings.get("source_url"):
+            # Validate the new URL by fetching it (keep the data for immediate sync)
+            try:
+                _status_code, ics_data, new_etag, new_last_modified = fetch_ics(
+                    new_source_url
+                )
+            except URLValidationError as exc:
+                return Response(
+                    {"source_url": [str(exc)]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            channel.settings["source_url"] = new_source_url
+            channel.settings["etag"] = ""
+            channel.settings["last_modified"] = ""
+            channel.settings["error_count"] = 0
+            channel.settings["last_sync_status"] = "pending"
+            channel.settings["last_sync_error"] = ""
+
+            # Purge existing events before syncing from new source
+            try:
+                from core.services.subscription_sync_service import (  # noqa: PLC0415
+                    SubscriptionSyncService,
+                )
+
+                SubscriptionSyncService().purge_events(
+                    request.user, channel.caldav_path
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to purge events for channel %s on URL change",
+                    channel.pk,
+                )
+
+            # Update WebDAV property
+            try:
+                http = CalDAVClient()._http  # noqa: SLF001
+                proppatch_body = (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<d:propertyupdate xmlns:d="DAV:" '
+                    'xmlns:ls="http://lasuite.numerique.gouv.fr/ns/">'
+                    "<d:set><d:prop>"
+                    "<ls:subscription-source>"
+                    f"{xml_escape(new_source_url)}"
+                    "</ls:subscription-source>"
+                    "</d:prop></d:set>"
+                    "</d:propertyupdate>"
+                )
+                http.request(
+                    "PROPPATCH",
+                    request.user,
+                    channel.caldav_path,
+                    data=proppatch_body.encode("utf-8"),
+                    content_type="application/xml; charset=utf-8",
+                )
+            except Exception:
+                logger.exception("Failed to update subscription-source property")
+
+            # Sync immediately using the ICS data we already fetched
+            if ics_data:
+                try:
+                    from core.services.subscription_sync_service import (  # noqa: PLC0415
+                        SubscriptionSyncService,
+                    )
+
+                    service = SubscriptionSyncService()
+                    service.sync_events(request.user, channel.caldav_path, ics_data)
+                    channel.settings["last_sync_status"] = "ok"
+                    channel.settings["last_sync_at"] = timezone.now().isoformat()
+                    channel.settings["etag"] = new_etag
+                    channel.settings["last_modified"] = new_last_modified
+                except Exception:
+                    logger.exception(
+                        "Immediate sync failed after URL update for channel %s",
+                        channel.pk,
+                    )
+
+        # Update CalDAV properties (displayname + color) via PROPPATCH
+        new_color = data.get("color")
+        new_name = data.get("name")
+        if (new_color or new_name) and channel.caldav_path:
+            props = ""
+            if new_name:
+                props += f"<d:displayname>{xml_escape(new_name)}</d:displayname>"
+            if new_color:
+                props += (
+                    f'<a:calendar-color xmlns:a="http://apple.com/ns/ical/">'
+                    f"{xml_escape(new_color)}</a:calendar-color>"
+                )
+            try:
+                http = CalDAVClient()._http  # noqa: SLF001
+                proppatch = (
+                    '<?xml version="1.0" encoding="UTF-8"?>'
+                    '<d:propertyupdate xmlns:d="DAV:">'
+                    f"<d:set><d:prop>{props}</d:prop></d:set>"
+                    "</d:propertyupdate>"
+                )
+                http.request(
+                    "PROPPATCH",
+                    request.user,
+                    channel.caldav_path,
+                    data=proppatch.encode("utf-8"),
+                    content_type="application/xml; charset=utf-8",
+                )
+            except Exception:
+                logger.exception("Failed to update CalDAV calendar properties")
+
+        channel.save(update_fields=["name", "settings", "updated_at"])
+
+        serializer = serializers.ChannelSubscriptionSerializer(channel)
+        return Response(serializer.data)
+
     def retrieve(self, request, pk=None):
         """Retrieve a channel (without token)."""
         channel = self._get_owned_channel(pk)
@@ -114,12 +403,62 @@ class ChannelViewSet(viewsets.GenericViewSet):
         return Response(serializer.data)
 
     def destroy(self, request, pk=None):
-        """Delete a channel."""
+        """Delete a channel.
+
+        For ical-subscription channels, also deletes the SabreDAV calendar.
+        """
         channel = self._get_owned_channel(pk)
         if channel is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Clean up SabreDAV calendar for subscriptions
+        if channel.type == "ical-subscription" and channel.caldav_path:
+            try:
+                http = CalDAVClient()._http  # noqa: SLF001
+                http.request("DELETE", request.user, channel.caldav_path)
+            except Exception:
+                logger.exception(
+                    "Failed to delete SabreDAV calendar %s for subscription %s",
+                    channel.caldav_path,
+                    channel.pk,
+                )
+                # Continue with channel deletion anyway
+
         channel.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], url_path="reactivate")
+    def reactivate(self, request, pk=None):
+        """Reactivate a stopped subscription channel."""
+        channel = self._get_owned_channel(pk)
+        if channel is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if channel.type != "ical-subscription":
+            return Response(
+                {"detail": "Only subscription channels can be reactivated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        channel.is_active = True
+        channel.settings["error_count"] = 0
+        channel.settings["last_sync_status"] = "pending"
+        channel.settings["last_sync_error"] = ""
+        channel.save(update_fields=["is_active", "settings", "updated_at"])
+
+        # Enqueue immediate sync
+        try:
+            from core.tasks import sync_one_subscription  # noqa: PLC0415
+
+            sync_one_subscription.send(str(channel.pk))
+        except Exception:
+            logger.exception(
+                "Failed to enqueue sync after reactivation for channel %s",
+                channel.pk,
+            )
+
+        serializer = serializers.ChannelSubscriptionSerializer(channel)
+        return Response(serializer.data)
 
     @action(detail=True, methods=["post"], url_path="regenerate-token")
     def regenerate_token(self, request, pk=None):

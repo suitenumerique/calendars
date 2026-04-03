@@ -192,9 +192,97 @@ class ChannelCreateSerializer(serializers.Serializer):  # pylint: disable=abstra
 
     def validate_type(self, value):
         """Validate channel type."""
-        if value == "ical-feed":
+        if value in ("ical-feed", "ical-subscription"):
             return value
         return "caldav"
+
+
+class ChannelSubscriptionSerializer(serializers.ModelSerializer):
+    """Read serializer for subscription channels with sync status fields."""
+
+    source_url = serializers.SerializerMethodField()
+    last_sync_at = serializers.SerializerMethodField()
+    last_sync_status = serializers.SerializerMethodField()
+    last_sync_error = serializers.SerializerMethodField()
+    error_count = serializers.SerializerMethodField()
+    sync_interval = serializers.SerializerMethodField()
+
+    class Meta:
+        model = models.Channel
+        fields = [
+            "id",
+            "name",
+            "type",
+            "caldav_path",
+            "is_active",
+            "source_url",
+            "last_sync_at",
+            "last_sync_status",
+            "last_sync_error",
+            "error_count",
+            "sync_interval",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_source_url(self, obj) -> str:
+        return obj.settings.get("source_url", "")
+
+    def get_last_sync_at(self, obj) -> str | None:
+        return obj.settings.get("last_sync_at")
+
+    def get_last_sync_status(self, obj) -> str:
+        return obj.settings.get("last_sync_status", "pending")
+
+    def get_last_sync_error(self, obj) -> str:
+        return obj.settings.get("last_sync_error", "")
+
+    def get_error_count(self, obj) -> int:
+        return obj.settings.get("error_count", 0)
+
+    def get_sync_interval(self, obj) -> int:
+        return obj.settings.get("sync_interval", 300)
+
+
+class ChannelSubscriptionCreateSerializer(serializers.Serializer):
+    """Write serializer for creating subscription channels."""
+
+    name = serializers.CharField(max_length=255)
+    source_url = serializers.CharField(max_length=2048)
+    color = serializers.CharField(max_length=50, required=False, default="")
+
+    def validate_source_url(self, value):
+        """Validate and normalize the source URL."""
+        from core.services.url_validation import (  # noqa: PLC0415  # pylint: disable=C0415
+            URLValidationError,
+            validate_subscription_url,
+        )
+
+        try:
+            return validate_subscription_url(value)
+        except URLValidationError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+
+class ChannelSubscriptionUpdateSerializer(serializers.Serializer):
+    """Write serializer for updating subscription channels."""
+
+    name = serializers.CharField(max_length=255, required=False)
+    source_url = serializers.CharField(max_length=2048, required=False)
+    color = serializers.CharField(max_length=50, required=False)
+
+    def validate_source_url(self, value):
+        """Validate and normalize the source URL."""
+        from core.services.url_validation import (  # noqa: PLC0415  # pylint: disable=C0415
+            URLValidationError,
+            validate_subscription_url,
+        )
+
+        try:
+            return validate_subscription_url(value)
+        except URLValidationError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
 
 
 class ChannelWithTokenSerializer(ChannelSerializer):
