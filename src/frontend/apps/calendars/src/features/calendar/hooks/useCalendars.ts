@@ -14,7 +14,14 @@ import {
   startImportTask,
   pollImportTask,
   ImportEventsResult,
+  SubscriptionChannel,
+  getSubscriptionChannels,
+  createSubscriptionChannel,
+  updateSubscriptionChannel,
+  deleteSubscriptionChannel,
+  reactivateSubscriptionChannel,
 } from "../api";
+import { SYNC_POLL_INTERVAL } from "../config";
 
 /**
  * Result type for useICalFeedChannel hook.
@@ -103,6 +110,91 @@ export const useImportEvents = () => {
     mutationFn: async ({ caldavPath, file }) => {
       const taskId = await startImportTask(caldavPath, file);
       return pollImportTask(taskId);
+    },
+  });
+};
+
+// ============================================================================
+// Subscription Channel Hooks
+// ============================================================================
+
+/**
+ * Hook to get all subscription channels.
+ */
+export const useSubscriptionChannels = () => {
+  return useQuery<SubscriptionChannel[]>({
+    queryKey: ["subscription-channels"],
+    queryFn: getSubscriptionChannels,
+    refetchInterval: SYNC_POLL_INTERVAL,
+  });
+};
+
+/**
+ * Hook to create a subscription channel.
+ */
+export const useCreateSubscriptionChannel = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createSubscriptionChannel,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["subscription-channels"],
+      });
+    },
+  });
+};
+
+/**
+ * Hook to update a subscription channel.
+ */
+export const useUpdateSubscriptionChannel = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      channelId,
+      params,
+    }: {
+      channelId: string;
+      params: { name?: string; sourceUrl?: string; color?: string };
+    }) => updateSubscriptionChannel(channelId, params),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["subscription-channels"],
+      });
+    },
+  });
+};
+
+/**
+ * Hook to delete a subscription channel.
+ */
+export const useDeleteSubscriptionChannel = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteSubscriptionChannel,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["subscription-channels"],
+      });
+    },
+  });
+};
+
+/**
+ * Hook to reactivate a stopped subscription channel.
+ */
+export const useReactivateSubscriptionChannel = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: reactivateSubscriptionChannel,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["subscription-channels"],
+      });
     },
   });
 };
