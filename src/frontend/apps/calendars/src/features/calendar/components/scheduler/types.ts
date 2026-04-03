@@ -52,6 +52,17 @@ export interface EventModalProps {
 }
 
 /**
+ * Props for the ReadOnlyEventModal component.
+ */
+export interface ReadOnlyEventModalProps {
+  isOpen: boolean;
+  event: Partial<IcsEvent> | null;
+  calendarUrl: string;
+  calendars: CalDavCalendar[];
+  onClose: () => void;
+}
+
+/**
  * Props for the DeleteEventModal component.
  */
 export interface DeleteEventModalProps {
@@ -82,7 +93,7 @@ export interface SchedulerProps {
  */
 export interface EventModalState {
   isOpen: boolean;
-  mode: "create" | "edit";
+  mode: "create" | "edit" | "view";
   event: Partial<IcsEvent> | null;
   calendarUrl: string;
   eventUrl?: string;

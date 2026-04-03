@@ -22,6 +22,8 @@ import {
   addToast,
   ToasterItem,
 } from "@/features/ui/components/toaster/Toaster";
+import { useSubscriptionChannels } from "../hooks/useCalendars";
+import { SYNC_POLL_INTERVAL } from "../config";
 
 const HIDDEN_CALENDARS_KEY = "calendar-hidden-urls";
 
@@ -55,6 +57,7 @@ export interface CalendarContextType {
   davCalendars: CalDavCalendar[];
   ownedCalendars: CalDavCalendar[];
   sharedCalendars: CalDavCalendar[];
+  subscriptionCalendarUrls: Set<string>;
   visibleCalendarUrls: Set<string>;
   isLoading: boolean;
   isConnected: boolean;
@@ -117,6 +120,30 @@ export const CalendarContextProvider = ({
   const [isConnected, setIsConnected] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Track subscription calendar URLs for read-only enforcement
+  const { data: subscriptionChannelsData } = useSubscriptionChannels();
+  const subscriptionCalendarUrls = useMemo(() => {
+    if (!subscriptionChannelsData?.length || !davCalendars.length)
+      return new Set<string>();
+    const subscriptionPaths = new Set(
+      subscriptionChannelsData.map((ch) => ch.caldav_path.replace(/\/$/, "")),
+    );
+    return new Set(
+      davCalendars
+        .filter((cal) => {
+          // Extract path from full URL and compare exactly
+          try {
+            const calPath = new URL(cal.url).pathname.replace(/\/$/, "");
+            const normalizedPath = calPath.replace(/^\/caldav/, "");
+            return subscriptionPaths.has(normalizedPath);
+          } catch {
+            return false;
+          }
+        })
+        .map((cal) => cal.url),
+    );
+  }, [subscriptionChannelsData, davCalendars]);
 
   const { ownedCalendars, sharedCalendars } = useMemo(() => {
     const homeUrl = caldavService.getAccount()?.homeUrl;
@@ -309,7 +336,18 @@ export const CalendarContextProvider = ({
     }
   }, []);
 
-  // Note: refetchEvents is called in Scheduler component after updating the ref
+  // Periodic refresh: poll calendars and events every 5 minutes
+  // to pick up subscription sync changes
+  useEffect(() => {
+    if (!isConnected) return;
+    const interval = setInterval(() => {
+      refreshCalendars();
+      if (calendarRef.current) {
+        calendarRef.current.refetchEvents();
+      }
+    }, SYNC_POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, [isConnected, refreshCalendars, calendarRef]);
 
   // Connect to CalDAV server on mount
   useEffect(() => {
@@ -377,6 +415,7 @@ export const CalendarContextProvider = ({
     davCalendars,
     ownedCalendars,
     sharedCalendars,
+    subscriptionCalendarUrls,
     visibleCalendarUrls,
     isLoading,
     isConnected,

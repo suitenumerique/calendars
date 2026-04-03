@@ -108,6 +108,12 @@ export const useSchedulerHandlers = ({
    */
   const handleEventDrop = useCallback(
     async (info: EventCalendarEventDropInfo) => {
+      // Block writes on read-only (subscription) events
+      if (info.event.editable === false) {
+        info.revert();
+        return;
+      }
+
       const extProps = info.event.extendedProps as CalDavExtendedProps;
 
       if (!extProps?.eventUrl) {
@@ -160,6 +166,12 @@ export const useSchedulerHandlers = ({
    */
   const handleEventResize = useCallback(
     async (info: EventCalendarEventResizeInfo) => {
+      // Block writes on read-only (subscription) events
+      if (info.event.editable === false) {
+        info.revert();
+        return;
+      }
+
       const extProps = info.event.extendedProps as CalDavExtendedProps;
 
       if (!extProps?.eventUrl) {
@@ -216,10 +228,23 @@ export const useSchedulerHandlers = ({
     (info: EventCalendarEventClickInfo) => {
       const extProps = info.event.extendedProps as CalDavExtendedProps;
 
-      // Convert EventCalendar event back to IcsEvent for editing
+      // Convert EventCalendar event back to IcsEvent
       const icsEvent = adapter.toIcsEvent(info.event as EventCalendarEvent, {
         defaultTimezone: extProps?.timezone || BROWSER_TIMEZONE,
       });
+
+      // Read-only (subscription) events: open in view mode
+      if (info.event.editable === false) {
+        setModalState({
+          isOpen: true,
+          mode: "view",
+          event: icsEvent,
+          calendarUrl: extProps?.calendarUrl || calendarUrl,
+          eventUrl: extProps?.eventUrl,
+          etag: extProps?.etag,
+        });
+        return;
+      }
 
       setModalState({
         isOpen: true,
