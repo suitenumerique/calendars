@@ -3,20 +3,27 @@
  * Shows onboarding modal when user has no calendars.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useCalendarContext } from "../../contexts";
 import { setupCalendar } from "@/features/mailbox/api";
+import {
+  useSubscriptionChannels,
+  useDeleteSubscriptionChannel,
+  useReactivateSubscriptionChannel,
+} from "../../hooks/useCalendars";
 
 import { CalendarModal } from "./CalendarModal";
 import { CalendarShareModal } from "./CalendarShareModal";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
 import { ImportEventsModal } from "./ImportEventsModal";
 import { SubscriptionUrlModal } from "./SubscriptionUrlModal";
+import { SubscriptionCalendarSection } from "./SubscriptionCalendarSection";
 import { CalendarListItem } from "./CalendarListItem";
 import { useCalendarListState } from "./hooks/useCalendarListState";
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
+import type { SubscriptionChannel } from "../../api";
 import { extractCaldavPath } from "./utils";
 
 export const CalendarList = () => {
@@ -129,6 +136,81 @@ export const CalendarList = () => {
     }
   }, [calendarRef]);
 
+  const handleSubscriptionRefresh = useCallback(async () => {
+    await refreshCalendars();
+    if (calendarRef.current) {
+      calendarRef.current.refetchEvents();
+    }
+  }, [refreshCalendars, calendarRef]);
+
+  // Subscription channels
+  const { data: subscriptionChannels = [] } = useSubscriptionChannels();
+  const deleteSubMutation = useDeleteSubscriptionChannel();
+  const reactivateSubMutation = useReactivateSubscriptionChannel();
+
+  // Separate subscription calendars from owned calendars
+  const subscriptionPaths = useMemo(
+    () => new Set(subscriptionChannels.map((ch) => ch.caldav_path)),
+    [subscriptionChannels],
+  );
+
+  const [deletingPaths, setDeletingPaths] = useState<Set<string>>(new Set());
+
+  const { regularCalendars, subscriptionCalendars } = useMemo(() => {
+    const regular: CalDavCalendar[] = [];
+    const subscription: CalDavCalendar[] = [];
+    for (const cal of ownedCalendars) {
+      const calPath = extractCaldavPath(cal.url);
+      if (calPath && deletingPaths.has(calPath)) continue;
+      if (calPath && subscriptionPaths.has(calPath)) {
+        subscription.push(cal);
+      } else {
+        regular.push(cal);
+      }
+    }
+    // Sort by channel creation date (oldest first = order of addition)
+    subscription.sort((a, b) => {
+      const pathA = extractCaldavPath(a.url);
+      const pathB = extractCaldavPath(b.url);
+      const chA = subscriptionChannels.find(
+        (ch) => pathA === ch.caldav_path,
+      );
+      const chB = subscriptionChannels.find(
+        (ch) => pathB === ch.caldav_path,
+      );
+      if (!chA || !chB) return 0;
+      return (
+        new Date(chA.created_at).getTime() -
+        new Date(chB.created_at).getTime()
+      );
+    });
+    return { regularCalendars: regular, subscriptionCalendars: subscription };
+  }, [ownedCalendars, subscriptionPaths, subscriptionChannels, deletingPaths]);
+
+  const handleDeleteSubscription = useCallback(
+    async (channel: SubscriptionChannel) => {
+      setDeletingPaths((prev) => new Set(prev).add(channel.caldav_path));
+      try {
+        await deleteSubMutation.mutateAsync(channel.id);
+        await refreshCalendars();
+      } finally {
+        setDeletingPaths((prev) => {
+          const next = new Set(prev);
+          next.delete(channel.caldav_path);
+          return next;
+        });
+      }
+    },
+    [deleteSubMutation, refreshCalendars],
+  );
+
+  const handleReactivateSubscription = useCallback(
+    async (channel: SubscriptionChannel) => {
+      await reactivateSubMutation.mutateAsync(channel.id);
+    },
+    [reactivateSubMutation],
+  );
+
   return (
     <>
       <div className="calendar-list">
@@ -162,7 +244,7 @@ export const CalendarList = () => {
           </div>
           {isMyCalendarsExpanded && (
             <div className="calendar-list__items">
-              {ownedCalendars.map((calendar) => (
+              {regularCalendars.map((calendar) => (
                 <CalendarListItem
                   key={calendar.url}
                   calendar={calendar}
@@ -182,6 +264,16 @@ export const CalendarList = () => {
             </div>
           )}
         </div>
+
+        <SubscriptionCalendarSection
+          calendars={subscriptionCalendars}
+          channels={subscriptionChannels}
+          visibleCalendarUrls={visibleCalendarUrls}
+          onToggleVisibility={toggleCalendarVisibility}
+          onDelete={handleDeleteSubscription}
+          onReactivate={handleReactivateSubscription}
+          onRefresh={handleSubscriptionRefresh}
+        />
 
         {sharedCalendars.length > 0 && (
           <div className="calendar-list__section">

@@ -23,6 +23,7 @@ import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { DEFAULT_COLORS } from "./constants";
+import { ColorPicker } from "./ColorPicker";
 import type { CalendarModalProps } from "./types";
 
 const NO_MAILBOX_VALUE = "__none__";
@@ -264,25 +265,7 @@ export const CalendarModal = ({
           fullWidth
         />
 
-        <div className="calendar-modal__field">
-          <label className="calendar-modal__label">
-            {t("calendar.createCalendar.color")}
-          </label>
-          <div className="calendar-modal__colors">
-            {DEFAULT_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={`calendar-modal__color-btn ${
-                  color === c ? "calendar-modal__color-btn--selected" : ""
-                }`}
-                style={{ backgroundColor: c }}
-                onClick={() => setColor(c)}
-                aria-label={c}
-              />
-            ))}
-          </div>
-        </div>
+        <ColorPicker value={color} onChange={setColor} />
 
         {mode === "edit" && availabilitiesEnabled && (
           <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 0", cursor: "pointer" }}>
