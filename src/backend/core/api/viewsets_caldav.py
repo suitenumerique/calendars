@@ -113,6 +113,38 @@ class CalDAVProxyView(View):
         return False
 
     @staticmethod
+    def _check_subscription_readonly(user, path, method):
+        """Block write operations on calendars owned by ical-subscription channels.
+
+        Returns an HttpResponse(403) if the path belongs to a subscription
+        calendar, None otherwise.
+        """
+        from core.services.caldav_service import (  # noqa: PLC0415
+            normalize_caldav_path,
+        )
+
+        full_path = "/" + path.lstrip("/") if path else "/"
+        normalized = normalize_caldav_path(full_path)
+
+        # Check if any subscription channel owns this calendar path
+        # The path could be /calendars/users/email/cal-uuid/event.ics
+        # We need to match the calendar prefix
+        # Note: no is_active filter — stopped subscriptions must stay read-only
+        subscription_paths = Channel.objects.filter(
+            user=user,
+            type="ical-subscription",
+        ).values_list("caldav_path", flat=True)
+
+        for sub_path in subscription_paths:
+            if normalized.startswith(sub_path) or full_path.startswith(sub_path):
+                return HttpResponse(
+                    status=403,
+                    content="Cannot modify events in a subscription calendar",
+                )
+
+        return None
+
+    @staticmethod
     def _check_entitlements_for_creation(user):
         """Check if user is entitled to create calendars.
 
@@ -169,6 +201,14 @@ class CalDAVProxyView(View):
         # Check entitlements for calendar creation (all auth methods)
         if request.method in ("MKCALENDAR", "MKCOL"):
             if denied := self._check_entitlements_for_creation(effective_user):
+                return denied
+
+        # Block write operations on subscription calendars
+        # Allow only read methods; block PUT, DELETE, MOVE, PROPPATCH, POST
+        if request.method not in self.READER_METHODS:
+            if denied := self._check_subscription_readonly(
+                effective_user, kwargs.get("path", ""), request.method
+            ):
                 return denied
 
         # Build the CalDAV server URL
