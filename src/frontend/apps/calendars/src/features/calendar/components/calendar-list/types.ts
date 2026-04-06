@@ -12,7 +12,8 @@ export interface CalendarModalProps {
   mode: "create" | "edit";
   calendar?: CalDavCalendar | null;
   onClose: () => void;
-  onSave: (name: string, color: string) => Promise<void>;
+  onSave: (name: string, color: string, mailboxEmail?: string, includeInAvailability?: boolean) => Promise<void>;
+  isOnboarding?: boolean;
 }
 
 /**
@@ -46,6 +47,7 @@ export interface CalendarListItemProps {
   calendar: CalDavCalendar;
   isVisible: boolean;
   isMenuOpen: boolean;
+  isMailboxCalendar?: boolean;
   onToggleVisibility: (url: string) => void;
   onMenuToggle: (url: string) => void;
   onEdit: (calendar: CalDavCalendar) => void;

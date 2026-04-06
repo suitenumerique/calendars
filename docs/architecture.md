@@ -83,7 +83,7 @@ The CalDAV server is a **standards-compliant CalDAV server** that handles all ca
 
 **Authentication Integration:**
 - Uses Apache authentication backend which reads `REMOTE_USER` environment variable
-- Django proxy sets `X-Forwarded-User` header, which the CalDAV server converts to `REMOTE_USER`
+- Django proxy sets `X-LS-User` header, which the CalDAV server converts to `REMOTE_USER`
 - All communication is via HTTP - no direct database access from Django
 
 ### Frontend (Next.js)
@@ -162,7 +162,7 @@ Events are created directly via CalDAV protocol:
 ### CalDAV Client Access
 
 1. **CalDAV Client** → PROPFIND `/api/v1.0/caldav/` (CalDAV protocol)
-2. **Django Backend**: Authenticates user via Django session, forwards request to CalDAV server with `X-Forwarded-User` header
+2. **Django Backend**: Authenticates user via Django session, forwards request to CalDAV server with `X-LS-User` header
 3. **CalDAV Server**: Processes CalDAV request, returns CalDAV response
 4. **Django Backend**: Forwards response to client
 
@@ -170,7 +170,7 @@ Events are created directly via CalDAV protocol:
 
 ### User Synchronization
 
-Users are automatically created in the CalDAV server when they first access it. The CalDAV server's Apache authentication backend reads the `REMOTE_USER` environment variable, which is set from the `X-Forwarded-User` header sent by Django. No explicit user creation is needed - the CalDAV server will create principals on-demand.
+Users are automatically created in the CalDAV server when they first access it. The CalDAV server's Apache authentication backend reads the `REMOTE_USER` environment variable, which is set from the `X-LS-User` header sent by Django. No explicit user creation is needed - the CalDAV server will create principals on-demand.
 
 ### Calendar Creation
 
@@ -182,8 +182,8 @@ When creating a calendar via REST API:
 ### Authentication Translation
 
 Django sessions are translated to CalDAV server authentication:
-- Django adds `X-Forwarded-User` header with user email
-- CalDAV server converts `X-Forwarded-User` to `REMOTE_USER` environment variable
+- Django adds `X-LS-User` header with user email
+- CalDAV server converts `X-LS-User` to `REMOTE_USER` environment variable
 - CalDAV server's Apache authentication backend reads `REMOTE_USER` for authentication
 - All communication is via HTTP - no direct database access
 

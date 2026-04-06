@@ -3,12 +3,13 @@
  * Wraps the UI Kit ShareModal for managing calendar sharing via CalDAV.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ShareModal } from "@gouvfr-lasuite/ui-kit";
 
 import { useCalendarContext } from "../../contexts";
 import { useAuth } from "../../../auth/Auth";
+import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import {
   addToast,
   ToasterItem,
@@ -47,6 +48,14 @@ const SHARE_ROLES: SharePrivilege[] = [
   "admin",
 ];
 
+const ROLE_KEYS: Record<string, string> = {
+  freebusy: "roles.freebusy",
+  read: "roles.reader",
+  "read-write": "roles.editor",
+  admin: "roles.administrator",
+  owner: "roles.owner",
+};
+
 export const CalendarShareModal = ({
   isOpen,
   calendar,
@@ -55,12 +64,14 @@ export const CalendarShareModal = ({
   const { t } = useTranslation();
   const { caldavService, shareCalendar } = useCalendarContext();
   const { user } = useAuth();
+  const { isMailboxCalendar, getMailboxEmail, availableMailboxes } = useMailboxContext();
   const [accesses, setAccesses] = useState<ShareAccess[]>([]);
   const [searchResults, setSearchResults] = useState<ShareUser[]>([]);
   const [loading, setLoading] = useState(false);
 
   const buildAccesses = useCallback(
-    (sharees: ShareAccess[]) => {
+    (sharees: ShareAccess[], skipOwner = false) => {
+      if (skipOwner) return sharees;
       const ownerAccess: ShareAccess | null = user
         ? {
             id: "owner",
@@ -78,16 +89,38 @@ export const CalendarShareModal = ({
     [user],
   );
 
+  // For mailbox calendars, find the mailbox data and user's role
+  const isMailbox = calendar ? isMailboxCalendar(calendar.url, calendar) : false;
+  const mailboxEmail = calendar ? getMailboxEmail(calendar.url, calendar) : undefined;
+  const mailboxData = useMemo(() => {
+    if (!mailboxEmail) return null;
+    return availableMailboxes.find((mb) => mb.email === mailboxEmail) ?? null;
+  }, [mailboxEmail, availableMailboxes]);
+
+  const mailboxUsers = useMemo(() => {
+    if (!mailboxData) return new Set<string>();
+    return new Set(mailboxData.users.map((u) => u.email));
+  }, [mailboxData]);
+
+  const isMailboxAdmin = mailboxData?.role === "admin";
+
+
   const fetchSharees = useCallback(async () => {
     if (!calendar) return;
 
     const result = await caldavService.getCalendarSharees(calendar.url);
     if (result.success && result.data) {
-      const shareeAccesses = result.data.map((sharee) => {
+      const shareeAccesses = result.data
+        // For mailbox calendars, filter out the owner row (the mailbox principal)
+        .filter((sharee) => !(isMailbox && sharee.privilege === "owner"))
+        .map((sharee) => {
         const email = sharee.href.replace(/^mailto:/, "");
+        const isSyncManaged = isMailbox && mailboxUsers.has(email);
         return {
           id: sharee.href,
           role: sharee.privilege,
+          can_delete: !isSyncManaged,
+          is_sync_managed: isSyncManaged,
           user: {
             id: sharee.href,
             full_name: sharee.displayName || email,
@@ -95,11 +128,11 @@ export const CalendarShareModal = ({
           },
         };
       });
-      setAccesses(buildAccesses(shareeAccesses));
+      setAccesses(buildAccesses(shareeAccesses, isMailbox));
     } else {
-      setAccesses(buildAccesses([]));
+      setAccesses(buildAccesses([], isMailbox));
     }
-  }, [calendar, caldavService, buildAccesses]);
+  }, [calendar, caldavService, buildAccesses, isMailbox, mailboxUsers]);
 
   useEffect(() => {
     if (isOpen && calendar) {
@@ -286,27 +319,22 @@ export const CalendarShareModal = ({
     [calendar, caldavService, fetchSharees, t],
   );
 
-  const invitationRoles = [
-    { label: t("roles.freebusy"), value: "freebusy" },
-    { label: t("roles.reader"), value: "read" },
-    { label: t("roles.editor"), value: "read-write" },
-    { label: t("roles.administrator"), value: "admin" },
-  ];
+  const makeRoles = (values: string[]) =>
+    values.map((v) => ({ label: t(ROLE_KEYS[v] || v), value: v }));
 
-  const getAccessRoles = useCallback(
-    (access: ShareAccess) => {
-      if (access.role === "owner") {
-        return [{ label: t("roles.owner"), value: "owner" }];
-      }
-      return [
-        { label: t("roles.freebusy"), value: "freebusy" },
-        { label: t("roles.reader"), value: "read" },
-        { label: t("roles.editor"), value: "read-write" },
-        { label: t("roles.administrator"), value: "admin" },
-      ];
-    },
-    [t],
-  );
+  const invitationRoles = isMailbox
+    ? makeRoles(["freebusy", "read"])
+    : makeRoles(["freebusy", "read", "read-write", "admin"]);
+
+  const getAccessRoles = (access: ShareAccess) => {
+    if (access.role === "owner") {
+      return makeRoles(["owner"]);
+    }
+    if ((access as ShareAccess & { is_sync_managed?: boolean }).is_sync_managed) {
+      return makeRoles([access.role]);
+    }
+    return makeRoles(["freebusy", "read", "read-write", "admin"]);
+  };
 
   return (
     <ShareModal
@@ -315,15 +343,43 @@ export const CalendarShareModal = ({
       modalTitle={t("calendar.shareCalendar.title")}
       accesses={accesses}
       getAccessRoles={getAccessRoles}
-      onDeleteAccess={handleDeleteAccess}
-      onUpdateAccess={handleUpdateAccess}
-      searchUsersResult={searchResults}
-      onSearchUsers={handleSearchUsers}
-      onInviteUser={handleInviteUser}
+      canUpdate={!isMailbox || isMailboxAdmin}
+      accessRoleTopMessage={(access: ShareAccess) =>
+        (access as ShareAccess & { is_sync_managed?: boolean }).is_sync_managed
+          ? t("calendar.shareCalendar.syncManagedHint")
+          : undefined
+      }
+      onDeleteAccess={isMailbox && !isMailboxAdmin ? undefined : handleDeleteAccess}
+      onUpdateAccess={isMailbox ? undefined : handleUpdateAccess}
+      searchUsersResult={isMailbox && !isMailboxAdmin ? [] : searchResults}
+      onSearchUsers={isMailbox && !isMailboxAdmin ? () => {} : handleSearchUsers}
+      onInviteUser={isMailbox && !isMailboxAdmin ? () => {} : handleInviteUser}
       searchPlaceholder={t("calendar.shareCalendar.emailPlaceholder")}
       invitationRoles={invitationRoles}
-      hideInvitations
+      hideInvitations={isMailbox && !isMailboxAdmin}
       loading={loading}
-    />
+    >
+      {isMailbox && (
+        <div style={{
+          margin: "0 16px 12px",
+          padding: "12px 16px",
+          backgroundColor: "#f0f4ff",
+          border: "1px solid #c5d4f0",
+          borderRadius: "6px",
+          fontSize: "14px",
+          color: "#334155",
+          display: "flex",
+          gap: "10px",
+          alignItems: "flex-start",
+        }}>
+          <span className="material-icons" style={{ fontSize: "20px", color: "#3b82f6", flexShrink: 0, marginTop: "1px" }}>info</span>
+          <span>
+            {isMailboxAdmin
+              ? t("calendar.shareCalendar.mailboxInfoAdmin", { email: mailboxData?.email })
+              : t("calendar.shareCalendar.mailboxInfoReadonly", { email: mailboxData?.email })}
+          </span>
+        </div>
+      )}
+    </ShareModal>
   );
 };

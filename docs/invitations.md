@@ -26,7 +26,7 @@ Frontend (EventModal)
 3. `CalDavService.createEvent()` sends a PUT to CalDAV through the
    Django proxy
 4. The proxy (`CalDAVProxyView`) injects an
-   `X-CalDAV-Callback-URL` header pointing back to Django
+   `X-LS-Callback-URL` header pointing back to Django
 
 The resulting `.ics` contains:
 
@@ -60,10 +60,10 @@ POSTs to Django:
 
 ```
 POST /api/v1.0/caldav-scheduling-callback/
-X-Api-Key: <shared secret>
-X-CalDAV-Sender: alice@example.com
-X-CalDAV-Recipient: bob@example.com
-X-CalDAV-Method: REQUEST
+X-LS-Api-Key: <shared secret>
+X-LS-Sender: alice@example.com
+X-LS-Recipient: bob@example.com
+X-LS-Method: REQUEST
 Content-Type: text/calendar
 
 <serialized VCALENDAR>

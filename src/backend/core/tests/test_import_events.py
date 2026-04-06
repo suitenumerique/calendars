@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import timezone as dt_tz
 from unittest.mock import MagicMock, patch
 
@@ -516,9 +516,9 @@ class TestICSImportService:
 
         call_kwargs = mock_post.call_args.kwargs
         headers = call_kwargs["headers"]
-        assert headers["X-Api-Key"] == settings.CALDAV_OUTBOUND_API_KEY
-        assert headers["X-Forwarded-User"] == user.email
-        assert headers["X-Internal-Api-Key"] == settings.CALDAV_INTERNAL_API_KEY
+        assert headers["X-LS-Api-Key"] == settings.CALDAV_OUTBOUND_API_KEY
+        assert headers["X-LS-User"] == user.email
+        assert headers["X-LS-Internal-Api-Key"] == settings.CALDAV_INTERNAL_API_KEY
         assert headers["Content-Type"] == "text/calendar"
 
     @patch("core.services.caldav_service.requests.request")
@@ -1077,3 +1077,124 @@ class TestCalendarSanitizerE2E:
         assert result.total_events == 1
         assert result.imported_count == 0
         assert result.skipped_count == 1
+
+
+
+def _create_user_with_calendar(org, email_prefix):
+    """Create a user with a calendar for E2E tests."""
+    user = factories.UserFactory(
+        email=f"{email_prefix}@norm-test.com", organization=org
+    )
+    client = APIClient()
+    client.force_login(user)
+    service = CalendarService()
+    caldav_path = service.create_calendar(user, name=f"{email_prefix}'s Calendar")
+    return user, client, caldav_path
+
+
+def _get_cal_id(caldav_path):
+    """Extract calendar ID from path."""
+    parts = caldav_path.strip("/").split("/")
+    return parts[-1] if len(parts) >= 4 else "default"
+
+
+class TestAttendeeNormalizer:
+    """AttendeeNormalizerPlugin deduplicates and normalizes attendees."""
+
+    def test_duplicate_attendees_deduplicated(self):
+        """Duplicate attendees (same email, different case) are merged."""
+        org = factories.OrganizationFactory(external_id="attnorm-dedup")
+        user, client, cal_path = _create_user_with_calendar(org, "user-attn")
+        cal_id = _get_cal_id(cal_path)
+
+        dtstart = datetime.now() + timedelta(days=1)
+        dtend = dtstart + timedelta(hours=1)
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:attn-dedup-ev\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            "SUMMARY:Dedup Test\r\n"
+            f"ORGANIZER:mailto:{user.email}\r\n"
+            "ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:Bob@Example.COM\r\n"
+            "ATTENDEE;PARTSTAT=ACCEPTED:mailto:bob@example.com\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        resp = client.generic(
+            "PUT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/attn-dedup-ev.ics",
+            data=ical,
+            content_type="text/calendar",
+        )
+        assert resp.status_code in (200, 201, 204), (
+            f"PUT should succeed: {resp.status_code}"
+        )
+
+        # GET the event back and check attendees
+        get_resp = client.generic(
+            "GET",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/attn-dedup-ev.ics",
+        )
+        content = get_resp.content.decode("utf-8", errors="ignore")
+        # Should have exactly one attendee (deduplicated), with ACCEPTED
+        # (higher priority than NEEDS-ACTION)
+        attendee_count = content.upper().count("ATTENDEE")
+        assert attendee_count == 1, (
+            f"Expected 1 attendee after dedup, found {attendee_count}.\n"
+            f"Event data: {content}"
+        )
+        assert "ACCEPTED" in content.upper(), (
+            "Dedup should keep the ACCEPTED status (higher priority)"
+        )
+
+    def test_attendee_email_normalized_to_lowercase(self):
+        """Attendee emails are normalized to lowercase."""
+        org = factories.OrganizationFactory(external_id="attnorm-case")
+        user, client, cal_path = _create_user_with_calendar(org, "user-attnc")
+        cal_id = _get_cal_id(cal_path)
+
+        dtstart = datetime.now() + timedelta(days=1)
+        dtend = dtstart + timedelta(hours=1)
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:attn-case-ev\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            "SUMMARY:Case Test\r\n"
+            f"ORGANIZER:mailto:{user.email}\r\n"
+            "ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:Alice@EXAMPLE.COM\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        resp = client.generic(
+            "PUT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/attn-case-ev.ics",
+            data=ical,
+            content_type="text/calendar",
+        )
+        assert resp.status_code in (200, 201, 204)
+
+        get_resp = client.generic(
+            "GET",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/attn-case-ev.ics",
+        )
+        content = get_resp.content.decode("utf-8", errors="ignore")
+        # Email should be lowercased
+        assert "alice@example.com" in content.lower(), (
+            "Attendee email should be normalized to lowercase"
+        )
+        assert "Alice@EXAMPLE.COM" not in content, (
+            "Original mixed-case email should be normalized"
+        )
+
+
+# ===================================================================
+# InternalApiPlugin - Error cases
+# ===================================================================

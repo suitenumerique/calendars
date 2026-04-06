@@ -27,7 +27,19 @@ logger = logging.getLogger(__name__)
 class CalDAVProxyView(View):
     """
     Proxy view that forwards all CalDAV requests to CalDAV server.
-    Handles authentication and adds appropriate headers.
+
+    THIS PROXY MUST REMAIN DUMB. It handles:
+    - Authentication (OIDC → X-LS-User header)
+    - Entitlement checks for calendar creation (MKCALENDAR)
+
+    It MUST NOT implement:
+    - Access control (ACL checks belong in SabreDAV)
+    - Org scoping (belongs in SabreDAV plugins)
+    - Content filtering (belongs in SabreDAV plugins)
+    - Protocol-level validation (belongs in SabreDAV)
+
+    All business logic runs in SabreDAV via plugins. The proxy is a
+    transparent forwarder with authentication. Keep it that way.
 
     CSRF protection is disabled because CalDAV uses non-standard HTTP methods
     (PROPFIND, REPORT, etc.) that don't work with Django's CSRF middleware.
@@ -173,6 +185,15 @@ class CalDAVProxyView(View):
 
         http = CalDAVHTTPClient()
 
+        # Defense-in-depth: strip all X-LS-* headers from the incoming
+        # request to prevent clients from injecting internal headers.
+        # The proxy unconditionally sets its own X-LS-* values below,
+        # but explicit stripping ensures no stale or malicious headers
+        # survive even if the header-setting code changes.
+        for key in list(request.META.keys()):
+            if key.startswith("HTTP_X_LS_"):
+                del request.META[key]
+
         # Build target URL
         clean_path = path.lstrip("/") if path else ""
         if clean_path:
@@ -206,14 +227,14 @@ class CalDAVProxyView(View):
         callback_base_url = settings.CALDAV_CALLBACK_BASE_URL
         if callback_base_url:
             # Use configured internal URL (e.g., http://backend:8000)
-            headers["X-CalDAV-Callback-URL"] = (
+            headers["X-LS-Callback-URL"] = (
                 f"{callback_base_url.rstrip('/')}{callback_path}"
             )
         else:
             # Fall back to external URL (works when CalDAV can reach Django externally)
-            headers["X-CalDAV-Callback-URL"] = request.build_absolute_uri(callback_path)
+            headers["X-LS-Callback-URL"] = request.build_absolute_uri(callback_path)
 
-        # No Basic Auth - our custom backend uses X-Forwarded-User header and API key
+        # No Basic Auth - our custom backend uses X-LS-User header and API key
         auth = None
 
         # Copy relevant headers from the original request
@@ -231,7 +252,7 @@ class CalDAVProxyView(View):
 
         try:
             # Forward the request to CalDAV server
-            # CalDAV server authenticates via X-Forwarded-User header and API key
+            # CalDAV server authenticates via X-LS-User header and API key
             logger.debug(
                 "Forwarding %s request to CalDAV server: %s (user: %s)",
                 request.method,
@@ -343,7 +364,7 @@ class CalDAVSchedulingCallbackView(View):
     def post(self, request, *args, **kwargs):  # noqa: PLR0911  # pylint: disable=too-many-return-statements
         """Handle scheduling messages from CalDAV server."""
         # Authenticate via API key
-        api_key = request.headers.get("X-Api-Key", "").strip()
+        api_key = request.headers.get("X-LS-Api-Key", "").strip()
         expected_key = settings.CALDAV_INBOUND_API_KEY
 
         if not expected_key or not secrets.compare_digest(api_key, expected_key):
@@ -351,13 +372,11 @@ class CalDAVSchedulingCallbackView(View):
             return HttpResponse(status=401)
 
         # Extract and validate sender/recipient emails
-        sender = re.sub(
-            r"^mailto:", "", request.headers.get("X-CalDAV-Sender", "")
-        ).strip()
+        sender = re.sub(r"^mailto:", "", request.headers.get("X-LS-Sender", "")).strip()
         recipient = re.sub(
-            r"^mailto:", "", request.headers.get("X-CalDAV-Recipient", "")
+            r"^mailto:", "", request.headers.get("X-LS-Recipient", "")
         ).strip()
-        method = request.headers.get("X-CalDAV-Method", "").upper()
+        method = request.headers.get("X-LS-Method", "").upper()
 
         # Validate required fields
         if not sender or not recipient or not method:
@@ -370,8 +389,8 @@ class CalDAVSchedulingCallbackView(View):
             )
             return HttpResponse(
                 status=400,
-                content="Missing required headers: X-CalDAV-Sender, "
-                "X-CalDAV-Recipient, X-CalDAV-Method",
+                content="Missing required headers: X-LS-Sender, "
+                "X-LS-Recipient, X-LS-Method",
                 content_type="text/plain",
             )
 
@@ -410,6 +429,13 @@ class CalDAVSchedulingCallbackView(View):
             method,
         )
 
+        # SabreDAV's HttpCallbackIMipPlugin checks the sender's principal type
+        # and passes it via header — no need for an extra API call here.
+        # Security: this endpoint is gated by X-LS-Api-Key (CALDAV_INBOUND_API_KEY),
+        # so the header cannot be spoofed by external callers.
+        is_mailbox = request.headers.get("X-LS-Is-Mailbox") == "true"
+        org_id = request.headers.get("X-LS-Org-Id", "")
+
         # Send the invitation/notification email
         try:
             success = calendar_invitation_service.send_invitation(
@@ -417,6 +443,8 @@ class CalDAVSchedulingCallbackView(View):
                 recipient_email=recipient,
                 method=method,
                 icalendar_data=icalendar_data,
+                is_mailbox=is_mailbox,
+                org_id=org_id,
             )
 
             if success:

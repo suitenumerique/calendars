@@ -109,26 +109,18 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
         $access = (int)$instance['access'];
         $freebusy = false;
 
-        // Check freebusy property only for shared calendars (access > 1)
+        // Check freebusy for shared calendars (access > 1)
         if ($access > 1) {
-            // Find the owner's instance
             $stmt2 = $this->pdo->prepare(
-                'SELECT principaluri, uri FROM calendarinstances '
-                . 'WHERE calendarid = ? AND access = 1'
+                'SELECT share_access_level FROM calendarinstances '
+                . 'WHERE principaluri = ? AND uri = ? AND share_access_level = ?'
             );
-            $stmt2->execute([$instance['calendarid']]);
-            $owner = $stmt2->fetch(\PDO::FETCH_ASSOC);
-
-            if ($owner) {
-                $ownerEmail = basename($owner['principaluri']);
-                $ownerCalPath = "calendars/users/{$ownerEmail}/{$owner['uri']}";
-
-                $stmt3 = $this->pdo->prepare(
-                    'SELECT 1 FROM propertystorage WHERE path = ? AND name = ?'
-                );
-                $stmt3->execute([$ownerCalPath, self::FREEBUSY_PROP]);
-                $freebusy = $stmt3->fetch(\PDO::FETCH_ASSOC) !== false;
-            }
+            $stmt2->execute([
+                "principals/users/{$email}",
+                $calUri,
+                'freebusy',
+            ]);
+            $freebusy = $stmt2->fetch(\PDO::FETCH_ASSOC) !== false;
         }
 
         return $this->cache[$calKey] = ['access' => $access, 'freebusy' => $freebusy];

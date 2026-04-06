@@ -149,8 +149,8 @@ END:VCALENDAR"""
 
             assert len(rsps.calls) == 1
             request = rsps.calls[0].request
-            assert request.headers["X-Forwarded-User"] == channel.user.email
-            assert request.headers["X-Api-Key"] == settings.CALDAV_OUTBOUND_API_KEY
+            assert request.headers["X-LS-User"] == channel.user.email
+            assert request.headers["X-LS-Api-Key"] == settings.CALDAV_OUTBOUND_API_KEY
 
     def test_export_handles_caldav_error(self):
         """Test that CalDAV server errors are handled gracefully."""

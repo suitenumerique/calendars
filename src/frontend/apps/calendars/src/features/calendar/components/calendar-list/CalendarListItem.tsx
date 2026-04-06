@@ -16,6 +16,7 @@ export const CalendarListItem = ({
   calendar,
   isVisible,
   isMenuOpen,
+  isMailboxCalendar = false,
   onToggleVisibility,
   onMenuToggle,
   onEdit,
@@ -31,7 +32,7 @@ export const CalendarListItem = ({
     <div className="calendar-list__item">
       <div
         className="calendar-list__item-checkbox"
-        style={{ "--calendar-color": calendar.color } as React.CSSProperties}
+        style={{ "--calendar-color": typeof calendar.color === "string" ? calendar.color : "#3788d8" } as React.CSSProperties}
       >
         <Checkbox
           checked={isVisible}
@@ -44,6 +45,14 @@ export const CalendarListItem = ({
         className="calendar-list__name"
         title={calendar.displayName || undefined}
       >
+        {isMailboxCalendar && (
+          <span
+            className="material-icons calendar-list__mailbox-icon"
+            title={t("calendar.list.mailboxCalendar")}
+          >
+            mail
+          </span>
+        )}
         {calendar.displayName || "Sans nom"}
       </span>
       <div className="calendar-list__item-actions">

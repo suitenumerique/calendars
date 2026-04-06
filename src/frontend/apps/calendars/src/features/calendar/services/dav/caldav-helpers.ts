@@ -37,6 +37,7 @@ export const XML_NS = {
   CALDAV: 'xmlns:C="urn:ietf:params:xml:ns:caldav"',
   APPLE: 'xmlns:A="http://apple.com/ns/ical/"',
   CS: 'xmlns:CS="http://calendarserver.org/ns/"',
+  LS: 'xmlns:LS="http://lasuite.numerique.gouv.fr/ns/"',
 } as const
 
 /** Build XML prop element */
@@ -58,6 +59,8 @@ export type CalendarProps = {
   description?: string
   color?: string
   components?: string[]
+  /** schedule-calendar-transp: 'opaque' (counts as busy) or 'transparent' */
+  scheduleTransp?: 'opaque' | 'transparent'
 }
 
 /** Build calendar property XML elements */
@@ -76,6 +79,14 @@ export function buildCalendarPropsXml(props: CalendarProps): string[] {
   if (props.components && props.components.length > 0) {
     const comps = props.components.map((c) => `<C:comp name="${escapeXml(c)}"/>`).join('')
     elements.push(`<C:supported-calendar-component-set>${comps}</C:supported-calendar-component-set>`)
+  }
+  if (props.scheduleTransp !== undefined) {
+    // RFC 6638: schedule-calendar-transp controls whether this calendar
+    // participates in freebusy calculations. Standard CalDAV property.
+    const value = props.scheduleTransp === 'transparent'
+      ? '<C:transparent/>'
+      : '<C:opaque/>'
+    elements.push(`<C:schedule-calendar-transp>${value}</C:schedule-calendar-transp>`)
   }
 
   return elements
@@ -111,9 +122,6 @@ export function buildProppatchXml(props: CalendarProps): string {
 // Sharing XML Builders
 // ============================================================================
 
-/** Freebusy access is stored as read at CalDAV level with a summary marker */
-const FREEBUSY_SUMMARY_MARKER = 'access:freebusy'
-
 /** Convert SharePrivilege to CalDAV XML element (freebusy maps to read) */
 export function sharePrivilegeToXml(privilege: SharePrivilege): string {
   const map: Record<SharePrivilege, string> = {
@@ -125,22 +133,22 @@ export function sharePrivilegeToXml(privilege: SharePrivilege): string {
   return map[privilege] ?? '<CS:read/>'
 }
 
-/** Get the summary string to store with a share (encodes freebusy marker) */
-export function sharePrivilegeToSummary(privilege: SharePrivilege): string | undefined {
-  return privilege === 'freebusy' ? FREEBUSY_SUMMARY_MARKER : undefined
-}
-
-/** Parse access object to SharePrivilege, using summary to distinguish freebusy from read.
+/** Parse access object to SharePrivilege.
+ *
+ * The CalDAV-level access (CS:read, CS:read-write, CS:admin) is augmented
+ * by a custom LS:share-access property on the calendar instance. When
+ * shareAccess is "freebusy", the share is freebusy-only even though the
+ * CalDAV access level is CS:read.
  *
  * Note: tsdav's XML parser camelCases element names (e.g. cs:read-write -> readWrite),
  * so we check both kebab-case and camelCase variants.
  */
-export function parseSharePrivilege(access: unknown, summary?: string): SharePrivilege {
+export function parseSharePrivilege(access: unknown, shareAccess?: string): SharePrivilege {
   if (!access) return 'read'
   const accessObj = access as Record<string, unknown>
   if (accessObj['read-write'] || accessObj['readWrite']) return 'read-write'
   if (accessObj['admin']) return 'admin'
-  if (summary === FREEBUSY_SUMMARY_MARKER) return 'freebusy'
+  if (shareAccess === 'freebusy') return 'freebusy'
   return 'read'
 }
 
@@ -148,7 +156,6 @@ export type ShareeXmlParams = {
   href: string
   displayName?: string
   privilege: SharePrivilege
-  summary?: string
 }
 
 /** Build share set XML for a single sharee */
@@ -157,14 +164,15 @@ export function buildShareeSetXml(params: ShareeXmlParams): string {
   const commonName = params.displayName
     ? `<CS:common-name>${escapeXml(params.displayName)}</CS:common-name>`
     : ''
-  const summaryValue = params.summary ?? sharePrivilegeToSummary(params.privilege)
-  const summary = summaryValue ? `<CS:summary>${escapeXml(summaryValue)}</CS:summary>` : ''
+  const shareAccess = params.privilege === 'freebusy'
+    ? '<LS:share-access>freebusy</LS:share-access>'
+    : ''
 
   return `
     <CS:set>
       <D:href>${escapeXml(params.href)}</D:href>
       ${commonName}
-      ${summary}
+      ${shareAccess}
       ${privilege}
     </CS:set>`
 }
@@ -173,7 +181,7 @@ export function buildShareeSetXml(params: ShareeXmlParams): string {
 export function buildShareRequestXml(sharees: ShareeXmlParams[]): string {
   const shareesXml = sharees.map(buildShareeSetXml).join('')
   return `<?xml version="1.0" encoding="utf-8"?>
-<CS:share ${XML_NS.DAV} ${XML_NS.CS}>
+<CS:share ${XML_NS.DAV} ${XML_NS.CS} ${XML_NS.LS}>
   ${shareesXml}
 </CS:share>`
 }
@@ -342,6 +350,8 @@ export const CALENDAR_PROPS = {
   [`${DAVNamespaceShort.DAV}:resourcetype`]: {},
   [`${DAVNamespaceShort.CALDAV}:supported-calendar-component-set`]: {},
   [`${DAVNamespaceShort.DAV}:sync-token`]: {},
+  [`${DAVNamespaceShort.CALDAV}:schedule-calendar-transp`]: {},
+  'LS:calendar-owner-type': {},
 } as const
 
 /** Execute PROPFIND with error handling */

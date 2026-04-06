@@ -1,0 +1,22 @@
+import { fetchAPI } from "@/features/api/fetchApi";
+import type { MailboxSyncResult } from "./types";
+
+export async function fetchMailboxes(): Promise<MailboxSyncResult> {
+  const response = await fetchAPI("setup/mailboxes/");
+  return response.json();
+}
+
+export async function setupCalendar(
+  name: string,
+  mailboxEmail?: string,
+): Promise<{ calendar_path: string; principal_uri: string; mailbox_email?: string }> {
+  const body: Record<string, string> = { name };
+  if (mailboxEmail) {
+    body.mailbox_email = mailboxEmail;
+  }
+  const response = await fetchAPI("setup/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}

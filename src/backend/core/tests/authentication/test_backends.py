@@ -17,16 +17,14 @@ from core.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
 
-# Patch org resolution and CalDAV provisioning out by default in this module.
+# Patch org resolution out by default in this module.
 # Tests for org resolution are in test_organizations.py.
 _no_org_resolve = mock.patch(
     "core.authentication.backends.resolve_organization", lambda *a, **kw: None
 )
-_no_caldav = mock.patch("core.authentication.backends.CalDAVClient", mock.MagicMock)
 
 
 @_no_org_resolve
-@_no_caldav
 def test_authentication_getter_existing_user_no_email(
     django_assert_num_queries, monkeypatch
 ):
@@ -51,7 +49,6 @@ def test_authentication_getter_existing_user_no_email(
 
 
 @_no_org_resolve
-@_no_caldav
 def test_authentication_getter_existing_user_via_email(
     django_assert_num_queries, monkeypatch
 ):
@@ -160,7 +157,6 @@ def test_authentication_getter_existing_user_no_fallback_to_email_no_duplicate(
 
 
 @_no_org_resolve
-@_no_caldav
 def test_authentication_getter_existing_user_with_email(
     django_assert_num_queries, monkeypatch
 ):
@@ -190,7 +186,6 @@ def test_authentication_getter_existing_user_with_email(
 
 
 @_no_org_resolve
-@_no_caldav
 @pytest.mark.parametrize(
     "first_name, last_name, email",
     [
@@ -232,7 +227,6 @@ def test_authentication_getter_existing_user_change_fields_sub(
 
 
 @_no_org_resolve
-@_no_caldav
 @pytest.mark.parametrize(
     "first_name, last_name, email",
     [
@@ -456,7 +450,6 @@ def test_authentication_getter_existing_disabled_user_via_email(
 
 
 @_no_org_resolve
-@_no_caldav
 @responses.activate
 def test_authentication_session_tokens(
     django_assert_num_queries, monkeypatch, rf, settings

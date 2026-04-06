@@ -48,7 +48,7 @@ class TestDeleteUserCaldavData(TestCase):
         body = json.loads(call_kwargs.kwargs.get("data", b"{}"))
         assert body["email"] == "alice@example.com"
         headers = call_kwargs.kwargs.get("headers", {})
-        assert headers.get("X-Internal-Api-Key") == "test-internal-key"
+        assert headers.get("X-LS-Internal-Api-Key") == "test-internal-key"
 
     def test_deleting_user_without_email_skips_cleanup(self):
         """Users without an email don't trigger CalDAV cleanup."""

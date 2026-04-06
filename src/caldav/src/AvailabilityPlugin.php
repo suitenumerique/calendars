@@ -27,11 +27,19 @@ class AvailabilityPlugin extends ServerPlugin
     /** @var Server */
     protected $server;
 
+    /** @var \PDO */
+    private $pdo;
+
     /** CalDAV namespace */
     private const CALDAV_NS = '{urn:ietf:params:xml:ns:caldav}';
 
     /** calendar-availability property name */
     private const AVAILABILITY_PROP = '{urn:ietf:params:xml:ns:caldav}calendar-availability';
+
+    public function __construct(\PDO $pdo = null)
+    {
+        $this->pdo = $pdo;
+    }
 
     public function initialize(Server $server)
     {
@@ -212,6 +220,30 @@ class AvailabilityPlugin extends ServerPlugin
             return null;
         }
 
+        // Query propertystorage directly to bypass ACL checks.
+        // The outbox request is made by the querier, who doesn't have
+        // read access to the target user's calendar home properties.
+        if ($this->pdo) {
+            try {
+                $stmt = $this->pdo->prepare(
+                    'SELECT value FROM propertystorage '
+                    . 'WHERE path = ? AND name = ? LIMIT 1'
+                );
+                $stmt->execute([$calendarHomePath, self::AVAILABILITY_PROP]);
+                $value = $stmt->fetchColumn();
+                if ($value !== false && $value !== null) {
+                    // PostgreSQL may return a stream resource for bytea columns
+                    if (is_resource($value)) {
+                        $value = stream_get_contents($value);
+                    }
+                    return $value;
+                }
+            } catch (\Exception $e) {
+                error_log("[AvailabilityPlugin] DB query failed: " . $e->getMessage());
+            }
+        }
+
+        // Fallback to DAV getProperties (works if requester has read access)
         try {
             $properties = $this->server->getProperties(
                 $calendarHomePath,

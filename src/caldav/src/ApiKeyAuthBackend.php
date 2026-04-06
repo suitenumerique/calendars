@@ -3,7 +3,7 @@
  * Custom authentication backend that supports API key and header-based authentication.
  * 
  * This backend authenticates users via:
- * - API key authentication: X-Api-Key header and X-Forwarded-User header
+ * - API key authentication: X-LS-Api-Key header and X-LS-User header
  * 
  * This allows Django to authenticate with CalDAV server using an API key.
  */
@@ -48,16 +48,16 @@ class ApiKeyAuthBackend implements BackendInterface
      */
     public function check(RequestInterface $request, ResponseInterface $response)
     {
-        // Get user from X-Forwarded-User header (required)
-        $xForwardedUser = $request->getHeader('X-Forwarded-User');
+        // Get user from X-LS-User header (required)
+        $xForwardedUser = $request->getHeader('X-LS-User');
         if (!$xForwardedUser) {
-            return [false, 'X-Forwarded-User header is required'];
+            return [false, 'X-LS-User header is required'];
         }
         
         // API key is required
-        $apiKeyHeader = $request->getHeader('X-Api-Key');
+        $apiKeyHeader = $request->getHeader('X-LS-Api-Key');
         if (!$apiKeyHeader) {
-            return [false, 'X-Api-Key header is required'];
+            return [false, 'X-LS-Api-Key header is required'];
         }
         
         // Validate API key
@@ -65,9 +65,9 @@ class ApiKeyAuthBackend implements BackendInterface
             return [false, 'Invalid API key'];
         }
         
-        // Validate X-Forwarded-User to prevent path traversal
+        // Validate X-LS-User to prevent path traversal
         if (preg_match('/[\/\\\\]|\.\./', $xForwardedUser)) {
-            throw new \Sabre\DAV\Exception\NotAuthenticated('Invalid X-Forwarded-User header value');
+            throw new \Sabre\DAV\Exception\NotAuthenticated('Invalid X-LS-User header value');
         }
 
         // Authentication successful

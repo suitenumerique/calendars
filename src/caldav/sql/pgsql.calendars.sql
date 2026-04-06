@@ -54,7 +54,9 @@ CREATE TABLE calendarinstances (
     transparent SMALLINT NOT NULL DEFAULT '0',
     share_href VARCHAR(255),
     share_displayname VARCHAR(255),
-    share_invitestatus SMALLINT NOT NULL DEFAULT '2' --  '1 = noresponse, 2 = accepted, 3 = declined, 4 = invalid'
+    share_invitestatus SMALLINT NOT NULL DEFAULT '2', --  '1 = noresponse, 2 = accepted, 3 = declined, 4 = invalid'
+    is_sync_managed BOOLEAN NOT NULL DEFAULT FALSE,
+    share_access_level VARCHAR(50)
 );
 
 ALTER TABLE ONLY calendarinstances

@@ -217,7 +217,7 @@ a subsequent login succeeds.
 - **Org-level settings**: Place to attach resource creation policy,
   default timezone, branding, etc.
 - **SabreDAV integration**: The org's Django UUID is forwarded to
-  SabreDAV as `X-CalDAV-Organization` for principal scoping
+  SabreDAV as `X-LS-Org-Id` for principal scoping
 - **Claim-agnostic**: The claim name is a setting, not hardcoded
 
 ---
@@ -244,14 +244,14 @@ itself or in the frontend.
 
 Org scoping is enforced server-side in SabreDAV by filtering
 principal queries by `org_id`. Django never inspects CalDAV
-traffic -- it only sets the `X-CalDAV-Organization` header.
+traffic -- it only sets the `X-LS-Org-Id` header.
 
 ```php
-class OrgAwarePrincipalBackend extends AutoCreatePrincipalBackend
+class OrgAwarePrincipalBackend extends PrincipalBackend
 {
     public function searchPrincipals($prefixPath, array $searchProperties, $test = 'allof')
     {
-        $orgId = $this->server->httpRequest->getHeader('X-CalDAV-Organization');
+        $orgId = $this->server->httpRequest->getHeader('X-LS-Org-Id');
         // Add WHERE org_id = $orgId to the query
         return parent::searchPrincipals(...) + org filter;
     }
@@ -260,9 +260,9 @@ class OrgAwarePrincipalBackend extends AutoCreatePrincipalBackend
 
 **Implementation:**
 1. Add `org_id` column to `principals` table
-2. Set it when auto-creating principals (from `X-CalDAV-Organization`)
+2. Set it when auto-creating principals (from `X-LS-Org-Id`)
 3. Filter discovery and listing methods by org (see below)
-4. `CalDAVProxyView` always sets `X-CalDAV-Organization` from the
+4. `CalDAVProxyView` always sets `X-LS-Org-Id` from the
    authenticated user's org
 
 **Which backend methods are org-filtered:**
@@ -443,7 +443,7 @@ This can come from the `GET /users/me/` response:
 1. Scope `UserViewSet` queryset by org when org is set
 2. Frontend user search autocomplete uses scoped endpoint
 3. Cross-org sharing still works via explicit email entry
-4. Add `X-CalDAV-Organization` header to `CalDAVProxyView` requests
+4. Add `X-LS-Org-Id` header to `CalDAVProxyView` requests
 
 ### Phase 3: CalDAV Scoping
 
@@ -451,8 +451,8 @@ This can come from the `GET /users/me/` response:
 
 1. Add `org_id` column to SabreDAV `principals` table
 2. Set `org_id` when auto-creating principals (from
-   `X-CalDAV-Organization`)
-3. Extend `AutoCreatePrincipalBackend` to filter
+   `X-LS-Org-Id`)
+3. Extend `PrincipalBackend` to filter
    `searchPrincipals()`, `getPrincipalsByPrefix()`, and free/busy
    by org
 4. Test with external CalDAV clients (Apple Calendar, Thunderbird)
@@ -479,7 +479,7 @@ implemented -- see [docs/resources.md](resources.md)).
 | CalDAV proxy | `src/backend/core/api/viewsets_caldav.py` |
 | Entitlements system | `src/backend/core/entitlements/` |
 | User serializer | `src/backend/core/api/serializers.py` |
-| SabreDAV principal backend | `src/caldav/src/AutoCreatePrincipalBackend.php` |
+| SabreDAV principal backend | `src/caldav/src/PrincipalBackend.php` |
 | SabreDAV server config | `src/caldav/server.php` |
 | Resource scoping details | `docs/resources.md` |
 | Entitlements details | `docs/entitlements.md` |
@@ -497,7 +497,7 @@ implemented -- see [docs/resources.md](resources.md)).
    auto-schedule plugin rejects invitations from users outside the
    resource's org.
 4. **Org scoping is enforced in SabreDAV**, not in Django. Django
-   only sets `X-CalDAV-Organization` on proxied requests.
+   only sets `X-LS-Org-Id` on proxied requests.
 5. **Org is derived from email domain by default**. A specific OIDC
    claim can be configured via `OIDC_USERINFO_ORGANIZATION_CLAIM` (e.g.
    `siret` for French public sector).

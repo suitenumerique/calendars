@@ -16,7 +16,6 @@ from rest_framework.throttling import UserRateThrottle
 
 from core import models
 from core.services.caldav_service import (
-    CalDAVClient,
     normalize_caldav_path,
     verify_caldav_access,
 )
@@ -138,17 +137,6 @@ class UserViewSet(
         """
         Return information on currently logged user
         """
-        cache_key = f"cal_ensured:{request.user.pk}"
-        if settings.CALDAV_URL and not cache.get(cache_key):
-            try:
-                CalDAVClient().ensure_default_calendar(request.user)
-                cache.set(cache_key, True, 3600)
-            except Exception:  # pylint: disable=broad-exception-caught
-                logger.exception(
-                    "Failed to ensure default calendar for %s",
-                    request.user.email,
-                )
-
         context = {"request": request}
         return response.Response(
             self.get_serializer(request.user, context=context).data
@@ -181,6 +169,7 @@ class ConfigView(views.APIView):
             "FRONTEND_LAGAUFRE_WIDGET_API_URL",
             "FRONTEND_MEET_BASE_URL",
             "FEATURE_ADMIN_CHANNELS",
+            "FEATURE_MESSAGES_INTEGRATION",
             "FEATURE_ADMIN_AVAILABILITIES",
             "FEATURE_ADMIN_RESOURCES",
             "MEDIA_BASE_URL",

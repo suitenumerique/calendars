@@ -71,6 +71,7 @@ import {
   getCalendarUrlFromEventUrl,
   withErrorHandling,
   type ShareeXmlParams,
+  type CalendarProps,
 } from './caldav-helpers'
 import { getIcalTimezoneBlock } from './helpers/ical-timezones'
 
@@ -147,19 +148,38 @@ export class CalDavService {
         fetchOptions: this._account!.fetchOptions,
       })
 
-      const calendars: CalDavCalendar[] = davCalendars.map((dav) => ({
-        url: dav.url,
-        displayName: typeof dav.displayName === 'string' ? dav.displayName : '',
-        description: typeof dav.description === 'string' ? dav.description : undefined,
-        color: dav.calendarColor,
-        ctag: dav.ctag,
-        syncToken: dav.syncToken,
-        timezone: typeof dav.timezone === 'string' ? dav.timezone : undefined,
-        components: dav.components,
-        resourcetype: dav.resourcetype ? Object.keys(dav.resourcetype) : undefined,
-        headers: this._account!.headers,
-        fetchOptions: this._account!.fetchOptions,
-      }))
+      const calendars: CalDavCalendar[] = davCalendars.map((dav) => {
+        // schedule-calendar-transp: tsdav returns the inner element name
+        // 'transparent' means the calendar does NOT count for freebusy
+        const rawTransp = (dav as Record<string, unknown>)['scheduleCalendarTransp']
+          ?? (dav as Record<string, unknown>)['schedule-calendar-transp']
+        const isTransparent = rawTransp != null && (
+          typeof rawTransp === 'string'
+            ? rawTransp.toLowerCase().includes('transparent')
+            : typeof rawTransp === 'object' && rawTransp !== null && 'transparent' in rawTransp
+        )
+
+        // LS:calendar-owner-type: "MAILBOX" for mailbox-owned shared calendars
+        const rawOwnerType = (dav as Record<string, unknown>)['calendarOwnerType']
+          ?? (dav as Record<string, unknown>)['calendar-owner-type']
+        const ownerType = typeof rawOwnerType === 'string' ? rawOwnerType : undefined
+
+        return {
+          url: dav.url,
+          displayName: typeof dav.displayName === 'string' ? dav.displayName : '',
+          description: typeof dav.description === 'string' ? dav.description : undefined,
+          color: dav.calendarColor,
+          includeInAvailability: !isTransparent,
+          ownerType,
+          ctag: dav.ctag,
+          syncToken: dav.syncToken,
+          timezone: typeof dav.timezone === 'string' ? dav.timezone : undefined,
+          components: dav.components,
+          resourcetype: dav.resourcetype ? Object.keys(dav.resourcetype) : undefined,
+          headers: this._account!.headers,
+          fetchOptions: this._account!.fetchOptions,
+        }
+      })
 
       this._calendars.clear()
       calendars.forEach((cal) => this._calendars.set(cal.url, cal))
@@ -182,11 +202,26 @@ export class CalDavService {
         throw new Error(`Calendar not found: ${rs.status}`)
       }
 
+      // Parse schedule-calendar-transp (RFC 6638)
+      const rawTransp = rs.props?.scheduleCalendarTransp
+        ?? rs.props?.['schedule-calendar-transp']
+      const isTransparent = rawTransp != null && (
+        typeof rawTransp === 'string'
+          ? rawTransp.toLowerCase().includes('transparent')
+          : typeof rawTransp === 'object' && rawTransp !== null && 'transparent' in rawTransp
+      )
+
+      const rawOwnerType = rs.props?.calendarOwnerType
+        ?? rs.props?.['calendar-owner-type']
+      const ownerType = typeof rawOwnerType === 'string' ? rawOwnerType : undefined
+
       const calendar: CalDavCalendar = {
         url: calendarUrl,
         displayName: rs.props?.displayname?._cdata ?? rs.props?.displayname ?? '',
         description: rs.props?.calendarDescription,
         color: rs.props?.calendarColor,
+        includeInAvailability: !isTransparent,
+        ownerType,
         ctag: rs.props?.getctag,
         syncToken: rs.props?.syncToken,
         timezone: rs.props?.calendarTimezone,
@@ -254,11 +289,17 @@ export class CalDavService {
     calendarUrl: string,
     params: CalDavCalendarUpdate
   ): Promise<CalDavResponse<CalDavCalendar>> {
-    if (!params.displayName && !params.description && !params.color) {
+    const hasProps = params.displayName || params.description || params.color
+      || params.includeInAvailability !== undefined
+    if (!hasProps) {
       return { success: false, error: 'No properties to update' }
     }
 
-    const body = buildProppatchXml(params)
+    const proppatchParams: CalendarProps = { ...params }
+    if (params.includeInAvailability !== undefined) {
+      proppatchParams.scheduleTransp = params.includeInAvailability ? 'opaque' : 'transparent'
+    }
+    const body = buildProppatchXml(proppatchParams)
 
     const result = await executeDavRequest({
       url: calendarUrl,
@@ -1078,7 +1119,6 @@ export class CalDavService {
       href: s.href,
       displayName: s.displayName,
       privilege: s.privilege,
-      summary: params.summary,
     }))
 
     const body = buildShareRequestXml(shareeParams)
@@ -1208,10 +1248,18 @@ export class CalDavService {
 
   async getCalendarSharees(calendarUrl: string): Promise<CalDavResponse<CalDavSharee[]>> {
     return withErrorHandling(async () => {
+      // Fetch CS:invite and LS:share-access-map in one PROPFIND
       const response = await propfind({
         url: calendarUrl,
-        props: { [`${DAVNamespaceShort.CALENDAR_SERVER}:invite`]: {} },
-        headers: this._account?.headers,
+        props: {
+          [`${DAVNamespaceShort.CALENDAR_SERVER}:invite`]: {},
+          'LS:share-access-map': {},
+        },
+        headers: {
+          ...this._account?.headers,
+          // Declare LS namespace for custom property
+        },
+        headersToExclude: [],
         fetchOptions: this._account?.fetchOptions,
         depth: '0',
       })
@@ -1221,13 +1269,32 @@ export class CalDavService {
         return []
       }
 
+      // Parse LS:share-access-map to build href → access level map
+      const accessMap = new Map<string, string>()
+      const rawMap = response[0]?.props?.['share-access-map']
+      if (rawMap) {
+        // tsdav parses XML into objects; handle both array and single element
+        const sharees = Array.isArray(rawMap.sharee) ? rawMap.sharee : rawMap.sharee ? [rawMap.sharee] : []
+        for (const s of sharees) {
+          const href = (s as Record<string, string>)?.href
+          const access = (s as Record<string, string>)?.access
+          if (href && access) {
+            accessMap.set(href, access)
+          }
+        }
+      }
+
       const users = Array.isArray(invite.user) ? invite.user : [invite.user]
-      return users.map((user: Record<string, unknown>) => ({
-        href: (user.href as string) || '',
-        displayName: user['common-name'] as string | undefined,
-        privilege: parseSharePrivilege(user.access, user.summary as string | undefined),
-        status: parseShareStatus(user['invite-accepted'], user['invite-noresponse']),
-      }))
+      return users.map((user: Record<string, unknown>) => {
+        const href = (user.href as string) || ''
+        const shareAccess = accessMap.get(href)
+        return {
+          href,
+          displayName: user['common-name'] as string | undefined,
+          privilege: parseSharePrivilege(user.access, shareAccess),
+          status: parseShareStatus(user['invite-accepted'], user['invite-noresponse']),
+        }
+      })
     }, 'Failed to get sharees')
   }
 

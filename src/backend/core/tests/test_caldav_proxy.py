@@ -18,6 +18,8 @@ from rest_framework.test import APIClient
 
 from core import factories
 from core.services.caldav_service import validate_caldav_proxy_path
+import json
+from core.services.caldav_service import CalDAVHTTPClient
 
 
 @pytest.mark.django_db
@@ -32,7 +34,7 @@ class TestCalDAVProxy:
 
     @responses.activate
     def test_proxy_forwards_headers_correctly(self):
-        """Test that proxy forwards X-Forwarded-User headers."""
+        """Test that proxy forwards X-LS-User headers."""
         user = factories.UserFactory(email="test@example.com")
         client = APIClient()
         client.force_login(user)
@@ -56,16 +58,16 @@ class TestCalDAVProxy:
         request = responses.calls[0].request
 
         # Verify headers were forwarded
-        assert request.headers["X-Forwarded-User"] == user.email
+        assert request.headers["X-LS-User"] == user.email
         assert request.headers["X-Forwarded-Host"] is not None
         assert request.headers["X-Forwarded-Proto"] == "http"
 
     @responses.activate
     def test_proxy_ignores_client_sent_x_forwarded_user_header(self):
-        """Test that proxy ignores and overwrites any X-Forwarded-User header sent by client.
+        """Test that proxy ignores and overwrites any X-LS-User header sent by client.
 
         This is a security test to ensure that hostile clients cannot impersonate other users
-        by sending a malicious X-Forwarded-User header. The proxy should always use the
+        by sending a malicious X-LS-User header. The proxy should always use the
         authenticated Django user's email, not any header value sent by the client.
         """
         user = factories.UserFactory(email="legitimate@example.com")
@@ -84,27 +86,27 @@ class TestCalDAVProxy:
             )
         )
 
-        # Try to send a malicious X-Forwarded-User header as if we were another user
+        # Try to send a malicious X-LS-User header as if we were another user
         malicious_email = "attacker@example.com"
         client.generic(
             "PROPFIND",
             "/caldav/",
-            HTTP_X_FORWARDED_USER=malicious_email,
+            HTTP_X_LS_USER=malicious_email,
         )
 
         # Verify request was made to CalDAV server
         assert len(responses.calls) == 1
         request = responses.calls[0].request
 
-        # Verify that the X-Forwarded-User header uses the authenticated user's email,
+        # Verify that the X-LS-User header uses the authenticated user's email,
         # NOT the malicious header value sent by the client
-        assert request.headers["X-Forwarded-User"] == user.email, (
-            f"Expected X-Forwarded-User to be {user.email} (authenticated user), "
-            f"but got {request.headers.get('X-Forwarded-User')}. "
+        assert request.headers["X-LS-User"] == user.email, (
+            f"Expected X-LS-User to be {user.email} (authenticated user), "
+            f"but got {request.headers.get('X-LS-User')}. "
             f"This indicates a security vulnerability - client-sent headers are being trusted!"
         )
-        assert request.headers["X-Forwarded-User"] != malicious_email, (
-            "X-Forwarded-User should NOT use client-sent header value"
+        assert request.headers["X-LS-User"] != malicious_email, (
+            "X-LS-User should NOT use client-sent header value"
         )
 
     def test_proxy_propfind_response_contains_prefixed_urls(self):
@@ -445,7 +447,7 @@ class TestCalDAVFreeBusy:
 
     @responses.activate
     def test_freebusy_post_forwards_auth_headers(self):
-        """POST to outbox should include X-Forwarded-User and X-Api-Key."""
+        """POST to outbox should include X-LS-User and X-LS-Api-Key."""
         user = factories.UserFactory(email="alice@example.com")
         client = APIClient()
         client.force_login(user)
@@ -473,8 +475,8 @@ class TestCalDAVFreeBusy:
         )
 
         forwarded = responses.calls[0].request
-        assert forwarded.headers["X-Forwarded-User"] == user.email
-        assert forwarded.headers["X-Api-Key"] == settings.CALDAV_OUTBOUND_API_KEY
+        assert forwarded.headers["X-LS-User"] == user.email
+        assert forwarded.headers["X-LS-Api-Key"] == settings.CALDAV_OUTBOUND_API_KEY
 
     @responses.activate
     def test_freebusy_post_returns_schedule_response(self):
@@ -527,7 +529,7 @@ class TestCalDAVFreeBusy:
 
     @responses.activate
     def test_freebusy_post_includes_organization_header(self):
-        """POST to outbox should include X-CalDAV-Organization header."""
+        """POST to outbox should include X-LS-Org-Id header."""
         user = factories.UserFactory(email="alice@example.com")
         client = APIClient()
         client.force_login(user)
@@ -555,7 +557,7 @@ class TestCalDAVFreeBusy:
         )
 
         forwarded = responses.calls[0].request
-        assert forwarded.headers["X-CalDAV-Organization"] == str(user.organization_id)
+        assert forwarded.headers["X-LS-Org-Id"] == str(user.organization_id)
 
 
 class TestValidateCaldavProxyPath:
@@ -608,3 +610,122 @@ class TestValidateCaldavProxyPath:
     def test_encoded_null_byte_is_rejected(self):
         """URL-encoded null byte should be rejected."""
         assert validate_caldav_proxy_path("calendars/user%00/") is False
+
+
+# ---------------------------------------------------------------------------
+# Internal API test helpers
+# ---------------------------------------------------------------------------
+
+_intapi_http = CalDAVHTTPClient()
+_INTAPI_HEADERS = {"X-LS-Internal-Api-Key": settings.CALDAV_INTERNAL_API_KEY}
+
+
+@pytest.mark.django_db
+@pytest.mark.xdist_group("caldav")
+class TestInternalApiErrors:
+    """InternalApiPlugin should reject invalid requests properly."""
+
+    def test_internal_api_without_key_blocked(self):
+        """Internal API requests without X-LS-Internal-Api-Key must be blocked.
+
+        Note: the Django proxy blocks /internal-api/ paths, but we also test
+        the CalDAV-level protection (defense in depth).
+        """
+        org = factories.OrganizationFactory(external_id="intapi-nokey")
+        user = factories.UserFactory(email="user@intapi-nokey.com", organization=org)
+
+        # Try via raw CalDAVHTTPClient without internal key
+        resp = _intapi_http.request(
+            "POST",
+            user,
+            "internal-api/calendars/",
+            data=json.dumps(
+                {
+                    "email": "test@example.com",
+                    "name": "Test",
+                }
+            ).encode("utf-8"),
+            content_type="application/json",
+            # No extra_headers with internal API key
+        )
+        assert resp.status_code in (401, 403), (
+            f"Internal API without key should be blocked, got {resp.status_code}"
+        )
+
+    def test_internal_api_with_wrong_key_blocked(self):
+        """Internal API with wrong key must be blocked."""
+        org = factories.OrganizationFactory(external_id="intapi-badkey")
+        user = factories.UserFactory(email="user@intapi-badkey.com", organization=org)
+
+        resp = _intapi_http.request(
+            "POST",
+            user,
+            "internal-api/calendars/",
+            data=json.dumps(
+                {
+                    "email": "test@example.com",
+                    "name": "Test",
+                }
+            ).encode("utf-8"),
+            content_type="application/json",
+            extra_headers={"X-LS-Internal-Api-Key": "wrong-key-12345"},
+        )
+        assert resp.status_code in (401, 403), (
+            f"Internal API with wrong key should be blocked, got {resp.status_code}"
+        )
+
+    def test_create_calendar_missing_email(self):
+        """POST /internal-api/calendars/ without email returns 400."""
+        org = factories.OrganizationFactory(external_id="intapi-noemail")
+        user = factories.UserFactory(email="user@intapi-noemail.com", organization=org)
+
+        resp = _intapi_http.request(
+            "POST",
+            user,
+            "internal-api/calendars/",
+            data=json.dumps({"name": "Test"}).encode("utf-8"),
+            content_type="application/json",
+            extra_headers=_INTAPI_HEADERS,
+        )
+        assert resp.status_code == 400, (
+            f"Missing email should return 400, got {resp.status_code}"
+        )
+
+    def test_sync_acls_malformed_json(self):
+        """POST /internal-api/sync-mailbox-acls/ with bad JSON returns 400."""
+        org = factories.OrganizationFactory(external_id="intapi-badjson")
+        user = factories.UserFactory(email="user@intapi-badjson.com", organization=org)
+
+        resp = _intapi_http.request(
+            "POST",
+            user,
+            "internal-api/sync-mailbox-acls/",
+            data=b"not json at all",
+            content_type="application/json",
+            extra_headers=_INTAPI_HEADERS,
+        )
+        assert resp.status_code == 400, (
+            f"Malformed JSON should return 400, got {resp.status_code}"
+        )
+
+    def test_proxy_blocks_internal_api_path(self):
+        """Django proxy must reject /caldav/internal-api/ requests."""
+        org = factories.OrganizationFactory(external_id="intapi-proxy")
+        user = factories.UserFactory(email="user@intapi-proxy.com", organization=org)
+        client = APIClient()
+        client.force_login(user)
+
+        resp = client.generic(
+            "POST",
+            "/caldav/internal-api/calendars/",
+            data=json.dumps({"email": "x@x.com"}).encode("utf-8"),
+            content_type="application/json",
+        )
+        assert resp.status_code == 400, (
+            f"Proxy should block internal-api paths, got {resp.status_code}"
+        )
+
+
+# ===================================================================
+# Protocol-level unauthorized access
+# ===================================================================

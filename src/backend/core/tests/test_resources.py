@@ -89,7 +89,7 @@ def test_create_resource_success():
     )
     headers = call_kwargs.kwargs.get("headers", {})
     assert "internal-api/resources" in url
-    assert "X-Internal-Api-Key" in headers
+    assert "X-LS-Internal-Api-Key" in headers
 
     get_entitlements_backend.cache_clear()
 
@@ -130,7 +130,7 @@ def test_delete_resource():
     )
     headers = call_kwargs.kwargs.get("headers", {})
     assert f"internal-api/resources/{resource_id}" in url
-    assert "X-Internal-Api-Key" in headers
+    assert "X-LS-Internal-Api-Key" in headers
 
     get_entitlements_backend.cache_clear()
 
@@ -238,7 +238,7 @@ def test_delete_resource_sends_user_org_id():
     assert response.status_code == HTTP_204_NO_CONTENT
     call_kwargs = mock_request.call_args
     headers = call_kwargs.kwargs.get("headers", {})
-    assert headers.get("X-CalDAV-Organization") == str(org.id)
+    assert headers.get("X-LS-Org-Id") == str(org.id)
 
     get_entitlements_backend.cache_clear()
 

@@ -70,15 +70,21 @@ SAMPLE_CALDAV_RESPONSE = """\
 
 
 def _make_token(
-    uid="test-uid-123", email="bob@example.com", organizer="alice@example.com"
+    uid="test-uid-123",
+    email="bob@example.com",
+    organizer="alice@example.com",
+    org_id="test-org-id",
+    action="accepted",
 ):
     """Create a valid signed RSVP token using TimestampSigner."""
     signer = TimestampSigner(salt="rsvp")
     return signer.sign_object(
         {
-            "uid": uid,
-            "email": email,
-            "organizer": organizer,
+            "u": uid,
+            "e": email,
+            "o": organizer,
+            "g": org_id,
+            "a": action,
         }
     )
 
@@ -91,9 +97,11 @@ class TestRSVPTokenGeneration:
         token = _make_token()
         signer = TimestampSigner(salt="rsvp")
         payload = signer.unsign_object(token)
-        assert payload["uid"] == "test-uid-123"
-        assert payload["email"] == "bob@example.com"
-        assert payload["organizer"] == "alice@example.com"
+        assert payload["u"] == "test-uid-123"
+        assert payload["e"] == "bob@example.com"
+        assert payload["o"] == "alice@example.com"
+        assert payload["g"] == "test-org-id"
+        assert payload["a"] == "accepted"
 
     def test_tampered_token_fails(self):
         """A tampered token raises BadSignature."""
@@ -113,20 +121,22 @@ class TestRSVPUrlsInContext:
         service = CalendarInvitationService()
         context = service._build_template_context(event, "REQUEST")
 
-        assert "rsvp_accept_url" in context
+        assert "rsvp_accepted_url" in context
         assert "rsvp_tentative_url" in context
-        assert "rsvp_decline_url" in context
+        assert "rsvp_declined_url" in context
 
-        # Check URLs contain proper action params
-        assert "action=accepted" in context["rsvp_accept_url"]
-        assert "action=tentative" in context["rsvp_tentative_url"]
-        assert "action=declined" in context["rsvp_decline_url"]
-
-        # Check all URLs contain a token
-        for key in ("rsvp_accept_url", "rsvp_tentative_url", "rsvp_decline_url"):
+        # Check all URLs contain a signed token (action is inside the token)
+        for key in ("rsvp_accepted_url", "rsvp_tentative_url", "rsvp_declined_url"):
             parsed = urlparse(context[key])
             params = parse_qs(parsed.query)
-            assert "token" in params
+            assert "t" in params
+
+        # Check each URL has a different token (action baked in)
+        urls = [
+            context[k]
+            for k in ("rsvp_accepted_url", "rsvp_tentative_url", "rsvp_declined_url")
+        ]
+        assert len(set(urls)) == 3
 
     def test_cancel_method_has_no_rsvp_urls(self):
         """CANCEL method should NOT include RSVP URLs."""
@@ -134,7 +144,7 @@ class TestRSVPUrlsInContext:
         service = CalendarInvitationService()
         context = service._build_template_context(event, "CANCEL")
 
-        assert "rsvp_accept_url" not in context
+        assert "rsvp_accepted_url" not in context
 
     def test_reply_method_has_no_rsvp_urls(self):
         """REPLY method should NOT include RSVP URLs."""
@@ -142,7 +152,7 @@ class TestRSVPUrlsInContext:
         service = CalendarInvitationService()
         context = service._build_template_context(event, "REPLY")
 
-        assert "rsvp_accept_url" not in context
+        assert "rsvp_accepted_url" not in context
 
 
 @pytest.mark.django_db
@@ -271,23 +281,30 @@ class TestRSVPConfirmView(TestCase):
 
     def test_valid_token_renders_confirm_page(self):
         token = _make_token()
-        request = self.factory.get("/rsvp/", {"token": token, "action": "accepted"})
+        request = self.factory.get("/rsvp/", {"t": token})
         response = self.view(request)
         assert response.status_code == 200
         content = response.content.decode()
         assert 'method="post"' in content
         assert token in content
 
-    def test_invalid_action_returns_400(self):
-        token = _make_token()
-        request = self.factory.get("/rsvp/", {"token": token, "action": "invalid"})
+    def test_invalid_action_in_token_returns_400(self):
+        signer = TimestampSigner(salt="rsvp")
+        token = signer.sign_object(
+            {
+                "u": "uid",
+                "e": "e@x.com",
+                "o": "o@x.com",
+                "g": "org",
+                "a": "invalid",
+            }
+        )
+        request = self.factory.get("/rsvp/", {"t": token})
         response = self.view(request)
         assert response.status_code == 400
 
     def test_invalid_token_returns_400(self):
-        request = self.factory.get(
-            "/rsvp/", {"token": "bad-token", "action": "accepted"}
-        )
+        request = self.factory.get("/rsvp/", {"t": "bad-token"})
         response = self.view(request)
         assert response.status_code == 400
 
@@ -307,30 +324,30 @@ class TestRSVPConfirmViewPost(TestCase):
         # RSVP view looks up organizer from DB
         self.organizer = factories.UserFactory(email="alice@example.com")
 
-    def _post(self, token, action):
-        request = self.factory.post(
-            "/api/v1.0/rsvp/",
-            {"token": token, "action": action},
-        )
+    def _post(self, token):
+        request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
         return self.view(request)
 
-    def test_invalid_action_returns_400(self):
-        token = _make_token()
-        response = self._post(token, "invalid")
-        assert response.status_code == 400
-
-    def test_missing_action_returns_400(self):
-        token = _make_token()
-        request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
-        response = self.view(request)
+    def test_invalid_action_in_token_returns_400(self):
+        signer = TimestampSigner(salt="rsvp")
+        token = signer.sign_object(
+            {
+                "u": "uid",
+                "e": "e@x.com",
+                "o": "o@x.com",
+                "g": "org",
+                "a": "invalid",
+            }
+        )
+        response = self._post(token)
         assert response.status_code == 400
 
     def test_invalid_token_returns_400(self):
-        response = self._post("bad-token", "accepted")
+        response = self._post("bad-token")
         assert response.status_code == 400
 
     def test_missing_token_returns_400(self):
-        request = self.factory.post("/api/v1.0/rsvp/", {"action": "accepted"})
+        request = self.factory.post("/api/v1.0/rsvp/", {})
         response = self.view(request)
         assert response.status_code == 400
 
@@ -345,8 +362,8 @@ class TestRSVPConfirmViewPost(TestCase):
         )
         mock_put.return_value = True
 
-        token = _make_token()
-        response = self._post(token, "accepted")
+        token = _make_token(action="accepted")
+        response = self._post(token)
 
         assert response.status_code == 200
         assert "accepted the invitation" in response.content.decode()
@@ -369,8 +386,8 @@ class TestRSVPConfirmViewPost(TestCase):
         mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
         mock_put.return_value = True
 
-        token = _make_token()
-        response = self._post(token, "declined")
+        token = _make_token(action="declined")
+        response = self._post(token)
 
         assert response.status_code == 200
         assert "declined the invitation" in response.content.decode()
@@ -383,8 +400,8 @@ class TestRSVPConfirmViewPost(TestCase):
         mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
         mock_put.return_value = True
 
-        token = _make_token()
-        response = self._post(token, "tentative")
+        token = _make_token(action="tentative")
+        response = self._post(token)
 
         assert response.status_code == 200
         content = response.content.decode()
@@ -396,8 +413,8 @@ class TestRSVPConfirmViewPost(TestCase):
     def test_event_not_found_returns_400(self, mock_find):
         mock_find.return_value = (None, None, None)
 
-        token = _make_token()
-        response = self._post(token, "accepted")
+        token = _make_token(action="accepted")
+        response = self._post(token)
 
         assert response.status_code == 400
         assert "not found" in response.content.decode().lower()
@@ -408,8 +425,8 @@ class TestRSVPConfirmViewPost(TestCase):
         mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
         mock_put.return_value = False
 
-        token = _make_token()
-        response = self._post(token, "accepted")
+        token = _make_token(action="accepted")
+        response = self._post(token)
 
         assert response.status_code == 400
         assert "error occurred" in response.content.decode().lower()
@@ -419,9 +436,8 @@ class TestRSVPConfirmViewPost(TestCase):
         """If the attendee email is not in the event, return error."""
         mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
 
-        # Token with an email that's not in the event
-        token = _make_token(email="stranger@example.com")
-        response = self._post(token, "accepted")
+        token = _make_token(email="stranger@example.com", action="accepted")
+        response = self._post(token)
 
         assert response.status_code == 400
         assert "not listed" in response.content.decode().lower()
@@ -431,8 +447,8 @@ class TestRSVPConfirmViewPost(TestCase):
         """Cannot RSVP to an event that has already ended."""
         mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics", None)
 
-        token = _make_token(uid="test-uid-past")
-        response = self._post(token, "accepted")
+        token = _make_token(uid="test-uid-past", action="accepted")
+        response = self._post(token)
 
         assert response.status_code == 400
         assert "already passed" in response.content.decode().lower()
@@ -508,7 +524,41 @@ class TestRSVPEndToEndFlow(TestCase):
         self.factory = RequestFactory()
         self.confirm_view = RSVPConfirmView.as_view()
         self.process_view = RSVPConfirmView.as_view()
-        self.organizer = factories.UserFactory(email="alice@example.com")
+        org = factories.OrganizationFactory(external_id="rsvp-e2e-org")
+        self.organizer = factories.UserFactory(
+            email="alice@example.com", organization=org
+        )
+
+    def _send_invitation(self, **kwargs):
+        """Send an invitation with org_id set."""
+        defaults = {
+            "sender_email": "alice@example.com",
+            "recipient_email": "bob@example.com",
+            "method": "REQUEST",
+            "icalendar_data": SAMPLE_ICS,
+            "org_id": str(self.organizer.organization_id or "test-org"),
+        }
+        defaults.update(kwargs)
+        service = CalendarInvitationService()
+        return service.send_invitation(**defaults)
+
+    def _extract_rsvp_link(self, html_body, button_color):
+        """Extract RSVP link URL from email HTML by button background color."""
+        pattern = (
+            rf'<a\s+href="([^"]*)"[^>]*background-color:\s*{re.escape(button_color)}'
+        )
+        match = re.search(pattern, html_body)
+        assert match is not None, (
+            f"Email should contain an RSVP link with color {button_color}"
+        )
+        return match.group(1).replace("&amp;", "&")
+
+    def _extract_token_from_url(self, url):
+        """Extract the 't' query parameter from an RSVP URL."""
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
+        assert "t" in params, f"URL should contain 't' param: {url}"
+        return params["t"][0]
 
     def test_email_to_rsvp_accept_flow(self):
         """
@@ -518,51 +568,26 @@ class TestRSVPEndToEndFlow(TestCase):
         4. POST to process the RSVP
         5. Verify the event PARTSTAT is updated to ACCEPTED
         """
-        # Step 1: Send invitation via the CalendarInvitationService
-        service = CalendarInvitationService()
-        success = service.send_invitation(
-            sender_email="alice@example.com",
-            recipient_email="bob@example.com",
-            method="REQUEST",
-            icalendar_data=SAMPLE_ICS,
-        )
+        success = self._send_invitation()
         assert success is True
         assert len(mail.outbox) == 1
+        assert "bob@example.com" in mail.outbox[0].to
 
-        sent_email = mail.outbox[0]
-        assert "bob@example.com" in sent_email.to
-
-        # Step 2: Extract RSVP accept link from email HTML
-        html_body = None
-        for alternative in sent_email.alternatives:
-            if alternative[1] == "text/html":
-                html_body = alternative[0]
-                break
-        assert html_body is not None, "Email should have an HTML body"
-
-        # Find the accept link (green button with "Accepter")
-        accept_match = re.search(r'<a\s+href="([^"]*action=accepted[^"]*)"', html_body)
-        assert accept_match is not None, "Email HTML should contain an RSVP accept link"
-        accept_url = accept_match.group(1)
-        # Unescape HTML entities
-        accept_url = accept_url.replace("&amp;", "&")
-
-        # Step 3: Parse the URL and extract token + action
-        parsed = urlparse(accept_url)
-        params = parse_qs(parsed.query)
-        assert "token" in params
-        assert params["action"] == ["accepted"]
-
-        # Step 3b: GET the confirm page
-        request = self.factory.get(
-            "/rsvp/",
-            {"token": params["token"][0], "action": "accepted"},
+        html_body = next(
+            alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
         )
+
+        # Find accept link by green button color (#16a34a)
+        accept_url = self._extract_rsvp_link(html_body, "#16a34a")
+        token = self._extract_token_from_url(accept_url)
+
+        # GET the confirm page
+        request = self.factory.get("/rsvp/", {"t": token})
         response = self.confirm_view(request)
         assert response.status_code == 200
         assert 'method="post"' in response.content.decode()
 
-        # Step 4: POST to process the RSVP (mock CalDAV interactions)
+        # POST to process the RSVP
         with (
             patch.object(CalDAVHTTPClient, "find_event_by_uid") as mock_find,
             patch.object(CalDAVHTTPClient, "put_event") as mock_put,
@@ -574,47 +599,29 @@ class TestRSVPEndToEndFlow(TestCase):
             )
             mock_put.return_value = True
 
-            request = self.factory.post(
-                "/api/v1.0/rsvp/",
-                {"token": params["token"][0], "action": "accepted"},
-            )
+            request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
             response = self.process_view(request)
 
-        # Step 5: Verify success
         assert response.status_code == 200
-        content = response.content.decode()
-        assert "accepted the invitation" in content
+        assert "accepted the invitation" in response.content.decode()
 
-        # Verify CalDAV was called with the right data
         mock_find.assert_called_once()
-        find_args = mock_find.call_args[0]
-        assert find_args[0].email == "alice@example.com"
-        assert find_args[1] == "test-uid-123"
+        assert mock_find.call_args[0][0].email == "alice@example.com"
+        assert mock_find.call_args[0][1] == "test-uid-123"
         mock_put.assert_called_once()
-        put_data = mock_put.call_args[0][2]
-        assert "PARTSTAT=ACCEPTED" in put_data
+        assert "PARTSTAT=ACCEPTED" in mock_put.call_args[0][2]
 
     def test_email_to_rsvp_decline_flow(self):
         """Same flow but for declining an invitation."""
-        service = CalendarInvitationService()
-        service.send_invitation(
-            sender_email="alice@example.com",
-            recipient_email="bob@example.com",
-            method="REQUEST",
-            icalendar_data=SAMPLE_ICS,
-        )
-        assert len(mail.outbox) == 1
+        self._send_invitation()
 
         html_body = next(
             alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
         )
 
-        decline_match = re.search(r'<a\s+href="([^"]*action=declined[^"]*)"', html_body)
-        assert decline_match is not None
-        decline_url = decline_match.group(1).replace("&amp;", "&")
-
-        parsed = urlparse(decline_url)
-        params = parse_qs(parsed.query)
+        # Find decline link by red button color (#dc2626)
+        decline_url = self._extract_rsvp_link(html_body, "#dc2626")
+        token = self._extract_token_from_url(decline_url)
 
         with (
             patch.object(CalDAVHTTPClient, "find_event_by_uid") as mock_find,
@@ -623,10 +630,7 @@ class TestRSVPEndToEndFlow(TestCase):
             mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
             mock_put.return_value = True
 
-            request = self.factory.post(
-                "/api/v1.0/rsvp/",
-                {"token": params["token"][0], "action": "declined"},
-            )
+            request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
             response = self.process_view(request)
 
         assert response.status_code == 200
@@ -635,67 +639,50 @@ class TestRSVPEndToEndFlow(TestCase):
 
     def test_email_contains_all_three_rsvp_links(self):
         """Verify the email contains accept, tentative, and decline links."""
-        service = CalendarInvitationService()
-        service.send_invitation(
-            sender_email="alice@example.com",
-            recipient_email="bob@example.com",
-            method="REQUEST",
-            icalendar_data=SAMPLE_ICS,
-        )
+        self._send_invitation()
 
         html_body = next(
             alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
         )
 
-        for action in ("accepted", "tentative", "declined"):
-            match = re.search(rf'<a\s+href="([^"]*action={action}[^"]*)"', html_body)
+        # Each button has a distinct color
+        colors = {
+            "accept": "#16a34a",  # green
+            "tentative": "#d97706",  # amber
+            "decline": "#dc2626",  # red
+        }
+        for label, color in colors.items():
+            pattern = rf'<a\s+href="([^"]*)"[^>]*background-color:\s*{re.escape(color)}'
+            match = re.search(pattern, html_body)
             assert match is not None, (
-                f"Email should contain an RSVP link for action={action}"
+                f"Email should contain an RSVP {label} link (color {color})"
             )
 
     def test_cancel_email_has_no_rsvp_links(self):
         """Cancel emails should NOT contain any RSVP links."""
-        service = CalendarInvitationService()
-        service.send_invitation(
-            sender_email="alice@example.com",
-            recipient_email="bob@example.com",
-            method="CANCEL",
-            icalendar_data=SAMPLE_ICS,
-        )
+        self._send_invitation(method="CANCEL")
         assert len(mail.outbox) == 1
 
         html_body = next(
             alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
         )
-        assert "action=accepted" not in html_body
-        assert "action=declined" not in html_body
+        # Cancel emails should have no RSVP links (no /rsvp/ URLs)
+        assert "/rsvp/" not in html_body
 
     @patch.object(CalDAVHTTPClient, "find_event_by_uid")
     def test_rsvp_link_for_past_event_fails(self, mock_find):
         """RSVP link for a past event should return an error."""
-        service = CalendarInvitationService()
-        service.send_invitation(
-            sender_email="alice@example.com",
-            recipient_email="bob@example.com",
-            method="REQUEST",
-            icalendar_data=SAMPLE_ICS,
-        )
+        self._send_invitation()
 
         html_body = next(
             alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
         )
-        accept_match = re.search(r'<a\s+href="([^"]*action=accepted[^"]*)"', html_body)
-        accept_url = accept_match.group(1).replace("&amp;", "&")
-        parsed = urlparse(accept_url)
-        params = parse_qs(parsed.query)
+        accept_url = self._extract_rsvp_link(html_body, "#16a34a")
+        token = self._extract_token_from_url(accept_url)
 
-        # The event is in the past
         mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics", None)
 
-        request = self.factory.post(
-            "/api/v1.0/rsvp/",
-            {"token": params["token"][0], "action": "accepted"},
-        )
+        request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
         response = self.process_view(request)
 
         assert response.status_code == 400
@@ -746,11 +733,8 @@ class TestRSVPRecurringTokenExpiry(TestCase):
         self.view = RSVPConfirmView.as_view()
         self.organizer = factories.UserFactory(email="alice@example.com")
 
-    def _post(self, token, action):
-        request = self.factory.post(
-            "/api/v1.0/rsvp/",
-            {"token": token, "action": action},
-        )
+    def _post(self, token):
+        request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
         return self.view(request)
 
     @patch.object(CalDAVHTTPClient, "put_event")
@@ -761,8 +745,8 @@ class TestRSVPRecurringTokenExpiry(TestCase):
         mock_find.return_value = (ics, "/path/to/event.ics", None)
         mock_put.return_value = True
 
-        token = _make_token(uid="recurring-uid-1")
-        response = self._post(token, "accepted")
+        token = _make_token(uid="recurring-uid-1", action="accepted")
+        response = self._post(token)
 
         assert response.status_code == 200
 
@@ -784,7 +768,7 @@ class TestRSVPRecurringTokenExpiry(TestCase):
             return original_unsign(TimestampSigner(), value, **kwargs)
 
         with patch.object(TimestampSigner, "unsign_object", side_effect=side_effect):
-            response = self._post(token, "accepted")
+            response = self._post(token)
 
         assert response.status_code == 400
         content = response.content.decode().lower()
@@ -800,11 +784,11 @@ class TestRSVPRecurringTokenExpiry(TestCase):
         ics = _make_recurring_ics()
         mock_find.return_value = (ics, "/path/to/event.ics", None)
 
-        token = _make_token(uid="recurring-uid-1")
+        token = _make_token(uid="recurring-uid-1", action="accepted")
 
         # Advance time beyond RSVP_TOKEN_MAX_AGE_RECURRING (90 days = 7776000s)
         with freeze_time(timezone.now() + timedelta(days=91)):
-            response = self._post(token, "accepted")
+            response = self._post(token)
 
         assert response.status_code == 400
         content = response.content.decode().lower()
@@ -817,7 +801,7 @@ class TestRSVPRecurringTokenExpiry(TestCase):
         mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
         mock_put.return_value = True
 
-        token = _make_token()
-        response = self._post(token, "accepted")
+        token = _make_token(action="accepted")
+        response = self._post(token)
 
         assert response.status_code == 200

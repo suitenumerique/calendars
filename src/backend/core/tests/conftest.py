@@ -75,20 +75,16 @@ def disconnect_caldav_signals_for_unit_tests(request):
         get_user_model,
     )
     from django.db.models.signals import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
-        post_save,
         pre_delete,
     )
 
     from core.signals import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
         delete_user_caldav_data,
-        provision_default_calendar,
     )
 
     user_model = get_user_model()
-    post_save.disconnect(provision_default_calendar, sender=user_model)
     pre_delete.disconnect(delete_user_caldav_data, sender=user_model)
     yield
-    post_save.connect(provision_default_calendar, sender=user_model)
     pre_delete.connect(delete_user_caldav_data, sender=user_model)
 
 

@@ -10,7 +10,6 @@ import {
   buildMkCalendarXml,
   buildProppatchXml,
   sharePrivilegeToXml,
-  sharePrivilegeToSummary,
   parseSharePrivilege,
   buildShareeSetXml,
   buildShareRequestXml,
@@ -179,24 +178,6 @@ describe('caldav-helpers', () => {
       })
     })
 
-    describe('sharePrivilegeToSummary', () => {
-      it('returns freebusy marker for freebusy privilege', () => {
-        expect(sharePrivilegeToSummary('freebusy')).toBe('access:freebusy')
-      })
-
-      it('returns undefined for read privilege', () => {
-        expect(sharePrivilegeToSummary('read')).toBeUndefined()
-      })
-
-      it('returns undefined for read-write privilege', () => {
-        expect(sharePrivilegeToSummary('read-write')).toBeUndefined()
-      })
-
-      it('returns undefined for admin privilege', () => {
-        expect(sharePrivilegeToSummary('admin')).toBeUndefined()
-      })
-    })
-
     describe('parseSharePrivilege', () => {
       it('returns read-write when present', () => {
         expect(parseSharePrivilege({ 'read-write': true })).toBe('read-write')
@@ -215,21 +196,21 @@ describe('caldav-helpers', () => {
         expect(parseSharePrivilege(null)).toBe('read')
       })
 
-      it('returns freebusy when access is read and summary is freebusy marker', () => {
-        expect(parseSharePrivilege({}, 'access:freebusy')).toBe('freebusy')
+      it('returns freebusy when access is read and shareAccess is freebusy', () => {
+        expect(parseSharePrivilege({}, 'freebusy')).toBe('freebusy')
       })
 
-      it('returns read when access is read and summary is not freebusy marker', () => {
-        expect(parseSharePrivilege({}, 'some other summary')).toBe('read')
+      it('returns read when access is read and shareAccess is not freebusy', () => {
+        expect(parseSharePrivilege({}, 'something-else')).toBe('read')
         expect(parseSharePrivilege({}, undefined)).toBe('read')
       })
 
-      it('ignores freebusy summary when access is read-write', () => {
-        expect(parseSharePrivilege({ 'read-write': true }, 'access:freebusy')).toBe('read-write')
+      it('ignores freebusy shareAccess when access is read-write', () => {
+        expect(parseSharePrivilege({ 'read-write': true }, 'freebusy')).toBe('read-write')
       })
 
-      it('ignores freebusy summary when access is admin', () => {
-        expect(parseSharePrivilege({ admin: true }, 'access:freebusy')).toBe('admin')
+      it('ignores freebusy shareAccess when access is admin', () => {
+        expect(parseSharePrivilege({ admin: true }, 'freebusy')).toBe('admin')
       })
     })
 
@@ -253,40 +234,29 @@ describe('caldav-helpers', () => {
         expect(result).toContain('<CS:common-name>John Doe</CS:common-name>')
       })
 
-      it('includes summary when provided', () => {
-        const result = buildShareeSetXml({
-          href: 'mailto:user@example.com',
-          summary: 'Shared calendar',
-          privilege: 'read',
-        })
-        expect(result).toContain('<CS:summary>Shared calendar</CS:summary>')
-      })
-
-      it('auto-injects freebusy summary marker for freebusy privilege', () => {
+      it('includes LS:share-access for freebusy privilege', () => {
         const result = buildShareeSetXml({
           href: 'mailto:user@example.com',
           privilege: 'freebusy',
         })
         expect(result).toContain('<CS:read/>')
-        expect(result).toContain('<CS:summary>access:freebusy</CS:summary>')
+        expect(result).toContain('<LS:share-access>freebusy</LS:share-access>')
       })
 
-      it('does not inject summary for non-freebusy privileges', () => {
+      it('does not include LS:share-access for non-freebusy privileges', () => {
         const result = buildShareeSetXml({
           href: 'mailto:user@example.com',
           privilege: 'read-write',
         })
-        expect(result).not.toContain('<CS:summary>')
+        expect(result).not.toContain('share-access')
       })
 
-      it('explicit summary takes precedence over freebusy auto-summary', () => {
+      it('does not include LS:share-access for read privilege', () => {
         const result = buildShareeSetXml({
           href: 'mailto:user@example.com',
-          summary: 'Custom summary',
-          privilege: 'freebusy',
+          privilege: 'read',
         })
-        expect(result).toContain('<CS:summary>Custom summary</CS:summary>')
-        expect(result).not.toContain('access:freebusy')
+        expect(result).not.toContain('share-access')
       })
     })
 

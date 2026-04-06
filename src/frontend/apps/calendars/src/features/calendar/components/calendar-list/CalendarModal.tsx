@@ -1,19 +1,26 @@
 /**
  * CalendarModal component.
  * Handles creation and editing of calendars.
+ * Supports mailbox selection when Messages integration is enabled.
+ * Can be used in onboarding mode (isOnboarding=true) for first-time users.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Button,
   Input,
   Modal,
   ModalSize,
+  Select,
 } from "@gouvfr-lasuite/cunningham-react";
+import { useConfig } from "@/features/config/ConfigProvider";
+import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 
 import { DEFAULT_COLORS } from "./constants";
 import type { CalendarModalProps } from "./types";
+
+const NO_MAILBOX_VALUE = "__none__";
 
 export const CalendarModal = ({
   isOpen,
@@ -21,12 +28,40 @@ export const CalendarModal = ({
   calendar,
   onClose,
   onSave,
+  isOnboarding = false,
 }: CalendarModalProps) => {
   const { t } = useTranslation();
+  const { config } = useConfig();
+  const { availableMailboxes, getMailboxEmail } = useMailboxContext();
+
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLORS[0]);
+  const [includeInAvailability, setIncludeInAvailability] = useState(true);
+  const [selectedMailbox, setSelectedMailbox] = useState(NO_MAILBOX_VALUE);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const messagesEnabled = !!config?.FEATURE_MESSAGES_INTEGRATION;
+  const hasMailboxes = messagesEnabled && availableMailboxes.length > 0;
+
+  // Build mailbox options for the select
+  const mailboxOptions = useMemo(() => {
+    const options = [
+      {
+        label: t("calendar.createCalendar.noMailbox"),
+        value: NO_MAILBOX_VALUE,
+      },
+    ];
+    for (const mb of availableMailboxes) {
+      // Only show mailboxes where user has sender or admin role
+      if (mb.role !== "sender" && mb.role !== "admin") continue;
+      options.push({
+        label: mb.name ? `${mb.name} (${mb.email})` : mb.email,
+        value: mb.email,
+      });
+    }
+    return options;
+  }, [availableMailboxes, t]);
 
   // Reset form when modal opens or calendar changes
   useEffect(() => {
@@ -34,48 +69,68 @@ export const CalendarModal = ({
       if (mode === "edit" && calendar) {
         setName(calendar.displayName || "");
         setColor(calendar.color || DEFAULT_COLORS[0]);
+        setIncludeInAvailability(calendar.includeInAvailability ?? true);
+        setSelectedMailbox(NO_MAILBOX_VALUE);
       } else {
-        setName("");
         setColor(DEFAULT_COLORS[0]);
+        if (isOnboarding && availableMailboxes.length > 0) {
+          setSelectedMailbox(availableMailboxes[0].email);
+          setName(availableMailboxes[0].name || "");
+        } else {
+          setSelectedMailbox(NO_MAILBOX_VALUE);
+          setName(t("calendar.createCalendar.defaultName"));
+        }
       }
       setError(null);
     }
-  }, [isOpen, mode, calendar]);
+  }, [isOpen, mode, calendar, isOnboarding, availableMailboxes]);
 
   const handleSave = async () => {
     if (!name.trim()) {
-      setError(t('calendar.createCalendar.nameRequired'));
+      setError(t("calendar.createCalendar.nameRequired"));
       return;
     }
 
     setIsLoading(true);
     setError(null);
     try {
-      await onSave(name.trim(), color);
-      onClose();
+      const mailboxEmail =
+        selectedMailbox !== NO_MAILBOX_VALUE ? selectedMailbox : undefined;
+      await onSave(name.trim(), color, mailboxEmail, includeInAvailability);
+      if (!isOnboarding) {
+        onClose();
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('api.error.unexpected'));
+      setError(
+        err instanceof Error ? err.message : t("api.error.unexpected"),
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClose = () => {
+    if (isOnboarding) {
+      // Cannot dismiss onboarding modal
+      return;
+    }
     setName("");
     setColor(DEFAULT_COLORS[0]);
+    setSelectedMailbox(NO_MAILBOX_VALUE);
     setError(null);
     onClose();
   };
 
-  const title =
-    mode === "create"
-      ? t('calendar.createCalendar.title')
-      : t('calendar.editCalendar.title');
+  const title = isOnboarding
+    ? t("calendar.onboarding.title")
+    : mode === "create"
+      ? t("calendar.createCalendar.title")
+      : t("calendar.editCalendar.title");
 
   const saveLabel =
     mode === "create"
-      ? t('calendar.createCalendar.create')
-      : t('calendar.editCalendar.save');
+      ? t("calendar.createCalendar.create")
+      : t("calendar.editCalendar.save");
 
   return (
     <Modal
@@ -83,11 +138,15 @@ export const CalendarModal = ({
       onClose={handleClose}
       size={ModalSize.MEDIUM}
       title={title}
+      closeOnClickOutside={!isOnboarding}
+      hideCloseButton={isOnboarding}
       rightActions={
         <>
-          <Button color="neutral" onClick={handleClose} disabled={isLoading}>
-            {t('calendar.event.cancel')}
-          </Button>
+          {!isOnboarding && (
+            <Button color="neutral" onClick={handleClose} disabled={isLoading}>
+              {t("calendar.event.cancel")}
+            </Button>
+          )}
           <Button
             color="brand"
             onClick={handleSave}
@@ -99,10 +158,64 @@ export const CalendarModal = ({
       }
     >
       <div className="calendar-modal__content">
+        {isOnboarding && (
+          <p className="calendar-modal__onboarding-text">
+            {t("calendar.onboarding.description")}
+          </p>
+        )}
+
         {error && <div className="calendar-modal__error">{error}</div>}
 
+        {hasMailboxes && mode === "create" && (
+          <div className="calendar-modal__field">
+            <Select
+              label={t("calendar.createCalendar.mailbox")}
+              options={mailboxOptions}
+              value={selectedMailbox}
+              onChange={(e) => {
+                const value = e.target.value as string;
+                setSelectedMailbox(value);
+                if (value !== NO_MAILBOX_VALUE) {
+                  const mb = availableMailboxes.find(
+                    (m) => m.email === value,
+                  );
+                  setName(mb?.name || value);
+                } else {
+                  setName(t("calendar.createCalendar.defaultName"));
+                }
+              }}
+              fullWidth
+            />
+            {selectedMailbox === NO_MAILBOX_VALUE && (
+              <p className="calendar-modal__mailbox-hint">
+                {t("calendar.createCalendar.noMailboxHint")}
+              </p>
+            )}
+            {selectedMailbox !== NO_MAILBOX_VALUE && (
+              <p className="calendar-modal__mailbox-hint">
+                {t("calendar.createCalendar.mailboxHint", {
+                  email: selectedMailbox,
+                })}
+              </p>
+            )}
+          </div>
+        )}
+
+        {!hasMailboxes && mode === "create" && (
+          <p className="calendar-modal__mailbox-hint">
+            {t("calendar.createCalendar.noMailboxAvailable")}
+          </p>
+        )}
+
+        {mode === "edit" && calendar && getMailboxEmail(calendar.url, calendar) && (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 0", color: "#555", fontSize: "14px" }}>
+            <span className="material-icons" style={{ fontSize: "18px" }}>mail</span>
+            <span>{t("calendar.editCalendar.linkedMailbox", { email: getMailboxEmail(calendar.url, calendar) })}</span>
+          </div>
+        )}
+
         <Input
-          label={t('calendar.createCalendar.name')}
+          label={t("calendar.createCalendar.name")}
           value={name}
           onChange={(e) => setName(e.target.value)}
           fullWidth
@@ -110,7 +223,7 @@ export const CalendarModal = ({
 
         <div className="calendar-modal__field">
           <label className="calendar-modal__label">
-            {t('calendar.createCalendar.color')}
+            {t("calendar.createCalendar.color")}
           </label>
           <div className="calendar-modal__colors">
             {DEFAULT_COLORS.map((c) => (
@@ -118,7 +231,7 @@ export const CalendarModal = ({
                 key={c}
                 type="button"
                 className={`calendar-modal__color-btn ${
-                  color === c ? 'calendar-modal__color-btn--selected' : ''
+                  color === c ? "calendar-modal__color-btn--selected" : ""
                 }`}
                 style={{ backgroundColor: c }}
                 onClick={() => setColor(c)}
@@ -128,6 +241,19 @@ export const CalendarModal = ({
           </div>
         </div>
 
+        {mode === "edit" && (
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 0", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={includeInAvailability}
+              onChange={(e) => setIncludeInAvailability(e.target.checked)}
+              style={{ width: "16px", height: "16px" }}
+            />
+            <span style={{ fontSize: "14px" }}>
+              {t("calendar.editCalendar.includeInAvailability")}
+            </span>
+          </label>
+        )}
       </div>
     </Modal>
   );

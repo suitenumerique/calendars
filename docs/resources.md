@@ -344,8 +344,8 @@ resource.
 > `/internal-api/` namespace in SabreDAV, which is completely
 > separate from the CalDAV protocol namespace. This avoids direct
 > database access from Django to SabreDAV tables. The internal API
-> is gated by the `X-Internal-Api-Key` header (different from the
-> `X-Api-Key` used by the CalDAV proxy) and is explicitly blocked
+> is gated by the `X-LS-Internal-Api-Key` header (different from the
+> `X-LS-Api-Key` used by the CalDAV proxy) and is explicitly blocked
 > by the Django proxy's path validation.
 
 ### Updating a Resource
@@ -444,7 +444,7 @@ RFC 6638 §2.4.2 defines the `{urn:ietf:params:xml:ns:caldav}calendar-user-type`
 This means adding CUTYPE support is a **one-line extension** of the fieldMap, not a hack:
 
 ```php
-// In our AutoCreatePrincipalBackend (extends PrincipalBackend\PDO)
+// In our PrincipalBackend (extends PrincipalBackend\PDO)
 protected $fieldMap = [
     '{DAV:}displayname' => ['dbField' => 'displayname'],
     '{http://sabredav.org/ns}email-address' => ['dbField' => 'email'],
@@ -600,7 +600,7 @@ For resources that should not be bookable by everyone (executive rooms, speciali
 
 See [docs/organizations.md](organizations.md) for the full org design. Key points for resources:
 
-- **Resource discovery** is org-scoped: SabreDAV filters resource principals by the `org_id` column on the `principals` table, using the `X-CalDAV-Organization` header set by Django.
+- **Resource discovery** is org-scoped: SabreDAV filters resource principals by the `org_id` column on the `principals` table, using the `X-LS-Org-Id` header set by Django.
 - **Cross-org resource booking is not allowed**: the auto-schedule plugin rejects invitations from users outside the resource's org.
 - **Resource creation** requires the `can_admin` entitlement (returned by the entitlements system alongside `can_access`).
 
@@ -703,13 +703,13 @@ The key takeaway: **booking works universally** (any client can invite a resourc
 **Changes**:
 
 1. **Extend SabreDAV principals table**: Add `calendar_user_type` column (and `org_id` for multi-tenancy)
-2. **Extend `AutoCreatePrincipalBackend.$fieldMap`**: Add `{urn:ietf:params:xml:ns:caldav}calendar-user-type` → `calendar_user_type`. This is SabreDAV's idiomatic extension point for principal properties -- the base `PrincipalBackend\PDO` automatically includes mapped fields in all queries, and the `Schedule\Plugin`'s hardcoded `INDIVIDUAL` becomes a fallback (see [What SabreDAV Provides](#what-sabredav-provides-and-what-it-doesnt))
+2. **Extend `PrincipalBackend.$fieldMap`**: Add `{urn:ietf:params:xml:ns:caldav}calendar-user-type` → `calendar_user_type`. This is SabreDAV's idiomatic extension point for principal properties -- the base `PrincipalBackend\PDO` automatically includes mapped fields in all queries, and the `Schedule\Plugin`'s hardcoded `INDIVIDUAL` becomes a fallback (see [What SabreDAV Provides](#what-sabredav-provides-and-what-it-doesnt))
 3. **Add nested principal prefixes**: `principals/users/` for user principals and `principals/resources/` for resource principals, with a custom `CalendarsRoot` node to handle the nested structure (SabreDAV's default `CalendarRoot` only supports flat principal prefixes)
 4. **Verify scheduling delivery**: Ensure `Schedule\Plugin` delivers iTIP messages to resource inboxes
 
 **Files to modify**:
 - `src/caldav/sql/pgsql.principals.sql` -- add columns
-- `src/caldav/src/AutoCreatePrincipalBackend.php` -- extend `$fieldMap`
+- `src/caldav/src/PrincipalBackend.php` -- extend `$fieldMap`
 - `src/caldav/src/CalendarsRoot.php` -- custom DAV Collection for nested prefixes
 - `src/caldav/server.php` -- use CalendarsRoot and nested principal collections
 
@@ -812,7 +812,7 @@ CREATE INDEX idx_principals_cutype ON principals (calendar_user_type)
     WHERE calendar_user_type IN ('ROOM', 'RESOURCE');
 ```
 
-The `calendar_user_type` column is exposed as the standard `{urn:ietf:params:xml:ns:caldav}calendar-user-type` DAV property via `AutoCreatePrincipalBackend.$fieldMap`. The `org_id` column is used internally for org-scoped filtering and is not exposed as a DAV property.
+The `calendar_user_type` column is exposed as the standard `{urn:ietf:params:xml:ns:caldav}calendar-user-type` DAV property via `PrincipalBackend.$fieldMap`. The `org_id` column is used internally for org-scoped filtering and is not exposed as a DAV property.
 
 Resource metadata (capacity, location, equipment, etc.) is stored in SabreDAV's existing `propertystorage` table via PROPPATCH -- no additional SabreDAV schema changes needed.
 

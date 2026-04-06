@@ -56,8 +56,7 @@
         <div class="icon">{{ status_icon|safe }}</div>
         <h1>{{ heading }}</h1>
         <form id="rsvp-form" method="post" action="/rsvp/">
-            <input type="hidden" name="token" value="{{ token }}">
-            <input type="hidden" name="action" value="{{ action }}">
+            <input type="hidden" name="t" value="{{ token }}">
             <noscript>
                 <button type="submit" class="submit-btn">{{ submit_label }}</button>
             </noscript>

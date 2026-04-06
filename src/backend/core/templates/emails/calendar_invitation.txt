@@ -13,9 +13,9 @@
 {{ event.description }}
 {% endif %}
 
-{% if rsvp_accept_url %}{{ actions.accept }} : {{ rsvp_accept_url }}
+{% if rsvp_accepted_url %}{{ actions.accept }} : {{ rsvp_accepted_url }}
 {{ actions.maybe }} : {{ rsvp_tentative_url }}
-{{ actions.decline }} : {{ rsvp_decline_url }}
+{{ actions.decline }} : {{ rsvp_declined_url }}
 
 {% endif %}{{ instructions }}
 

@@ -9,16 +9,17 @@ use Sabre\DAVACL;
 use Sabre\CalDAV;
 use Sabre\CardDAV;
 use Sabre\DAV;
-use Calendars\SabreDav\AutoCreatePrincipalBackend;
+use Calendars\SabreDav\PrincipalBackend;
 use Calendars\SabreDav\HttpCallbackIMipPlugin;
 use Calendars\SabreDav\ApiKeyAuthBackend;
 use Calendars\SabreDav\CalendarSanitizerPlugin;
 use Calendars\SabreDav\AttendeeNormalizerPlugin;
 use Calendars\SabreDav\InternalApiPlugin;
 use Calendars\SabreDav\ResourceAutoSchedulePlugin;
-use Calendars\SabreDav\ResourceMkCalendarBlockPlugin;
 use Calendars\SabreDav\FreeBusyOrgScopePlugin;
 use Calendars\SabreDav\SharedCalendarPrivacyPlugin;
+use Calendars\SabreDav\MailboxPlugin;
+use Calendars\SabreDav\ShareAccessPlugin;
 use Calendars\SabreDav\AvailabilityPlugin;
 use Calendars\SabreDav\AuditCalDAVBackend;
 use Calendars\SabreDav\AuditContextPlugin;
@@ -55,7 +56,7 @@ $pdo = new PDO(
 );
 
 // Create custom authentication backend
-// Requires API key authentication and X-Forwarded-User header
+// Requires API key authentication and X-LS-User header
 $apiKey = getenv('CALDAV_OUTBOUND_API_KEY');
 if (!$apiKey) {
     error_log("[sabre/dav] CALDAV_OUTBOUND_API_KEY environment variable is required");
@@ -72,15 +73,15 @@ $caldavBackend = new AuditCalDAVBackend($pdo);
 // Create CardDAV backend (optional, for future use)
 $carddavBackend = new CardDAV\Backend\PDO($pdo);
 
-// Create principal backend with auto-creation support
-$principalBackend = new AutoCreatePrincipalBackend($pdo);
+// Create principal backend with org-scoped discovery and mailbox address loading
+$principalBackend = new PrincipalBackend($pdo);
 
 // Create directory tree
 // Principal collections: principals/users/ and principals/resources/
 // Calendar collections: calendars/users/ and calendars/resources/
 $nodes = [
     new PrincipalsRoot($principalBackend),
-    new CalendarsRoot($principalBackend, $caldavBackend),
+    new CalendarsRoot($principalBackend, $caldavBackend, $pdo),
     new CardDAV\AddressBookRoot($principalBackend, $carddavBackend),
 ];
 
@@ -89,7 +90,7 @@ $server = new DAV\Server($nodes);
 $server->setBaseUri($baseUri);
 
 // Give the principal backend a reference to the server
-// so it can read X-CalDAV-Organization from the HTTP request
+// so it can read X-LS-Org-Id from the HTTP request
 $principalBackend->setServer($server);
 
 // Add plugins
@@ -115,6 +116,8 @@ $server->addPlugin(new CalDAV\ICSExportPlugin());
 // Note: Order matters! CalDAV\SharingPlugin must come after DAV\Sharing\Plugin
 $server->addPlugin(new DAV\Sharing\Plugin());
 $server->addPlugin(new CalDAV\SharingPlugin());
+$server->addPlugin(new MailboxPlugin($pdo));
+$server->addPlugin(new ShareAccessPlugin($pdo));
 
 // Debug logging for POST requests - commented out to avoid PII in logs
 // Uncomment for local debugging only, never in production.
@@ -167,13 +170,13 @@ $server->addPlugin(new CalendarSanitizerPlugin(
 $server->addPlugin(new AttendeeNormalizerPlugin());
 
 // Add internal API plugin for resource provisioning and ICS import
-// Gated by X-Internal-Api-Key header (separate from X-Api-Key used by proxy)
+// Gated by X-LS-Internal-Api-Key header (separate from X-LS-Api-Key used by proxy)
 $internalApiKey = getenv('CALDAV_INTERNAL_API_KEY') ?: $apiKey;
 $server->addPlugin(new InternalApiPlugin($pdo, $caldavBackend, $internalApiKey));
 
 // Add custom IMipPlugin that forwards scheduling messages via HTTP callback
 // This MUST be added BEFORE the Schedule\Plugin so that Schedule\Plugin finds it
-// The callback URL can be provided per-request via X-CalDAV-Callback-URL header
+// The callback URL can be provided per-request via X-LS-Callback-URL header
 // or via CALDAV_CALLBACK_URL environment variable as fallback
 $callbackApiKey = getenv('CALDAV_INBOUND_API_KEY');
 if (!$callbackApiKey) {
@@ -184,30 +187,30 @@ $defaultCallbackUrl = getenv('CALDAV_CALLBACK_URL') ?: null;
 if ($defaultCallbackUrl) {
     error_log("[sabre/dav] Using default callback URL for scheduling: {$defaultCallbackUrl}");
 }
-$imipPlugin = new HttpCallbackIMipPlugin($callbackApiKey, $defaultCallbackUrl);
+$imipPlugin = new HttpCallbackIMipPlugin($callbackApiKey, $pdo, $defaultCallbackUrl);
 $server->addPlugin($imipPlugin);
 
 // Enforce org-level freebusy sharing settings
-// Blocks VFREEBUSY queries when X-CalDAV-Sharing-Level is "none"
-$server->addPlugin(new FreeBusyOrgScopePlugin());
+// Blocks VFREEBUSY queries when X-LS-Org-Sharing-Level is "none"
+$server->addPlugin(new FreeBusyOrgScopePlugin($pdo));
 
 // Add CalDAV scheduling support
 // See https://sabre.io/dav/scheduling/
-// The Schedule\Plugin will automatically find and use the IMipPlugin we just added
-// It looks for plugins that implement CalDAV\Schedule\IMipPlugin interface
+// NOTE: MailboxPlugin (registered above) runs propFind at priority 80 to inject
+// mailbox emails into calendar-user-address-set before Schedule\Plugin (100).
 $schedulePlugin = new CalDAV\Schedule\Plugin();
 $server->addPlugin($schedulePlugin);
 
-// Add resource auto-scheduling plugin
-// Handles automatic accept/decline for resource principals based on availability
+// Resource principal management: auto-scheduling + MKCALENDAR blocking
 $server->addPlugin(new ResourceAutoSchedulePlugin($pdo, $caldavBackend));
-
-// Block MKCALENDAR on resource principals (each resource has exactly one calendar)
-$server->addPlugin(new ResourceMkCalendarBlockPlugin());
 
 // Add availability integration for freebusy responses
 // Reads calendar-availability property and adds BUSY-UNAVAILABLE periods
-$server->addPlugin(new AvailabilityPlugin());
+$server->addPlugin(new AvailabilityPlugin($pdo));
+
+// Add WebDAV sync support (RFC 6578) for incremental calendar sync
+// Enables sync-collection REPORT used by all CalDAV clients
+$server->addPlugin(new DAV\Sync\Plugin());
 
 // Add property storage plugin for custom properties (resource metadata, etc.)
 $server->addPlugin(new DAV\PropertyStorage\Plugin(

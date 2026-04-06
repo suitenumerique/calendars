@@ -36,5 +36,9 @@ ALTER TABLE ONLY groupmembers
 CREATE UNIQUE INDEX groupmembers_ukey
     ON groupmembers USING btree (principal_id, member_id);
 
--- No seed data: principals are created via AutoCreatePrincipalBackend
--- (for users on first access) or InternalApiPlugin (for resources).
+-- No seed data. Principals are auto-created by PrincipalBackend on first
+-- CalDAV access (without calendars). Calendars are created explicitly via
+-- POST /api/v1.0/setup/ → POST /internal-api/calendars/.
+--
+-- calendar-user-address-set is derived at runtime by PrincipalBackend
+-- from calendarinstances shares to MAILBOX principals. No separate table needed.

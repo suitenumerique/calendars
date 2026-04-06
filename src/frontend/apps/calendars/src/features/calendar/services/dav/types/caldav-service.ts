@@ -60,6 +60,10 @@ export type CalDavCalendar = Pick<DAVCalendar, 'url' | 'ctag' | 'syncToken' | 'c
   displayName: string
   description?: string
   color?: string
+  /** Whether this calendar's events count toward freebusy (default: true) */
+  includeInAvailability: boolean
+  /** Owner principal type: "MAILBOX" for mailbox calendars, undefined otherwise */
+  ownerType?: string
   resourcetype?: string[]
   headers?: Record<string, string>
   fetchOptions?: RequestInit
@@ -78,6 +82,8 @@ export type CalDavCalendarUpdate = {
   description?: string
   color?: string
   timezone?: string
+  /** Toggle whether this calendar counts toward freebusy/availability */
+  includeInAvailability?: boolean
 }
 
 // ============================================================================
@@ -134,8 +140,6 @@ export type CalDavSharee = {
 export type CalDavShareInvite = {
   calendarUrl: string
   sharees: CalDavSharee[]
-  summary?: string
-  comment?: string
 }
 
 export type CalDavShareResponse = {

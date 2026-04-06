@@ -13,6 +13,7 @@ import { LeftPanelMobile } from "@/features/layouts/components/left-panel/LeftPa
 import { LeftPanel } from "@/features/calendar/components";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
 import { CalendarContextProvider } from "@/features/calendar/contexts";
+import { MailboxContextProvider } from "@/features/mailbox/MailboxContext";
 import { Scheduler } from "@/features/calendar/components/scheduler/Scheduler";
 import { HomePage } from "@/features/home/HomePage";
 import { SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL } from "@/features/api/fetchApi";
@@ -46,6 +47,7 @@ function AuthenticatedView() {
   }, [user, router]);
 
   return (
+    <MailboxContextProvider>
     <CalendarContextProvider>
       <div className="calendars__calendar">
         <MainLayout
@@ -74,6 +76,7 @@ function AuthenticatedView() {
         </MainLayout>
       </div>
     </CalendarContextProvider>
+    </MailboxContextProvider>
   );
 }
 

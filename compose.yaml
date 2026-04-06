@@ -48,6 +48,8 @@ services:
       - ./data/static:/data/static
       - ./src/frontend/apps/calendars/src/features/i18n/translations.json:/data/translations.json:ro
       - /app/.venv
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - lasuite
       - default

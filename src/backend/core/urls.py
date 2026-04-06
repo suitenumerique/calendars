@@ -11,6 +11,10 @@ from core.api.viewsets_caldav import CalDAVProxyView, CalDAVSchedulingCallbackVi
 from core.api.viewsets_channels import ChannelViewSet
 from core.api.viewsets_ical import ICalExportView
 from core.api.viewsets_rsvp import RSVPConfirmView
+from core.api.viewsets_setup import (
+    MailboxListView,
+    SetupView,
+)
 from core.api.viewsets_task import TaskDetailView
 from core.external_api import viewsets as external_api_viewsets
 
@@ -38,6 +42,17 @@ urlpatterns = [
                     "caldav-scheduling-callback/",
                     CalDAVSchedulingCallbackView.as_view(),
                     name="caldav-scheduling-callback",
+                ),
+                # Setup endpoints
+                path(
+                    "setup/",
+                    SetupView.as_view(),
+                    name="setup",
+                ),
+                path(
+                    "setup/mailboxes/",
+                    MailboxListView.as_view(),
+                    name="setup-mailboxes",
                 ),
                 # Task status polling endpoint
                 path(

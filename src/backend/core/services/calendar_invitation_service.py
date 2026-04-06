@@ -297,12 +297,14 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
     def __init__(self):
         self.parser = ICalendarParser()
 
-    def send_invitation(
+    def send_invitation(  # noqa: PLR0913
         self,
         sender_email: str,
         recipient_email: str,
         method: str,
         icalendar_data: str,
+        is_mailbox: bool = False,
+        org_id: str = "",
     ) -> bool:
         """
         Send a calendar invitation email.
@@ -312,6 +314,8 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             recipient_email: The attendee's email (mailto: format)
             method: iTip method (REQUEST, CANCEL, REPLY)
             icalendar_data: Raw iCalendar data
+            is_mailbox: If True, send via Messages API from mailbox email
+            org_id: Organization ID for RSVP token (from CalDAV request)
 
         Returns:
             True if email was sent successfully, False otherwise
@@ -349,7 +353,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 template_prefix = "calendar_invitation"
 
             # Build context for templates
-            context = self._build_template_context(event, method, lang)
+            context = self._build_template_context(event, method, lang, org_id=org_id)
 
             # Render email bodies
             text_body = render_to_string(f"emails/{template_prefix}.txt", context)
@@ -358,7 +362,19 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             # Prepare ICS attachment with correct METHOD
             ics_content = self._prepare_ics_attachment(icalendar_data, method)
 
-            # Send email
+            # Send email via Messages API (for mailbox calendars)
+            # or via default SMTP (for standalone calendars)
+            if is_mailbox and settings.FEATURE_MESSAGES_INTEGRATION:
+                return self._send_via_messages(
+                    mailbox_email=sender,
+                    to_email=recipient,
+                    subject=subject,
+                    text_body=text_body,
+                    html_body=html_body,
+                    ics_content=ics_content,
+                    event_uid=event.uid,
+                )
+
             return self._send_email(
                 from_email=sender,
                 to_email=recipient,
@@ -406,32 +422,30 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             return f"{name} ({email})"
         return email or name or ""
 
-    def _build_rsvp_context(self, event: "EventDetails") -> dict:
-        """Build RSVP link context entries for REQUEST-method emails."""
+    def _build_rsvp_context(self, event: "EventDetails", org_id: str = "") -> dict:
+        """Build RSVP link context entries for REQUEST-method emails.
+
+        Each action URL gets its own signed token with the action baked in.
+        This prevents URL tampering (can't turn an accept link into a decline).
+        """
         signer = TimestampSigner(salt="rsvp")
         organizer = re.sub(r"^mailto:", "", event.organizer_email, flags=re.IGNORECASE)
-        token = signer.sign_object(
-            {
-                "uid": event.uid,
-                "email": event.attendee_email,
-                "organizer": organizer,
-            }
-        )
-        base = f"{settings.APP_URL}/rsvp/"
-        partstat = {
-            "accept": "accepted",
-            "tentative": "tentative",
-            "decline": "declined",
+        base = {
+            "u": event.uid,
+            "e": event.attendee_email,
+            "o": organizer,
+            "g": org_id,
         }
+        rsvp_base = f"{settings.APP_URL}/rsvp/"
         return {
             f"rsvp_{action}_url": (
-                f"{base}?{urlencode({'token': token, 'action': partstat[action]})}"
+                f"{rsvp_base}?{urlencode({'t': signer.sign_object({**base, 'a': action})})}"
             )
-            for action in ("accept", "tentative", "decline")
+            for action in ("accepted", "tentative", "declined")
         }
 
     def _build_template_context(
-        self, event: EventDetails, method: str, lang: str = "fr"
+        self, event: EventDetails, method: str, lang: str = "fr", org_id: str = ""
     ) -> dict:
         """Build context dictionary for email templates."""
         t = TranslationService.t
@@ -506,7 +520,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
 
         # Add RSVP links for REQUEST method (invitations and updates)
         if method == self.METHOD_REQUEST:
-            context.update(self._build_rsvp_context(event))
+            context.update(self._build_rsvp_context(event, org_id=org_id))
 
         return context
 
@@ -617,6 +631,69 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "Failed to send calendar invitation email to %s: %s", to_email, e
+            )
+            return False
+
+    def _send_via_messages(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        mailbox_email: str,
+        to_email: str,
+        subject: str,
+        text_body: str,
+        html_body: str,
+        ics_content: str,
+        event_uid: str,
+    ) -> bool:
+        """Send an invitation via the Messages API from a mailbox.
+
+        Looks up the mailbox by email, then submits the email through Messages.
+        Returns False on failure (no SMTP fallback — mailbox invitations must
+        come from the mailbox identity or not at all).
+        """
+        try:
+            from core.services.messages_service import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+                MessagesService,
+            )
+
+            messages = MessagesService()
+            mailbox = messages.get_mailbox_by_email(mailbox_email)
+            if not mailbox:
+                logger.error(
+                    "Mailbox %s not found in Messages, cannot send invitation",
+                    mailbox_email,
+                )
+                return False
+
+            success = messages.submit_raw_email(
+                mailbox_id=mailbox.get("id", ""),
+                mailbox_email=mailbox_email,
+                to_email=to_email,
+                subject=subject,
+                text_body=text_body,
+                html_body=html_body,
+                ics_attachment=ics_content,
+            )
+
+            if success:
+                logger.info(
+                    "Calendar invitation sent via Messages: %s -> %s (uid: %s)",
+                    mailbox_email,
+                    to_email,
+                    event_uid,
+                )
+            else:
+                logger.error(
+                    "Messages API send failed for %s -> %s",
+                    mailbox_email,
+                    to_email,
+                )
+            return success
+
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception(
+                "Failed to send via Messages for %s -> %s",
+                mailbox_email,
+                to_email,
             )
             return False
 

@@ -28,11 +28,12 @@ class CalendarsRoot extends DAV\Collection
 
     public function __construct(
         PrincipalBackendInterface $principalBackend,
-        CalDAVBackendInterface $caldavBackend
+        CalDAVBackendInterface $caldavBackend,
+        \PDO $pdo = null
     ) {
         $this->children = [
-            new NamedCalendarRoot('users', $principalBackend, $caldavBackend, 'principals/users'),
-            new NamedCalendarRoot('resources', $principalBackend, $caldavBackend, 'principals/resources'),
+            new NamedCalendarRoot('users', $principalBackend, $caldavBackend, 'principals/users', $pdo),
+            new NamedCalendarRoot('resources', $principalBackend, $caldavBackend, 'principals/resources', $pdo),
         ];
     }
 
@@ -69,18 +70,36 @@ class NamedCalendarRoot extends CalDAV\CalendarRoot
     /** @var string */
     private $nodeName;
 
+    /** @var \PDO|null */
+    private $pdo;
+
     public function __construct(
         string $nodeName,
         PrincipalBackendInterface $principalBackend,
         CalDAVBackendInterface $caldavBackend,
-        string $principalPrefix
+        string $principalPrefix,
+        \PDO $pdo = null
     ) {
         parent::__construct($principalBackend, $caldavBackend, $principalPrefix);
         $this->nodeName = $nodeName;
+        $this->pdo = $pdo;
     }
 
     public function getName()
     {
         return $this->nodeName;
+    }
+
+    /**
+     * Override to return CustomCalendarHome which supports
+     * MailboxSharedCalendar for MAILBOX-owned shared instances.
+     */
+    public function getChildForPrincipal(array $principal)
+    {
+        $home = new CustomCalendarHome($this->caldavBackend, $principal);
+        if ($this->pdo) {
+            $home->setPdo($this->pdo);
+        }
+        return $home;
     }
 }

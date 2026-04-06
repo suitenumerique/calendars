@@ -19,7 +19,6 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
-from core.models import User
 from core.services.caldav_service import CalDAVHTTPClient
 from core.services.translation_service import TranslationService
 
@@ -107,16 +106,32 @@ def _validate_token(token, max_age=None):
     except BadSignature:
         return None, "invalid_token"
 
-    uid = payload.get("uid")
-    recipient_email = payload.get("email")
-    organizer_email = payload.get("organizer", "")
-    # Strip mailto: prefix (case-insensitive) in case it leaked into the token
+    # Short keys: u=uid, e=email, o=organizer, g=org_id, a=action
+    uid = payload.get("u")
+    recipient_email = payload.get("e")
+    organizer_email = payload.get("o", "")
     organizer_email = re.sub(r"^mailto:", "", organizer_email, flags=re.IGNORECASE)
+    org_id = payload.get("g")
+    action = payload.get("a")
 
-    if not uid or not recipient_email or not organizer_email:
+    if (
+        not uid
+        or not recipient_email
+        or not organizer_email
+        or not org_id
+        or not action
+    ):
         return None, "invalid_payload"
 
+    if action not in PARTSTAT_VALUES:
+        return None, "invalid_payload"
+
+    # Normalize to readable keys for downstream consumers
+    payload["uid"] = uid
+    payload["email"] = recipient_email
     payload["organizer"] = organizer_email
+    payload["org_id"] = org_id
+    payload["action"] = action
     return payload, None
 
 
@@ -127,15 +142,12 @@ _TOKEN_ERROR_KEYS = {
 }
 
 
-def _validate_and_render_error(request, token, action, lang):
-    """Validate action + token; return (payload, error_response).
+def _validate_and_render_error(request, token, lang):
+    """Validate token (which contains the action); return (payload, error_response).
 
     On success error_response is None.
     """
     t = TranslationService.t
-
-    if action not in PARTSTAT_VALUES:
-        return None, _render_error(request, t("rsvp.error.invalidAction", lang), lang)
 
     payload, error = _validate_token(
         token, max_age=settings.RSVP_TOKEN_MAX_AGE_RECURRING
@@ -158,15 +170,14 @@ class RSVPConfirmView(View):
 
     def get(self, request):
         """Render a page that auto-submits the RSVP via fetch()."""
-        token = request.GET.get("token", "")
-        action = request.GET.get("action", "")
+        token = request.GET.get("t", "")
         lang = TranslationService.resolve_language(request=request)
 
-        _, error_response = _validate_and_render_error(request, token, action, lang)
+        payload, error_response = _validate_and_render_error(request, token, lang)
         if error_response:
             return error_response
 
-        # Render auto-submit page
+        action = payload["action"]
         label = TranslationService.t(f"rsvp.{action}", lang)
         return render(
             request,
@@ -174,7 +185,6 @@ class RSVPConfirmView(View):
             {
                 "page_title": label,
                 "token": token,
-                "action": action,
                 "lang": lang,
                 "heading": label,
                 "status_icon": PARTSTAT_ICONS[action],
@@ -197,10 +207,9 @@ def _process_rsvp(request, payload, action, lang):
     t = TranslationService.t
     http = CalDAVHTTPClient()
 
-    try:
-        organizer = User.objects.get(email=payload["organizer"])
-    except User.DoesNotExist:
-        return _render_error(request, t("rsvp.error.eventNotFound", lang), lang)
+    organizer = _MailboxPrincipalProxy(
+        payload["organizer"], org_id=payload.get("org_id")
+    )
 
     calendar_data, href, etag = http.find_event_by_uid(organizer, payload["uid"])
     if not calendar_data or not href:
@@ -225,15 +234,15 @@ def _rsvp_post(request):
     """Shared RSVP POST logic for both the API and noscript fallback."""
     # Support both DRF's request.data and Django's request.POST
     data = getattr(request, "data", None) or request.POST
-    token = data.get("token", "")
-    action = data.get("action", "")
+    token = data.get("token", "") or data.get("t", "")
     lang = TranslationService.resolve_language(request=request)
     t = TranslationService.t
 
-    payload, error_response = _validate_and_render_error(request, token, action, lang)
+    payload, error_response = _validate_and_render_error(request, token, lang)
     if error_response:
         return error_response
 
+    action = payload["action"]
     result = _process_rsvp(request, payload, action, lang)
 
     # result is either an error HttpResponse or calendar data string
@@ -260,3 +269,16 @@ def _rsvp_post(request):
             "lang": lang,
         },
     )
+
+
+class _MailboxPrincipalProxy:
+    """Lightweight proxy to authenticate CalDAV requests as a mailbox principal.
+
+    CalDAVHTTPClient.build_base_headers() expects an object with .email
+    and .organization_id attributes. This proxy provides those for mailbox
+    principals that don't have a corresponding Django User.
+    """
+
+    def __init__(self, email, org_id=None):
+        self.email = email
+        self.organization_id = org_id

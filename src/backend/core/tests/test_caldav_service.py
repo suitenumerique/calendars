@@ -12,7 +12,7 @@ class TestCalDAVClient:
     """Tests for CalDAVClient authentication and communication."""
 
     def test_get_client_sends_x_forwarded_user_header(self):
-        """Test that DAVClient is configured with X-Forwarded-User header."""
+        """Test that DAVClient is configured with X-LS-User header."""
         user = factories.UserFactory(email="test@example.com")
         client = CalDAVClient()
 
@@ -23,11 +23,11 @@ class TestCalDAVClient:
         assert dav_client.username is None
         assert dav_client.password is None
 
-        # Verify the X-Forwarded-User header is set
+        # Verify the X-LS-User header is set
         # The caldav library stores headers as a CaseInsensitiveDict
         assert hasattr(dav_client, "headers")
-        assert "X-Forwarded-User" in dav_client.headers
-        assert dav_client.headers["X-Forwarded-User"] == user.email
+        assert "X-LS-User" in dav_client.headers
+        assert dav_client.headers["X-LS-User"] == user.email
 
     def test_create_calendar_authenticates_with_caldav_server(self):
         """Test that calendar creation authenticates successfully with CalDAV server."""

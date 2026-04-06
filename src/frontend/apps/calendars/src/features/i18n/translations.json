@@ -226,6 +226,7 @@
           "myCalendars": "My calendars",
           "sharedCalendars": "Shared calendars",
           "shared": "(shared)",
+          "mailboxCalendar": "Mailbox calendar",
           "showCalendar": "Show calendar",
           "edit": "Edit",
           "delete": "Delete",
@@ -334,11 +335,23 @@
           "description": "Description",
           "descriptionPlaceholder": "Calendar description (optional)",
           "cancel": "Cancel",
-          "create": "Create"
+          "create": "Create",
+          "defaultName": "My calendar",
+          "mailbox": "Sending identity",
+          "noMailbox": "None (standalone calendar)",
+          "noMailboxHint": "Invites will be sent from the system email address, not a personal email.",
+          "mailboxHint": "Invites will be sent from {{email}} and the calendar will be shared with all mailbox users.",
+          "noMailboxAvailable": "Invites will be sent from the system email address."
+        },
+        "onboarding": {
+          "title": "Welcome! Create your first calendar",
+          "description": "Choose a sending identity for your calendar. This determines which email address will be used when sending event invitations."
         },
         "editCalendar": {
           "title": "Edit calendar",
-          "save": "Save"
+          "save": "Save",
+          "linkedMailbox": "Linked to mailbox {{email}}",
+          "includeInAvailability": "Include in availability"
         },
         "deleteCalendar": {
           "title": "Delete calendar",
@@ -352,7 +365,10 @@
           "hint": "The person will have the same rights as you (read and write).",
           "success": "Calendar shared with {{email}}",
           "error": "Failed to share calendar",
-          "invalidEmail": "Please enter a valid email address"
+          "invalidEmail": "Please enter a valid email address",
+          "syncManagedHint": "Managed by Messages.",
+          "mailboxInfoAdmin": "This calendar is linked to the mailbox {{email}}. You can add read-only shares below. Write access is managed in Messages.",
+          "mailboxInfoReadonly": "This calendar is linked to the mailbox {{email}}. Sharing is managed in Messages."
         },
         "attendees": {
           "label": "Invite attendees",
@@ -1191,18 +1207,30 @@
         },
         "createCalendar": {
           "title": "Créer un calendrier",
-          "name": "Nom",
+          "name": "Nom du calendrier",
           "namePlaceholder": "Nom du calendrier",
           "nameRequired": "Le nom est requis",
           "color": "Couleur",
           "description": "Description",
           "descriptionPlaceholder": "Description du calendrier (optionnel)",
           "cancel": "Annuler",
-          "create": "Créer"
+          "create": "Créer",
+          "defaultName": "Mon calendrier",
+          "mailbox": "Identité d'envoi",
+          "noMailbox": "Aucune (calendrier autonome)",
+          "noMailboxHint": "Les invitations seront envoyées depuis l'adresse système, pas une adresse personnelle.",
+          "mailboxHint": "Les invitations seront envoyées depuis {{email}} et le calendrier sera partagé avec tous les utilisateurs de la boîte.",
+          "noMailboxAvailable": "Les invitations seront envoyées depuis l'adresse système."
+        },
+        "onboarding": {
+          "title": "Bienvenue ! Créez votre premier calendrier",
+          "description": "Choisissez une identité d'envoi pour votre calendrier. Elle détermine l'adresse email utilisée pour envoyer les invitations."
         },
         "editCalendar": {
           "title": "Modifier le calendrier",
-          "save": "Enregistrer"
+          "save": "Enregistrer",
+          "linkedMailbox": "Lié à la boîte {{email}}",
+          "includeInAvailability": "Inclure dans les disponibilités"
         },
         "deleteCalendar": {
           "title": "Supprimer le calendrier",
@@ -1216,7 +1244,10 @@
           "hint": "La personne aura les mêmes droits que vous (lecture et écriture).",
           "success": "Calendrier partagé avec {{email}}",
           "error": "Échec du partage du calendrier",
-          "invalidEmail": "Veuillez entrer une adresse email valide"
+          "invalidEmail": "Veuillez entrer une adresse email valide",
+          "syncManagedHint": "Géré par Messages.",
+          "mailboxInfoAdmin": "Ce calendrier est lié à la boîte {{email}}. Vous pouvez ajouter des partages en lecture seule ci-dessous. L'accès en écriture est géré dans Messages.",
+          "mailboxInfoReadonly": "Ce calendrier est lié à la boîte {{email}}. Le partage est géré dans Messages."
         },
         "attendees": {
           "label": "Inviter des participants",
@@ -1804,11 +1835,23 @@
           "description": "Beschrijving",
           "descriptionPlaceholder": "Kalender beschrijving (optioneel)",
           "cancel": "Annuleren",
-          "create": "Aanmaken"
+          "create": "Aanmaken",
+          "defaultName": "Mijn kalender",
+          "mailbox": "Verzendidentiteit",
+          "noMailbox": "Geen (zelfstandige kalender)",
+          "noMailboxHint": "Uitnodigingen worden verzonden vanaf het systeemadres.",
+          "mailboxHint": "Uitnodigingen worden verzonden vanaf {{email}} en de kalender wordt gedeeld met alle mailboxgebruikers.",
+          "noMailboxAvailable": "Uitnodigingen worden verzonden vanaf het systeemadres."
+        },
+        "onboarding": {
+          "title": "Welkom! Maak je eerste kalender aan",
+          "description": "Kies een verzendidentiteit voor je kalender. Dit bepaalt welk e-mailadres wordt gebruikt voor het verzenden van uitnodigingen."
         },
         "editCalendar": {
           "title": "Kalender bewerken",
-          "save": "Opslaan"
+          "save": "Opslaan",
+          "linkedMailbox": "Gekoppeld aan mailbox {{email}}",
+          "includeInAvailability": "Opnemen in beschikbaarheid"
         },
         "deleteCalendar": {
           "title": "Kalender verwijderen",
@@ -1822,7 +1865,10 @@
           "hint": "De persoon krijgt dezelfde rechten als u (lezen en schrijven).",
           "success": "Kalender gedeeld met {{email}}",
           "error": "Delen van kalender mislukt",
-          "invalidEmail": "Voer een geldig e-mailadres in"
+          "invalidEmail": "Voer een geldig e-mailadres in",
+          "syncManagedHint": "Beheerd door Messages.",
+          "mailboxInfoAdmin": "Deze kalender is gekoppeld aan mailbox {{email}}. Je kunt hieronder alleen-lezen toegang toevoegen. Schrijftoegang wordt beheerd in Messages.",
+          "mailboxInfoReadonly": "Deze kalender is gekoppeld aan mailbox {{email}}. Delen wordt beheerd in Messages."
         },
         "attendees": {
           "label": "Deelnemers uitnodigen",

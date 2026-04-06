@@ -1,32 +1,28 @@
 <?php
 /**
- * Custom principal backend that auto-creates principals when they don't exist
- * and supports org-scoped discovery.
+ * Custom principal backend with auto-creation and org-scoped discovery.
  *
- * - Auto-creates principals on first access (for OIDC-authenticated users)
- * - Stores org_id and calendar_user_type on principals
+ * - Auto-creates principals (without calendars) on first access
  * - Filters searchPrincipals() and getPrincipalsByPrefix() by org_id
  * - Does NOT filter getPrincipalByPath() (allows cross-org sharing)
+ *
+ * Mailbox address injection is handled by MailboxPlugin (propFind).
  */
 
 namespace Calendars\SabreDav;
 
 use Sabre\DAVACL\PrincipalBackend\PDO as BasePDO;
-use Sabre\DAV\MkCol;
 
-class AutoCreatePrincipalBackend extends BasePDO
+class PrincipalBackend extends BasePDO
 {
+    const TYPE_INDIVIDUAL = 'INDIVIDUAL';
+    const TYPE_MAILBOX = 'MAILBOX';
+    const ACCESS_OWNER = 1;
+    const ACCESS_READ = 2;
+    const ACCESS_READ_WRITE = 3;
+
     /**
      * Extend the default field map to include calendar-user-type.
-     *
-     * SabreDAV's PDO principal backend uses $fieldMap to map WebDAV property
-     * names to database columns. The base class only maps displayname and email.
-     * The Schedule\Plugin hardcodes calendar-user-type to 'INDIVIDUAL' via a
-     * propFind handler, but that handler uses handle() which is a no-op when
-     * the property is already set. By adding calendar-user-type to the fieldMap,
-     * the Principal node exposes the real value from the DB via getProperties(),
-     * and the Schedule\Plugin's hardcoded 'INDIVIDUAL' only serves as a fallback
-     * for principals that don't have the column set.
      *
      * @see https://github.com/sabre-io/dav/blob/master/lib/DAVACL/PrincipalBackend/PDO.php
      * @see https://github.com/sabre-io/dav/blob/master/lib/CalDAV/Schedule/Plugin.php
@@ -59,22 +55,22 @@ class AutoCreatePrincipalBackend extends BasePDO
     }
 
     /**
-     * Get the org_id from the current HTTP request's X-CalDAV-Organization header.
+     * Get the org_id from the current HTTP request's X-LS-Org-Id header.
      *
      * @return string|null
      */
     private function getRequestOrgId()
     {
         if ($this->server && $this->server->httpRequest) {
-            return $this->server->httpRequest->getHeader('X-CalDAV-Organization');
+            return $this->server->httpRequest->getHeader('X-LS-Org-Id');
         }
         return null;
     }
 
     /**
      * Returns a specific principal, specified by its path.
-     * Auto-creates the principal if it doesn't exist.
      *
+     * Auto-creates the principal (without a calendar) if it doesn't exist.
      * NOT org-filtered: allows cross-org sharing and scheduling.
      *
      * @param string $path
@@ -84,36 +80,66 @@ class AutoCreatePrincipalBackend extends BasePDO
     {
         $principal = parent::getPrincipalByPath($path);
 
-        // If principal doesn't exist, create it automatically
-        // Only auto-create user principals (principals/users/*).
-        // Resource principals (principals/resources/*) are provisioned via Django.
         if (!$principal && strpos($path, 'principals/users/') === 0) {
-            // Extract username from path
-            $username = substr($path, strlen('principals/users/'));
-
-            $pdo = $this->pdo;
-            $tableName = $this->tableName;
-            $orgId = $this->getRequestOrgId();
-
-            try {
-                $stmt = $pdo->prepare(
-                    'INSERT INTO ' . $tableName
-                    . ' (uri, email, displayname, calendar_user_type, org_id)'
-                    . ' VALUES (?, ?, ?, ?, ?)'
-                    . ' ON CONFLICT (uri) DO UPDATE SET org_id = COALESCE(EXCLUDED.org_id, '
-                    . $tableName . '.org_id)'
-                );
-                $stmt->execute([$path, $username, $username, 'INDIVIDUAL', $orgId]);
-
-                // Retry getting the principal
-                $principal = parent::getPrincipalByPath($path);
-            } catch (\Exception $e) {
-                error_log("Failed to auto-create principal: " . $e->getMessage());
-                return null;
-            }
+            $email = substr($path, strlen('principals/users/'));
+            $principal = $this->ensurePrincipal($email);
         }
 
         return $principal;
+    }
+
+    /**
+     * Find a principal by URI (e.g. mailto:bob@company.com).
+     *
+     * Auto-creates the principal if it doesn't exist, so that
+     * CS:share can resolve any mailto: URI to a principal.
+     *
+     * @param string $uri
+     * @param string $principalPrefix
+     * @return string|null Principal path or null
+     */
+    public function findByUri($uri, $principalPrefix)
+    {
+        $result = parent::findByUri($uri, $principalPrefix);
+
+        if (!$result && str_starts_with($uri, 'mailto:')) {
+            $email = substr($uri, 7);
+            $principal = $this->ensurePrincipal($email);
+            if ($principal) {
+                return $principal['uri'];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Ensure a user principal exists (create if missing, no calendar).
+     *
+     * @param string $email
+     * @return array|null The principal, or null on failure.
+     */
+    private function ensurePrincipal($email)
+    {
+        $path = 'principals/users/' . $email;
+        $orgId = $this->getRequestOrgId();
+
+        try {
+            // DO NOTHING on conflict: this is a lightweight auto-create for
+            // sharing/scheduling. The canonical path for setting org_id and
+            // calendar_user_type is POST /internal-api/calendars/ (setup flow).
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO ' . $this->tableName
+                . ' (uri, email, displayname, calendar_user_type, org_id)'
+                . ' VALUES (?, ?, ?, ?, ?)'
+                . ' ON CONFLICT (uri) DO NOTHING'
+            );
+            $stmt->execute([$path, $email, $email, self::TYPE_INDIVIDUAL, $orgId]);
+            return parent::getPrincipalByPath($path);
+        } catch (\Exception $e) {
+            error_log("[PrincipalBackend] Failed to ensure principal for $email: " . $e->getMessage());
+            return null;
+        }
     }
 
     /**

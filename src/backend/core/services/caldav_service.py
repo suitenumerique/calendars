@@ -57,14 +57,16 @@ class CalDAVHTTPClient:
         """
         if not user.email:
             raise ValueError("User has no email address")
+        if not user.organization_id:
+            raise ValueError("User has no organization_id")
         headers = {
-            "X-Api-Key": cls.get_api_key(),
-            "X-Forwarded-User": user.email,
-            "X-CalDAV-Organization": str(user.organization_id),
+            "X-LS-Api-Key": cls.get_api_key(),
+            "X-LS-User": user.email,
+            "X-LS-Org-Id": str(user.organization_id),
         }
         org = getattr(user, "organization", None)
         if org and hasattr(org, "effective_sharing_level"):
-            headers["X-CalDAV-Sharing-Level"] = org.effective_sharing_level
+            headers["X-LS-Org-Sharing-Level"] = org.effective_sharing_level
         return headers
 
     def build_url(self, path: str, query: str = "") -> str:
@@ -144,7 +146,7 @@ class CalDAVHTTPClient:
             data = json_lib.dumps(json).encode("utf-8")
             content_type = "application/json"
 
-        headers = {"X-Internal-Api-Key": api_key}
+        headers = {"X-LS-Internal-Api-Key": api_key}
         if extra_headers:
             headers.update(extra_headers)
         return self.request(
@@ -277,8 +279,8 @@ class CalDAVClient:
         Get a CalDAV client for the given user.
 
         The CalDAV server requires API key authentication via Authorization header
-        and X-Forwarded-User header for user identification.
-        Includes X-CalDAV-Organization when the user has an org.
+        and X-LS-User header for user identification.
+        Includes X-LS-Org-Id when the user has an org.
         """
         return self._http.get_dav_client(user)
 
@@ -652,28 +654,6 @@ def normalize_caldav_path(caldav_path):
     return caldav_path
 
 
-def _resource_belongs_to_org(resource_id: str, org_id: str) -> bool:
-    """Check whether a resource principal belongs to the given organization.
-
-    Queries the CalDAV internal API. Returns False on any error (fail-closed).
-    """
-    api_key = settings.CALDAV_INTERNAL_API_KEY
-    caldav_url = settings.CALDAV_URL
-    if not api_key or not caldav_url:
-        return False
-    try:
-        resp = requests.get(
-            f"{caldav_url.rstrip('/')}/caldav/internal-api/resources/{resource_id}",
-            headers={"X-Internal-Api-Key": api_key},
-            timeout=10,
-        )
-        if resp.status_code != 200:
-            return False
-        data = resp.json()
-        return data.get("org_id") == org_id
-    except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("Failed to verify resource org for %s", resource_id)
-        return False
 
 
 def verify_caldav_access(user, caldav_path):
@@ -682,11 +662,7 @@ def verify_caldav_access(user, caldav_path):
     Checks that:
     1. The path matches the expected pattern (prevents path injection)
     2. For user calendars: the user's email matches the email in the path
-    3. For resource calendars: the user has an organization
-
-    Note: Fine-grained org-to-resource authorization is enforced by SabreDAV
-    itself (via X-CalDAV-Organization header). This check only gates access
-    for Django-level features (subscription tokens, imports).
+    3. For resource calendars: the resource belongs to the user's org
     """
     if not CALDAV_PATH_PATTERN.match(caldav_path):
         return False
@@ -700,13 +676,43 @@ def verify_caldav_access(user, caldav_path):
         path_email = unquote(parts[2])
         return path_email.lower() == user.email.lower()
     # Resource calendars: calendars/resources/<resource-id>/<calendar-id>
-    # Org membership is required. Fine-grained org-to-resource authorization
-    # is enforced by SabreDAV via the X-CalDAV-Organization header on every
-    # proxied request. For subscription tokens / imports, callers should
-    # additionally use _resource_belongs_to_org() to verify ownership.
+    # Verify the resource belongs to the user's org via CalDAV internal API.
     if parts[1] == "resources":
-        return bool(getattr(user, "organization_id", None))
+        org_id = getattr(user, "organization_id", None)
+        if not org_id:
+            return False
+        resource_id = unquote(parts[2])
+        return _resource_belongs_to_org(resource_id, str(org_id))
     return False
+
+
+def _resource_belongs_to_org(resource_id: str, org_id: str) -> bool:
+    """Check whether a resource principal belongs to the given organization.
+
+    Queries the CalDAV internal API. Returns False on any error (fail-closed).
+    """
+    try:
+        http = CalDAVHTTPClient()
+        # We need a user for internal_request, but we only need the API key.
+        # Use a minimal object — internal_request only reads the API key from
+        # settings, and build_base_headers needs user.email and organization_id.
+        # Instead, use a raw request with the internal API key directly.
+        api_key = settings.CALDAV_INTERNAL_API_KEY
+        caldav_url = settings.CALDAV_URL
+        if not api_key or not caldav_url:
+            return False
+        resp = requests.get(
+            f"{caldav_url.rstrip('/')}/caldav/internal-api/resources/{resource_id}",
+            headers={"X-LS-Internal-Api-Key": api_key},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return False
+        data = resp.json()
+        return data.get("org_id") == org_id
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("Failed to verify resource org for %s", resource_id)
+        return False
 
 
 def validate_caldav_proxy_path(path):

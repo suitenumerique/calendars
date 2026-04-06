@@ -10,6 +10,7 @@ import {
 } from "@gouvfr-lasuite/cunningham-react";
 
 import { useAuth } from "@/features/auth/Auth";
+import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { DeleteEventModal } from "./DeleteEventModal";
 import { RecurringEditModal } from "./RecurringEditModal";
@@ -54,12 +55,18 @@ export const EventModal = ({
   const [showEditRecurringModal, setShowEditRecurringModal] = useState(false);
 
   const { resources: availableResources } = useResourcePrincipals();
+  const { getMailboxEmail } = useMailboxContext();
+
+  // For mailbox calendars, use the mailbox email as ORGANIZER
+  const mailboxEmail = calendarUrl ? getMailboxEmail(calendarUrl) : undefined;
 
   const organizer: IcsOrganizer | undefined =
     event?.organizer ||
-    (user?.email
-      ? { email: user.email, name: user.full_name || user.email.split("@")[0] }
-      : undefined);
+    (mailboxEmail
+      ? { email: mailboxEmail, name: mailboxEmail.split("@")[0] }
+      : user?.email
+        ? { email: user.email, name: user.full_name || user.email.split("@")[0] }
+        : undefined);
 
   const form = useEventForm({
     event,

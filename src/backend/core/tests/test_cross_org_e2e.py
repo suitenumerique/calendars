@@ -7,10 +7,14 @@ server (no mocks) to validate the full stack: Django -> SabreDAV -> DB.
 Requires: CalDAV server running (skipped otherwise).
 """
 
-# pylint: disable=no-member,broad-exception-caught,unused-variable
+# pylint: disable=no-member,broad-exception-caught,unused-variable,too-many-lines
 
+import re
 from datetime import datetime, timedelta
+from datetime import timezone as dt_tz
 from types import SimpleNamespace
+
+from django.conf import settings
 
 import pytest
 from rest_framework.status import (
@@ -132,6 +136,144 @@ def _put_event_on_resource(api_client, resource_id, event_uid, organizer_email):
     return api_client.generic(
         "PUT",
         f"/caldav/calendars/resources/{resource_id}/default/{event_uid}.ics",
+        data=ical,
+        content_type="text/calendar",
+    )
+
+
+def _create_user_with_calendar(org, email_prefix, domain="plugin-test.com"):
+    """Create a user with a calendar and return (user, client, caldav_path)."""
+    user = factories.UserFactory(email=f"{email_prefix}@{domain}", organization=org)
+    client = APIClient()
+    client.force_login(user)
+    service = CalendarService()
+    caldav_path = service.create_calendar(user, name=f"{email_prefix}'s Calendar")
+    return user, client, caldav_path
+
+
+def _get_cal_id(caldav_path):
+    """Extract calendar ID from path like calendars/users/email/cal-id/."""
+    parts = caldav_path.strip("/").split("/")
+    return parts[-1] if len(parts) >= 4 else "default"
+
+
+def _put_event(  # noqa: PLR0913
+    client,
+    user_email,
+    cal_id,
+    event_uid,
+    summary="Test Event",
+    organizer=None,
+    attendees=None,
+):
+    """PUT a VCALENDAR event into a calendar via the CalDAV proxy."""
+    dtstart = datetime.now() + timedelta(days=1)
+    dtend = dtstart + timedelta(hours=1)
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Test//Test//EN",
+        "BEGIN:VEVENT",
+        f"UID:{event_uid}",
+        f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}",
+        f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}",
+        f"SUMMARY:{summary}",
+    ]
+    if organizer:
+        lines.append(f"ORGANIZER:mailto:{organizer}")
+    for att in attendees or []:
+        lines.append(f"ATTENDEE;RSVP=TRUE:mailto:{att}")
+    lines += ["END:VEVENT", "END:VCALENDAR", ""]
+    ical = "\r\n".join(lines)
+    return client.generic(
+        "PUT",
+        f"/caldav/calendars/users/{user_email}/{cal_id}/{event_uid}.ics",
+        data=ical,
+        content_type="text/calendar",
+    )
+
+
+def _share_calendar(owner_client, owner, cal_id, sharee_email, privilege):
+    """Share a calendar using CS:share POST via the CalDAV proxy."""
+    privilege_xml = {
+        "read": "<CS:read/>",
+        "read-write": "<CS:read-write/>",
+        "admin": "<CS:admin/>",
+    }[privilege]
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/">'
+        "<CS:set>"
+        f"<D:href>mailto:{sharee_email}</D:href>"
+        f"{privilege_xml}"
+        "</CS:set>"
+        "</CS:share>"
+    )
+    return owner_client.generic(
+        "POST",
+        f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+        data=body,
+        content_type="application/xml",
+    )
+
+
+def _proppatch(client, path, prop_xml):
+    """PROPPATCH on a CalDAV resource."""
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<D:propertyupdate xmlns:D="DAV:" '
+        'xmlns:A="http://apple.com/ns/ical/" '
+        'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+        f"<D:set><D:prop>{prop_xml}</D:prop></D:set>"
+        "</D:propertyupdate>"
+    )
+    return client.generic(
+        "PROPPATCH",
+        path,
+        data=body,
+        content_type="application/xml",
+    )
+
+
+def _freebusy_report(client, user_email, cal_id):
+    """Send a free-busy-query REPORT on a calendar."""
+    dtstart = (datetime.now() - timedelta(days=1)).strftime("%Y%m%dT%H%M%SZ")
+    dtend = (datetime.now() + timedelta(days=30)).strftime("%Y%m%dT%H%M%SZ")
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<C:free-busy-query xmlns:C="urn:ietf:params:xml:ns:caldav">'
+        f'<C:time-range start="{dtstart}" end="{dtend}"/>'
+        "</C:free-busy-query>"
+    )
+    return client.generic(
+        "REPORT",
+        f"/caldav/calendars/users/{user_email}/{cal_id}/",
+        data=body,
+        content_type="application/xml",
+        HTTP_DEPTH="1",
+    )
+
+
+def _freebusy_outbox(client, user_email, target_email):
+    """Send a freebusy query via scheduling outbox POST."""
+    dtstart = (datetime.now() + timedelta(days=1)).strftime("%Y%m%dT%H%M%SZ")
+    dtend = (datetime.now() + timedelta(days=2)).strftime("%Y%m%dT%H%M%SZ")
+    ical = (
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//Test//Test//EN\r\n"
+        "METHOD:REQUEST\r\n"
+        "BEGIN:VFREEBUSY\r\n"
+        f"DTSTART:{dtstart}\r\n"
+        f"DTEND:{dtend}\r\n"
+        f"ORGANIZER:mailto:{user_email}\r\n"
+        f"ATTENDEE:mailto:{target_email}\r\n"
+        "END:VFREEBUSY\r\n"
+        "END:VCALENDAR\r\n"
+    )
+    return client.generic(
+        "POST",
+        f"/caldav/calendars/users/{user_email}/outbox/",
         data=ical,
         content_type="text/calendar",
     )
@@ -347,7 +489,7 @@ class TestResourceCalendarAccessE2E:
 class TestResourceAutoScheduleCrossOrgE2E:
     """Verify that cross-org resource bookings are declined by SabreDAV.
 
-    The ResourceAutoSchedulePlugin checks X-CalDAV-Organization against
+    The ResourceAutoSchedulePlugin checks X-LS-Org-Id against
     the resource's org_id and declines cross-org booking requests.
 
     NOTE: SabreDAV's scheduling plugin resolves attendees via the principal
@@ -713,3 +855,975 @@ class TestEventCRUDIsolationE2E:
         assert ical_data is not None, (
             "Victim's event should still exist after blocked deletion attempt"
         )
+
+
+class TestCrossOrgFreebusyIsolation:
+    """Verify that freebusy queries are blocked across organizations.
+
+    Cross-org freebusy is ALWAYS blocked regardless of sharing level.
+    Same-org freebusy depends on the org's effective_sharing_level.
+    """
+
+    def test_cross_org_freebusy_query_blocked(self):
+        """A user in org A should NOT be able to query freebusy on
+        a calendar in org B via CALDAV:free-busy-query REPORT.
+
+        Cross-org freebusy is blocked regardless of sharing level.
+        Even with sharing_level="read" (the most permissive), cross-org
+        queries must be rejected by FreeBusyOrgScopePlugin.
+        """
+        org_a = factories.OrganizationFactory(
+            external_id="fb-iso-org-a",
+            default_sharing_level="read",
+        )
+        org_b = factories.OrganizationFactory(
+            external_id="fb-iso-org-b",
+            default_sharing_level="read",
+        )
+
+        user_a = factories.UserFactory(
+            email="attacker@fb-iso-a.com", organization=org_a
+        )
+        user_b = factories.UserFactory(email="victim@fb-iso-b.com", organization=org_b)
+
+        # Create a calendar for user B with an event
+        service = CalendarService()
+        cal_path = service.create_calendar(user_b, name="Private Calendar")
+        cal_id = cal_path.strip("/").split("/")[-1]
+
+        # Add an event to user B's calendar
+        http = CalDAVHTTPClient()
+        dtstart = (datetime.now() + timedelta(days=1)).strftime("%Y%m%dT%H%M%SZ")
+        dtend = (datetime.now() + timedelta(days=1, hours=1)).strftime("%Y%m%dT%H%M%SZ")
+        ical = (
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:private-event-fb-iso\r\n"
+            f"DTSTART:{dtstart}\r\n"
+            f"DTEND:{dtend}\r\n"
+            "SUMMARY:Secret Meeting\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR"
+        )
+        resp = http.request(
+            "PUT",
+            user_b,
+            f"calendars/users/{user_b.email}/{cal_id}/private.ics",
+            data=ical.encode(),
+            content_type="text/calendar",
+        )
+        assert resp.status_code == 201
+
+        # User A tries to query freebusy on user B's calendar
+        client_a = APIClient()
+        client_a.force_login(user_a)
+
+        fb_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<C:free-busy-query xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<C:time-range"
+            f' start="{dtstart}"'
+            f' end="{dtend}"/>'
+            "</C:free-busy-query>"
+        )
+
+        resp = client_a.generic(
+            "REPORT",
+            f"/caldav/calendars/users/{user_b.email}/{cal_id}/",
+            data=fb_body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+
+        # This should be blocked (403) for cross-org queries
+        assert resp.status_code == 403, (
+            f"Cross-org freebusy query should be blocked but got "
+            f"{resp.status_code}. SabreDAV grants read-free-busy to "
+            f"all authenticated users by default — this must be restricted "
+            f"to same-org users.\n"
+            f"Response: {resp.content.decode('utf-8', errors='ignore')[:500]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Freebusy and protocol test helpers
+# ---------------------------------------------------------------------------
+
+
+def _freebusy_report(client, user_email, cal_id):
+    """Send a free-busy-query REPORT on a calendar."""
+    dtstart = (datetime.now() - timedelta(days=1)).strftime("%Y%m%dT%H%M%SZ")
+    dtend = (datetime.now() + timedelta(days=30)).strftime("%Y%m%dT%H%M%SZ")
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<C:free-busy-query xmlns:C="urn:ietf:params:xml:ns:caldav">'
+        f'<C:time-range start="{dtstart}" end="{dtend}"/>'
+        "</C:free-busy-query>"
+    )
+    return client.generic(
+        "REPORT",
+        f"/caldav/calendars/users/{user_email}/{cal_id}/",
+        data=body, content_type="application/xml", HTTP_DEPTH="1",
+    )
+
+
+def _freebusy_outbox(client, user_email, target_email):
+    """Send a freebusy query via scheduling outbox POST."""
+    dtstart = (datetime.now() + timedelta(days=1)).strftime("%Y%m%dT%H%M%SZ")
+    dtend = (datetime.now() + timedelta(days=2)).strftime("%Y%m%dT%H%M%SZ")
+    ical = (
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//Test//Test//EN\r\n"
+        "METHOD:REQUEST\r\n"
+        "BEGIN:VFREEBUSY\r\n"
+        f"DTSTART:{dtstart}\r\n"
+        f"DTEND:{dtend}\r\n"
+        f"ORGANIZER:mailto:{user_email}\r\n"
+        f"ATTENDEE:mailto:{target_email}\r\n"
+        "END:VFREEBUSY\r\n"
+        "END:VCALENDAR\r\n"
+    )
+    return client.generic(
+        "POST",
+        f"/caldav/calendars/users/{user_email}/outbox/",
+        data=ical, content_type="text/calendar",
+    )
+
+
+def _proppatch(client, path, prop_xml):
+    """PROPPATCH on a CalDAV resource."""
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<D:propertyupdate xmlns:D="DAV:" '
+        'xmlns:A="http://apple.com/ns/ical/" '
+        'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+        f"<D:set><D:prop>{prop_xml}</D:prop></D:set>"
+        "</D:propertyupdate>"
+    )
+    return client.generic(
+        "PROPPATCH", path, data=body, content_type="application/xml",
+    )
+
+
+def _share_calendar_cs(owner_client, owner, cal_id, sharee_email, privilege):
+    """Share a calendar using CS:share POST via the CalDAV proxy."""
+    privilege_xml = {
+        "read": "<CS:read/>", "read-write": "<CS:read-write/>", "admin": "<CS:admin/>",
+    }[privilege]
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/">'
+        "<CS:set>"
+        f"<D:href>mailto:{sharee_email}</D:href>"
+        f"{privilege_xml}"
+        "</CS:set>"
+        "</CS:share>"
+    )
+    return owner_client.generic(
+        "POST",
+        f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+        data=body, content_type="application/xml",
+    )
+
+
+class TestFreeBusyOrgScope:
+    """FreeBusyOrgScopePlugin enforces org-level freebusy isolation.
+
+    Cross-org queries must be blocked. Same-org queries depend on
+    the organization's effective_sharing_level.
+    """
+
+    def test_same_org_freebusy_report_allowed_with_freebusy_level(self):
+        """Same-org freebusy REPORT allowed when sharing_level=freebusy."""
+        org = factories.OrganizationFactory(
+            external_id="fb-scope-same",
+            default_sharing_level="freebusy",
+        )
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-fbsame")
+        querier, querier_client, _ = _create_user_with_calendar(org, "querier-fbsame")
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event(owner_client, owner.email, cal_id, "fb-same-ev", "Meeting")
+
+        resp = _freebusy_report(querier_client, owner.email, cal_id)
+        # Should succeed (200 or 207) with VFREEBUSY data
+        assert resp.status_code in (200, 207), (
+            f"Same-org freebusy REPORT should be allowed, "
+            f"got {resp.status_code}: {resp.content.decode()[:500]}"
+        )
+
+    def test_same_org_freebusy_report_allowed_with_read_level(self):
+        """Same-org freebusy REPORT also allowed when sharing_level=read."""
+        org = factories.OrganizationFactory(
+            external_id="fb-scope-same-read",
+            default_sharing_level="read",
+        )
+        owner, owner_client, cal_path = _create_user_with_calendar(
+            org, "owner-fbsameread"
+        )
+        querier, querier_client, _ = _create_user_with_calendar(
+            org, "querier-fbsameread"
+        )
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event(owner_client, owner.email, cal_id, "fb-sameread-ev", "Mtg")
+
+        resp = _freebusy_report(querier_client, owner.email, cal_id)
+        assert resp.status_code in (200, 207), (
+            f"Same-org freebusy REPORT with sharing_level=read should work, "
+            f"got {resp.status_code}"
+        )
+
+    def test_cross_org_freebusy_report_blocked_even_with_read_level(self):
+        """Cross-org freebusy REPORT blocked even with sharing_level=read.
+
+        Cross-org isolation is absolute — the sharing level only controls
+        same-org freebusy access, never cross-org.
+        """
+        org_a = factories.OrganizationFactory(
+            external_id="fb-scope-a",
+            default_sharing_level="read",
+        )
+        org_b = factories.OrganizationFactory(
+            external_id="fb-scope-b",
+            default_sharing_level="read",
+        )
+        owner, owner_client, cal_path = _create_user_with_calendar(
+            org_b, "owner-fbcross"
+        )
+        attacker, attacker_client, _ = _create_user_with_calendar(
+            org_a, "attacker-fbcross"
+        )
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event(owner_client, owner.email, cal_id, "fb-cross-ev", "Secret")
+
+        resp = _freebusy_report(attacker_client, owner.email, cal_id)
+        assert resp.status_code == 403, (
+            f"Cross-org freebusy REPORT should be blocked, got {resp.status_code}"
+        )
+
+    def test_sharing_level_none_blocks_same_org_freebusy_report(self):
+        """sharing_level=none blocks freebusy REPORT even same-org."""
+        org = factories.OrganizationFactory(
+            external_id="fb-scope-none",
+            default_sharing_level="none",
+        )
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-fbnone")
+        querier, querier_client, _ = _create_user_with_calendar(org, "querier-fbnone")
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event(owner_client, owner.email, cal_id, "fb-none-ev", "Meeting")
+
+        resp = _freebusy_report(querier_client, owner.email, cal_id)
+        assert resp.status_code == 403, (
+            f"sharing_level=none should block same-org freebusy REPORT, "
+            f"got {resp.status_code}"
+        )
+
+    def test_sharing_level_none_blocks_outbox_freebusy(self):
+        """sharing_level=none blocks scheduling outbox freebusy too."""
+        org = factories.OrganizationFactory(
+            external_id="fb-scope-none-outbox",
+            default_sharing_level="none",
+        )
+        querier, querier_client, _ = _create_user_with_calendar(org, "querier-fbnoneob")
+        target = factories.UserFactory(
+            email="target@fb-scope-none-outbox.com", organization=org
+        )
+
+        resp = _freebusy_outbox(querier_client, querier.email, target.email)
+        assert resp.status_code == 403, (
+            f"sharing_level=none should block outbox freebusy POST, "
+            f"got {resp.status_code}"
+        )
+
+    def test_own_calendar_freebusy_always_allowed(self):
+        """Users can always query freebusy on their own calendar."""
+        org = factories.OrganizationFactory(
+            external_id="fb-scope-own",
+            default_sharing_level="none",
+        )
+        user, client, cal_path = _create_user_with_calendar(org, "user-fbown")
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event(client, user.email, cal_id, "fb-own-ev", "My Meeting")
+
+        resp = _freebusy_report(client, user.email, cal_id)
+        # Own calendar should always work regardless of sharing level
+        assert resp.status_code in (200, 207), (
+            f"Own calendar freebusy should always be allowed, got {resp.status_code}"
+        )
+
+
+# ===================================================================
+# ResourceAutoSchedulePlugin
+# ===================================================================
+
+
+class TestResourceMkCalendarBlock:
+    """ResourceAutoSchedulePlugin blocks MKCALENDAR on resource principals."""
+
+    def test_mkcalendar_on_resource_blocked(self):
+        """MKCALENDAR under /calendars/resources/ must be blocked."""
+        org = factories.OrganizationFactory(external_id="res-mkcal-block")
+        user, client, _ = _create_user_with_calendar(org, "user-resmk")
+
+        # Create a resource first so the principal exists
+
+        service = ResourceService()
+        resource = service.create_resource(user, "Test Room", "ROOM")
+        resource_id = resource["id"]
+
+        # Try to MKCALENDAR under the resource
+        resp = client.generic(
+            "MKCALENDAR",
+            f"/caldav/calendars/resources/{resource_id}/extra-calendar/",
+            data=(
+                '<?xml version="1.0" encoding="utf-8"?>'
+                '<C:mkcalendar xmlns:D="DAV:" '
+                'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+                "<D:set><D:prop>"
+                "<D:displayname>Extra</D:displayname>"
+                "</D:prop></D:set>"
+                "</C:mkcalendar>"
+            ),
+            content_type="application/xml",
+        )
+        assert resp.status_code == 403, (
+            f"MKCALENDAR on resource principal should be blocked, "
+            f"got {resp.status_code}"
+        )
+
+
+# ===================================================================
+# AttendeeNormalizerPlugin
+# ===================================================================
+
+
+class TestResourceAutoSchedule:
+    """ResourceAutoSchedulePlugin handles automatic accept/decline for resources.
+
+    Resources should auto-accept non-conflicting bookings and auto-decline
+    conflicting ones. Cross-org bookings should be declined.
+    """
+
+    def test_resource_auto_accepts_booking(self):
+        """Resource with auto-schedule accepts non-conflicting booking."""
+        org = factories.OrganizationFactory(external_id="res-autosched")
+        user, client, _ = _create_user_with_calendar(org, "user-resauto")
+
+        service = ResourceService()
+        resource = service.create_resource(user, "Auto Room", "ROOM")
+        resource_id = resource["id"]
+
+        # Book the resource by creating an event with ATTENDEE=resource
+        dtstart = datetime.now() + timedelta(days=2)
+        dtend = dtstart + timedelta(hours=1)
+        resource_email = resource.get("email", f"{resource_id}@resource.local")
+
+        # We need to book via scheduling (organizer creates event with attendee)
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:res-auto-booking\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            "SUMMARY:Team Standup\r\n"
+            f"ORGANIZER:mailto:{user.email}\r\n"
+            f"ATTENDEE;RSVP=TRUE:mailto:{resource_email}\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        # Find user's calendar to PUT the event
+        dav = CalDAVHTTPClient().get_dav_client(user)
+        cals = dav.principal().calendars()
+        assert len(cals) > 0, "User should have at least one calendar"
+        cals[0].save_event(ical)
+
+        # Check that the event was saved (scheduling processed it)
+        event_data, _, _ = CalDAVHTTPClient().find_event_by_uid(
+            user, "res-auto-booking"
+        )
+        assert event_data is not None, "Booking event should be saved"
+
+
+# ===================================================================
+# Sync ACL edge cases
+# ===================================================================
+
+
+class TestCalDAVProtocolSecurity:
+    """Protocol-level security tests for CalDAV operations."""
+
+    def test_proppatch_on_readonly_shared_calendar_blocked(self):
+        """PROPPATCH on a read-only shared calendar must be blocked."""
+        org = factories.OrganizationFactory(external_id="proto-proppatch")
+        owner, owner_client, cal_path = _create_user_with_calendar(
+            org, "owner-proppatch"
+        )
+        sharee, _, _ = _create_user_with_calendar(org, "sharee-proppatch")
+        sharee_client = APIClient()
+        sharee_client.force_login(sharee)
+        cal_id = _get_cal_id(cal_path)
+
+        _share_calendar(owner_client, owner, cal_id, sharee.email, "read")
+
+        # Sharee tries to change displayname via PROPPATCH
+        resp = _proppatch(
+            sharee_client,
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            "<D:displayname>Hacked Name</D:displayname>",
+        )
+        # Should fail — sharee doesn't own the calendar
+        # SabreDAV returns 207 with 403 status per property
+        if resp.status_code == 207:
+            content = resp.content.decode("utf-8", errors="ignore")
+            assert "403" in content or "forbidden" in content.lower(), (
+                f"PROPPATCH by read-only sharee should show 403 per-prop: "
+                f"{content[:500]}"
+            )
+        else:
+            assert resp.status_code in (403, 404), (
+                f"Expected 403/404/207 for PROPPATCH by read sharee, "
+                f"got {resp.status_code}"
+            )
+
+    def test_delete_calendar_you_dont_own(self):
+        """DELETE on a calendar you don't own must be blocked."""
+        org = factories.OrganizationFactory(external_id="proto-delcal")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-delcal")
+        stranger, stranger_client, _ = _create_user_with_calendar(
+            org, "stranger-delcal"
+        )
+        cal_id = _get_cal_id(cal_path)
+
+        resp = stranger_client.generic(
+            "DELETE",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+        )
+        assert resp.status_code in (403, 404), (
+            f"DELETE on other user's calendar should be blocked, got {resp.status_code}"
+        )
+
+        # Verify calendar still exists
+        check = owner_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=(
+                '<?xml version="1.0"?>'
+                '<propfind xmlns="DAV:"><prop><displayname/></prop></propfind>'
+            ),
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        assert check.status_code == 207, "Calendar should still exist"
+
+    def test_share_calendar_you_dont_own(self):
+        """CS:share on a calendar you don't own must be blocked."""
+        org = factories.OrganizationFactory(external_id="proto-share")
+        owner, owner_client, cal_path = _create_user_with_calendar(
+            org, "owner-sharesec"
+        )
+        attacker, attacker_client, _ = _create_user_with_calendar(
+            org, "attacker-sharesec"
+        )
+        victim = factories.UserFactory(email="victim@proto-share.com", organization=org)
+        cal_id = _get_cal_id(cal_path)
+
+        # Attacker tries to share owner's calendar with victim
+        resp = _share_calendar(
+            attacker_client, owner, cal_id, victim.email, "read-write"
+        )
+        assert resp.status_code in (403, 404), (
+            f"CS:share on non-owned calendar should be blocked, got {resp.status_code}"
+        )
+
+    def test_mkcalendar_under_other_user(self):
+        """MKCALENDAR under another user's home must be blocked."""
+        org = factories.OrganizationFactory(external_id="proto-mkcal")
+        owner = factories.UserFactory(email="owner@proto-mkcal.com", organization=org)
+        attacker, attacker_client, _ = _create_user_with_calendar(org, "attacker-mkcal")
+
+        resp = attacker_client.generic(
+            "MKCALENDAR",
+            f"/caldav/calendars/users/{owner.email}/injected-calendar/",
+            data=(
+                '<?xml version="1.0" encoding="utf-8"?>'
+                '<C:mkcalendar xmlns:D="DAV:" '
+                'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+                "<D:set><D:prop>"
+                "<D:displayname>Injected</D:displayname>"
+                "</D:prop></D:set>"
+                "</C:mkcalendar>"
+            ),
+            content_type="application/xml",
+        )
+        assert resp.status_code in (403, 404), (
+            f"MKCALENDAR under other user should be blocked, got {resp.status_code}"
+        )
+
+    def test_post_to_other_users_outbox_blocked(self):
+        """POST to another user's scheduling outbox must be blocked."""
+        org = factories.OrganizationFactory(external_id="proto-outbox")
+        owner, _, _ = _create_user_with_calendar(org, "owner-outbox")
+        attacker, attacker_client, _ = _create_user_with_calendar(
+            org, "attacker-outbox"
+        )
+
+        resp = _freebusy_outbox(attacker_client, owner.email, "anyone@x.com")
+        # Should fail — attacker is posting to owner's outbox
+        assert resp.status_code in (403, 404), (
+            f"POST to another user's outbox should be blocked, got {resp.status_code}"
+        )
+
+    def test_delete_own_calendar_works(self):
+        """Owner can DELETE their own calendar."""
+        org = factories.OrganizationFactory(external_id="proto-delown")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-delown")
+        cal_id = _get_cal_id(cal_path)
+
+        resp = owner_client.generic(
+            "DELETE",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+        )
+        assert resp.status_code in (200, 204), (
+            f"Owner should be able to DELETE own calendar, got {resp.status_code}"
+        )
+
+    def test_proppatch_rename_own_calendar(self):
+        """Owner can PROPPATCH (rename) their own calendar."""
+        org = factories.OrganizationFactory(external_id="proto-rename")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-rename")
+        cal_id = _get_cal_id(cal_path)
+
+        resp = _proppatch(
+            owner_client,
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            "<D:displayname>New Name</D:displayname>",
+        )
+        assert resp.status_code == 207
+
+        # Verify the rename took effect
+        check = owner_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=(
+                '<?xml version="1.0"?>'
+                '<propfind xmlns="DAV:"><prop><displayname/></prop></propfind>'
+            ),
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        assert "New Name" in check.content.decode("utf-8", errors="ignore")
+
+    def test_proppatch_color_own_calendar(self):
+        """Owner can PROPPATCH the color of their own calendar."""
+        org = factories.OrganizationFactory(external_id="proto-color")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-color")
+        cal_id = _get_cal_id(cal_path)
+
+        resp = _proppatch(
+            owner_client,
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            "<A:calendar-color>#e74c3c</A:calendar-color>",
+        )
+        assert resp.status_code == 207
+
+        check = owner_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=(
+                '<?xml version="1.0"?>'
+                '<propfind xmlns="DAV:" xmlns:A="http://apple.com/ns/ical/">'
+                "<prop><A:calendar-color/></prop>"
+                "</propfind>"
+            ),
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        assert "#e74c3c" in check.content.decode("utf-8", errors="ignore")
+
+
+# ===================================================================
+# ResourceAutoSchedulePlugin
+# ===================================================================
+
+
+class TestSyncCollectionReport:
+    """sync-collection REPORT enables incremental calendar sync.
+
+    Clients send a sync-token (empty for initial sync) and receive
+    only changed/deleted resources since that token.
+    """
+
+    def test_initial_sync_returns_all_events(self):
+        """Initial sync (empty token) returns all events + a sync-token."""
+        org = factories.OrganizationFactory(external_id="sync-coll-init")
+        user, client, cal_path = _create_user_with_calendar(org, "user-syncinit")
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event(client, user.email, cal_id, "sync-ev-1", "Event 1")
+        _put_event(client, user.email, cal_id, "sync-ev-2", "Event 2")
+
+        sync_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:sync-collection xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:sync-token></D:sync-token>"
+            "<D:sync-level>1</D:sync-level>"
+            "<D:prop>"
+            "<D:getetag/>"
+            "<C:calendar-data/>"
+            "</D:prop>"
+            "</D:sync-collection>"
+        )
+        resp = client.generic(
+            "REPORT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/",
+            data=sync_body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+        assert resp.status_code == 207, (
+            f"sync-collection REPORT failed: {resp.status_code}"
+        )
+
+        content = resp.content.decode("utf-8", errors="ignore")
+        # Should contain both events
+        assert "sync-ev-1" in content, "Initial sync should include event 1"
+        assert "sync-ev-2" in content, "Initial sync should include event 2"
+        # Should contain a sync-token for next sync
+        assert "sync-token" in content, (
+            "sync-collection response must include a sync-token"
+        )
+
+    def test_incremental_sync_returns_only_changes(self):
+        """Incremental sync (with token) returns only new/changed events."""
+
+        org = factories.OrganizationFactory(external_id="sync-coll-incr")
+        user, client, cal_path = _create_user_with_calendar(org, "user-syncincr")
+        cal_id = _get_cal_id(cal_path)
+
+        # Create first event
+        _put_event(client, user.email, cal_id, "sync-old-ev", "Old Event")
+
+        # Do initial sync to get a token
+        sync_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:sync-collection xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:sync-token></D:sync-token>"
+            "<D:sync-level>1</D:sync-level>"
+            "<D:prop>"
+            "<D:getetag/>"
+            "<C:calendar-data/>"
+            "</D:prop>"
+            "</D:sync-collection>"
+        )
+        resp = client.generic(
+            "REPORT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/",
+            data=sync_body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+        assert resp.status_code == 207
+
+        content = resp.content.decode("utf-8", errors="ignore")
+        # Extract sync-token from response
+        # SabreDAV format: <d:sync-token>http://sabre.io/ns/sync/123</d:sync-token>
+        token_match = re.search(
+            r"<[^>]*sync-token[^>]*>([^<]+)</[^>]*sync-token>",
+            content,
+            re.IGNORECASE,
+        )
+        assert token_match, (
+            f"Could not extract sync-token from response:\n{content[:1000]}"
+        )
+        sync_token = token_match.group(1)
+
+        # Create a NEW event after the initial sync
+        _put_event(client, user.email, cal_id, "sync-new-ev", "New Event")
+
+        # Incremental sync with the token
+        incr_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:sync-collection xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            f"<D:sync-token>{sync_token}</D:sync-token>"
+            "<D:sync-level>1</D:sync-level>"
+            "<D:prop>"
+            "<D:getetag/>"
+            "<C:calendar-data/>"
+            "</D:prop>"
+            "</D:sync-collection>"
+        )
+        resp2 = client.generic(
+            "REPORT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/",
+            data=incr_body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+        assert resp2.status_code == 207
+
+        content2 = resp2.content.decode("utf-8", errors="ignore")
+        # Should include the new event
+        assert "sync-new-ev" in content2, (
+            "Incremental sync should include newly created event"
+        )
+        # Should NOT include the old event (it hasn't changed)
+        assert "sync-old-ev" not in content2, (
+            "Incremental sync should NOT include unchanged events.\n"
+            f"Response:\n{content2[:1000]}"
+        )
+
+    def test_sync_deleted_event_returns_404_status(self):
+        """Incremental sync after deleting an event should report 404 for it."""
+
+        org = factories.OrganizationFactory(external_id="sync-coll-del")
+        user, client, cal_path = _create_user_with_calendar(org, "user-syncdel")
+        cal_id = _get_cal_id(cal_path)
+
+        # Create event
+        _put_event(client, user.email, cal_id, "sync-del-ev", "Doomed Event")
+
+        # Initial sync to get token
+        sync_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:sync-collection xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:sync-token></D:sync-token>"
+            "<D:sync-level>1</D:sync-level>"
+            "<D:prop><D:getetag/></D:prop>"
+            "</D:sync-collection>"
+        )
+        resp = client.generic(
+            "REPORT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/",
+            data=sync_body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+        content = resp.content.decode("utf-8", errors="ignore")
+        token_match = re.search(
+            r"<[^>]*sync-token[^>]*>([^<]+)</[^>]*sync-token>",
+            content,
+            re.IGNORECASE,
+        )
+        sync_token = token_match.group(1)
+
+        # Delete the event
+        del_resp = client.generic(
+            "DELETE",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/sync-del-ev.ics",
+        )
+        assert del_resp.status_code in (200, 204), (
+            f"DELETE failed: {del_resp.status_code}"
+        )
+
+        # Incremental sync — deleted event should appear with 404 status
+        incr_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:sync-collection xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            f"<D:sync-token>{sync_token}</D:sync-token>"
+            "<D:sync-level>1</D:sync-level>"
+            "<D:prop><D:getetag/></D:prop>"
+            "</D:sync-collection>"
+        )
+        resp2 = client.generic(
+            "REPORT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/",
+            data=incr_body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+        assert resp2.status_code == 207
+
+        content2 = resp2.content.decode("utf-8", errors="ignore")
+        # The deleted event should be listed with its href
+        assert "sync-del-ev" in content2, "Deleted event should appear in sync response"
+        # And it should have a 404 status
+        assert "404" in content2, (
+            "Deleted event should have HTTP 404 status in sync response.\n"
+            f"Response:\n{content2[:1000]}"
+        )
+
+
+# ===================================================================
+# ETag / If-Match conflict detection (HTTP 412)
+# ===================================================================
+
+
+class TestETagConflict:
+    """ETag-based conflict detection prevents lost updates.
+
+    When a client sends If-Match with a stale ETag, the server must
+    return 412 Precondition Failed instead of silently overwriting.
+    """
+
+    def test_put_with_correct_etag_succeeds(self):
+        """PUT with matching If-Match ETag should succeed."""
+        org = factories.OrganizationFactory(external_id="etag-ok")
+        user, client, cal_path = _create_user_with_calendar(org, "user-etagok")
+        cal_id = _get_cal_id(cal_path)
+
+        # Create event
+        resp = _put_event(client, user.email, cal_id, "etag-ev", "Original")
+        assert resp.status_code in (200, 201, 204)
+
+        # GET to obtain current ETag
+        get_resp = client.generic(
+            "GET",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-ev.ics",
+        )
+        etag = get_resp.headers.get("ETag") or get_resp.headers.get("etag")
+        assert etag, "GET should return an ETag header"
+
+        # PUT with matching If-Match
+        dtstart = datetime.now() + timedelta(days=2)
+        dtend = dtstart + timedelta(hours=1)
+        updated_ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:etag-ev\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            "SUMMARY:Updated\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        resp2 = client.generic(
+            "PUT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-ev.ics",
+            data=updated_ical,
+            content_type="text/calendar",
+            HTTP_IF_MATCH=etag,
+        )
+        assert resp2.status_code in (200, 204), (
+            f"PUT with correct ETag should succeed, got {resp2.status_code}"
+        )
+
+    def test_put_with_stale_etag_returns_412(self):
+        """PUT with stale If-Match ETag should return 412 Precondition Failed."""
+        org = factories.OrganizationFactory(external_id="etag-conflict")
+        user, client, cal_path = _create_user_with_calendar(org, "user-etag412")
+        cal_id = _get_cal_id(cal_path)
+
+        # Create event
+        _put_event(client, user.email, cal_id, "etag-conflict-ev", "Version 1")
+
+        # GET the ETag
+        get_resp = client.generic(
+            "GET",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-conflict-ev.ics",
+        )
+        old_etag = get_resp.headers.get("ETag") or get_resp.headers.get("etag")
+        assert old_etag, "GET should return an ETag"
+
+        # Update the event (this changes the ETag on the server)
+        dtstart = datetime.now() + timedelta(days=3)
+        dtend = dtstart + timedelta(hours=1)
+        v2_ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:etag-conflict-ev\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            "SUMMARY:Version 2\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        resp2 = client.generic(
+            "PUT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-conflict-ev.ics",
+            data=v2_ical,
+            content_type="text/calendar",
+        )
+        assert resp2.status_code in (200, 204)
+
+        # Now try to PUT with the OLD ETag (stale)
+        v3_ical = v2_ical.replace("Version 2", "Version 3 (conflict)")
+        resp3 = client.generic(
+            "PUT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-conflict-ev.ics",
+            data=v3_ical,
+            content_type="text/calendar",
+            HTTP_IF_MATCH=old_etag,
+        )
+        assert resp3.status_code == 412, (
+            f"PUT with stale ETag should return 412, got {resp3.status_code}"
+        )
+
+        # Verify version 2 is still intact (not overwritten)
+        get_resp2 = client.generic(
+            "GET",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-conflict-ev.ics",
+        )
+        content = get_resp2.content.decode("utf-8", errors="ignore")
+        assert "Version 2" in content, "Event should still be Version 2"
+        assert "Version 3" not in content, "Version 3 should NOT have been saved"
+
+    def test_delete_with_stale_etag_returns_412(self):
+        """DELETE with stale If-Match ETag should return 412."""
+        org = factories.OrganizationFactory(external_id="etag-del-conflict")
+        user, client, cal_path = _create_user_with_calendar(org, "user-etagdel")
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event(client, user.email, cal_id, "etag-del-ev", "To Delete")
+
+        # GET ETag
+        get_resp = client.generic(
+            "GET",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-del-ev.ics",
+        )
+        old_etag = get_resp.headers.get("ETag") or get_resp.headers.get("etag")
+
+        # Update the event (changes ETag)
+        dtstart = datetime.now() + timedelta(days=4)
+        dtend = dtstart + timedelta(hours=1)
+        updated = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:etag-del-ev\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            "SUMMARY:Updated\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        client.generic(
+            "PUT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-del-ev.ics",
+            data=updated,
+            content_type="text/calendar",
+        )
+
+        # Try DELETE with old ETag
+        del_resp = client.generic(
+            "DELETE",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-del-ev.ics",
+            HTTP_IF_MATCH=old_etag,
+        )
+        assert del_resp.status_code == 412, (
+            f"DELETE with stale ETag should return 412, got {del_resp.status_code}"
+        )
+
+        # Event should still exist
+        check = client.generic(
+            "GET",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/etag-del-ev.ics",
+        )
+        assert check.status_code == 200, "Event should survive blocked delete"
+

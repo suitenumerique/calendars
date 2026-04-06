@@ -84,6 +84,17 @@ class Base(Configuration):
         None, environ_name="CALDAV_INTERNAL_API_KEY", environ_prefix=None
     )
 
+    # Messages app integration (mailbox identity for calendars)
+    FEATURE_MESSAGES_INTEGRATION = values.BooleanValue(
+        False, environ_name="FEATURE_MESSAGES_INTEGRATION", environ_prefix=None
+    )
+    MESSAGES_API_URL = values.Value(
+        None, environ_name="MESSAGES_API_URL", environ_prefix=None
+    )
+    MESSAGES_API_KEY = SecretFileValue(
+        None, environ_name="MESSAGES_API_KEY", environ_prefix=None
+    )
+
     # Default calendar sharing level for new organizations.
     # Controls what colleagues in the same org can see by default.
     # Values: "none", "freebusy", "read", "write"

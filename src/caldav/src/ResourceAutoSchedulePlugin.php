@@ -1,18 +1,21 @@
 <?php
 /**
- * ResourceAutoSchedulePlugin - Automatic scheduling for resource principals.
+ * ResourceAutoSchedulePlugin - Resource principal management for CalDAV.
  *
- * Intercepts iTIP messages delivered to resource principals (ROOM/RESOURCE)
- * and automatically accepts or declines based on:
- * - The resource's auto-schedule mode (automatic, accept-always, decline-always, manual)
- * - Calendar conflict detection (for 'automatic' mode)
- * - Org scoping (rejects cross-org bookings)
+ * Handles two aspects of resource principals (ROOM/RESOURCE):
+ *
+ * 1. **Auto-scheduling**: Intercepts iTIP messages and automatically accepts
+ *    or declines based on:
+ *    - The resource's auto-schedule mode (automatic, accept-always, decline-always, manual)
+ *    - Calendar conflict detection (for 'automatic' mode)
+ *    - Org scoping (rejects cross-org bookings)
+ *
+ * 2. **MKCALENDAR blocking**: Resources have exactly one calendar (created
+ *    during provisioning). Additional calendar creation is rejected.
  *
  * Runs after Schedule\Plugin delivers the iTIP message (priority 120 > 110).
- *
- * This plugin also sets $message->scheduleStatus before HttpCallbackIMipPlugin
- * runs, which prevents email delivery to resource addresses (resource addresses
- * are not real mailboxes).
+ * Sets $message->scheduleStatus before HttpCallbackIMipPlugin runs, which
+ * prevents email delivery to resource addresses.
  */
 
 namespace Calendars\SabreDav;
@@ -57,6 +60,22 @@ class ResourceAutoSchedulePlugin extends ServerPlugin
         // which hardcodes calendar-user-type to 'INDIVIDUAL'. By setting
         // the real value first, the Schedule\Plugin's handle() becomes a no-op.
         $server->on('propFind', [$this, 'propFindResourceType'], 200);
+        // Block additional calendar creation on resource principals
+        $server->on('beforeMethod:MKCALENDAR', [$this, 'blockMkCalendar'], 90);
+    }
+
+    /**
+     * Block MKCALENDAR on resource principal calendar homes.
+     * Resources have exactly one calendar created during provisioning.
+     */
+    public function blockMkCalendar($request, $response)
+    {
+        if (preg_match('#^calendars/resources/#', $request->getPath())) {
+            throw new \Sabre\DAV\Exception\Forbidden(
+                'Resource principals can only have one calendar. '
+                . 'Additional calendar creation is not allowed.'
+            );
+        }
     }
 
     /**
@@ -106,7 +125,7 @@ class ResourceAutoSchedulePlugin extends ServerPlugin
 
         // Enforce org scoping: reject cross-org bookings
         $requestOrgId = $this->server->httpRequest
-            ? $this->server->httpRequest->getHeader('X-CalDAV-Organization')
+            ? $this->server->httpRequest->getHeader('X-LS-Org-Id')
             : null;
         $resourceOrgId = $recipientPrincipal['org_id'] ?? null;
 

@@ -76,7 +76,7 @@ export const useCalendarListState = ({
   }, []);
 
   const handleSaveCalendar = useCallback(
-    async (name: string, color: string) => {
+    async (name: string, color: string, includeInAvailability?: boolean) => {
       if (modalState.mode === "create") {
         const result = await createCalendar({
           displayName: name,
@@ -90,6 +90,7 @@ export const useCalendarListState = ({
         const result = await updateCalendar(modalState.calendar.url, {
           displayName: name,
           color,
+          includeInAvailability,
         });
         if (!result.success) {
           throw new Error(result.error);

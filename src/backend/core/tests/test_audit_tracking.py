@@ -88,8 +88,8 @@ class TestCalDAVProxyChannelIdHeader:
         mock_request.return_value = mock_response
 
         mock_http_cls.build_base_headers.return_value = {
-            "X-Api-Key": "test",
-            "X-Forwarded-User": user.email,
+            "X-LS-Api-Key": "test",
+            "X-LS-User": user.email,
         }
 
         client = APIClient()
@@ -125,8 +125,8 @@ class TestCalDAVProxyChannelIdHeader:
         mock_request.return_value = mock_response
 
         mock_http_cls.build_base_headers.return_value = {
-            "X-Api-Key": "test",
-            "X-Forwarded-User": user.email,
+            "X-LS-Api-Key": "test",
+            "X-LS-User": user.email,
         }
 
         client = APIClient()
@@ -204,7 +204,7 @@ class TestInternalRequest:
         http.internal_request("GET", user, "internal-api/test")
 
         headers = mock_request.call_args.kwargs["headers"]
-        assert headers["X-Internal-Api-Key"] == "test-internal-key"
+        assert headers["X-LS-Internal-Api-Key"] == "test-internal-key"
 
     @patch("core.services.caldav_service.requests.request")
     def test_json_param_serializes_body(self, mock_request):
@@ -252,7 +252,7 @@ class TestInternalRequest:
         )
 
         headers = mock_request.call_args.kwargs["headers"]
-        assert headers["X-Internal-Api-Key"] == "test-internal-key"
+        assert headers["X-LS-Internal-Api-Key"] == "test-internal-key"
         assert headers["X-CalDAV-Channel-Id"] == "abc-123"
 
 

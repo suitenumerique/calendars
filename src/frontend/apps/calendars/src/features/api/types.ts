@@ -15,6 +15,7 @@ export interface ApiConfig {
   FEATURE_ADMIN_CHANNELS?: boolean;
   FEATURE_ADMIN_AVAILABILITIES?: boolean;
   FEATURE_ADMIN_RESOURCES?: boolean;
+  FEATURE_MESSAGES_INTEGRATION?: boolean;
   theme_customization?: ThemeCustomization;
 }
 

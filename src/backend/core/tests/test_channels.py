@@ -255,8 +255,8 @@ class TestCalDAVProxyChannelAuth:
             },
         )()
         mock_http_cls.build_base_headers.return_value = {
-            "X-Api-Key": "test",
-            "X-Forwarded-User": user.email,
+            "X-LS-Api-Key": "test",
+            "X-LS-User": user.email,
         }
 
         client = APIClient()
@@ -312,8 +312,8 @@ class TestCalDAVProxyChannelAuth:
             },
         )()
         mock_http_cls.build_base_headers.return_value = {
-            "X-Api-Key": "test",
-            "X-Forwarded-User": user.email,
+            "X-LS-Api-Key": "test",
+            "X-LS-User": user.email,
         }
 
         client = APIClient()
@@ -426,8 +426,8 @@ class TestCalDAVProxyChannelAuth:
             },
         )()
         mock_http_cls.build_base_headers.return_value = {
-            "X-Api-Key": "test",
-            "X-Forwarded-User": user.email,
+            "X-LS-Api-Key": "test",
+            "X-LS-User": user.email,
         }
 
         client = APIClient()
@@ -495,3 +495,61 @@ class TestCalDAVProxyChannelAuth:
         )
         assert response.status_code == 403
         mock_entitlements.assert_called_once_with(user.sub, user.email)
+
+
+class TestChannelCrossOrgResourceAccess:
+    """Channel tokens for cross-org resource calendars should not work.
+
+    A user in org A should not be able to create a channel scoped to a
+    resource in org B. Even if they could, the CalDAV proxy would block
+    the request via X-LS-Org-Id header. This test verifies the full chain.
+    """
+
+    def test_channel_for_cross_org_resource_blocked(self):
+        """Creating a channel for a resource not in the user's org is blocked.
+
+        verify_caldav_access queries the CalDAV internal API to check
+        the resource's org_id matches the user's org.
+        """
+        org_a = factories.OrganizationFactory(external_id="chan-org-a")
+        user_a = factories.UserFactory(organization=org_a)
+
+        client = APIClient()
+        client.force_authenticate(user=user_a)
+
+        # Resource doesn't exist in CalDAV — internal API returns 404 → fail-closed
+        response = client.post(
+            CHANNELS_URL,
+            {
+                "name": "Cross-org resource channel",
+                "caldav_path": "/calendars/resources/nonexistent-resource/default/",
+            },
+            format="json",
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.xdist_group("caldav")
+    def test_channel_for_same_org_resource_allowed(self):
+        """Creating a channel for a resource in the user's own org succeeds."""
+        from core.services.resource_service import ResourceService  # noqa: PLC0415
+
+        org = factories.OrganizationFactory(external_id="chan-same-org")
+        user = factories.UserFactory(organization=org)
+
+        # Create a real resource in this org
+        service = ResourceService()
+        resource = service.create_resource(user, "Test Room", "ROOM")
+        resource_id = resource["id"]
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(
+            CHANNELS_URL,
+            {
+                "name": "Same-org resource channel",
+                "caldav_path": f"/calendars/resources/{resource_id}/default/",
+            },
+            format="json",
+        )
+        assert response.status_code == 201

@@ -9,10 +9,12 @@
  *   POST   /internal-api/resources/              Create a resource principal
  *   DELETE /internal-api/resources/{resource_id}  Delete a resource principal
  *   POST   /internal-api/import/{user}/{calendar} Bulk import ICS events
+ *   POST   /internal-api/calendars/               Create a calendar (and principal if needed)
+ *   POST   /internal-api/sync-mailbox-acls/     Sync Messages ACL shares for one user
  *
  * Access control (defense in depth):
  *   1. Django proxy blocklist rejects /internal-api/ paths
- *   2. Requires X-Internal-Api-Key header (different from X-Api-Key used by proxy)
+ *   2. Requires X-LS-Internal-Api-Key header (different from X-LS-Api-Key used by proxy)
  *   3. Test coverage verifies the proxy rejects these paths
  */
 
@@ -20,6 +22,7 @@ namespace Calendars\SabreDav;
 
 use Sabre\DAV\Server;
 use Sabre\DAV\ServerPlugin;
+use Sabre\DAV\UUIDUtil;
 use Sabre\CalDAV\Backend\PDO as CalDAVBackend;
 use Sabre\VObject;
 
@@ -73,12 +76,12 @@ class InternalApiPlugin extends ServerPlugin
         }
 
         // Verify the dedicated internal API key header
-        $headerValue = $request->getHeader('X-Internal-Api-Key');
+        $headerValue = $request->getHeader('X-LS-Internal-Api-Key');
         if (!$headerValue || !hash_equals($this->apiKey, $headerValue)) {
             $response->setStatus(403);
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(json_encode([
-                'error' => 'Forbidden: missing or invalid X-Internal-Api-Key header',
+                'error' => 'Forbidden: missing or invalid X-LS-Internal-Api-Key header',
             ]));
             return false;
         }
@@ -88,6 +91,12 @@ class InternalApiPlugin extends ServerPlugin
         // Route: POST /internal-api/resources/
         if ($method === 'POST' && preg_match('#^internal-api/resources/?$#', $path)) {
             $this->handleCreateResource($request, $response);
+            return false;
+        }
+
+        // Route: GET /internal-api/resources/{resource_id}
+        if ($method === 'GET' && preg_match('#^internal-api/resources/([a-zA-Z0-9-]+)$#', $path, $matches)) {
+            $this->handleGetResource($request, $response, $matches[1]);
             return false;
         }
 
@@ -108,6 +117,18 @@ class InternalApiPlugin extends ServerPlugin
                 return false;
             }
             $this->handleDeleteUser($request, $response, $email);
+            return false;
+        }
+
+        // Route: POST /internal-api/calendars/
+        if ($method === 'POST' && preg_match('#^internal-api/calendars/?$#', $path)) {
+            $this->handleCreateCalendar($request, $response);
+            return false;
+        }
+
+        // Route: POST /internal-api/sync-mailbox-acls/
+        if ($method === 'POST' && preg_match('#^internal-api/sync-mailbox-acls/?$#', $path)) {
+            $this->handleSyncMailboxAcls($request, $response);
             return false;
         }
 
@@ -147,6 +168,43 @@ class InternalApiPlugin extends ServerPlugin
      * POST /internal-api/resources/
      * Create a resource principal and its default calendar.
      */
+    /**
+     * GET /internal-api/resources/{resource_id}
+     *
+     * Returns the resource principal's org_id. Used by Django's
+     * verify_caldav_access to check cross-org resource access.
+     */
+    private function handleGetResource($request, $response, $resourceId)
+    {
+        $principalUri = 'principals/resources/' . $resourceId;
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT org_id FROM principals WHERE uri = ?'
+            );
+            $stmt->execute([$principalUri]);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        } catch (\Exception $e) {
+            $response->setStatus(500);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Database error']));
+            return;
+        }
+
+        if (!$row) {
+            $response->setStatus(404);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Resource not found']));
+            return;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'resource_id' => $resourceId,
+            'org_id' => $row['org_id'],
+        ]));
+    }
+
     private function handleCreateResource($request, $response)
     {
         $body = json_decode($request->getBodyAsString(), true);
@@ -235,7 +293,7 @@ class InternalApiPlugin extends ServerPlugin
     private function handleDeleteResource($request, $response, $resourceId)
     {
         $principalUri = 'principals/resources/' . $resourceId;
-        $orgId = $request->getHeader('X-CalDAV-Organization');
+        $orgId = $request->getHeader('X-LS-Org-Id');
 
         // Look up the principal
         try {
@@ -330,7 +388,7 @@ class InternalApiPlugin extends ServerPlugin
     private function handleDeleteUser($request, $response, $email)
     {
         $principalUri = 'principals/users/' . $email;
-        $orgId = $request->getHeader('X-CalDAV-Organization');
+        $orgId = $request->getHeader('X-LS-Org-Id');
 
         // Look up the principal
         try {
@@ -385,6 +443,294 @@ class InternalApiPlugin extends ServerPlugin
         $response->setBody(json_encode(['deleted' => true, 'existed' => true]));
         return false;
     }
+
+    /**
+     * POST /internal-api/calendars/
+     * Create a calendar under a principal (creating the principal if needed).
+     *
+     * Unlike MKCALENDAR (which only works for the authenticated user's own
+     * principal), this endpoint can create calendars under any principal
+     * — including mailbox principals that no user logs in as.
+     *
+     * Body: {
+     *   "email": "contact@company.com",       (required)
+     *   "name": "Contact Team",               (optional, defaults to email)
+     *   "org_id": "...",                       (optional)
+     *   "calendar_user_type": "INDIVIDUAL",    (optional, default INDIVIDUAL)
+     * }
+     */
+    private function handleCreateCalendar($request, $response)
+    {
+        $body = json_decode($request->getBodyAsString(), true);
+        if (!$body) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Invalid JSON body']));
+            return false;
+        }
+
+        $email = $body['email'] ?? null;
+        $name = $body['name'] ?? $email;
+        $orgId = $body['org_id'] ?? null;
+        $calendarUserType = $body['calendar_user_type'] ?? 'INDIVIDUAL';
+        $color = $body['color'] ?? '#3788d8';
+
+        if (!$email) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Missing required field: email']));
+            return false;
+        }
+
+        $principalUri = 'principals/users/' .$email;
+
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO principals (uri, email, displayname, calendar_user_type, org_id)'
+                . ' VALUES (?, ?, ?, ?, ?)'
+                . ' ON CONFLICT (uri) DO UPDATE SET'
+                . ' org_id = COALESCE(EXCLUDED.org_id, principals.org_id),'
+                . ' displayname = COALESCE(EXCLUDED.displayname, principals.displayname),'
+                . ' calendar_user_type = EXCLUDED.calendar_user_type'
+            );
+            $stmt->execute([$principalUri, $email, $name, $calendarUserType, $orgId]);
+
+            // Check if this principal already had a calendar
+            $existingCalendars = $this->caldavBackend->getCalendarsForUser($principalUri);
+            $isNew = empty($existingCalendars);
+
+            if ($isNew) {
+                $this->caldavBackend->createCalendar(
+                    $principalUri,
+                    'default',
+                    [
+                        '{DAV:}displayname' => $name,
+                        '{http://apple.com/ns/ical/}calendar-color' => $color,
+                        '{urn:ietf:params:xml:ns:caldav}supported-calendar-component-set'
+                            => new \Sabre\CalDAV\Xml\Property\SupportedCalendarComponentSet(['VEVENT']),
+                    ]
+                );
+            }
+
+            $this->pdo->commit();
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            error_log("[InternalApiPlugin] Failed to create calendar: " . $e->getMessage());
+            $response->setStatus(500);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Failed to create calendar']));
+            return false;
+        }
+
+        $status = $isNew ? 201 : 200;
+        $response->setStatus($status);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'principal_uri' => $principalUri,
+            'email' => $email,
+            'created' => $isNew,
+        ]));
+        return false;
+    }
+
+    /**
+     * POST /internal-api/sync-mailbox-acls/
+     * Batch sync Messages ACLs to CalDAV shares for multiple users at once.
+     *
+     * Body: {
+     *   "shares": [
+     *     {"user_email": "alice@co", "mailbox_email": "contact@co",
+     *      "calendar_uri": "default", "privilege": "read-write"},
+     *     {"user_email": "bob@co", "mailbox_email": "contact@co",
+     *      "calendar_uri": "default", "privilege": "read"}
+     *   ],
+     *   "full_sync_users": ["alice@co"]
+     * }
+     *
+     * "shares" is a flat list of all desired sync-managed shares.
+     * "full_sync_users" lists users whose stale shares should be removed
+     * (users not in this list only get additive upserts).
+     */
+    private function handleSyncMailboxAcls($request, $response)
+    {
+        $body = json_decode($request->getBodyAsString(), true);
+        if (!$body) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Invalid JSON body']));
+            return false;
+        }
+
+        $shares = $body['shares'] ?? [];
+        $fullSyncUsers = array_flip($body['full_sync_users'] ?? []);
+        $privilegeMap = [
+            'read' => PrincipalBackend::ACCESS_READ,
+            'read-write' => PrincipalBackend::ACCESS_READ_WRITE,
+        ];
+
+        $this->pdo->beginTransaction();
+        try {
+            // 1. Batch-fetch all owner calendar instances (one query)
+            $mailboxEmails = array_unique(
+                array_filter(array_column($shares, 'mailbox_email'))
+            );
+            $ownerCalendars = []; // "mailbox_email:uri" → row
+            if ($mailboxEmails) {
+                $ownerPrincipals = array_map(
+                    fn($e) => 'principals/users/' .$e,
+                    $mailboxEmails
+                );
+                $ph = implode(',', array_fill(0, count($ownerPrincipals), '?'));
+                $stmt = $this->pdo->prepare(
+                    'SELECT ci.calendarid, ci.principaluri, ci.uri, ci.displayname, ci.calendarcolor '
+                    . 'FROM calendarinstances ci '
+                    . 'WHERE ci.principaluri IN (' . $ph . ') AND ci.access = 1'
+                );
+                $stmt->execute($ownerPrincipals);
+                foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                    $email = str_replace('principals/users/', '',$row['principaluri']);
+                    $ownerCalendars[$email . ':' . $row['uri']] = $row;
+                }
+            }
+
+            // 2. Collect all involved user emails
+            $allUserEmails = array_unique(array_merge(
+                array_filter(array_column($shares, 'user_email')),
+                array_keys($fullSyncUsers)
+            ));
+            if (empty($allUserEmails)) {
+                $this->pdo->commit();
+                $response->setStatus(200);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode(['active' => []]));
+                return false;
+            }
+
+            // 3. Batch-fetch existing sync-managed shares for all users (one query)
+            $userPrincipals = array_map(
+                fn($e) => 'principals/users/' .$e,
+                $allUserEmails
+            );
+            $ph = implode(',', array_fill(0, count($userPrincipals), '?'));
+            $stmt = $this->pdo->prepare(
+                'SELECT id, principaluri, calendarid, access FROM calendarinstances '
+                . 'WHERE principaluri IN (' . $ph . ') AND is_sync_managed = TRUE'
+            );
+            $stmt->execute($userPrincipals);
+            // existing[principaluri][calendarid] → row
+            $existing = [];
+            foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+                $existing[$row['principaluri']][(int)$row['calendarid']] = $row;
+            }
+
+            // 4. Group desired shares by user
+            // desired[principaluri][calendarid] → {access, uri, displayname}
+            $desired = [];
+            $active = [];
+            foreach ($shares as $share) {
+                $userEmail = $share['user_email'] ?? null;
+                $mailboxEmail = $share['mailbox_email'] ?? null;
+                $calendarUri = $share['calendar_uri'] ?? 'default';
+                $privilege = $share['privilege'] ?? 'read';
+                if (!$userEmail || !$mailboxEmail) {
+                    continue;
+                }
+
+                $key = $mailboxEmail . ':' . $calendarUri;
+                if (!isset($ownerCalendars[$key])) {
+                    continue;
+                }
+
+                $ownerCal = $ownerCalendars[$key];
+                $principal = 'principals/users/' .$userEmail;
+                $calendarId = (int)$ownerCal['calendarid'];
+                $access = $privilegeMap[$privilege] ?? 2;
+
+                $desired[$principal][$calendarId] = [
+                    'access' => $access,
+                    'displayname' => $ownerCal['displayname'],
+                    'share_href' => 'mailto:' . $userEmail,
+                    'share_displayname' => $userEmail,
+                    'color' => $ownerCal['calendarcolor'] ?? '#3788d8',
+                ];
+                $active[] = [
+                    'user_email' => $userEmail,
+                    'mailbox_email' => $mailboxEmail,
+                    'calendar_uri' => $calendarUri,
+                    'privilege' => $privilege,
+                ];
+            }
+
+            // 5. Prepare upsert statement (reused across all users)
+            $upsertStmt = $this->pdo->prepare(
+                'INSERT INTO calendarinstances '
+                . '(calendarid, principaluri, access, uri, displayname, calendarcolor, '
+                . 'share_href, share_displayname, share_invitestatus, transparent, is_sync_managed) '
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 0, TRUE) '
+                . 'ON CONFLICT (principaluri, calendarid) '
+                . 'DO UPDATE SET access = EXCLUDED.access, share_href = EXCLUDED.share_href, '
+                . 'is_sync_managed = TRUE'
+            );
+
+            // 6. Apply diff per user
+            $staleIds = [];
+            foreach ($allUserEmails as $userEmail) {
+                $principal = 'principals/users/' .$userEmail;
+                $userExisting = $existing[$principal] ?? [];
+                $userDesired = $desired[$principal] ?? [];
+
+                // Upsert changed/new shares
+                foreach ($userDesired as $calendarId => $d) {
+                    if (isset($userExisting[$calendarId])
+                        && (int)$userExisting[$calendarId]['access'] === $d['access']) {
+                        continue;
+                    }
+                    // UUID for the uri column (same as SabreDAV's native CS:share).
+                    // Only used on first INSERT; (principaluri, calendarid)
+                    // unique index handles upsert — existing URI is preserved.
+                    $upsertStmt->execute([
+                        $calendarId, $principal, $d['access'], UUIDUtil::getUUID(),
+                        $d['displayname'], $d['color'],
+                        $d['share_href'], $d['share_displayname'],
+                    ]);
+                }
+
+                // Collect stale shares (only for full_sync users)
+                if (isset($fullSyncUsers[$userEmail])) {
+                    foreach ($userExisting as $calendarId => $row) {
+                        if (!isset($userDesired[$calendarId])) {
+                            $staleIds[] = $row['id'];
+                        }
+                    }
+                }
+            }
+
+            // 7. Batch delete stale shares (one query)
+            if ($staleIds) {
+                $ph = implode(',', array_fill(0, count($staleIds), '?'));
+                $stmt = $this->pdo->prepare(
+                    'DELETE FROM calendarinstances WHERE id IN (' . $ph . ')'
+                );
+                $stmt->execute($staleIds);
+            }
+
+            $this->pdo->commit();
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            error_log("[InternalApiPlugin] Failed to sync mailbox ACLs: " . $e->getMessage());
+            $response->setStatus(500);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Failed to sync mailbox ACLs']));
+            return false;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode(['active' => $active]));
+        return false;
+    }
+
 
     /**
      * POST /internal-api/import/{principalUser}/{calendarUri}
