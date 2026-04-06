@@ -92,6 +92,12 @@
       }
     }
 
+    // Keep the options button visible while its dropdown menu is open,
+    // even though the cursor has left the item to interact with the menu.
+    &--menu-open .calendar-list__options-btn {
+      opacity: 1;
+    }
+
     // Override Cunningham checkbox styles for compact display
     .c__checkbox {
       margin: 0;
@@ -122,14 +128,29 @@
     flex-shrink: 0;
   }
 
-  &__name {
+  &__name-wrapper {
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0; // allow ellipsis on the inner name
+  }
+
+  &__name {
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--c--theme--colors--greyscale-800);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__mailbox-icon {
+    font-size: 0.875rem;
+    color: var(--c--theme--colors--greyscale-500, #9ca3af);
+    flex-shrink: 0;
+    cursor: help;
+    opacity: 0.7;
   }
 
   &__item-actions {

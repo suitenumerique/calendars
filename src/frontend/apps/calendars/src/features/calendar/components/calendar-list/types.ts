@@ -47,7 +47,8 @@ export interface CalendarListItemProps {
   calendar: CalDavCalendar;
   isVisible: boolean;
   isMenuOpen: boolean;
-  isMailboxCalendar?: boolean;
+  /** Mailbox email if this calendar is mailbox-backed; undefined otherwise. */
+  mailboxEmail?: string;
   onToggleVisibility: (url: string) => void;
   onMenuToggle: (url: string) => void;
   onEdit: (calendar: CalDavCalendar) => void;

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { IcsEvent, IcsOrganizer } from "ts-ics";
 import {
@@ -76,6 +76,21 @@ export const EventModal = ({
     mode,
     availableResources,
   });
+
+  // Defensive: if the form's selected calendar URL is empty or doesn't
+  // match any entry in the dropdown's options (stale state, race
+  // condition between calendar creation and modal open, URL trailing-
+  // slash mismatch…), auto-snap to the first available calendar so the
+  // user always sees something selected and Save is enabled.
+  useEffect(() => {
+    if (!isOpen || calendars.length === 0) return;
+    const isValid = calendars.some(
+      (cal) => cal.url === form.selectedCalendarUrl,
+    );
+    if (!isValid) {
+      form.setSelectedCalendarUrl(calendars[0].url);
+    }
+  }, [isOpen, calendars, form]);
 
   // Check if current user is invited
   const currentUserAttendee = event?.attendees?.find(

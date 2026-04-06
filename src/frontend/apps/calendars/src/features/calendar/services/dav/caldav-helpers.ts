@@ -4,7 +4,7 @@
  * Factorized utilities for XML building, DAV requests, and error handling.
  */
 
-import { davRequest, propfind, DAVNamespaceShort } from 'tsdav'
+import { davRequest, DAVNamespaceShort } from 'tsdav'
 import type { DAVMethods } from 'tsdav'
 
 type HTTPMethods = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'CONNECT' | 'OPTIONS' | 'TRACE' | 'PATCH'
@@ -354,6 +354,51 @@ export const CALENDAR_PROPS = {
   'LS:calendar-owner-type': {},
 } as const
 
+/**
+ * Drop-in replacement for tsdav's ``propfind()`` that also declares
+ * ``xmlns:LS=...`` on the root ``<propfind>`` element.
+ *
+ * tsdav's built-in ``propfind()`` hardcodes the xmlns map and has no
+ * extension point for custom namespaces, so any ``LS:<prop>`` we put in
+ * the props object would be serialized as ``<LS:foo/>`` in a body that
+ * never declared the prefix — SabreDAV rejects it with
+ * ``BadRequest: Namespace prefix LS is not defined``.
+ *
+ * This wrapper mirrors tsdav's body shape exactly so the response
+ * shape matches what callers already expect (camelCased keys with
+ * namespace prefixes stripped).
+ */
+export async function propfindLs(params: {
+  url: string
+  props: Record<string, unknown>
+  depth?: '0' | '1' | 'infinity'
+  headers?: Record<string, string>
+  fetchOptions?: RequestInit
+}) {
+  return davRequest({
+    url: params.url,
+    init: {
+      method: 'PROPFIND' as DAVMethods,
+      headers: { depth: params.depth ?? '0', ...params.headers },
+      namespace: DAVNamespaceShort.DAV,
+      body: {
+        propfind: {
+          _attributes: {
+            'xmlns:c': 'urn:ietf:params:xml:ns:caldav',
+            'xmlns:ca': 'http://apple.com/ns/ical/',
+            'xmlns:cs': 'http://calendarserver.org/ns/',
+            'xmlns:card': 'urn:ietf:params:xml:ns:carddav',
+            'xmlns:d': 'DAV:',
+            'xmlns:LS': 'http://lasuite.numerique.gouv.fr/ns/',
+          },
+          prop: params.props,
+        },
+      },
+    },
+    fetchOptions: params.fetchOptions,
+  })
+}
+
 /** Execute PROPFIND with error handling */
 export async function executePropfind<T>(
   url: string,
@@ -365,7 +410,7 @@ export async function executePropfind<T>(
   }
 ): Promise<CalDavResponse<T>> {
   try {
-    const response = await propfind({
+    const response = await propfindLs({
       url,
       props,
       headers: options?.headers,

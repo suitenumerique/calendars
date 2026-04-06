@@ -36,7 +36,7 @@ export const CalendarList = () => {
     isLoading: isCalendarLoading,
   } = useCalendarContext();
 
-  const { isMailboxCalendar } = useMailboxContext();
+  const { getMailboxEmail } = useMailboxContext();
 
   const {
     modalState,
@@ -171,7 +171,7 @@ export const CalendarList = () => {
                   calendar={calendar}
                   isVisible={visibleCalendarUrls.has(calendar.url)}
                   isMenuOpen={openMenuUrl === calendar.url}
-                  isMailboxCalendar={isMailboxCalendar(calendar.url, calendar)}
+                  mailboxEmail={getMailboxEmail(calendar.url, calendar)}
                   onToggleVisibility={toggleCalendarVisibility}
                   onMenuToggle={handleMenuToggle}
                   onEdit={handleOpenEditModal}
@@ -216,7 +216,7 @@ export const CalendarList = () => {
                     calendar={calendar}
                     isVisible={visibleCalendarUrls.has(calendar.url)}
                     isMenuOpen={openMenuUrl === calendar.url}
-                    isMailboxCalendar={isMailboxCalendar(calendar.url, calendar)}
+                    mailboxEmail={getMailboxEmail(calendar.url, calendar)}
                     onToggleVisibility={toggleCalendarVisibility}
                     onMenuToggle={handleMenuToggle}
                     onEdit={handleOpenEditModal}

@@ -30,36 +30,47 @@ ROLE_TO_PRIVILEGE = {
 SEND_ROLES = {"sender", "admin"}
 
 
-def _resolve_mailbox_org_id(mailbox_data):
-    """Extract org external_id from a Messages mailbox response.
+class SetupServiceError(Exception):
+    """Raised when a mailbox operation fails."""
 
-    Messages returns maildomain_custom_attributes containing the org claim
-    (e.g. SIRET). We look up the matching Organization in our DB.
-    Returns the org PK as string, or None.
+
+def _resolve_mailbox_org_id(mailbox_data):
+    """Resolve the mailbox's organization PK from a Messages response.
+
+    Messages returns ``maildomain_custom_attributes`` containing the org
+    claim (e.g. SIRET). We look up the matching ``Organization`` in our DB
+    by ``external_id``. If no row exists yet (no user from that org has
+    ever logged into Calendars), we auto-create one with a placeholder
+    name — it will be renamed the next time a user from that org logs in
+    via the OIDC backend's ``resolve_organization`` flow.
+
+    Returns the org PK as string. Raises ``SetupServiceError`` if the
+    Messages response does not provide a usable organization claim.
     """
-    custom_attrs = mailbox_data.get("maildomain_custom_attributes", {})
+    custom_attrs = mailbox_data.get("maildomain_custom_attributes") or {}
     org_claim = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
-    if not org_claim or not custom_attrs:
-        return None
+    if not org_claim:
+        raise SetupServiceError("OIDC_USERINFO_ORGANIZATION_CLAIM is not configured")
 
     external_id = custom_attrs.get(org_claim)
     if not external_id:
-        return None
+        raise SetupServiceError(
+            f"Mailbox {mailbox_data.get('email', '')} has no "
+            f"'{org_claim}' attribute on its mail domain"
+        )
 
-    try:
-        org = Organization.objects.get(external_id=external_id)
-        return str(org.id)
-    except Organization.DoesNotExist:
-        logger.warning(
-            "Organization with external_id=%s not found for mailbox %s",
+    org, created = Organization.objects.get_or_create(
+        external_id=external_id,
+        defaults={"name": f"Organization {external_id}"},
+    )
+    if created:
+        logger.info(
+            "Auto-created Organization external_id=%s for mailbox %s "
+            "(name will be updated on first user login)",
             external_id,
             mailbox_data.get("email", ""),
         )
-        return None
-
-
-class SetupServiceError(Exception):
-    """Raised when a mailbox operation fails."""
+    return str(org.id)
 
 
 class SetupService:
@@ -102,21 +113,32 @@ class SetupService:
         return self._setup_standalone(user, name, color=color)
 
     def _setup_standalone(self, user, name, color=None):
-        """Create an INDIVIDUAL principal + default calendar."""
-        self._create_calendar(
+        """Create an INDIVIDUAL principal + calendar."""
+        result = self._create_calendar(
             user=user,
             email=user.email,
             name=name or user.email,
             calendar_user_type="INDIVIDUAL",
+            org_id=str(user.organization_id),
             color=color,
         )
+        calendar_uri = result.get("calendar_uri", "default")
         return {
-            "calendar_path": f"calendars/users/{user.email}/default",
+            "calendar_path": f"calendars/users/{user.email}/{calendar_uri}",
             "principal_uri": f"principals/users/{user.email}",
         }
 
     def _setup_mailbox(self, user, name, mailbox_email, color=None):
-        """Create a MAILBOX principal + default calendar, shared with all users."""
+        """Create a MAILBOX principal + calendar, shared with all mailbox users.
+
+        Each call creates a NEW calendar under the mailbox principal so
+        a single mailbox can back several calendars (e.g. ``Personal``,
+        ``Triage``, ``Out-of-office`` all sending as ``me@example.com``).
+
+        The picked ``color`` lands on the caller's own sharee instance
+        only — it is never stored on the (invisible) owner row and never
+        propagated to other mailbox users via the share fan-out.
+        """
         if not settings.FEATURE_MESSAGES_INTEGRATION:
             raise SetupServiceError("Messages integration is not enabled")
 
@@ -141,20 +163,32 @@ class SetupService:
         # Resolve org from the mailbox's mail domain custom attributes
         org_id = _resolve_mailbox_org_id(user_mailbox)
 
-        self._create_calendar(
+        result = self._create_calendar(
             user=user,
             email=mailbox_email,
             name=name or mailbox_email,
             calendar_user_type="MAILBOX",
             org_id=org_id,
             color=color,
+            caller_email=user.email,
         )
+        # ``calendar_uri`` is the owner-side URI (under the mailbox
+        # principal); ``caller_calendar_uri`` is the URI the caller can
+        # actually read at ``calendars/users/{user.email}/<uri>/``. The
+        # response below uses the caller-side URI because the frontend
+        # path it builds is read by the caller.
+        caller_calendar_uri = result.get("caller_calendar_uri", "default")
 
-        # Share with all mailbox users immediately (users already in the response)
+        # Fan out to the rest of the mailbox users. The caller's sharee
+        # row already exists (with their picked color) thanks to
+        # caller_email above; sync_mailbox will leave it alone because
+        # ON CONFLICT only refreshes ``access``, not ``calendarcolor``.
         self.sync_mailbox(user, mailbox_email, users=user_mailbox.get("users", []))
 
         return {
-            "calendar_path": f"calendars/users/{mailbox_email}/default",
+            "calendar_path": (
+                f"calendars/users/{user.email}/{caller_calendar_uri}"
+            ),
             "mailbox_email": mailbox_email,
             "principal_uri": f"principals/users/{mailbox_email}",
         }
@@ -268,12 +302,16 @@ class SetupService:
         email,
         name,
         calendar_user_type,
-        org_id=None,
+        org_id,
         color=None,
+        caller_email=None,
     ):
-        """Create a calendar (and principal if needed) via internal API."""
-        if org_id is None:
-            org_id = str(user.organization_id) if user.organization_id else None
+        """Create a calendar (and principal if needed) via internal API.
+
+        Returns the parsed JSON response, which includes ``calendar_uri``
+        (the freshly-allocated URI under the principal — ``default`` for
+        the first calendar, a UUID for subsequent ones).
+        """
         payload = {
             "email": email,
             "name": name,
@@ -282,6 +320,8 @@ class SetupService:
         }
         if color:
             payload["color"] = color
+        if caller_email:
+            payload["caller_email"] = caller_email
         try:
             resp = self._http.internal_request(
                 "POST",
@@ -293,6 +333,7 @@ class SetupService:
                 raise SetupServiceError(
                     f"Failed to create calendar: {resp.status_code}"
                 )
+            return resp.json()
         except SetupServiceError:
             raise
         except Exception as exc:

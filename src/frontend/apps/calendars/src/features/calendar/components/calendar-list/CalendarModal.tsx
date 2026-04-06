@@ -94,7 +94,7 @@ export const CalendarModal = ({
   }, [isOpen, mode, calendar, isOnboarding, sendCapableMailboxes, t]);
 
   const handleSave = async () => {
-    if (!name.trim()) {
+    if (!name?.trim()) {
       setError(t("calendar.createCalendar.nameRequired"));
       return;
     }
@@ -158,7 +158,7 @@ export const CalendarModal = ({
           <Button
             color="brand"
             onClick={handleSave}
-            disabled={isLoading || !name.trim()}
+            disabled={isLoading || !name?.trim()}
           >
             {isLoading ? "..." : saveLabel}
           </Button>
@@ -181,7 +181,11 @@ export const CalendarModal = ({
               options={mailboxOptions}
               value={selectedMailbox}
               onChange={(e) => {
-                const value = e.target.value as string;
+                // Cunningham's Select emits undefined when the user
+                // clicks "Clear selection" — treat that as NO_MAILBOX.
+                const raw = e.target.value;
+                const value =
+                  typeof raw === "string" && raw ? raw : NO_MAILBOX_VALUE;
                 setSelectedMailbox(value);
                 if (value !== NO_MAILBOX_VALUE) {
                   const mb = sendCapableMailboxes.find(

@@ -476,11 +476,31 @@ class InternalApiPlugin extends ServerPlugin
      * principal), this endpoint can create calendars under any principal
      * — including mailbox principals that no user logs in as.
      *
+     * Each call creates a NEW calendar. The first call for a fresh
+     * principal uses the URI ``default`` (so existing onboarding code
+     * paths and bookmarks keep working); subsequent calls allocate a
+     * fresh UUID URI. This means a user can have multiple calendars
+     * backed by the same mailbox principal.
+     *
+     * Color is strictly personal: for mailbox calendars (where the
+     * caller is not the principal) the picked ``color`` lands on the
+     * caller's own sharee instance, never on the owner instance and
+     * never propagated to other mailbox users. For individual calendars
+     * (caller IS the principal) it lands on the owner instance — the
+     * only one the caller has.
+     *
      * Body: {
-     *   "email": "contact@company.com",       (required)
+     *   "email": "contact@company.com",       (required) principal email
      *   "calendar_user_type": "INDIVIDUAL",   (required; INDIVIDUAL | MAILBOX)
+     *   "org_id": "...",                       (required)
      *   "name": "Contact Team",               (optional, defaults to email)
-     *   "org_id": "...",                       (optional)
+     *   "color": "#dc3545",                   (optional, defaults to #3788d8)
+     *   "caller_email": "alice@co",           (optional) When set and
+     *       different from ``email``, an additional sharee instance for
+     *       the caller is inserted with read-write access and the
+     *       chosen ``color``. Used by the mailbox setup flow so the
+     *       caller sees the new calendar with their picked color
+     *       immediately, without waiting for sync-mailbox-acls.
      * }
      */
     private function handleCreateCalendar($request, $response)
@@ -493,10 +513,12 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
-        // Strong contract: email and calendar_user_type are mandatory.
-        // Validating explicitly here prevents silent upsert downgrades
-        // (e.g. MAILBOX → INDIVIDUAL) from a caller that forgot the field.
-        foreach (['email', 'calendar_user_type'] as $field) {
+        // Strong contract: email, calendar_user_type and org_id are
+        // mandatory. Requiring org_id here prevents silently inserting a
+        // NULL-org principal (which would bypass cross-org freebusy and
+        // discovery isolation) and prevents an upsert from downgrading
+        // MAILBOX → INDIVIDUAL.
+        foreach (['email', 'calendar_user_type', 'org_id'] as $field) {
             if (empty($body[$field])) {
                 $response->setStatus(400);
                 $response->setHeader('Content-Type', 'application/json');
@@ -509,11 +531,13 @@ class InternalApiPlugin extends ServerPlugin
 
         $email = $body['email'];
         $calendarUserType = $body['calendar_user_type'];
+        $orgId = $body['org_id'];
         $name = $body['name'] ?? $email;
-        $orgId = $body['org_id'] ?? null;
         $color = $body['color'] ?? '#3788d8';
-
+        $callerEmail = $body['caller_email'] ?? null;
         $principalUri = 'principals/users/' . $email;
+        $isMailbox = ($calendarUserType === PrincipalBackend::TYPE_MAILBOX);
+        $callerIsOwner = ($callerEmail === null || $callerEmail === $email);
 
         $this->pdo->beginTransaction();
         try {
@@ -521,36 +545,83 @@ class InternalApiPlugin extends ServerPlugin
                 'INSERT INTO principals (uri, email, displayname, calendar_user_type, org_id)'
                 . ' VALUES (?, ?, ?, ?, ?)'
                 . ' ON CONFLICT (uri) DO UPDATE SET'
-                . ' org_id = COALESCE(EXCLUDED.org_id, principals.org_id),'
-                . ' displayname = COALESCE(EXCLUDED.displayname, principals.displayname),'
+                . ' org_id = EXCLUDED.org_id,'
+                . ' displayname = EXCLUDED.displayname,'
                 . ' calendar_user_type = EXCLUDED.calendar_user_type'
             );
             $stmt->execute([$principalUri, $email, $name, $calendarUserType, $orgId]);
 
-            // Serialize concurrent calls for the same principal: lock the
-            // principal row for the duration of this transaction so two
-            // simultaneous requests cannot both observe "no calendars" and
-            // both call createCalendar('default').
+            // Serialize concurrent calls for the same principal: lock
+            // the principal row so two simultaneous requests can't both
+            // pick the URI ``default`` for the first calendar.
             $lockStmt = $this->pdo->prepare(
                 'SELECT id FROM principals WHERE uri = ? FOR UPDATE'
             );
             $lockStmt->execute([$principalUri]);
 
-            // Check if this principal already had a calendar
+            // First calendar gets the URI ``default`` (preserving
+            // legacy onboarding URLs); subsequent calendars get a UUID.
             $existingCalendars = $this->caldavBackend->getCalendarsForUser($principalUri);
-            $isNew = empty($existingCalendars);
+            $newUri = empty($existingCalendars) ? 'default' : UUIDUtil::getUUID();
 
-            if ($isNew) {
-                $this->caldavBackend->createCalendar(
-                    $principalUri,
-                    'default',
-                    [
-                        '{DAV:}displayname' => $name,
-                        '{http://apple.com/ns/ical/}calendar-color' => $color,
-                        '{urn:ietf:params:xml:ns:caldav}supported-calendar-component-set'
-                            => new \Sabre\CalDAV\Xml\Property\SupportedCalendarComponentSet(['VEVENT']),
-                    ]
+            // For mailbox calendars the owner-side color is invisible
+            // (no human logs in as the mailbox principal), so we store
+            // a fixed default and put the caller's color on their own
+            // sharee instance below. For individual calendars the
+            // caller IS the owner, so the color goes directly on the
+            // owner instance via the property map.
+            $ownerColor = ($isMailbox && !$callerIsOwner) ? '#3788d8' : $color;
+            $this->caldavBackend->createCalendar(
+                $principalUri,
+                $newUri,
+                [
+                    '{DAV:}displayname' => $name,
+                    '{http://apple.com/ns/ical/}calendar-color' => $ownerColor,
+                    '{urn:ietf:params:xml:ns:caldav}supported-calendar-component-set'
+                        => new \Sabre\CalDAV\Xml\Property\SupportedCalendarComponentSet(['VEVENT']),
+                ]
+            );
+
+            // Mailbox path: also create the caller's own sharee
+            // instance now with their picked color, so they see the
+            // calendar in their UI immediately and the color is theirs
+            // alone (sync-mailbox-acls will fan out to other users with
+            // the default color).
+            //
+            // ``callerCalendarUri`` is the URI the caller will use to
+            // read the calendar from THEIR own principal home — it's
+            // the freshly-allocated UUID for the sharee row, not the
+            // owner-side ``$newUri``. We surface it in the response so
+            // callers (Python setup service, tests) don't have to do
+            // a follow-up PROPFIND just to discover it.
+            $callerCalendarUri = $newUri;
+            if ($isMailbox && !$callerIsOwner) {
+                $cidStmt = $this->pdo->prepare(
+                    'SELECT calendarid FROM calendarinstances'
+                    . ' WHERE principaluri = ? AND uri = ?'
                 );
+                $cidStmt->execute([$principalUri, $newUri]);
+                $calendarId = (int) $cidStmt->fetchColumn();
+
+                $callerPrincipal = 'principals/users/' . $callerEmail;
+                $callerCalendarUri = UUIDUtil::getUUID();
+                $sharee = $this->pdo->prepare(
+                    'INSERT INTO calendarinstances'
+                    . ' (calendarid, principaluri, access, uri, displayname,'
+                    . '  calendarcolor, share_href, share_displayname,'
+                    . '  share_invitestatus, transparent, is_sync_managed)'
+                    . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 0, TRUE)'
+                );
+                $sharee->execute([
+                    $calendarId,
+                    $callerPrincipal,
+                    PrincipalBackend::ACCESS_READ_WRITE,
+                    $callerCalendarUri,
+                    $name,
+                    $color,
+                    'mailto:' . $callerEmail,
+                    $callerEmail,
+                ]);
             }
 
             $this->pdo->commit();
@@ -563,13 +634,14 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
-        $status = $isNew ? 201 : 200;
-        $response->setStatus($status);
+        $response->setStatus(201);
         $response->setHeader('Content-Type', 'application/json');
         $response->setBody(json_encode([
             'principal_uri' => $principalUri,
             'email' => $email,
-            'created' => $isNew,
+            'calendar_uri' => $newUri,
+            'caller_calendar_uri' => $callerCalendarUri,
+            'created' => true,
         ]));
         return false;
     }
@@ -741,7 +813,13 @@ class InternalApiPlugin extends ServerPlugin
                     'displayname' => $ownerCal['displayname'],
                     'share_href' => 'mailto:' . $userEmail,
                     'share_displayname' => $userEmail,
-                    'color' => $ownerCal['calendarcolor'] ?? '#3788d8',
+                    // Color is strictly personal: each sharee starts
+                    // with the default and is free to PROPPATCH their
+                    // own. Do NOT inherit from the owner — for mailbox
+                    // calendars the owner-side color is meaningless,
+                    // and for individual calendars sharing the owner's
+                    // color into a sharee's view would be confusing.
+                    'color' => '#3788d8',
                 ];
                 $active[] = [
                     'user_email' => $userEmail,

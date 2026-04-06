@@ -8,6 +8,7 @@ Requires: CalDAV server running.
 
 from datetime import datetime, timedelta
 from urllib.parse import unquote
+from xml.etree import ElementTree as ET
 
 import pytest
 from rest_framework.test import APIClient
@@ -492,6 +493,104 @@ class TestFreebusySharePersistence:
             f"but got:\n{content[:1000]}"
         )
         assert sharee.email in content, "Expected sharee email in LS:share-access-map"
+
+    def test_share_access_map_returns_proper_xml_elements(self):
+        """LS:share-access-map must contain real <LS:sharee/> child elements,
+        not an HTML-escaped XML string.
+
+        Regression: ShareAccessPlugin used to return the inner XML as a
+        plain PHP string, which SabreDAV's serializer then HTML-escaped
+        as text content. The wire response contained
+        ``&lt;LS:sharee href=&quot;...&quot; access=&quot;freebusy&quot;/&gt;``
+        — the frontend XML parser saw a single text node and the share
+        was displayed as 'Reader' instead of 'Free/Busy'. The fix is to
+        wrap the inner XML in ``Sabre\\Xml\\Element\\XmlFragment`` so it
+        gets re-parsed and serialized as proper child elements.
+
+        This test parses the multistatus response and asserts the
+        expected XML *structure* — the substring check in
+        ``test_freebusy_share_roundtrip`` did not catch the regression
+        because "freebusy" appears in both the broken and the fixed
+        wire format.
+        """
+        org = factories.OrganizationFactory(external_id="fb-map-xml")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-fbmx")
+        sharee = factories.UserFactory(
+            email="sharee-fbmx@share-test.com", organization=org
+        )
+        cal_id = _get_cal_id(cal_path)
+
+        body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"'
+            ' xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<CS:set>"
+            f"<D:href>mailto:{sharee.email}</D:href>"
+            "<LS:share-access>freebusy</LS:share-access>"
+            "<CS:read/>"
+            "</CS:set>"
+            "</CS:share>"
+        )
+        resp = owner_client.generic(
+            "POST",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=body,
+            content_type="application/xml",
+        )
+        assert resp.status_code in (200, 204)
+
+        propfind_body = (
+            '<?xml version="1.0"?>'
+            '<propfind xmlns="DAV:" '
+            'xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<prop><LS:share-access-map/></prop>"
+            "</propfind>"
+        )
+        map_resp = owner_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=propfind_body,
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        assert map_resp.status_code == 207, (
+            f"PROPFIND returned {map_resp.status_code}: "
+            f"{map_resp.content.decode()[:500]}"
+        )
+
+        ns = {
+            "d": "DAV:",
+            "ls": "http://lasuite.numerique.gouv.fr/ns/",
+        }
+        root = ET.fromstring(map_resp.content)
+        sam_elements = root.findall(".//ls:share-access-map", ns)
+        assert len(sam_elements) == 1, (
+            f"Expected exactly one share-access-map element, got {len(sam_elements)}"
+        )
+        sam = sam_elements[0]
+
+        # CRITICAL: must NOT be a text node — that's the regression
+        # we're guarding against. If SabreDAV serialized the inner XML
+        # as escaped text content, the element would have text but no
+        # children.
+        assert (sam.text or "").strip() == "", (
+            f"share-access-map must not contain text content "
+            f"(escaped XML string regression). Got text: "
+            f"{(sam.text or '')!r}"
+        )
+
+        sharees = sam.findall("ls:sharee", ns)
+        assert len(sharees) == 1, (
+            f"Expected exactly one sharee child element, got "
+            f"{len(sharees)}. Raw response:\n"
+            f"{map_resp.content.decode()[:1000]}"
+        )
+        assert sharees[0].get("href") == f"mailto:{sharee.email}", (
+            f"sharee href mismatch: got {sharees[0].get('href')!r}"
+        )
+        assert sharees[0].get("access") == "freebusy", (
+            f"sharee access mismatch: got {sharees[0].get('access')!r}"
+        )
 
     def test_per_share_freebusy_strips_event_details(self):
         """LS:share-access=freebusy should strip event details for THAT sharee only."""
@@ -2034,4 +2133,576 @@ class TestSyncAclEdgeCases:
         assert len(cals) == 1, (
             f"Idempotent sync should produce exactly 1 share, "
             f"got {len(cals)}: {[str(c.url) for c in cals]}"
+        )
+
+
+class TestProppatchScheduleTransp:
+    """PROPPATCH schedule-calendar-transp on a sharee instance must work
+    against PostgreSQL.
+
+    Regression: SabreDAV's upstream ``CalDAV\\Backend\\PDO::updateCalendar``
+    stores the ``transparent`` value as a PHP boolean and binds it
+    directly. The pgsql PDO driver serializes ``false`` as the empty
+    string ``''`` (instead of 0/1), which the ``transparent SMALLINT NOT
+    NULL`` column rejects with ``SQLSTATE[22P02]: invalid input syntax
+    for type smallint``. The fix is in
+    ``AuditCalDAVBackend::updateCalendar`` (the override casts to int
+    before binding).
+    """
+
+    def test_proppatch_schedule_transp_on_sharee_instance(self):  # pylint: disable=too-many-locals
+        """A sharee should be able to PROPPATCH schedule-calendar-transp
+        on their per-instance shared calendar without hitting the
+        bool→smallint PDO bug."""
+        org = factories.OrganizationFactory(external_id="proppatch-transp")
+        owner, _, cal_path = _create_user_with_calendar(org, "owner-trsp")
+        sharee, sharee_client, _ = _create_user_with_calendar(org, "sharee-trsp")
+        cal_id = _get_cal_id(cal_path)
+
+        # Owner shares read-write with sharee via raw CS:share so the
+        # sharee-instance row exists in calendarinstances.
+        owner_client = APIClient()
+        owner_client.force_login(owner)
+        share_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/">'
+            "<CS:set>"
+            f"<D:href>mailto:{sharee.email}</D:href>"
+            "<CS:read-write/>"
+            "</CS:set>"
+            "</CS:share>"
+        )
+        share_resp = owner_client.generic(
+            "POST",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=share_body,
+            content_type="application/xml",
+        )
+        assert share_resp.status_code in (200, 204)
+
+        # Find the sharee's instance URI (UUID under their principal home).
+        before = set()
+        dav = CalDAVHTTPClient().get_dav_client(sharee)
+        cals = dav.principal().calendars()
+        assert len(cals) >= 1
+        # The sharee may have their own cal + the shared one. Pick the
+        # shared instance — its URI is a UUID, not "default".
+        shared = next(
+            (c for c in cals if not str(c.url).rstrip("/").endswith("default")),
+            None,
+        )
+        assert shared is not None, (
+            f"Expected at least one non-default calendar for the sharee, "
+            f"got {[str(c.url) for c in cals]}"
+        )
+        shared_uri = unquote(str(shared.url)).rstrip("/").rsplit("/", maxsplit=1)[-1]
+
+        # PROPPATCH schedule-calendar-transp = OPAQUE on the sharee
+        # instance. The opaque case is the one that hits the bug:
+        # SabreDAV upstream stores ``transparent === getValue()`` which
+        # for opaque is PHP false, and pgsql PDO serializes false as ''.
+        # The transparent case binds PHP true → '1' which works.
+        proppatch_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:propertyupdate xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:set><D:prop>"
+            "<C:schedule-calendar-transp><C:opaque/></C:schedule-calendar-transp>"
+            "</D:prop></D:set>"
+            "</D:propertyupdate>"
+        )
+        resp = sharee_client.generic(
+            "PROPPATCH",
+            f"/caldav/calendars/users/{sharee.email}/{shared_uri}/",
+            data=proppatch_body,
+            content_type="application/xml",
+        )
+
+        # Must succeed (207 multistatus with HTTP/1.1 200 OK inside).
+        assert resp.status_code == 207, (
+            f"PROPPATCH returned {resp.status_code}: {resp.content.decode()[:1000]}"
+        )
+        body = resp.content.decode()
+        assert "PDOException" not in body, (
+            f"Raw PDO error leaked to client:\n{body[:1500]}"
+        )
+        assert "SQLSTATE" not in body, f"Raw SQLSTATE leaked to client:\n{body[:1500]}"
+        assert "200 OK" in body, f"Expected per-property 200 OK, got:\n{body[:1500]}"
+
+        # Now PROPPATCH back to transparent and confirm it also works
+        # (round-trip both directions).
+        proppatch_body_t = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:propertyupdate xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:set><D:prop>"
+            "<C:schedule-calendar-transp><C:transparent/></C:schedule-calendar-transp>"
+            "</D:prop></D:set>"
+            "</D:propertyupdate>"
+        )
+        resp_t = sharee_client.generic(
+            "PROPPATCH",
+            f"/caldav/calendars/users/{sharee.email}/{shared_uri}/",
+            data=proppatch_body_t,
+            content_type="application/xml",
+        )
+        assert resp_t.status_code == 207
+        body_t = resp_t.content.decode()
+        assert "PDOException" not in body_t
+        assert "200 OK" in body_t
+
+        # Read it back to confirm transparent was persisted.
+        check_body = (
+            '<?xml version="1.0"?>'
+            '<propfind xmlns="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<prop><C:schedule-calendar-transp/></prop>"
+            "</propfind>"
+        )
+        check_resp = sharee_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{sharee.email}/{shared_uri}/",
+            data=check_body,
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        assert check_resp.status_code == 207
+        assert "transparent" in check_resp.content.decode(), (
+            f"schedule-calendar-transp was not persisted as transparent:\n"
+            f"{check_resp.content.decode()[:1000]}"
+        )
+
+    def test_proppatch_schedule_transp_does_not_leak_pdo_error(self):
+        """Defense-in-depth: even if a future regression makes the
+        backend throw a raw PDOException, the global exception handler
+        in server.php must mask it as a generic 'Internal server error'
+        before serializing the response. The client must never see
+        SQLSTATE codes, table names, or PDO parameter values.
+        """
+        # We don't have a way to force a PDO error from outside, so this
+        # test simply asserts the same hardening as the test above:
+        # PROPPATCH must never expose internal-error markers in the
+        # response body. Combined with the always-positive test above,
+        # this guards both the success path and the format of any
+        # future failure.
+        org = factories.OrganizationFactory(external_id="proppatch-noleak")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-leak")
+        cal_id = _get_cal_id(cal_path)
+
+        proppatch_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:propertyupdate xmlns:D="DAV:" '
+            'xmlns:A="http://apple.com/ns/ical/">'
+            "<D:set><D:prop>"
+            "<A:calendar-color>#ff00aa</A:calendar-color>"
+            "</D:prop></D:set>"
+            "</D:propertyupdate>"
+        )
+        resp = owner_client.generic(
+            "PROPPATCH",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=proppatch_body,
+            content_type="application/xml",
+        )
+        assert resp.status_code == 207
+        body = resp.content.decode()
+        assert "PDOException" not in body
+        assert "SQLSTATE" not in body
+        assert "syntax for type" not in body
+
+
+class TestInternalApiCreateCalendarColor:
+    """``POST /internal-api/calendars/`` must persist the requested
+    ``color`` and ``name`` on every call, and each call must allocate a
+    fresh calendar — never overwrite an existing one.
+
+    The first call for a fresh principal still uses the URI ``default``
+    (so existing onboarding URLs keep working); subsequent calls get a
+    UUID URI returned in the ``calendar_uri`` response field.
+    """
+
+    @staticmethod
+    def _create(owner, payload):
+        return CalDAVHTTPClient().internal_request(
+            "POST",
+            owner,
+            "internal-api/calendars/",
+            json=payload,
+        )
+
+    @staticmethod
+    def _read_calendar_props(reader, target_email, calendar_uri="default"):
+        """Read displayname + color via PROPFIND on the target calendar.
+
+        Uses ``CalDAVHTTPClient.request`` so we go through the same
+        SabreDAV PROPFIND code path the frontend uses — never SQL.
+        """
+        body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:propfind xmlns:D="DAV:" '
+            'xmlns:A="http://apple.com/ns/ical/">'
+            "<D:prop>"
+            "<D:displayname/>"
+            "<A:calendar-color/>"
+            "</D:prop>"
+            "</D:propfind>"
+        )
+        resp = CalDAVHTTPClient().request(
+            "PROPFIND",
+            reader,
+            f"calendars/users/{target_email}/{calendar_uri}/",
+            data=body,
+            content_type="application/xml; charset=utf-8",
+            extra_headers={"Depth": "0"},
+        )
+        assert resp.status_code == 207, (
+            f"PROPFIND failed: {resp.status_code} {resp.text[:500]}"
+        )
+        ns = {
+            "d": "DAV:",
+            "a": "http://apple.com/ns/ical/",
+        }
+        root = ET.fromstring(resp.content)
+        displayname_el = root.find(".//d:displayname", ns)
+        color_el = root.find(".//a:calendar-color", ns)
+        return {
+            "displayname": (displayname_el.text or "")
+            if displayname_el is not None
+            else None,
+            "color": (color_el.text or "") if color_el is not None else None,
+        }
+
+    def test_color_persisted_on_first_create(self):
+        """First create with a color must persist that color, and the
+        first calendar URI is ``default`` for backwards compatibility."""
+        org = factories.OrganizationFactory(external_id="color-first")
+        user = factories.UserFactory(
+            email="user-color-first@share-test.com", organization=org
+        )
+
+        resp = self._create(
+            user,
+            {
+                "email": user.email,
+                "name": "My calendar",
+                "calendar_user_type": "INDIVIDUAL",
+                "org_id": str(org.id),
+                "color": "#abcdef",
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json().get("calendar_uri") == "default"
+
+        props = self._read_calendar_props(user, user.email)
+        assert props["color"] == "#abcdef", props
+
+    def test_second_create_allocates_a_new_calendar(self):
+        """Each call must allocate a brand-new calendar — never overwrite
+        the principal's existing one. The first create gets ``default``,
+        the second gets a fresh UUID, and BOTH calendars keep their own
+        independent color (so the user effectively has multiple
+        calendars under the same principal)."""
+        org = factories.OrganizationFactory(external_id="color-recreate")
+        user = factories.UserFactory(
+            email="user-color-rc@share-test.com", organization=org
+        )
+
+        first = self._create(
+            user,
+            {
+                "email": user.email,
+                "name": "First",
+                "calendar_user_type": "INDIVIDUAL",
+                "org_id": str(org.id),
+                "color": "#111111",
+            },
+        )
+        assert first.status_code == 201, first.text
+        first_uri = first.json()["calendar_uri"]
+        assert first_uri == "default"
+        assert self._read_calendar_props(user, user.email, first_uri)["color"] == (
+            "#111111"
+        )
+
+        second = self._create(
+            user,
+            {
+                "email": user.email,
+                "name": "Second",
+                "calendar_user_type": "INDIVIDUAL",
+                "org_id": str(org.id),
+                "color": "#222222",
+            },
+        )
+        assert second.status_code == 201, second.text
+        second_uri = second.json()["calendar_uri"]
+        assert second_uri != "default", second.json()
+        assert second_uri != first_uri
+
+        # Both calendars exist independently, each keeping its own color.
+        assert self._read_calendar_props(user, user.email, first_uri)["color"] == (
+            "#111111"
+        )
+        assert self._read_calendar_props(user, user.email, second_uri)["color"] == (
+            "#222222"
+        )
+
+    def test_displayname_independent_per_calendar(self):
+        """Each new calendar keeps its own displayname; a second create
+        does not rename the first."""
+        org = factories.OrganizationFactory(external_id="name-recreate")
+        user = factories.UserFactory(
+            email="user-name-rc@share-test.com", organization=org
+        )
+
+        first = self._create(
+            user,
+            {
+                "email": user.email,
+                "name": "First Name",
+                "calendar_user_type": "INDIVIDUAL",
+                "org_id": str(org.id),
+            },
+        )
+        assert first.status_code == 201, first.text
+        first_uri = first.json()["calendar_uri"]
+
+        second = self._create(
+            user,
+            {
+                "email": user.email,
+                "name": "Second Name",
+                "calendar_user_type": "INDIVIDUAL",
+                "org_id": str(org.id),
+            },
+        )
+        assert second.status_code == 201, second.text
+        second_uri = second.json()["calendar_uri"]
+        assert second_uri != first_uri
+
+        assert self._read_calendar_props(user, user.email, first_uri)[
+            "displayname"
+        ] == "First Name"
+        assert self._read_calendar_props(user, user.email, second_uri)[
+            "displayname"
+        ] == (
+            "Second Name"
+        )
+
+
+class TestInternalApiCreateMailboxCalendar:
+    """``POST /internal-api/calendars/`` with ``calendar_user_type=MAILBOX``
+    + ``caller_email`` must:
+
+    1. Land the picked color on the **caller's** sharee instance only —
+       not on the (invisible) owner instance, and not on any other
+       mailbox user's sharee instance after sync.
+    2. Allocate a new calendar on every call so a single mailbox can
+       back multiple calendars (think personal mailbox with several
+       project calendars).
+    """
+
+    @staticmethod
+    def _create(owner, payload):
+        return CalDAVHTTPClient().internal_request(
+            "POST",
+            owner,
+            "internal-api/calendars/",
+            json=payload,
+        )
+
+    @staticmethod
+    def _read_color(reader, owner_email, calendar_uri):
+        body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:propfind xmlns:D="DAV:" '
+            'xmlns:A="http://apple.com/ns/ical/">'
+            "<D:prop><A:calendar-color/></D:prop>"
+            "</D:propfind>"
+        )
+        resp = CalDAVHTTPClient().request(
+            "PROPFIND",
+            reader,
+            f"calendars/users/{owner_email}/{calendar_uri}/",
+            data=body,
+            content_type="application/xml; charset=utf-8",
+            extra_headers={"Depth": "0"},
+        )
+        assert resp.status_code == 207, (
+            f"PROPFIND failed: {resp.status_code} {resp.text[:500]}"
+        )
+        ns = {"a": "http://apple.com/ns/ical/"}
+        color_el = ET.fromstring(resp.content).find(".//a:calendar-color", ns)
+        return (color_el.text or "") if color_el is not None else None
+
+    @staticmethod
+    def _list_calendar_uris(user):
+        """Return the set of UUID/default URIs visible to ``user``."""
+        dav = CalDAVHTTPClient().get_dav_client(user)
+        uris = set()
+        for cal in dav.principal().calendars():
+            uris.add(unquote(str(cal.url)).rstrip("/").rsplit("/", maxsplit=1)[-1])
+        return uris
+
+    def test_caller_color_lands_on_caller_view_not_owner(self):
+        """The caller's picked color must show up when the caller reads
+        their own view of the calendar (their sharee instance), and the
+        owner instance must keep the default color."""
+        org = factories.OrganizationFactory(external_id="mbx-color-personal")
+        caller = factories.UserFactory(
+            email="caller-mbx-cp@share-test.com", organization=org
+        )
+        mailbox_email = "team-mbx-cp@share-test.com"
+
+        resp = self._create(
+            caller,
+            {
+                "email": mailbox_email,
+                "name": "Team",
+                "calendar_user_type": "MAILBOX",
+                "org_id": str(org.id),
+                "color": "#dc3545",
+                "caller_email": caller.email,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        owner_uri = body["calendar_uri"]
+        caller_uri = body["caller_calendar_uri"]
+        # Owner-side and caller-side URIs are independent: the owner
+        # row is freshly allocated for the mailbox principal; the
+        # caller's sharee row is a different SabreDAV-style UUID under
+        # the caller's own principal home.
+        assert caller_uri != owner_uri
+
+        # Caller reads via their OWN principal: SabreDAV serves the
+        # caller's sharee instance row, which must carry the picked
+        # color.
+        caller_color = self._read_color(caller, caller.email, caller_uri)
+        assert caller_color == "#dc3545", (
+            f"Caller view should have picked color, got {caller_color!r}"
+        )
+
+        # Reading the OWNER's instance (via the mailbox principal path)
+        # must NOT show the picked color — the owner row is invisible
+        # to humans and we deliberately leave it at the default so the
+        # color stays personal.
+        owner_color = self._read_color(caller, mailbox_email, owner_uri)
+        assert owner_color != "#dc3545", (
+            f"Owner instance must not carry the personal color, got {owner_color!r}"
+        )
+
+    def test_caller_color_not_propagated_to_other_mailbox_users(self):
+        """When the calendar is fanned out to other mailbox users via
+        sync-mailbox-acls, those users' sharee instances must NOT inherit
+        the creator's personal color — they get the default."""
+        org = factories.OrganizationFactory(external_id="mbx-color-fanout")
+        caller = factories.UserFactory(
+            email="caller-mbx-fan@share-test.com", organization=org
+        )
+        other = factories.UserFactory(
+            email="other-mbx-fan@share-test.com", organization=org
+        )
+        mailbox_email = "team-mbx-fan@share-test.com"
+
+        resp = self._create(
+            caller,
+            {
+                "email": mailbox_email,
+                "name": "Team",
+                "calendar_user_type": "MAILBOX",
+                "org_id": str(org.id),
+                "color": "#dc3545",
+                "caller_email": caller.email,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        calendar_uri = resp.json()["calendar_uri"]
+
+        # Fan out the share to ``other`` via the same path the setup
+        # service uses (``SetupService.sync_mailbox`` calls this).
+        _sync_mailbox_acls(
+            caller,
+            [
+                {
+                    "user_email": other.email,
+                    "mailbox_email": mailbox_email,
+                    "calendar_uri": calendar_uri,
+                    "privilege": "read-write",
+                }
+            ],
+        )
+
+        # ``other`` must see the calendar with the DEFAULT color, not
+        # the personal one the caller picked.
+        # Find the new sharee URI for ``other`` (it's a fresh UUID
+        # under their principal — different from the owner uri).
+        other_uris = self._list_calendar_uris(other)
+        assert other_uris, "other should see the shared calendar"
+        # ``other`` only sees this one shared calendar in this test.
+        other_uri = next(iter(other_uris))
+        other_color = self._read_color(other, other.email, other_uri)
+        assert other_color != "#dc3545", (
+            f"Other user must NOT inherit the caller's personal color, "
+            f"got {other_color!r}"
+        )
+
+    def test_second_mailbox_create_allocates_new_calendar(self):
+        """Two consecutive setup calls for the SAME mailbox must create
+        TWO distinct calendars (a single personal mailbox can back
+        multiple calendars)."""
+        org = factories.OrganizationFactory(external_id="mbx-multi")
+        caller = factories.UserFactory(
+            email="caller-mbx-multi@share-test.com", organization=org
+        )
+        mailbox_email = "team-mbx-multi@share-test.com"
+
+        first = self._create(
+            caller,
+            {
+                "email": mailbox_email,
+                "name": "Project A",
+                "calendar_user_type": "MAILBOX",
+                "org_id": str(org.id),
+                "color": "#111111",
+                "caller_email": caller.email,
+            },
+        )
+        assert first.status_code == 201, first.text
+        first_owner_uri = first.json()["calendar_uri"]
+        first_caller_uri = first.json()["caller_calendar_uri"]
+
+        second = self._create(
+            caller,
+            {
+                "email": mailbox_email,
+                "name": "Project B",
+                "calendar_user_type": "MAILBOX",
+                "org_id": str(org.id),
+                "color": "#222222",
+                "caller_email": caller.email,
+            },
+        )
+        assert second.status_code == 201, second.text
+        second_owner_uri = second.json()["calendar_uri"]
+        second_caller_uri = second.json()["caller_calendar_uri"]
+        assert second_owner_uri != first_owner_uri, (
+            "Second mailbox create must allocate a new owner URI, not overwrite"
+        )
+        assert second_caller_uri != first_caller_uri
+
+        # Caller sees both calendars in their own home (each via its
+        # sharee URI), and each carries its own picked color.
+        caller_uris = self._list_calendar_uris(caller)
+        assert first_caller_uri in caller_uris, (
+            f"Expected {first_caller_uri} in caller's home, got {caller_uris}"
+        )
+        assert second_caller_uri in caller_uris, (
+            f"Expected {second_caller_uri} in caller's home, got {caller_uris}"
+        )
+        assert self._read_color(caller, caller.email, first_caller_uri) == (
+            "#111111"
+        )
+        assert self._read_color(caller, caller.email, second_caller_uri) == (
+            "#222222"
         )

@@ -94,6 +94,11 @@ class Base(Configuration):
     MESSAGES_API_KEY = SecretFileValue(
         None, environ_name="MESSAGES_API_KEY", environ_prefix=None
     )
+    # Channel identifier sent as X-Channel-Id on every Messages API call.
+    # Required by the Messages app to scope service-key access.
+    MESSAGES_CHANNEL_ID = values.Value(
+        None, environ_name="MESSAGES_CHANNEL_ID", environ_prefix=None
+    )
 
     # Default calendar sharing level for new organizations.
     # Controls what colleagues in the same org can see by default.

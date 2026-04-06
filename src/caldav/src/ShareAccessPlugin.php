@@ -31,11 +31,12 @@
 
 namespace Calendars\SabreDav;
 
+use Sabre\CalDAV\ICalendar;
+use Sabre\DAV\INode;
+use Sabre\DAV\PropFind;
 use Sabre\DAV\Server;
 use Sabre\DAV\ServerPlugin;
-use Sabre\DAV\PropFind;
-use Sabre\DAV\INode;
-use Sabre\CalDAV\ICalendar;
+use Sabre\Xml\Element\XmlFragment;
 
 class ShareAccessPlugin extends ServerPlugin
 {
@@ -243,15 +244,22 @@ class ShareAccessPlugin extends ServerPlugin
                     return null;
                 }
 
-                // Return as a simple serializable structure
-                // tsdav will parse the inner XML elements
+                // Build the inner XML as proper child elements via
+                // XmlFragment. Returning a plain string would let
+                // SabreDAV serialize it as escaped text content (e.g.
+                // "&lt;LS:sharee.../&gt;"), which the frontend cannot
+                // parse as a structured object. XmlFragment re-parses
+                // the inner XML and writes real child elements with the
+                // right namespace declarations.
                 $xml = '';
                 foreach ($rows as $row) {
                     $href = htmlspecialchars($row['share_href'], ENT_XML1);
                     $level = htmlspecialchars($row['share_access_level'], ENT_XML1);
-                    $xml .= "<LS:sharee href=\"{$href}\" access=\"{$level}\"/>";
+                    $xml .= '<LS:sharee xmlns:LS="' . self::LS_NS . '"'
+                        . ' href="' . $href . '"'
+                        . ' access="' . $level . '"/>';
                 }
-                return $xml;
+                return new XmlFragment($xml);
             } catch (\Exception $e) {
                 error_log("[ShareAccessPlugin] propFindMap error: " . $e->getMessage());
             }

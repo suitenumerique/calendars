@@ -337,14 +337,22 @@ mail domain**, not from the creating user:
    `add_maildomain_custom_attributes={OIDC_USERINFO_ORGANIZATION_CLAIM}`.
 2. The response includes `maildomain_custom_attributes: {<claim>: <value>}`
    (e.g. `{"siret": "12345678900010"}`).
-3. `SetupService` looks up `Organization.objects.get(external_id=value)`
-   and sets that org's ID on the mailbox principal.
+3. `SetupService._resolve_mailbox_org_id` calls
+   `Organization.objects.get_or_create(external_id=value, defaults=...)`
+   and assigns that org's ID to the mailbox principal.
 
-This ensures the mailbox principal belongs to the correct org regardless
-of which user creates it. If the org doesn't exist in Calendars yet (no
-user from that org has logged in), `org_id` is set to `None` and the
-mailbox principal won't appear in org-scoped discovery until an org member
-logs in and the org is created.
+This ensures the mailbox principal belongs to the correct organization
+regardless of which user creates it. If no `Organization` row exists yet
+(no user from that org has logged into Calendars), one is auto-created
+with `name = "Organization {external_id}"` as a placeholder; the OIDC
+backend's `resolve_organization` will overwrite the name with the real
+one the next time a user from that org logs in.
+
+If `OIDC_USERINFO_ORGANIZATION_CLAIM` is not configured or the mailbox's
+mail domain has no value for that claim, mailbox calendar creation
+**fails with a `SetupServiceError`** — there is no silent fallback to
+the creator's organization, since that would silently break cross-org
+isolation for freebusy and discovery.
 
 For standalone (INDIVIDUAL) calendars, `org_id` comes from the creating
 user's organization as before.

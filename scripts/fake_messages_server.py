@@ -53,6 +53,16 @@ for mb_email, mb_data in MAILBOXES.items():
 
 
 class FakeMessagesHandler(BaseHTTPRequestHandler):
+    def _check_auth(self):
+        """Reject requests missing the required X-API-Key / X-Channel-Id."""
+        if not self.headers.get("X-API-Key"):
+            self._send(401, {"detail": "X-API-Key header required"})
+            return False
+        if not self.headers.get("X-Channel-Id"):
+            self._send(401, {"detail": "X-Channel-Id header required"})
+            return False
+        return True
+
     def do_GET(self):
         path = self.path.split("?")[0]
         params = {}
@@ -61,17 +71,23 @@ class FakeMessagesHandler(BaseHTTPRequestHandler):
             params = parse_qs(urlparse(self.path).query)
 
         if path == "/api/v1.0/provisioning/mailboxes/":
+            if not self._check_auth():
+                return None
             return self._handle_mailboxes(params)
 
         self._send(404, {"error": "Not found"})
+        return None
 
     def do_POST(self):
         path = self.path.split("?")[0]
 
         if path == "/api/v1.0/submit/":
+            if not self._check_auth():
+                return None
             return self._handle_submit()
 
         self._send(404, {"error": "Not found"})
+        return None
 
     def _handle_mailboxes(self, params):
         user_email = params.get("user_email", [None])[0]

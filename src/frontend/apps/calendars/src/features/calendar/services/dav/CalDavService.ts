@@ -18,13 +18,11 @@ import {
 } from 'ts-ics'
 import {
   createAccount,
-  fetchCalendars as davFetchCalendars,
   fetchCalendarObjects as davFetchCalendarObjects,
   createCalendarObject as davCreateCalendarObject,
   updateCalendarObject as davUpdateCalendarObject,
   deleteCalendarObject as davDeleteCalendarObject,
   makeCalendar as davMakeCalendar,
-  propfind,
   DAVNamespaceShort,
   type DAVCalendarObject,
   davRequest,
@@ -65,6 +63,7 @@ import {
   executeDavRequest,
   escapeXml,
   CALENDAR_PROPS,
+  propfindLs,
   parseCalendarComponents,
   parseSharePrivilege,
   parseShareStatus,
@@ -136,50 +135,24 @@ export class CalDavService {
     }
 
     return withErrorHandling(async () => {
-      const davCalendars = await davFetchCalendars({
-        account: {
-          serverUrl: this._account!.serverUrl,
-          rootUrl: this._account!.rootUrl,
-          principalUrl: this._account!.principalUrl,
-          homeUrl: this._account!.homeUrl,
-          accountType: 'caldav',
-        },
+      const responses = await propfindLs({
+        url: this._account!.homeUrl!,
+        props: CALENDAR_PROPS,
+        depth: '1',
         headers: this._account!.headers,
         fetchOptions: this._account!.fetchOptions,
       })
 
-      const calendars: CalDavCalendar[] = davCalendars.map((dav) => {
-        // schedule-calendar-transp: tsdav returns the inner element name
-        // 'transparent' means the calendar does NOT count for freebusy
-        const rawTransp = (dav as Record<string, unknown>)['scheduleCalendarTransp']
-          ?? (dav as Record<string, unknown>)['schedule-calendar-transp']
-        const isTransparent = rawTransp != null && (
-          typeof rawTransp === 'string'
-            ? rawTransp.toLowerCase().includes('transparent')
-            : typeof rawTransp === 'object' && rawTransp !== null && 'transparent' in rawTransp
+      const calendars: CalDavCalendar[] = responses
+        .filter((r) =>
+          Object.keys(
+            (r.props?.resourcetype ?? {}) as Record<string, unknown>,
+          ).includes('calendar'),
         )
-
-        // LS:calendar-owner-type: "MAILBOX" for mailbox-owned shared calendars
-        const rawOwnerType = (dav as Record<string, unknown>)['calendarOwnerType']
-          ?? (dav as Record<string, unknown>)['calendar-owner-type']
-        const ownerType = typeof rawOwnerType === 'string' ? rawOwnerType : undefined
-
-        return {
-          url: dav.url,
-          displayName: typeof dav.displayName === 'string' ? dav.displayName : '',
-          description: typeof dav.description === 'string' ? dav.description : undefined,
-          color: dav.calendarColor,
-          includeInAvailability: !isTransparent,
-          ownerType,
-          ctag: dav.ctag,
-          syncToken: dav.syncToken,
-          timezone: typeof dav.timezone === 'string' ? dav.timezone : undefined,
-          components: dav.components,
-          resourcetype: dav.resourcetype ? Object.keys(dav.resourcetype) : undefined,
-          headers: this._account!.headers,
-          fetchOptions: this._account!.fetchOptions,
-        }
-      })
+        .map((rs) => this.parseCalendarPropfindResponse(
+          new URL(rs.href ?? '', this._account!.rootUrl ?? '').href,
+          rs.props,
+        ))
 
       this._calendars.clear()
       calendars.forEach((cal) => this._calendars.set(cal.url, cal))
@@ -188,11 +161,57 @@ export class CalDavService {
     }, 'Failed to fetch calendars')
   }
 
+  /** Build a CalDavCalendar from a tsdav-parsed PROPFIND props object. */
+  private parseCalendarPropfindResponse(
+    url: string,
+    props: Record<string, unknown> | undefined,
+  ): CalDavCalendar {
+    // schedule-calendar-transp (RFC 6638): "transparent" means the
+    // calendar does NOT count for freebusy.
+    const rawTransp = props?.scheduleCalendarTransp
+      ?? (props as Record<string, unknown> | undefined)?.['schedule-calendar-transp']
+    const isTransparent = rawTransp != null && (
+      typeof rawTransp === 'string'
+        ? rawTransp.toLowerCase().includes('transparent')
+        : typeof rawTransp === 'object' && rawTransp !== null && 'transparent' in rawTransp
+    )
+
+    // LS:calendar-owner-type: "MAILBOX" for mailbox-owned shared calendars.
+    const rawOwnerType = (props as Record<string, unknown> | undefined)?.calendarOwnerType
+    const ownerType = typeof rawOwnerType === 'string' ? rawOwnerType : undefined
+
+    const displayname = (props as Record<string, unknown> | undefined)?.displayname
+    const displayName = typeof displayname === 'string'
+      ? displayname
+      : (displayname as { _cdata?: string } | undefined)?._cdata ?? ''
+
+    return {
+      url,
+      displayName,
+      description: (props as Record<string, string | undefined> | undefined)?.calendarDescription,
+      color: (props as Record<string, string | undefined> | undefined)?.calendarColor,
+      includeInAvailability: !isTransparent,
+      ownerType,
+      ctag: (props as Record<string, string | undefined> | undefined)?.getctag,
+      syncToken: (props as Record<string, string | undefined> | undefined)?.syncToken,
+      timezone: (props as Record<string, string | undefined> | undefined)?.calendarTimezone,
+      components: parseCalendarComponents(
+        (props as Record<string, unknown> | undefined)?.supportedCalendarComponentSet,
+      ),
+      resourcetype: props?.resourcetype
+        ? Object.keys(props.resourcetype as Record<string, unknown>)
+        : undefined,
+      headers: this._account?.headers,
+      fetchOptions: this._account?.fetchOptions,
+    }
+  }
+
   async fetchCalendar(calendarUrl: string): Promise<CalDavResponse<CalDavCalendar>> {
     return withErrorHandling(async () => {
-      const response = await propfind({
+      const response = await propfindLs({
         url: calendarUrl,
         props: CALENDAR_PROPS,
+        depth: '0',
         headers: this._account?.headers,
         fetchOptions: this._account?.fetchOptions,
       })
@@ -202,34 +221,7 @@ export class CalDavService {
         throw new Error(`Calendar not found: ${rs.status}`)
       }
 
-      // Parse schedule-calendar-transp (RFC 6638)
-      const rawTransp = rs.props?.scheduleCalendarTransp
-        ?? rs.props?.['schedule-calendar-transp']
-      const isTransparent = rawTransp != null && (
-        typeof rawTransp === 'string'
-          ? rawTransp.toLowerCase().includes('transparent')
-          : typeof rawTransp === 'object' && rawTransp !== null && 'transparent' in rawTransp
-      )
-
-      const rawOwnerType = rs.props?.calendarOwnerType
-        ?? rs.props?.['calendar-owner-type']
-      const ownerType = typeof rawOwnerType === 'string' ? rawOwnerType : undefined
-
-      const calendar: CalDavCalendar = {
-        url: calendarUrl,
-        displayName: rs.props?.displayname?._cdata ?? rs.props?.displayname ?? '',
-        description: rs.props?.calendarDescription,
-        color: rs.props?.calendarColor,
-        includeInAvailability: !isTransparent,
-        ownerType,
-        ctag: rs.props?.getctag,
-        syncToken: rs.props?.syncToken,
-        timezone: rs.props?.calendarTimezone,
-        components: parseCalendarComponents(rs.props?.supportedCalendarComponentSet),
-        resourcetype: rs.props?.resourcetype ? Object.keys(rs.props.resourcetype) : undefined,
-        headers: this._account?.headers,
-        fetchOptions: this._account?.fetchOptions,
-      }
+      const calendar = this.parseCalendarPropfindResponse(calendarUrl, rs.props)
 
       this._calendars.set(calendar.url, calendar)
       return calendar
@@ -1165,7 +1157,7 @@ export class CalDavService {
     }
 
     return withErrorHandling(async () => {
-      const response = await propfind({
+      const response = await propfindLs({
         url: this._account!.homeUrl!,
         props: { [`${DAVNamespaceShort.CALENDAR_SERVER}:notification-URL`]: {} },
         headers: this._account!.headers,
@@ -1178,7 +1170,7 @@ export class CalDavService {
         return []
       }
 
-      const notificationsResponse = await propfind({
+      const notificationsResponse = await propfindLs({
         url: notificationUrl,
         props: { [`${DAVNamespaceShort.CALENDAR_SERVER}:notification`]: {} },
         headers: this._account!.headers,
@@ -1251,20 +1243,15 @@ export class CalDavService {
 
   async getCalendarSharees(calendarUrl: string): Promise<CalDavResponse<CalDavSharee[]>> {
     return withErrorHandling(async () => {
-      // Fetch CS:invite and LS:share-access-map in one PROPFIND
-      const response = await propfind({
+      const response = await propfindLs({
         url: calendarUrl,
         props: {
           [`${DAVNamespaceShort.CALENDAR_SERVER}:invite`]: {},
           'LS:share-access-map': {},
         },
-        headers: {
-          ...this._account?.headers,
-          // Declare LS namespace for custom property
-        },
-        headersToExclude: [],
-        fetchOptions: this._account?.fetchOptions,
         depth: '0',
+        headers: this._account?.headers,
+        fetchOptions: this._account?.fetchOptions,
       })
 
       const invite = response[0]?.props?.invite
@@ -1272,16 +1259,27 @@ export class CalDavService {
         return []
       }
 
-      // Parse LS:share-access-map to build href → access level map
+      // Parse LS:share-access-map → href → access level. tsdav strips
+      // namespace prefixes and camelCases, so the key is "shareAccessMap".
       const accessMap = new Map<string, string>()
-      const rawMap = response[0]?.props?.['share-access-map']
-        ?? response[0]?.props?.['shareAccessMap']
+      const rawMap = response[0]?.props?.shareAccessMap
+        ?? response[0]?.props?.['share-access-map']
       if (rawMap) {
-        // tsdav parses XML into objects; handle both array and single element
-        const sharees = Array.isArray(rawMap.sharee) ? rawMap.sharee : rawMap.sharee ? [rawMap.sharee] : []
+        const sharees = Array.isArray(rawMap.sharee)
+          ? rawMap.sharee
+          : rawMap.sharee
+            ? [rawMap.sharee]
+            : []
         for (const s of sharees) {
-          const href = (s as Record<string, string>)?.href
-          const access = (s as Record<string, string>)?.access
+          // tsdav uses xml-js compact mode, so XML element attributes
+          // land under `_attributes`. The PHP plugin emits
+          // <LS:sharee href="..." access="freebusy"/> with attributes,
+          // not child elements.
+          const sharee = s as Record<string, unknown>
+          const attrs = (sharee._attributes as Record<string, string> | undefined)
+            ?? (sharee as Record<string, string>)
+          const href = attrs?.href
+          const access = attrs?.access
           if (href && access) {
             accessMap.set(href, access)
           }
@@ -1501,7 +1499,7 @@ END:VCALENDAR`
     }
 
     return withErrorHandling(async () => {
-      const response = await propfind({
+      const response = await propfindLs({
         url: this._account!.homeUrl!,
         props: {
           [`${DAVNamespaceShort.CALDAV}:calendar-availability`]: {},
@@ -1594,7 +1592,7 @@ END:VCALENDAR`
 
   async getCalendarAcl(calendarUrl: string): Promise<CalDavResponse<CalendarAcl>> {
     return withErrorHandling(async () => {
-      const response = await propfind({
+      const response = await propfindLs({
         url: calendarUrl,
         props: {
           [`${DAVNamespaceShort.DAV}:acl`]: {},
@@ -1629,7 +1627,7 @@ END:VCALENDAR`
     }
 
     return withErrorHandling(async () => {
-      const response = await propfind({
+      const response = await propfindLs({
         url,
         props: {
           [`${DAVNamespaceShort.DAV}:displayname`]: {},
@@ -1719,7 +1717,7 @@ END:VCALENDAR`
     if (!this._account?.principalUrl) return null
 
     try {
-      const response = await propfind({
+      const response = await propfindLs({
         url: this._account.principalUrl,
         props: { [`${DAVNamespaceShort.CALDAV}:schedule-outbox-URL`]: {} },
         headers: this._account.headers,
@@ -1750,7 +1748,7 @@ END:VCALENDAR`
     }
 
     return withErrorHandling(async () => {
-      const response = await propfind({
+      const response = await propfindLs({
         url: this._account!.principalUrl!,
         props: {
           [`${DAVNamespaceShort.CALDAV}:schedule-outbox-URL`]: {},

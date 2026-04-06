@@ -118,7 +118,15 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
             $stmt->execute(['principals/users/' . $targetEmail]);
             $row = $stmt->fetch(\PDO::FETCH_ASSOC);
 
-            if ($row && $row['org_id'] && $row['org_id'] !== $requesterOrgId) {
+            // Fail-closed: a missing principal or one with no org_id
+            // (e.g. a mailbox principal whose org isn't registered yet)
+            // must not leak freebusy data to anyone outside its own org.
+            if (!$row || empty($row['org_id'])) {
+                throw new DAV\Exception\Forbidden(
+                    'Cannot verify organization for freebusy query'
+                );
+            }
+            if ($row['org_id'] !== $requesterOrgId) {
                 throw new DAV\Exception\Forbidden(
                     'Cross-organization free/busy queries are not allowed'
                 );

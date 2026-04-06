@@ -10,7 +10,7 @@
     ],
     "require": {
         "php": ">=8.1",
-        "sabre/dav": "dev-master#1000fc028469c240fe13459e36648959f1519d09",
+        "sabre/dav": "dev-master#7e6eb94b80813a129a89235fa9f0b73df1a44bdf",
         "ext-pdo": "*",
         "ext-pdo_pgsql": "*"
     },

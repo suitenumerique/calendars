@@ -140,10 +140,51 @@ $server->addPlugin(new ShareAccessPlugin($pdo));
 //     }
 // }, 50);
 
-// Log unhandled exceptions
-$server->on('exception', function($e) {
+// Log unhandled exceptions, and mask any raw internal-error message so
+// the client never sees database internals (SQL state, table names,
+// PDO parameter values…). SabreDAV's error renderer uses
+// $e->getMessage() directly when building the multistatus body and
+// has no extension point to override the message, so we mutate the
+// protected `Exception::$message` field via reflection. SabreDAV's
+// own DAV exceptions are passed through unchanged — they're safe by
+// design (NotFound, Forbidden, BadRequest, ServerError, etc.).
+//
+// FAIL-CLOSED: if reflection fails for any reason we MUST NOT let
+// SabreDAV render the original message. We write a generic 500
+// response directly and exit, bypassing the entire renderer.
+$server->on('exception', function ($e) {
     error_log("[sabre/dav] Exception: " . get_class($e) . " - " . $e->getMessage());
     error_log("[sabre/dav] Exception trace: " . $e->getTraceAsString());
+
+    if ($e instanceof \Sabre\DAV\Exception) {
+        return;
+    }
+    try {
+        $reflClass = new \ReflectionClass(\Exception::class);
+        $reflMessage = $reflClass->getProperty('message');
+        $reflMessage->setAccessible(true);
+        $reflMessage->setValue($e, 'Internal server error');
+        return;
+    } catch (\Throwable $reflFailure) {
+        error_log(
+            "[sabre/dav] Reflection-based message masking failed: "
+            . $reflFailure->getMessage()
+            . " — emitting hardcoded 500 to avoid leaking original error"
+        );
+    }
+
+    // Reflection failed. Bypass SabreDAV's renderer entirely so the
+    // raw exception message can never reach the client.
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/xml; charset=utf-8');
+    }
+    echo '<?xml version="1.0" encoding="utf-8"?>'
+        . '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">'
+        . '<s:exception>InternalServerError</s:exception>'
+        . '<s:message>Internal server error</s:message>'
+        . '</d:error>';
+    exit;
 }, 50);
 
 // Add audit context plugin (priority 70, runs before sanitizer/normalizer)

@@ -3,6 +3,19 @@
 
 $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
 
+// Keep the header (logo, settings button, user menu) on top of modal
+// backdrops so users can always log out / change settings — for example,
+// the onboarding modal that blocks the rest of the UI when no calendar
+// has been created yet. Cunningham's modal backdrop uses z-index: 1000
+// (see styles/globals.scss). The header is rendered inside
+// .c__main-layout__header which is position:fixed and forms its own
+// stacking context, so the z-index must go on that wrapper — bumping
+// .c__header alone has no effect because it's already on top within
+// its parent's stacking context.
+.c__main-layout__header {
+  z-index: 1100;
+}
+
 @media (max-width: $tablet) {
   .c__header {
     border-bottom: 0;

@@ -16,7 +16,7 @@ export const CalendarListItem = ({
   calendar,
   isVisible,
   isMenuOpen,
-  isMailboxCalendar = false,
+  mailboxEmail,
   onToggleVisibility,
   onMenuToggle,
   onEdit,
@@ -31,7 +31,11 @@ export const CalendarListItem = ({
   const calendarColor = typeof calendar.color === "string" ? calendar.color : "#3788d8";
 
   return (
-    <div className="calendar-list__item">
+    <div
+      className={`calendar-list__item ${
+        isMenuOpen ? "calendar-list__item--menu-open" : ""
+      }`}
+    >
       <div
         className="calendar-list__item-checkbox"
         style={{ "--calendar-color": calendarColor } as React.CSSProperties}
@@ -43,20 +47,23 @@ export const CalendarListItem = ({
           aria-label={`${t("calendar.list.showCalendar")} ${calendar.displayName || ""}`}
         />
       </div>
-      <span
-        className="calendar-list__name"
-        title={calendar.displayName || undefined}
-      >
-        {isMailboxCalendar && (
+      <div className="calendar-list__name-wrapper">
+        <span
+          className="calendar-list__name"
+          title={calendar.displayName || undefined}
+        >
+          {calendar.displayName || t("calendar.list.unnamed")}
+        </span>
+        {mailboxEmail && (
           <span
             className="material-icons calendar-list__mailbox-icon"
-            title={t("calendar.list.mailboxCalendar")}
+            title={t("calendar.list.mailboxCalendar", { email: mailboxEmail })}
+            aria-label={t("calendar.list.mailboxCalendar", { email: mailboxEmail })}
           >
             mail
           </span>
         )}
-        {calendar.displayName || t("calendar.list.unnamed")}
-      </span>
+      </div>
       <div className="calendar-list__item-actions">
         <CalendarItemMenu
           isOpen={isMenuOpen}

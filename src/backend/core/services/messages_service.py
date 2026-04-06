@@ -3,8 +3,9 @@
 Discovers mailboxes available to a user and sends emails
 through those mailboxes via the provisioning and submit endpoints.
 
-Authentication uses the ``X-Service-Auth: Bearer <token>`` header,
-matching the ``HasCalendarsApiKey`` permission on the Messages side.
+Authentication uses two headers, both required by the Messages app:
+- ``X-API-Key: <token>`` — the shared service key
+- ``X-Channel-Id: <id>`` — scopes the key to a specific channel
 """
 
 import logging
@@ -30,8 +31,13 @@ class MessagesService:
     def __init__(self):
         if not settings.MESSAGES_API_URL:
             raise MessagesServiceError("MESSAGES_API_URL is not configured")
+        if not settings.MESSAGES_API_KEY:
+            raise MessagesServiceError("MESSAGES_API_KEY is not configured")
+        if not settings.MESSAGES_CHANNEL_ID:
+            raise MessagesServiceError("MESSAGES_CHANNEL_ID is not configured")
         self.base_url = settings.MESSAGES_API_URL.rstrip("/")
-        self.api_key = settings.MESSAGES_API_KEY or ""
+        self.api_key = settings.MESSAGES_API_KEY
+        self.channel_id = settings.MESSAGES_CHANNEL_ID
         self._org_claim = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
 
     def _request(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
@@ -41,9 +47,10 @@ class MessagesService:
 
         Returns the requests.Response object. Raises on HTTP errors.
         """
-        hdrs = {}
-        if self.api_key:
-            hdrs["X-Service-Auth"] = f"Bearer {self.api_key}"
+        hdrs = {
+            "X-API-Key": self.api_key,
+            "X-Channel-Id": self.channel_id,
+        }
         if headers:
             hdrs.update(headers)
 
