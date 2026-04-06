@@ -297,7 +297,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
     def __init__(self):
         self.parser = ICalendarParser()
 
-    def send_invitation(  # noqa: PLR0913
+    def send_invitation(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         sender_email: str,
         recipient_email: str,
@@ -664,8 +664,19 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 )
                 return False
 
+            mailbox_id = mailbox.get("id")
+            if not mailbox_id:
+                logger.error(
+                    "Mailbox %s has no id in Messages response (got %r), "
+                    "cannot send invitation to %s",
+                    mailbox_email,
+                    mailbox_id,
+                    to_email,
+                )
+                return False
+
             success = messages.submit_raw_email(
-                mailbox_id=mailbox.get("id", ""),
+                mailbox_id=mailbox_id,
                 mailbox_email=mailbox_email,
                 to_email=to_email,
                 subject=subject,

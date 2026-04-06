@@ -92,7 +92,7 @@ We now use a **proper custom CalDAV extension** in our own namespace instead.
 
 We define a CalDAV extension in the **La Suite namespace**:
 
-```
+```text
 {http://lasuite.numerique.gouv.fr/ns/}  (abbreviated LS:)
 ```
 

@@ -2,6 +2,7 @@
 
 # pylint: disable=no-member
 
+import json
 from xml.etree import ElementTree as ET
 
 from django.conf import settings
@@ -17,9 +18,7 @@ from rest_framework.status import (
 from rest_framework.test import APIClient
 
 from core import factories
-from core.services.caldav_service import validate_caldav_proxy_path
-import json
-from core.services.caldav_service import CalDAVHTTPClient
+from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy_path
 
 
 @pytest.mark.django_db

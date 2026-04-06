@@ -47,9 +47,9 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
             return;
         }
 
+        // Missing/empty header is treated as "none" (fail-closed).
         $sharingLevel = $request->getHeader('X-LS-Org-Sharing-Level');
-
-        if ($sharingLevel !== 'none') {
+        if ($sharingLevel !== null && $sharingLevel !== '' && $sharingLevel !== 'none') {
             return;
         }
 
@@ -95,10 +95,9 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
             return;
         }
 
+        // Missing/empty/none header: block all freebusy (fail-closed, even same-org).
         $sharingLevel = $request->getHeader('X-LS-Org-Sharing-Level');
-
-        // sharing_level=none: block all freebusy (even same-org)
-        if ($sharingLevel === 'none') {
+        if ($sharingLevel === null || $sharingLevel === '' || $sharingLevel === 'none') {
             throw new DAV\Exception\Forbidden(
                 'Free/busy queries are not allowed when sharing is disabled'
             );

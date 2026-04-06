@@ -372,7 +372,9 @@ class CalDAVSchedulingCallbackView(View):
             return HttpResponse(status=401)
 
         # Extract and validate sender/recipient emails
-        sender = re.sub(r"(?i)^mailto:", "", request.headers.get("X-LS-Sender", "")).strip()
+        sender = re.sub(
+            r"(?i)^mailto:", "", request.headers.get("X-LS-Sender", "")
+        ).strip()
         recipient = re.sub(
             r"(?i)^mailto:", "", request.headers.get("X-LS-Recipient", "")
         ).strip()

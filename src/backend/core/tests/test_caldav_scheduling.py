@@ -1,7 +1,8 @@
 """Tests for CalDAV scheduling callback integration."""
 
+# pylint: disable=no-member,redefined-outer-name,unsubscriptable-object
+
 import http.server
-import json
 import logging
 import os
 import secrets
@@ -250,7 +251,7 @@ END:VCALENDAR"""
             server.shutdown()
             server.server_close()
 
-    def test_scheduling_callback_for_shared_mailbox_calendar(  # pylint: disable=too-many-locals,too-many-statements
+    def test_scheduling_callback_for_shared_mailbox_calendar(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements,redefined-outer-name,unused-variable,no-member
         self,
     ):
         """Test that creating an event in a shared mailbox calendar triggers
@@ -270,7 +271,9 @@ END:VCALENDAR"""
 
         # 1. Create MAILBOX principal + default calendar
         resp = http.internal_request(
-            "POST", user, "internal-api/calendars/",
+            "POST",
+            user,
+            "internal-api/calendars/",
             json={
                 "email": mailbox_email,
                 "name": "Test Mailbox",
@@ -282,9 +285,19 @@ END:VCALENDAR"""
             f"Failed to create mailbox calendar: {resp.status_code} {resp.text}"
         )
 
-        # 2. Share the calendar with the user (read-write) via sync-mailbox-acls
+        # 2. Snapshot the user's calendars BEFORE the share so we can find
+        #    the new shared instance via set-difference (deterministic).
+        #    Shared mailbox calendars appear under the sharee's principal
+        #    home with a UUID URI — they do NOT contain mailbox_email — so
+        #    a substring filter would not work.
+        dav = http.get_dav_client(user)
+        before_urls = {str(c.url) for c in dav.principal().calendars()}
+
+        # 3. Share the calendar with the user (read-write) via sync-mailbox-acls
         resp = http.internal_request(
-            "POST", user, "internal-api/sync-mailbox-acls/",
+            "POST",
+            user,
+            "internal-api/sync-mailbox-acls/",
             json={
                 "shares": [
                     {
@@ -301,21 +314,26 @@ END:VCALENDAR"""
             f"Failed to sync mailbox ACLs: {resp.status_code} {resp.text}"
         )
 
-        # 2b. Verify the share shows with correct user info in CS:invite
+        # 3b. Verify the share shows with correct user info in CS:invite
         # (the share modal reads this — it should show user emails, not mailbox)
 
         user_client = DRFClient()
         user_client.force_login(user)
 
-        # Find the shared calendar URI dynamically (UUID-based, not deterministic)
-        dav = http.get_dav_client(user)
-        user_cals = dav.principal().calendars()
-        # The shared instance is the one we didn't create ourselves
-        shared_cal = [c for c in user_cals if mailbox_email in str(c.url) or len(user_cals) > 1]
-        # Use the last calendar (most recently added = the shared one)
-        shared_cal_url = str(user_cals[-1].url) if user_cals else ""
+        # Pick the new calendar via before/after set-difference.
+        after_cals = dav.principal().calendars()
+        new_cals = [c for c in after_cals if str(c.url) not in before_urls]
+        assert len(new_cals) == 1, (
+            f"Expected exactly 1 new calendar after share, got "
+            f"{[str(c.url) for c in new_cals]}"
+        )
+        shared_cal_url = str(new_cals[0].url)
         # Extract the relative path for proxy requests
-        shared_path = shared_cal_url.split("/caldav/")[-1] if "/caldav/" in shared_cal_url else ""
+        shared_path = (
+            shared_cal_url.rsplit("/caldav/", maxsplit=1)[-1]
+            if "/caldav/" in shared_cal_url
+            else ""
+        )
 
         invite_resp = user_client.generic(
             "PROPFIND",
@@ -412,13 +430,10 @@ END:VCALENDAR"""
             server.server_close()
 
 
-
 def _create_user_with_calendar(org, email_prefix, domain="sched-test.com"):
     """Create a user with a calendar and return (user, client, caldav_path)."""
-    from rest_framework.test import APIClient  # noqa: PLC0415
-
     user = factories.UserFactory(email=f"{email_prefix}@{domain}", organization=org)
-    client = APIClient()
+    client = DRFClient()
     client.force_login(user)
     service = CalendarService()
     caldav_path = service.create_calendar(user, name=f"{email_prefix}'s Calendar")

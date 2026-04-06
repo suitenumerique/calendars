@@ -6,11 +6,8 @@ Requires: CalDAV server running.
 
 # pylint: disable=no-member,broad-exception-caught,unused-variable,too-many-lines
 
-import json
 from datetime import datetime, timedelta
 from urllib.parse import unquote
-
-from django.conf import settings
 
 import pytest
 from rest_framework.test import APIClient
@@ -78,13 +75,6 @@ def _share_calendar_via_caldav(owner_client, owner, cal_id, sharee_email, privil
         f"/caldav/calendars/users/{owner.email}/{cal_id}/",
         data=body,
         content_type="application/xml",
-    )
-
-
-def _share_calendar(owner_client, owner, cal_id, sharee_email, privilege):
-    """Alias for _share_calendar_via_caldav (used by moved plugin tests)."""
-    return _share_calendar_via_caldav(
-        owner_client, owner, cal_id, sharee_email, privilege
     )
 
 
@@ -260,10 +250,14 @@ _share_calendar = _share_calendar_via_caldav
 def _create_mailbox_calendar(owner, mailbox_email, org, name="Mailbox"):
     """Create a MAILBOX principal + default calendar via internal API."""
     resp = http.internal_request(
-        "POST", owner, "internal-api/calendars/",
+        "POST",
+        owner,
+        "internal-api/calendars/",
         json={
-            "email": mailbox_email, "name": name,
-            "calendar_user_type": "MAILBOX", "org_id": str(org.id),
+            "email": mailbox_email,
+            "name": name,
+            "calendar_user_type": "MAILBOX",
+            "org_id": str(org.id),
         },
     )
     assert resp.status_code in (200, 201), (
@@ -272,26 +266,45 @@ def _create_mailbox_calendar(owner, mailbox_email, org, name="Mailbox"):
     return resp
 
 
-def _find_shared_cal_uri(user):
-    """Find the URI of the user's most recently added shared calendar.
+def _list_calendar_urls(user):
+    """Return the set of calendar URLs currently visible to user."""
+    dav = CalDAVHTTPClient().get_dav_client(user)
+    return {str(c.url) for c in dav.principal().calendars()}
 
-    After sync-mailbox-acls creates a share, the new calendar instance
-    has a UUID URI. This helper discovers it by listing all calendars
-    and returning the URI of the last one (most recently added).
+
+def _find_shared_cal_uri(user, before_urls=None):
+    """Find the URI of a newly added shared calendar.
+
+    If ``before_urls`` is provided, the new calendar is found via
+    set-difference against the current calendar list — this is unambiguous
+    and robust to ordering. Otherwise, falls back to returning the last
+    calendar (legacy behavior).
+
     Returns just the URI component (e.g., 'a1b2c3d4-...').
     """
     dav = CalDAVHTTPClient().get_dav_client(user)
     cals = dav.principal().calendars()
-    assert len(cals) >= 2, (
-        f"Expected at least 2 calendars (own + shared), got {len(cals)}"
-    )
-    return unquote(str(cals[-1].url)).rstrip("/").split("/")[-1]
+    if before_urls is not None:
+        new_urls = {str(c.url) for c in cals} - set(before_urls)
+        assert len(new_urls) == 1, (
+            f"Expected exactly 1 new calendar after share, got {len(new_urls)}: "
+            f"{new_urls}"
+        )
+        new_url = next(iter(new_urls))
+    else:
+        assert len(cals) >= 2, (
+            f"Expected at least 2 calendars (own + shared), got {len(cals)}"
+        )
+        new_url = str(cals[-1].url)
+    return unquote(new_url).rstrip("/").rsplit("/", maxsplit=1)[-1]
 
 
 def _sync_mailbox_acls(owner, shares, full_sync_users=None):
     """Sync mailbox ACLs via internal API."""
     resp = http.internal_request(
-        "POST", owner, "internal-api/sync-mailbox-acls/",
+        "POST",
+        owner,
+        "internal-api/sync-mailbox-acls/",
         json={"shares": shares, "full_sync_users": full_sync_users or []},
     )
     assert resp.status_code == 200, (
@@ -478,7 +491,7 @@ class TestFreebusySharePersistence:
             f"Expected freebusy in LS:share-access-map response "
             f"but got:\n{content[:1000]}"
         )
-        assert sharee.email in content, f"Expected sharee email in LS:share-access-map"
+        assert sharee.email in content, "Expected sharee email in LS:share-access-map"
 
     def test_per_share_freebusy_strips_event_details(self):
         """LS:share-access=freebusy should strip event details for THAT sharee only."""
@@ -564,55 +577,56 @@ class TestSyncTakesOverManualShare:
             email="sharee@sync-takeover.com", organization=org
         )
 
-        http = CalDAVHTTPClient()
-
         # 1. Create MAILBOX calendar
         resp = http.internal_request(
-            "POST", owner,
+            "POST",
+            owner,
             "internal-api/calendars/",
-            json=                {
-                    "email": mailbox_email,
-                    "name": "Team",
-                    "calendar_user_type": "MAILBOX",
-                    "org_id": str(org.id),
-                },
+            json={
+                "email": mailbox_email,
+                "name": "Team",
+                "calendar_user_type": "MAILBOX",
+                "org_id": str(org.id),
+            },
         )
         assert resp.status_code in (200, 201)
 
         # 2. Create a read-only share via sync (simulating a viewer in Messages)
         cal_id = "default"
         resp = http.internal_request(
-            "POST", owner,
+            "POST",
+            owner,
             "internal-api/sync-mailbox-acls/",
-            json=                {
-                    "shares": [
-                        {
-                            "user_email": sharee.email,
-                            "mailbox_email": mailbox_email,
-                            "calendar_uri": "default",
-                            "privilege": "read",
-                        }
-                    ],
-                    "full_sync_users": [],
-                },
+            json={
+                "shares": [
+                    {
+                        "user_email": sharee.email,
+                        "mailbox_email": mailbox_email,
+                        "calendar_uri": "default",
+                        "privilege": "read",
+                    }
+                ],
+                "full_sync_users": [],
+            },
         )
         assert resp.status_code == 200
 
         # 3. Sync with read-write (simulating Messages adding sender role)
         resp = http.internal_request(
-            "POST", owner,
+            "POST",
+            owner,
             "internal-api/sync-mailbox-acls/",
-            json=                {
-                    "shares": [
-                        {
-                            "user_email": sharee.email,
-                            "mailbox_email": mailbox_email,
-                            "calendar_uri": "default",
-                            "privilege": "read-write",
-                        }
-                    ],
-                    "full_sync_users": [],
-                },
+            json={
+                "shares": [
+                    {
+                        "user_email": sharee.email,
+                        "mailbox_email": mailbox_email,
+                        "calendar_uri": "default",
+                        "privilege": "read-write",
+                    }
+                ],
+                "full_sync_users": [],
+            },
         )
         assert resp.status_code == 200
 
@@ -628,7 +642,11 @@ class TestSyncTakesOverManualShare:
             cal_url = str(c.url)
             if sharee.email not in cal_url or len(sharee_cals) > 1:
                 shared_cal_url = cal_url
-        shared_path = shared_cal_url.split("/caldav/")[-1] if shared_cal_url and "/caldav/" in shared_cal_url else ""
+        shared_path = (
+            shared_cal_url.rsplit("/caldav/", maxsplit=1)[-1]
+            if shared_cal_url and "/caldav/" in shared_cal_url
+            else ""
+        )
         assert shared_path, f"Could not find shared calendar for {sharee.email}"
         invite_resp = sharee_client.generic(
             "PROPFIND",
@@ -664,14 +682,17 @@ class TestSyncPreservesUserCustomizations:
         sharee = factories.UserFactory(email="sharee@sync-color.com", organization=org)
 
         mailbox_email = "team@sync-color.com"
-        http = CalDAVHTTPClient()
 
         # 1. Create MAILBOX calendar with blue color
         resp = http.internal_request(
-            "POST", owner, "internal-api/calendars/",
+            "POST",
+            owner,
+            "internal-api/calendars/",
             json={
-                "email": mailbox_email, "name": "Team",
-                "calendar_user_type": "MAILBOX", "color": "#0000ff",
+                "email": mailbox_email,
+                "name": "Team",
+                "calendar_user_type": "MAILBOX",
+                "color": "#0000ff",
                 "org_id": str(org.id),
             },
         )
@@ -679,14 +700,18 @@ class TestSyncPreservesUserCustomizations:
 
         # 2. Sync share for sharee (initial — creates the share with blue color)
         resp = http.internal_request(
-            "POST", owner, "internal-api/sync-mailbox-acls/",
+            "POST",
+            owner,
+            "internal-api/sync-mailbox-acls/",
             json={
-                "shares": [{
-                    "user_email": sharee.email,
-                    "mailbox_email": mailbox_email,
-                    "calendar_uri": "default",
-                    "privilege": "read-write",
-                }],
+                "shares": [
+                    {
+                        "user_email": sharee.email,
+                        "mailbox_email": mailbox_email,
+                        "calendar_uri": "default",
+                        "privilege": "read-write",
+                    }
+                ],
                 "full_sync_users": [],
             },
         )
@@ -700,7 +725,7 @@ class TestSyncPreservesUserCustomizations:
         s_cals = dav_s.principal().calendars()
         assert len(s_cals) == 1, "Sharee should see exactly 1 calendar (the shared one)"
         # Find the calendar that wasn't there before sync (it's the newer one)
-        shared_uri = str(s_cals[-1].url).rstrip("/").split("/")[-1]
+        shared_uri = str(s_cals[-1].url).rstrip("/").rsplit("/", maxsplit=1)[-1]
         proppatch_body = (
             '<?xml version="1.0" encoding="utf-8"?>'
             '<D:propertyupdate xmlns:D="DAV:" '
@@ -722,14 +747,18 @@ class TestSyncPreservesUserCustomizations:
         # (e.g., user demoted from read-write to read, then promoted back)
         for privilege in ("read", "read-write"):
             resp = http.internal_request(
-                "POST", owner, "internal-api/sync-mailbox-acls/",
+                "POST",
+                owner,
+                "internal-api/sync-mailbox-acls/",
                 json={
-                    "shares": [{
-                        "user_email": sharee.email,
-                        "mailbox_email": mailbox_email,
-                        "calendar_uri": "default",
-                        "privilege": privilege,
-                    }],
+                    "shares": [
+                        {
+                            "user_email": sharee.email,
+                            "mailbox_email": mailbox_email,
+                            "calendar_uri": "default",
+                            "privilege": privilege,
+                        }
+                    ],
                     "full_sync_users": [],
                 },
             )
@@ -826,7 +855,6 @@ class TestReadOnlySharing:
             target[0].delete()
 
         # Verify it still exists
-        http = CalDAVHTTPClient()
         data, _, _ = http.find_event_by_uid(owner, "ro-del-ev")
         assert data is not None, "Event should survive blocked delete"
 
@@ -871,7 +899,6 @@ class TestReadWriteSharing:
         )
         shared_cal.save_event(ical)
 
-        http = CalDAVHTTPClient()
         data, _, _ = http.find_event_by_uid(owner, "rw-created-ev")
         assert data is not None, "Event created by RW sharee should exist"
 
@@ -890,7 +917,6 @@ class TestReadWriteSharing:
         assert len(target) == 1, "Should find the doomed event"
         target[0].delete()
 
-        http = CalDAVHTTPClient()
         data, _, _ = http.find_event_by_uid(owner, "rw-del-ev")
         assert data is None, "Deleted event should be gone"
 
@@ -1037,7 +1063,6 @@ class TestPrivilegeEscalation:
         cals2 = dav2.principal().calendars()
         shared_cal2 = [c for c in cals2 if str(c.url) == str(shared_cal.url)][0]
         shared_cal2.save_event(ical)
-        http = CalDAVHTTPClient()
         data, _, _ = http.find_event_by_uid(owner, "esc-up-ev")
         assert data is not None, "Upgraded sharee should create events"
 
@@ -1543,6 +1568,7 @@ class TestMailboxShareRestriction:
         mailbox_email = "team@mbx-restrict.com"
         _create_mailbox_calendar(owner, mailbox_email, org)
 
+        before_urls = _list_calendar_urls(owner)
         # Sync owner so they can access the mailbox calendar
         _sync_mailbox_acls(
             owner,
@@ -1557,7 +1583,7 @@ class TestMailboxShareRestriction:
         )
 
         # Find the shared calendar URI dynamically
-        shared_cal_uri = _find_shared_cal_uri(owner)
+        shared_cal_uri = _find_shared_cal_uri(owner, before_urls=before_urls)
 
         # Try direct CS:share with read-write (should be blocked/capped)
         resp = owner_client.generic(
@@ -1591,6 +1617,7 @@ class TestMailboxShareRestriction:
         mailbox_email = "team@mbx-restrict-ro.com"
         _create_mailbox_calendar(owner, mailbox_email, org)
 
+        before_urls = _list_calendar_urls(owner)
         _sync_mailbox_acls(
             owner,
             [
@@ -1604,7 +1631,7 @@ class TestMailboxShareRestriction:
         )
 
         # Find the shared calendar URI dynamically
-        shared_uri_ro = _find_shared_cal_uri(owner)
+        shared_uri_ro = _find_shared_cal_uri(owner, before_urls=before_urls)
 
         resp = owner_client.generic(
             "POST",
@@ -1856,7 +1883,7 @@ class TestShareAcceptDecline:
             "Owner's event should still exist after sharee deletes shared view"
         )
 
-    def test_delete_shared_calendar_doesnt_affect_other_sharees(self):  # noqa: PLR0912
+    def test_delete_shared_calendar_doesnt_affect_other_sharees(self):  # noqa: PLR0912  # pylint: disable=too-many-branches
         """One sharee deleting their view doesn't affect other sharees."""
         org = factories.OrganizationFactory(external_id="share-del-multi")
         owner, owner_client, cal_path = _create_user_with_calendar(
@@ -2008,6 +2035,3 @@ class TestSyncAclEdgeCases:
             f"Idempotent sync should produce exactly 1 share, "
             f"got {len(cals)}: {[str(c.url) for c in cals]}"
         )
-
-
-

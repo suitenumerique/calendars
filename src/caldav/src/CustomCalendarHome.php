@@ -22,8 +22,8 @@ class CustomCalendarHome extends CalendarHome
     /** @var \PDO */
     private $pdo;
 
-    /** @var array Per-request cache: principalUri → calendar_user_type */
-    private static $typeCache = [];
+    /** @var array<int,bool> Per-instance cache: calendarId → isMailboxOwned */
+    private $mailboxOwnedCache = [];
 
     public function setPdo(\PDO $pdo)
     {
@@ -71,8 +71,10 @@ class CustomCalendarHome extends CalendarHome
     {
         $objs = [];
 
-        // Calendars
-        foreach ($this->caldavBackend->getCalendarsForUser($this->principalInfo['uri']) as $calendar) {
+        // Calendars — batch-prefetch mailbox-owned status to avoid N+1 queries
+        $calendars = $this->caldavBackend->getCalendarsForUser($this->principalInfo['uri']);
+        $this->prefetchMailboxOwned($calendars);
+        foreach ($calendars as $calendar) {
             $objs[] = $this->wrapCalendar($calendar);
         }
 
@@ -133,6 +135,10 @@ class CustomCalendarHome extends CalendarHome
             ? $calendarInfo['id'][0]
             : $calendarInfo['id'];
 
+        if (array_key_exists($calendarId, $this->mailboxOwnedCache)) {
+            return $this->mailboxOwnedCache[$calendarId];
+        }
+
         try {
             // Find the owner principal for this calendar
             $stmt = $this->pdo->prepare(
@@ -144,10 +150,56 @@ class CustomCalendarHome extends CalendarHome
             $stmt->execute([$calendarId]);
             $type = $stmt->fetchColumn();
 
-            return $type === PrincipalBackend::TYPE_MAILBOX;
+            $result = $type === PrincipalBackend::TYPE_MAILBOX;
+            $this->mailboxOwnedCache[$calendarId] = $result;
+            return $result;
         } catch (\Exception $e) {
             error_log("[CustomCalendarHome] DB error: " . $e->getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Batch-prefetch mailbox-owned status for a set of calendars in one query.
+     * Called from getChildren to avoid N+1 queries.
+     *
+     * @param array $calendars List of calendar info arrays from getCalendarsForUser
+     */
+    private function prefetchMailboxOwned(array $calendars): void
+    {
+        if (!$this->pdo || empty($calendars)) {
+            return;
+        }
+
+        $ids = [];
+        foreach ($calendars as $cal) {
+            $cid = is_array($cal['id']) ? $cal['id'][0] : $cal['id'];
+            if (!array_key_exists($cid, $this->mailboxOwnedCache)) {
+                $ids[] = $cid;
+            }
+        }
+        if (empty($ids)) {
+            return;
+        }
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $stmt = $this->pdo->prepare(
+                'SELECT ci.calendarid, p.calendar_user_type FROM calendarinstances ci '
+                . 'JOIN principals p ON p.uri = ci.principaluri '
+                . 'WHERE ci.calendarid IN (' . $placeholders . ') AND ci.access = 1'
+            );
+            $stmt->execute($ids);
+            $found = [];
+            while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+                $found[$row['calendarid']] = $row['calendar_user_type'];
+            }
+            foreach ($ids as $cid) {
+                $this->mailboxOwnedCache[$cid] =
+                    ($found[$cid] ?? null) === PrincipalBackend::TYPE_MAILBOX;
+            }
+        } catch (\Exception $e) {
+            error_log("[CustomCalendarHome] prefetch DB error: " . $e->getMessage());
         }
     }
 

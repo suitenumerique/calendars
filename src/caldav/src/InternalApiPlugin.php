@@ -215,20 +215,24 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
-        $resourceId = $body['resource_id'] ?? null;
-        $name = $body['name'] ?? null;
-        $email = $body['email'] ?? null;
-        $resourceType = $body['resource_type'] ?? 'ROOM';
-        $orgId = $body['org_id'] ?? null;
-
-        if (!$resourceId || !$name || !$email) {
-            $response->setStatus(400);
-            $response->setHeader('Content-Type', 'application/json');
-            $response->setBody(json_encode([
-                'error' => 'Missing required fields: resource_id, name, email',
-            ]));
-            return false;
+        // Strong contract: all fields required. org_id is mandatory for
+        // cross-org isolation; resource_type must be set explicitly.
+        foreach (['resource_id', 'name', 'email', 'resource_type', 'org_id'] as $field) {
+            if (empty($body[$field])) {
+                $response->setStatus(400);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode([
+                    'error' => 'Missing required field: ' . $field,
+                ]));
+                return false;
+            }
         }
+
+        $resourceId = $body['resource_id'];
+        $name = $body['name'];
+        $email = $body['email'];
+        $resourceType = $body['resource_type'];
+        $orgId = $body['org_id'];
 
         $principalUri = 'principals/resources/' . $resourceId;
 
@@ -295,6 +299,16 @@ class InternalApiPlugin extends ServerPlugin
         $principalUri = 'principals/resources/' . $resourceId;
         $orgId = $request->getHeader('X-LS-Org-Id');
 
+        // Strong contract: X-LS-Org-Id must be present (fail-closed).
+        if (!$orgId) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'X-LS-Org-Id header is required',
+            ]));
+            return false;
+        }
+
         // Look up the principal
         try {
             $stmt = $this->pdo->prepare(
@@ -319,8 +333,9 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
-        // Verify org scoping — reject if orgs don't match or either is missing
-        if (!$orgId || !$row['org_id'] || $orgId !== $row['org_id']) {
+        // Verify org scoping — fail-closed if the stored org is missing or
+        // does not match the caller's X-LS-Org-Id.
+        if (!$row['org_id'] || $orgId !== $row['org_id']) {
             $response->setStatus(403);
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(json_encode([
@@ -390,6 +405,16 @@ class InternalApiPlugin extends ServerPlugin
         $principalUri = 'principals/users/' . $email;
         $orgId = $request->getHeader('X-LS-Org-Id');
 
+        // Strong contract: X-LS-Org-Id must be present (fail-closed).
+        if (!$orgId) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'X-LS-Org-Id header is required',
+            ]));
+            return false;
+        }
+
         // Look up the principal
         try {
             $stmt = $this->pdo->prepare(
@@ -413,16 +438,15 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
-        // Verify org scoping — reject if orgs don't match or either is missing
-        if ($row['org_id']) {
-            if (!$orgId || $orgId !== $row['org_id']) {
-                $response->setStatus(403);
-                $response->setHeader('Content-Type', 'application/json');
-                $response->setBody(json_encode([
-                    'error' => 'Cannot delete a user from a different organization',
-                ]));
-                return false;
-            }
+        // Verify org scoping — fail-closed if the stored org is missing or
+        // does not match the caller's X-LS-Org-Id.
+        if (!$row['org_id'] || $orgId !== $row['org_id']) {
+            $response->setStatus(403);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'Cannot delete a user from a different organization',
+            ]));
+            return false;
         }
 
         // Delete calendars and their objects
@@ -454,9 +478,9 @@ class InternalApiPlugin extends ServerPlugin
      *
      * Body: {
      *   "email": "contact@company.com",       (required)
+     *   "calendar_user_type": "INDIVIDUAL",   (required; INDIVIDUAL | MAILBOX)
      *   "name": "Contact Team",               (optional, defaults to email)
      *   "org_id": "...",                       (optional)
-     *   "calendar_user_type": "INDIVIDUAL",    (optional, default INDIVIDUAL)
      * }
      */
     private function handleCreateCalendar($request, $response)
@@ -469,18 +493,25 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
-        $email = $body['email'] ?? null;
+        // Strong contract: email and calendar_user_type are mandatory.
+        // Validating explicitly here prevents silent upsert downgrades
+        // (e.g. MAILBOX → INDIVIDUAL) from a caller that forgot the field.
+        foreach (['email', 'calendar_user_type'] as $field) {
+            if (empty($body[$field])) {
+                $response->setStatus(400);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode([
+                    'error' => 'Missing required field: ' . $field,
+                ]));
+                return false;
+            }
+        }
+
+        $email = $body['email'];
+        $calendarUserType = $body['calendar_user_type'];
         $name = $body['name'] ?? $email;
         $orgId = $body['org_id'] ?? null;
-        $calendarUserType = $body['calendar_user_type'] ?? 'INDIVIDUAL';
         $color = $body['color'] ?? '#3788d8';
-
-        if (!$email) {
-            $response->setStatus(400);
-            $response->setHeader('Content-Type', 'application/json');
-            $response->setBody(json_encode(['error' => 'Missing required field: email']));
-            return false;
-        }
 
         $principalUri = 'principals/users/' . $email;
 
@@ -495,6 +526,15 @@ class InternalApiPlugin extends ServerPlugin
                 . ' calendar_user_type = EXCLUDED.calendar_user_type'
             );
             $stmt->execute([$principalUri, $email, $name, $calendarUserType, $orgId]);
+
+            // Serialize concurrent calls for the same principal: lock the
+            // principal row for the duration of this transaction so two
+            // simultaneous requests cannot both observe "no calendars" and
+            // both call createCalendar('default').
+            $lockStmt = $this->pdo->prepare(
+                'SELECT id FROM principals WHERE uri = ? FOR UPDATE'
+            );
+            $lockStmt->execute([$principalUri]);
 
             // Check if this principal already had a calendar
             $existingCalendars = $this->caldavBackend->getCalendarsForUser($principalUri);
@@ -562,8 +602,60 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
-        $shares = $body['shares'] ?? [];
+        // Strong contract: shares must be an array (may be empty for
+        // full-sync-only calls); full_sync_users must be an array.
+        if (!array_key_exists('shares', $body) || !is_array($body['shares'])) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'Missing or invalid field: shares (must be array)',
+            ]));
+            return false;
+        }
+        if (array_key_exists('full_sync_users', $body)
+            && !is_array($body['full_sync_users'])
+        ) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'Invalid field: full_sync_users (must be array)',
+            ]));
+            return false;
+        }
+
+        $shares = $body['shares'];
         $fullSyncUsers = array_flip($body['full_sync_users'] ?? []);
+
+        // Validate each share entry strictly.
+        foreach ($shares as $i => $share) {
+            if (!is_array($share)) {
+                $response->setStatus(400);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode([
+                    'error' => "shares[$i] must be an object",
+                ]));
+                return false;
+            }
+            foreach (['user_email', 'mailbox_email', 'calendar_uri', 'privilege'] as $f) {
+                if (empty($share[$f])) {
+                    $response->setStatus(400);
+                    $response->setHeader('Content-Type', 'application/json');
+                    $response->setBody(json_encode([
+                        'error' => "shares[$i] missing required field: $f",
+                    ]));
+                    return false;
+                }
+            }
+            if (!in_array($share['privilege'], ['read', 'read-write'], true)) {
+                $response->setStatus(400);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode([
+                    'error' => "shares[$i] invalid privilege: "
+                        . "must be 'read' or 'read-write'",
+                ]));
+                return false;
+            }
+        }
         $privilegeMap = [
             'read' => PrincipalBackend::ACCESS_READ,
             'read-write' => PrincipalBackend::ACCESS_READ_WRITE,
@@ -629,13 +721,10 @@ class InternalApiPlugin extends ServerPlugin
             $desired = [];
             $active = [];
             foreach ($shares as $share) {
-                $userEmail = $share['user_email'] ?? null;
-                $mailboxEmail = $share['mailbox_email'] ?? null;
-                $calendarUri = $share['calendar_uri'] ?? 'default';
-                $privilege = $share['privilege'] ?? 'read';
-                if (!$userEmail || !$mailboxEmail) {
-                    continue;
-                }
+                $userEmail = $share['user_email'];
+                $mailboxEmail = $share['mailbox_email'];
+                $calendarUri = $share['calendar_uri'];
+                $privilege = $share['privilege'];
 
                 $key = $mailboxEmail . ':' . $calendarUri;
                 if (!isset($ownerCalendars[$key])) {
@@ -645,7 +734,7 @@ class InternalApiPlugin extends ServerPlugin
                 $ownerCal = $ownerCalendars[$key];
                 $principal = 'principals/users/' . $userEmail;
                 $calendarId = (int)$ownerCal['calendarid'];
-                $access = $privilegeMap[$privilege] ?? 2;
+                $access = $privilegeMap[$privilege];
 
                 $desired[$principal][$calendarId] = [
                     'access' => $access,

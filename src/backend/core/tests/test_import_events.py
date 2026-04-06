@@ -1,4 +1,4 @@
-"""Tests for the ICS import events feature."""  # pylint: disable=too-many-lines
+"""Tests for the ICS import events feature."""  # pylint: disable=too-many-lines,no-member
 
 import json
 import uuid
@@ -1077,7 +1077,6 @@ class TestCalendarSanitizerE2E:
         assert result.total_events == 1
         assert result.imported_count == 0
         assert result.skipped_count == 1
-
 
 
 def _create_user_with_calendar(org, email_prefix):

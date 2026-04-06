@@ -68,7 +68,7 @@ def sync_all_mailbox_acls():
     from core.services.messages_service import MessagesServiceError  # noqa: PLC0415
     from core.services.setup_service import SetupService  # noqa: PLC0415
 
-    User = get_user_model()
+    User = get_user_model()  # pylint: disable=invalid-name
 
     try:
         service = SetupService()
@@ -76,7 +76,7 @@ def sync_all_mailbox_acls():
         logger.error("sync_all_mailbox_acls: cannot init service: %s", exc)
         return
 
-    # TODO: Sync based on mailboxes instead of users for efficiency.
+    # Future: sync based on mailboxes instead of users for efficiency.
     total = 0
     errors = 0
     for user in User.objects.filter(organization__isnull=False).iterator():

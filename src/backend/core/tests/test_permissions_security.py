@@ -33,10 +33,18 @@ class TestVerifyCaldavAccessResourcePaths:
     """Tests for verify_caldav_access() with resource calendar paths."""
 
     def _make_user(self, email="alice@example.com", org_id=None):
-        """Create a mock user object."""
-        user = mock.Mock()
+        """Create a mock user object.
+
+        Uses spec_set so attributes accessed by build_base_headers
+        (organization.effective_sharing_level) return concrete values
+        instead of auto-generated Mock instances that the requests
+        library would reject as invalid header values.
+        """
+        user = mock.Mock(spec=["email", "organization_id", "organization"])
         user.email = email
         user.organization_id = org_id
+        user.organization = mock.Mock(spec=["effective_sharing_level"])
+        user.organization.effective_sharing_level = "freebusy"
         return user
 
     @responses.activate

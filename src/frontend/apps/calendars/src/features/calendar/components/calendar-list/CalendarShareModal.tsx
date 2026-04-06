@@ -112,7 +112,10 @@ export const CalendarShareModal = ({
     if (result.success && result.data) {
       const shareeAccesses = result.data
         // For mailbox calendars, filter out the owner row (the mailbox principal)
-        .filter((sharee) => !(isMailbox && sharee.privilege === "owner"))
+        .filter(
+          (sharee) =>
+            !(isMailbox && (sharee.privilege as string) === "owner"),
+        )
         .map((sharee) => {
         const email = sharee.href.replace(/^mailto:/, "");
         const isSyncManaged = isMailbox && mailboxUsers.has(email);
@@ -350,7 +353,7 @@ export const CalendarShareModal = ({
           : undefined
       }
       onDeleteAccess={isMailbox && !isMailboxAdmin ? undefined : handleDeleteAccess}
-      onUpdateAccess={isMailbox ? undefined : handleUpdateAccess}
+      onUpdateAccess={isMailbox && !isMailboxAdmin ? undefined : handleUpdateAccess}
       searchUsersResult={isMailbox && !isMailboxAdmin ? [] : searchResults}
       onSearchUsers={isMailbox && !isMailboxAdmin ? () => {} : handleSearchUsers}
       onInviteUser={isMailbox && !isMailboxAdmin ? () => {} : handleInviteUser}

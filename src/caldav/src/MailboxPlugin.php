@@ -219,23 +219,4 @@ class MailboxPlugin extends ServerPlugin
         }
     }
 
-    /**
-     * Check if a principal is a MAILBOX type.
-     *
-     * @param string $principalUri
-     * @return bool
-     */
-    private function isMailboxPrincipal($principalUri)
-    {
-        try {
-            $stmt = $this->pdo->prepare(
-                'SELECT calendar_user_type FROM principals WHERE uri = ?'
-            );
-            $stmt->execute([$principalUri]);
-            return $stmt->fetchColumn() === PrincipalBackend::TYPE_MAILBOX;
-        } catch (\Exception $e) {
-            error_log("[MailboxPlugin] DB error: " . $e->getMessage());
-            return false;
-        }
-    }
 }

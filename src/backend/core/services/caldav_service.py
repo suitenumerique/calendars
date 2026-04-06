@@ -654,9 +654,7 @@ def normalize_caldav_path(caldav_path):
     return caldav_path
 
 
-
-
-def verify_caldav_access(user, caldav_path):
+def verify_caldav_access(user, caldav_path):  # noqa: PLR0911  # pylint: disable=too-many-return-statements
     """Verify that the user has access to the CalDAV calendar.
 
     Checks that:
@@ -682,34 +680,24 @@ def verify_caldav_access(user, caldav_path):
         if not org_id:
             return False
         resource_id = unquote(parts[2])
-        return _resource_belongs_to_org(resource_id, str(org_id))
+        return _resource_belongs_to_org(user, resource_id, str(org_id))
     return False
 
 
-def _resource_belongs_to_org(resource_id: str, org_id: str) -> bool:
+def _resource_belongs_to_org(user, resource_id: str, org_id: str) -> bool:
     """Check whether a resource principal belongs to the given organization.
 
     Queries the CalDAV internal API. Returns False on any error (fail-closed).
     """
     try:
-        http = CalDAVHTTPClient()
-        # We need a user for internal_request, but we only need the API key.
-        # Use a minimal object — internal_request only reads the API key from
-        # settings, and build_base_headers needs user.email and organization_id.
-        # Instead, use a raw request with the internal API key directly.
-        api_key = settings.CALDAV_INTERNAL_API_KEY
-        caldav_url = settings.CALDAV_URL
-        if not api_key or not caldav_url:
-            return False
-        resp = requests.get(
-            f"{caldav_url.rstrip('/')}/caldav/internal-api/resources/{resource_id}",
-            headers={"X-LS-Internal-Api-Key": api_key},
-            timeout=10,
+        resp = CalDAVHTTPClient().internal_request(
+            "GET",
+            user,
+            f"internal-api/resources/{resource_id}",
         )
         if resp.status_code != 200:
             return False
-        data = resp.json()
-        return data.get("org_id") == org_id
+        return resp.json().get("org_id") == org_id
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("Failed to verify resource org for %s", resource_id)
         return False

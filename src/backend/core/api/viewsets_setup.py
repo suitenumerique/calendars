@@ -23,6 +23,7 @@ class MailboxListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        """List mailboxes and sync their ACLs."""
         if not settings.FEATURE_MESSAGES_INTEGRATION:
             return Response(
                 {
@@ -55,7 +56,8 @@ class SetupView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        name = request.data.get("name", "")
+        """Create a standalone or mailbox-backed calendar."""
+        name = request.data.get("name", "").strip()
         mailbox_email = request.data.get("mailbox_email")
         color = request.data.get("color")
 

@@ -11,6 +11,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from core import factories, models
+from core.services.resource_service import ResourceService
 
 pytestmark = pytest.mark.django_db
 
@@ -531,8 +532,6 @@ class TestChannelCrossOrgResourceAccess:
     @pytest.mark.xdist_group("caldav")
     def test_channel_for_same_org_resource_allowed(self):
         """Creating a channel for a resource in the user's own org succeeds."""
-        from core.services.resource_service import ResourceService  # noqa: PLC0415
-
         org = factories.OrganizationFactory(external_id="chan-same-org")
         user = factories.UserFactory(organization=org)
 

@@ -171,6 +171,7 @@ export const CalendarList = () => {
                   calendar={calendar}
                   isVisible={visibleCalendarUrls.has(calendar.url)}
                   isMenuOpen={openMenuUrl === calendar.url}
+                  isMailboxCalendar={isMailboxCalendar(calendar.url, calendar)}
                   onToggleVisibility={toggleCalendarVisibility}
                   onMenuToggle={handleMenuToggle}
                   onEdit={handleOpenEditModal}

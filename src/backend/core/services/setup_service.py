@@ -8,11 +8,11 @@ The calendar-user-address-set is derived at runtime by PrincipalBackend
 from calendarinstances shares — no explicit address sync needed.
 """
 
-import json
 import logging
 
 from django.conf import settings
 
+from core.models import Organization
 from core.services.caldav_service import CalDAVHTTPClient
 from core.services.messages_service import MessagesService
 
@@ -45,8 +45,6 @@ def _resolve_mailbox_org_id(mailbox_data):
     external_id = custom_attrs.get(org_claim)
     if not external_id:
         return None
-
-    from core.models import Organization  # noqa: PLC0415
 
     try:
         org = Organization.objects.get(external_id=external_id)
@@ -180,10 +178,12 @@ class SetupService:
             # No mailboxes — clean up any stale sync-managed shares
             try:
                 self._http.internal_request(
-                    "POST", user, "internal-api/sync-mailbox-acls/",
+                    "POST",
+                    user,
+                    "internal-api/sync-mailbox-acls/",
                     json={"shares": [], "full_sync_users": [user.email]},
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
                 logger.warning("Failed to clean stale shares for user %s", user.pk)
             return {"available_mailboxes": [], "active_mailbox_calendars": []}
 
@@ -262,8 +262,14 @@ class SetupService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _create_calendar(  # noqa: PLR0913
-        self, user, email, name, calendar_user_type, org_id=None, color=None,
+    def _create_calendar(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        user,
+        email,
+        name,
+        calendar_user_type,
+        org_id=None,
+        color=None,
     ):
         """Create a calendar (and principal if needed) via internal API."""
         if org_id is None:
@@ -278,7 +284,10 @@ class SetupService:
             payload["color"] = color
         try:
             resp = self._http.internal_request(
-                "POST", user, "internal-api/calendars/", json=payload,
+                "POST",
+                user,
+                "internal-api/calendars/",
+                json=payload,
             )
             if resp.status_code not in (200, 201):
                 raise SetupServiceError(

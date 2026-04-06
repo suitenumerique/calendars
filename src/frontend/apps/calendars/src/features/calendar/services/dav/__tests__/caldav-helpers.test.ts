@@ -271,6 +271,14 @@ describe('caldav-helpers', () => {
         expect(result).toContain('mailto:user1@example.com')
         expect(result).toContain('mailto:user2@example.com')
       })
+
+      it('declares the LS namespace so LS:share-access is valid', () => {
+        const result = buildShareRequestXml([
+          { href: 'mailto:user@example.com', privilege: 'freebusy' },
+        ])
+        expect(result).toMatch(/xmlns:LS=['"]/)
+        expect(result).toContain('<LS:share-access>freebusy</LS:share-access>')
+      })
     })
 
     describe('buildUnshareRequestXml', () => {

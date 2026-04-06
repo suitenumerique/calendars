@@ -11,10 +11,7 @@ Requires: CalDAV server running (skipped otherwise).
 
 import re
 from datetime import datetime, timedelta
-from datetime import timezone as dt_tz
 from types import SimpleNamespace
-
-from django.conf import settings
 
 import pytest
 from rest_framework.status import (
@@ -157,7 +154,7 @@ def _get_cal_id(caldav_path):
     return parts[-1] if len(parts) >= 4 else "default"
 
 
-def _put_event(  # noqa: PLR0913
+def _put_event(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
     client,
     user_email,
     cal_id,
@@ -945,71 +942,12 @@ class TestCrossOrgFreebusyIsolation:
         )
 
 
-# ---------------------------------------------------------------------------
-# Freebusy and protocol test helpers
-# ---------------------------------------------------------------------------
-
-
-def _freebusy_report(client, user_email, cal_id):
-    """Send a free-busy-query REPORT on a calendar."""
-    dtstart = (datetime.now() - timedelta(days=1)).strftime("%Y%m%dT%H%M%SZ")
-    dtend = (datetime.now() + timedelta(days=30)).strftime("%Y%m%dT%H%M%SZ")
-    body = (
-        '<?xml version="1.0" encoding="utf-8"?>'
-        '<C:free-busy-query xmlns:C="urn:ietf:params:xml:ns:caldav">'
-        f'<C:time-range start="{dtstart}" end="{dtend}"/>'
-        "</C:free-busy-query>"
-    )
-    return client.generic(
-        "REPORT",
-        f"/caldav/calendars/users/{user_email}/{cal_id}/",
-        data=body, content_type="application/xml", HTTP_DEPTH="1",
-    )
-
-
-def _freebusy_outbox(client, user_email, target_email):
-    """Send a freebusy query via scheduling outbox POST."""
-    dtstart = (datetime.now() + timedelta(days=1)).strftime("%Y%m%dT%H%M%SZ")
-    dtend = (datetime.now() + timedelta(days=2)).strftime("%Y%m%dT%H%M%SZ")
-    ical = (
-        "BEGIN:VCALENDAR\r\n"
-        "VERSION:2.0\r\n"
-        "PRODID:-//Test//Test//EN\r\n"
-        "METHOD:REQUEST\r\n"
-        "BEGIN:VFREEBUSY\r\n"
-        f"DTSTART:{dtstart}\r\n"
-        f"DTEND:{dtend}\r\n"
-        f"ORGANIZER:mailto:{user_email}\r\n"
-        f"ATTENDEE:mailto:{target_email}\r\n"
-        "END:VFREEBUSY\r\n"
-        "END:VCALENDAR\r\n"
-    )
-    return client.generic(
-        "POST",
-        f"/caldav/calendars/users/{user_email}/outbox/",
-        data=ical, content_type="text/calendar",
-    )
-
-
-def _proppatch(client, path, prop_xml):
-    """PROPPATCH on a CalDAV resource."""
-    body = (
-        '<?xml version="1.0" encoding="utf-8"?>'
-        '<D:propertyupdate xmlns:D="DAV:" '
-        'xmlns:A="http://apple.com/ns/ical/" '
-        'xmlns:C="urn:ietf:params:xml:ns:caldav">'
-        f"<D:set><D:prop>{prop_xml}</D:prop></D:set>"
-        "</D:propertyupdate>"
-    )
-    return client.generic(
-        "PROPPATCH", path, data=body, content_type="application/xml",
-    )
-
-
 def _share_calendar_cs(owner_client, owner, cal_id, sharee_email, privilege):
     """Share a calendar using CS:share POST via the CalDAV proxy."""
     privilege_xml = {
-        "read": "<CS:read/>", "read-write": "<CS:read-write/>", "admin": "<CS:admin/>",
+        "read": "<CS:read/>",
+        "read-write": "<CS:read-write/>",
+        "admin": "<CS:admin/>",
     }[privilege]
     body = (
         '<?xml version="1.0" encoding="utf-8"?>'
@@ -1023,7 +961,8 @@ def _share_calendar_cs(owner_client, owner, cal_id, sharee_email, privilege):
     return owner_client.generic(
         "POST",
         f"/caldav/calendars/users/{owner.email}/{cal_id}/",
-        data=body, content_type="application/xml",
+        data=body,
+        content_type="application/xml",
     )
 
 
@@ -1826,4 +1765,3 @@ class TestETagConflict:
             f"/caldav/calendars/users/{user.email}/{cal_id}/etag-del-ev.ics",
         )
         assert check.status_code == 200, "Event should survive blocked delete"
-

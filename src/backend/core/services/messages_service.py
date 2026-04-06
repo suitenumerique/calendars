@@ -34,7 +34,7 @@ class MessagesService:
         self.api_key = settings.MESSAGES_API_KEY or ""
         self._org_claim = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
 
-    def _request(  # noqa: PLR0913
+    def _request(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self, method, path, *, params=None, data=None, headers=None, timeout=10
     ):
         """Make an authenticated request to the Messages API.

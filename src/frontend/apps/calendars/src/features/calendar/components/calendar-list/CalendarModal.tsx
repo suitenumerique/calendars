@@ -42,26 +42,34 @@ export const CalendarModal = ({
   const [error, setError] = useState<string | null>(null);
 
   const messagesEnabled = !!config?.FEATURE_MESSAGES_INTEGRATION;
-  const hasMailboxes = messagesEnabled && availableMailboxes.length > 0;
+
+  // The modal can only create mailbox-backed calendars from mailboxes where
+  // the user has sender/admin role; other mailboxes must be filtered out from
+  // every code path so the select value can never reference a hidden option.
+  const sendCapableMailboxes = useMemo(
+    () =>
+      availableMailboxes.filter(
+        (mb) => mb.role === "sender" || mb.role === "admin",
+      ),
+    [availableMailboxes],
+  );
+
+  const hasMailboxes = messagesEnabled && sendCapableMailboxes.length > 0;
 
   // Build mailbox options for the select
-  const mailboxOptions = useMemo(() => {
-    const options = [
+  const mailboxOptions = useMemo(
+    () => [
       {
         label: t("calendar.createCalendar.noMailbox"),
         value: NO_MAILBOX_VALUE,
       },
-    ];
-    for (const mb of availableMailboxes) {
-      // Only show mailboxes where user has sender or admin role
-      if (mb.role !== "sender" && mb.role !== "admin") continue;
-      options.push({
+      ...sendCapableMailboxes.map((mb) => ({
         label: mb.name ? `${mb.name} (${mb.email})` : mb.email,
         value: mb.email,
-      });
-    }
-    return options;
-  }, [availableMailboxes, t]);
+      })),
+    ],
+    [sendCapableMailboxes, t],
+  );
 
   // Reset form when modal opens or calendar changes
   useEffect(() => {
@@ -73,9 +81,9 @@ export const CalendarModal = ({
         setSelectedMailbox(NO_MAILBOX_VALUE);
       } else {
         setColor(DEFAULT_COLORS[0]);
-        if (isOnboarding && availableMailboxes.length > 0) {
-          setSelectedMailbox(availableMailboxes[0].email);
-          setName(availableMailboxes[0].name || "");
+        if (isOnboarding && sendCapableMailboxes.length > 0) {
+          setSelectedMailbox(sendCapableMailboxes[0].email);
+          setName(sendCapableMailboxes[0].name || "");
         } else {
           setSelectedMailbox(NO_MAILBOX_VALUE);
           setName(t("calendar.createCalendar.defaultName"));
@@ -83,7 +91,7 @@ export const CalendarModal = ({
       }
       setError(null);
     }
-  }, [isOpen, mode, calendar, isOnboarding, availableMailboxes]);
+  }, [isOpen, mode, calendar, isOnboarding, sendCapableMailboxes, t]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -176,7 +184,7 @@ export const CalendarModal = ({
                 const value = e.target.value as string;
                 setSelectedMailbox(value);
                 if (value !== NO_MAILBOX_VALUE) {
-                  const mb = availableMailboxes.find(
+                  const mb = sendCapableMailboxes.find(
                     (m) => m.email === value,
                   );
                   setName(mb?.name || value);
