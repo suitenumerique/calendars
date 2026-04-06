@@ -104,10 +104,12 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
             );
         }
 
-        // Cross-org: always blocked
+        // Cross-org: always blocked. Fail-closed on missing header or DB error.
         $requesterOrgId = $request->getHeader('X-LS-Org-Id');
         if (!$requesterOrgId) {
-            return;
+            throw new DAV\Exception\Forbidden(
+                'Organization header required for cross-calendar freebusy queries'
+            );
         }
 
         try {
@@ -125,7 +127,10 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
         } catch (DAV\Exception\Forbidden $e) {
             throw $e;
         } catch (\Exception $e) {
-            error_log("[FreeBusyOrgScopePlugin] Error: " . $e->getMessage());
+            error_log("[FreeBusyOrgScopePlugin] DB error: " . $e->getMessage());
+            throw new DAV\Exception\Forbidden(
+                'Cannot verify organization for freebusy query'
+            );
         }
     }
 

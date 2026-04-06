@@ -35,7 +35,7 @@ class MailboxListView(APIView):
             result = SetupService().sync_user_mailboxes(request.user)
             return Response(result)
         except Exception:  # pylint: disable=broad-exception-caught
-            logger.exception("Failed to fetch mailboxes for %s", request.user.email)
+            logger.exception("Failed to fetch mailboxes for %s", request.user.pk)
             return Response(
                 {"error": "Failed to fetch mailboxes"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -57,8 +57,11 @@ class SetupView(APIView):
     def post(self, request):
         name = request.data.get("name", "")
         mailbox_email = request.data.get("mailbox_email")
+        color = request.data.get("color")
 
-        if not name and not mailbox_email:
+        if mailbox_email and not name:
+            name = mailbox_email
+        if not name:
             return Response(
                 {"error": "name is required"},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -66,7 +69,7 @@ class SetupView(APIView):
 
         try:
             result = SetupService().setup(
-                request.user, name, mailbox_email=mailbox_email
+                request.user, name, mailbox_email=mailbox_email, color=color
             )
             return Response(result, status=status.HTTP_201_CREATED)
         except SetupServiceError as exc:
@@ -75,7 +78,7 @@ class SetupView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:  # pylint: disable=broad-exception-caught
-            logger.exception("Failed to setup calendar for %s", request.user.email)
+            logger.exception("Failed to setup calendar for %s", request.user.pk)
             return Response(
                 {"error": "Failed to create calendar"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

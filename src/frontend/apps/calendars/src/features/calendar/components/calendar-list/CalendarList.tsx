@@ -71,7 +71,7 @@ export const CalendarList = () => {
   const handleSaveWithMailbox = useCallback(
     async (name: string, color: string, mailboxEmail?: string, includeInAvailability?: boolean) => {
       if (mailboxEmail) {
-        await setupCalendar(name, mailboxEmail);
+        await setupCalendar(name, mailboxEmail, color);
         await refreshCalendars();
       } else {
         await handleSaveCalendar(name, color, includeInAvailability);

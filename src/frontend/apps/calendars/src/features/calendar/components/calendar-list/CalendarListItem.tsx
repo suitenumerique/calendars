@@ -28,11 +28,13 @@ export const CalendarListItem = ({
 }: CalendarListItemProps) => {
   const { t } = useTranslation();
 
+  const calendarColor = typeof calendar.color === "string" ? calendar.color : "#3788d8";
+
   return (
     <div className="calendar-list__item">
       <div
         className="calendar-list__item-checkbox"
-        style={{ "--calendar-color": typeof calendar.color === "string" ? calendar.color : "#3788d8" } as React.CSSProperties}
+        style={{ "--calendar-color": calendarColor } as React.CSSProperties}
       >
         <Checkbox
           checked={isVisible}
@@ -53,7 +55,7 @@ export const CalendarListItem = ({
             mail
           </span>
         )}
-        {calendar.displayName || "Sans nom"}
+        {calendar.displayName || t("calendar.list.unnamed")}
       </span>
       <div className="calendar-list__item-actions">
         <CalendarItemMenu

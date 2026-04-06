@@ -289,7 +289,10 @@ export class CalDavService {
     calendarUrl: string,
     params: CalDavCalendarUpdate
   ): Promise<CalDavResponse<CalDavCalendar>> {
-    const hasProps = params.displayName || params.description || params.color
+    const hasProps = params.displayName !== undefined
+      || params.description !== undefined
+      || params.color !== undefined
+      || params.timezone !== undefined
       || params.includeInAvailability !== undefined
     if (!hasProps) {
       return { success: false, error: 'No properties to update' }
@@ -1272,6 +1275,7 @@ export class CalDavService {
       // Parse LS:share-access-map to build href → access level map
       const accessMap = new Map<string, string>()
       const rawMap = response[0]?.props?.['share-access-map']
+        ?? response[0]?.props?.['shareAccessMap']
       if (rawMap) {
         // tsdav parses XML into objects; handle both array and single element
         const sharees = Array.isArray(rawMap.sharee) ? rawMap.sharee : rawMap.sharee ? [rawMap.sharee] : []

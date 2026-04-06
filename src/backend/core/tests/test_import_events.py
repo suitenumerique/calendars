@@ -1098,6 +1098,7 @@ def _get_cal_id(caldav_path):
     return parts[-1] if len(parts) >= 4 else "default"
 
 
+@pytest.mark.xdist_group("caldav")
 class TestAttendeeNormalizer:
     """AttendeeNormalizerPlugin deduplicates and normalizes attendees."""
 

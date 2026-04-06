@@ -482,7 +482,7 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
-        $principalUri = 'principals/users/' .$email;
+        $principalUri = 'principals/users/' . $email;
 
         $this->pdo->beginTransaction();
         try {
@@ -578,7 +578,7 @@ class InternalApiPlugin extends ServerPlugin
             $ownerCalendars = []; // "mailbox_email:uri" → row
             if ($mailboxEmails) {
                 $ownerPrincipals = array_map(
-                    fn($e) => 'principals/users/' .$e,
+                    fn($e) => 'principals/users/' . $e,
                     $mailboxEmails
                 );
                 $ph = implode(',', array_fill(0, count($ownerPrincipals), '?'));
@@ -609,7 +609,7 @@ class InternalApiPlugin extends ServerPlugin
 
             // 3. Batch-fetch existing sync-managed shares for all users (one query)
             $userPrincipals = array_map(
-                fn($e) => 'principals/users/' .$e,
+                fn($e) => 'principals/users/' . $e,
                 $allUserEmails
             );
             $ph = implode(',', array_fill(0, count($userPrincipals), '?'));
@@ -643,7 +643,7 @@ class InternalApiPlugin extends ServerPlugin
                 }
 
                 $ownerCal = $ownerCalendars[$key];
-                $principal = 'principals/users/' .$userEmail;
+                $principal = 'principals/users/' . $userEmail;
                 $calendarId = (int)$ownerCal['calendarid'];
                 $access = $privilegeMap[$privilege] ?? 2;
 
@@ -676,7 +676,7 @@ class InternalApiPlugin extends ServerPlugin
             // 6. Apply diff per user
             $staleIds = [];
             foreach ($allUserEmails as $userEmail) {
-                $principal = 'principals/users/' .$userEmail;
+                $principal = 'principals/users/' . $userEmail;
                 $userExisting = $existing[$principal] ?? [];
                 $userDesired = $desired[$principal] ?? [];
 

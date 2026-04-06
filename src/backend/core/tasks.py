@@ -84,7 +84,7 @@ def sync_all_mailbox_acls():
             service.sync_user_mailboxes(user)
             total += 1
         except Exception:  # pylint: disable=broad-exception-caught
-            logger.exception("sync_all_mailbox_acls: failed for %s", user.email)
+            logger.exception("sync_all_mailbox_acls: failed for user %s", user.pk)
             errors += 1
 
     logger.info("sync_all_mailbox_acls: synced %d users, %d errors", total, errors)

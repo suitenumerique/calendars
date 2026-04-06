@@ -92,9 +92,8 @@ export function MailboxContextProvider({
           // The calendar's underlying calendar lives at the mailbox path
           if (calendarUrl.includes(mc.calendar_path)) return mc.mailbox_email;
         }
-        // If we know it's a mailbox but can't find which one,
-        // return the first available (edge case)
-        return activeMailboxCalendars[0]?.mailbox_email;
+        // Can't determine which mailbox — don't guess
+        return undefined;
       }
       // Fallback: path matching for the owner's own calendar view
       for (const [path, email] of ownerPathMap) {

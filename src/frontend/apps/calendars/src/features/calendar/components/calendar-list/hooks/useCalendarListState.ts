@@ -78,6 +78,8 @@ export const useCalendarListState = ({
   const handleSaveCalendar = useCallback(
     async (name: string, color: string, includeInAvailability?: boolean) => {
       if (modalState.mode === "create") {
+        // New calendars default to opaque (included in availability).
+        // includeInAvailability is only editable after creation.
         const result = await createCalendar({
           displayName: name,
           color,

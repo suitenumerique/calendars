@@ -82,7 +82,7 @@ class SetupService:
     # Setup: POST /api/v1.0/setup/
     # ------------------------------------------------------------------
 
-    def setup(self, user, name, mailbox_email=None):
+    def setup(self, user, name, mailbox_email=None, color=None):
         """Create a principal + default calendar.
 
         Args:
@@ -91,6 +91,7 @@ class SetupService:
             mailbox_email: If provided, creates a MAILBOX calendar and shares
                            it with all mailbox users. If None, creates a
                            standalone INDIVIDUAL calendar.
+            color: Calendar color (e.g., "#3788d8").
 
         Returns:
             dict with calendar_path, principal_uri, and optionally mailbox_email.
@@ -99,23 +100,24 @@ class SetupService:
             SetupServiceError on failure.
         """
         if mailbox_email:
-            return self._setup_mailbox(user, name, mailbox_email)
-        return self._setup_standalone(user, name)
+            return self._setup_mailbox(user, name, mailbox_email, color=color)
+        return self._setup_standalone(user, name, color=color)
 
-    def _setup_standalone(self, user, name):
+    def _setup_standalone(self, user, name, color=None):
         """Create an INDIVIDUAL principal + default calendar."""
         self._create_calendar(
             user=user,
             email=user.email,
             name=name or user.email,
             calendar_user_type="INDIVIDUAL",
+            color=color,
         )
         return {
             "calendar_path": f"calendars/users/{user.email}/default",
             "principal_uri": f"principals/users/{user.email}",
         }
 
-    def _setup_mailbox(self, user, name, mailbox_email):
+    def _setup_mailbox(self, user, name, mailbox_email, color=None):
         """Create a MAILBOX principal + default calendar, shared with all users."""
         if not settings.FEATURE_MESSAGES_INTEGRATION:
             raise SetupServiceError("Messages integration is not enabled")
@@ -147,6 +149,7 @@ class SetupService:
             name=name or mailbox_email,
             calendar_user_type="MAILBOX",
             org_id=org_id,
+            color=color,
         )
 
         # Share with all mailbox users immediately (users already in the response)
@@ -174,6 +177,14 @@ class SetupService:
 
         mailboxes = self.messages.get_user_mailboxes(user.email)
         if not mailboxes:
+            # No mailboxes — clean up any stale sync-managed shares
+            try:
+                self._http.internal_request(
+                    "POST", user, "internal-api/sync-mailbox-acls/",
+                    json={"shares": [], "full_sync_users": [user.email]},
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning("Failed to clean stale shares for user %s", user.pk)
             return {"available_mailboxes": [], "active_mailbox_calendars": []}
 
         role_by_email = {}
@@ -251,21 +262,23 @@ class SetupService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _create_calendar(self, user, email, name, calendar_user_type, org_id=None):
+    def _create_calendar(  # noqa: PLR0913
+        self, user, email, name, calendar_user_type, org_id=None, color=None,
+    ):
         """Create a calendar (and principal if needed) via internal API."""
         if org_id is None:
             org_id = str(user.organization_id) if user.organization_id else None
+        payload = {
+            "email": email,
+            "name": name,
+            "org_id": org_id,
+            "calendar_user_type": calendar_user_type,
+        }
+        if color:
+            payload["color"] = color
         try:
             resp = self._http.internal_request(
-                "POST",
-                user,
-                "internal-api/calendars/",
-                json={
-                    "email": email,
-                    "name": name,
-                    "org_id": org_id,
-                    "calendar_user_type": calendar_user_type,
-                },
+                "POST", user, "internal-api/calendars/", json=payload,
             )
             if resp.status_code not in (200, 201):
                 raise SetupServiceError(

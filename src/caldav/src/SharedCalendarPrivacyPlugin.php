@@ -96,7 +96,7 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
         $calUri = $parts[3];
 
         $stmt = $this->pdo->prepare(
-            'SELECT calendarid, access FROM calendarinstances '
+            'SELECT calendarid, access, share_access_level FROM calendarinstances '
             . 'WHERE principaluri = ? AND uri = ?'
         );
         $stmt->execute(["principals/users/{$email}", $calUri]);
@@ -107,21 +107,8 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
         }
 
         $access = (int)$instance['access'];
-        $freebusy = false;
-
-        // Check freebusy for shared calendars (access > 1)
-        if ($access > 1) {
-            $stmt2 = $this->pdo->prepare(
-                'SELECT share_access_level FROM calendarinstances '
-                . 'WHERE principaluri = ? AND uri = ? AND share_access_level = ?'
-            );
-            $stmt2->execute([
-                "principals/users/{$email}",
-                $calUri,
-                'freebusy',
-            ]);
-            $freebusy = $stmt2->fetch(\PDO::FETCH_ASSOC) !== false;
-        }
+        $freebusy = $access > 1
+            && ($instance['share_access_level'] ?? '') === 'freebusy';
 
         return $this->cache[$calKey] = ['access' => $access, 'freebusy' => $freebusy];
     }

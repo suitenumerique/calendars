@@ -150,6 +150,8 @@ class MailboxPlugin extends ServerPlugin
      * sync-mailbox-acls API.
      *
      * @return bool|null
+     *
+     * @noinspection PhpUnusedParameterInspection
      */
     public function restrictSharing(RequestInterface $request, ResponseInterface $response)
     {

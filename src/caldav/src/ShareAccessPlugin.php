@@ -146,11 +146,13 @@ class ShareAccessPlugin extends ServerPlugin
                 $accessLevel = $setValues[self::SHARE_ACCESS_PROP] ?? null;
 
                 if ($href && $accessLevel) {
+                    // Resolve calendarid from the instance at this path.
+                    // The path may be the owner's calendar or a shared instance.
                     $stmt = $this->pdo->prepare(
                         'UPDATE calendarinstances SET share_access_level = ? '
                         . 'WHERE share_href = ? AND calendarid = ('
                         . '  SELECT calendarid FROM calendarinstances '
-                        . '  WHERE principaluri = ? AND uri = ? AND access = 1'
+                        . '  WHERE principaluri = ? AND uri = ?'
                         . ')'
                     );
                     $stmt->execute([trim($accessLevel), $href, $ownerPrincipal, $calendarUri]);

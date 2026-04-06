@@ -292,14 +292,12 @@ shell-front: ## open a shell in the frontend container
 	@$(COMPOSE) run --rm frontend-dev /bin/sh
 .PHONY: shell-front
 
-# -- Fake Messages server (for local mailbox integration testing)
+# -- Misc
 
 fake-messages: ## start a fake Messages API server on port 8940
 	@echo "$(BOLD)Starting fake Messages API server...$(RESET)"
 	@python3 scripts/fake_messages_server.py
 .PHONY: fake-messages
-
-# -- Misc
 
 clean: ## restore repository state as it was freshly cloned
 	git clean -idx
