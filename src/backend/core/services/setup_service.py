@@ -227,21 +227,28 @@ class SetupService:
             if not mb_email:
                 continue
             role_by_email[mb_email] = mb_role
+            # One share entry per mailbox: the CalDAV side fans it out
+            # to every calendar under the mailbox principal (a single
+            # mailbox can back several calendars).
             shares.append(
                 {
                     "user_email": user.email,
                     "mailbox_email": mb_email,
-                    "calendar_uri": "default",
                     "privilege": ROLE_TO_PRIVILEGE.get(mb_role, "read"),
                 }
             )
 
         synced = self._sync_acls(user, shares, full_sync_users=[user.email])
 
+        # ``synced`` has one entry per (user, mailbox, calendar) — the
+        # PHP fan-out resolves the actual URIs, so we use those here
+        # rather than assuming ``default``.
         active_calendars = [
             {
                 "mailbox_email": s["mailbox_email"],
-                "calendar_path": f"calendars/users/{s['mailbox_email']}/default",
+                "calendar_path": (
+                    f"calendars/users/{s['mailbox_email']}/{s['calendar_uri']}"
+                ),
                 "role": role_by_email.get(s["mailbox_email"], "viewer"),
             }
             for s in synced
@@ -278,11 +285,12 @@ class SetupService:
             mb_user_role = mb_user.get("role", "viewer")
             if not mb_user_email or mb_user_email == mailbox_email:
                 continue
+            # One share entry per user: the CalDAV side fans it out to
+            # every calendar under the mailbox principal.
             shares.append(
                 {
                     "user_email": mb_user_email,
                     "mailbox_email": mailbox_email,
-                    "calendar_uri": "default",
                     "privilege": ROLE_TO_PRIVILEGE.get(mb_user_role, "read"),
                 }
             )
@@ -342,10 +350,15 @@ class SetupService:
 
         Args:
             caller: User object for authenticating the internal API call.
-            shares: Flat list of {user_email, mailbox_email, calendar_uri, privilege}.
+            shares: Flat list of {user_email, mailbox_email, privilege}.
+                Each entry grants access at the mailbox level — the
+                CalDAV side fans it out to every owner calendar under
+                the mailbox principal.
             full_sync_users: List of user emails whose stale shares should be removed.
 
-        Returns list of shares that were actually created.
+        Returns the ``active`` list from the response: one entry per
+        (user, mailbox, calendar) with the actual ``calendar_uri`` filled
+        in by the fan-out.
         """
         try:
             resp = self._http.internal_request(

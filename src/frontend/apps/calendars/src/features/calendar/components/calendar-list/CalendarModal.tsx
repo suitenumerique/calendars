@@ -14,6 +14,7 @@ import {
   ModalSize,
   Select,
 } from "@gouvfr-lasuite/cunningham-react";
+import { useAuth } from "@/features/auth/Auth";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 
@@ -32,7 +33,8 @@ export const CalendarModal = ({
 }: CalendarModalProps) => {
   const { t } = useTranslation();
   const { config } = useConfig();
-  const { availableMailboxes, getMailboxEmail } = useMailboxContext();
+  const { user } = useAuth();
+  const { availableMailboxes } = useMailboxContext();
 
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLORS[0]);
@@ -55,6 +57,19 @@ export const CalendarModal = ({
   );
 
   const hasMailboxes = messagesEnabled && sendCapableMailboxes.length > 0;
+
+  // Default mailbox pre-selection: prefer the mailbox whose email
+  // matches the current user (their personal identity), otherwise
+  // fall back to standalone. Used by both onboarding and the regular
+  // create modal so the two flows behave the same way.
+  const defaultMailbox = useMemo(() => {
+    if (!user?.email) return null;
+    const target = user.email.toLowerCase();
+    return (
+      sendCapableMailboxes.find((mb) => mb.email.toLowerCase() === target) ??
+      null
+    );
+  }, [sendCapableMailboxes, user?.email]);
 
   // Build mailbox options for the select
   const mailboxOptions = useMemo(
@@ -81,9 +96,9 @@ export const CalendarModal = ({
         setSelectedMailbox(NO_MAILBOX_VALUE);
       } else {
         setColor(DEFAULT_COLORS[0]);
-        if (isOnboarding && sendCapableMailboxes.length > 0) {
-          setSelectedMailbox(sendCapableMailboxes[0].email);
-          setName(sendCapableMailboxes[0].name || "");
+        if (defaultMailbox) {
+          setSelectedMailbox(defaultMailbox.email);
+          setName(defaultMailbox.name || "");
         } else {
           setSelectedMailbox(NO_MAILBOX_VALUE);
           setName(t("calendar.createCalendar.defaultName"));
@@ -91,7 +106,7 @@ export const CalendarModal = ({
       }
       setError(null);
     }
-  }, [isOpen, mode, calendar, isOnboarding, sendCapableMailboxes, t]);
+  }, [isOpen, mode, calendar, defaultMailbox, t]);
 
   const handleSave = async () => {
     if (!name?.trim()) {
@@ -219,10 +234,10 @@ export const CalendarModal = ({
           </p>
         )}
 
-        {mode === "edit" && calendar && getMailboxEmail(calendar.url, calendar) && (
+        {mode === "edit" && calendar?.mailboxEmail && (
           <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 0", color: "#555", fontSize: "14px" }}>
             <span className="material-icons" style={{ fontSize: "18px" }}>mail</span>
-            <span>{t("calendar.editCalendar.linkedMailbox", { email: getMailboxEmail(calendar.url, calendar) })}</span>
+            <span>{t("calendar.editCalendar.linkedMailbox", { email: calendar.mailboxEmail })}</span>
           </div>
         )}
 

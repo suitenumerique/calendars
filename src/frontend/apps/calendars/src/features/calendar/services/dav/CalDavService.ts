@@ -66,7 +66,8 @@ import {
   propfindLs,
   parseCalendarComponents,
   parseSharePrivilege,
-  parseShareStatus,
+  parseInviteSharees,
+  parseInviteOrganizerEmail,
   getCalendarUrlFromEventUrl,
   withErrorHandling,
   type ShareeXmlParams,
@@ -180,6 +181,18 @@ export class CalDavService {
     const rawOwnerType = (props as Record<string, unknown> | undefined)?.calendarOwnerType
     const ownerType = typeof rawOwnerType === 'string' ? rawOwnerType : undefined
 
+    // CS:invite is requested as part of CALENDAR_PROPS so the mailbox
+    // email and the sharee list both come back with the standard
+    // calendar fetch — no second PROPFIND, no dependency on
+    // useMailboxSync hydration.
+    const rawInvite = (props as Record<string, unknown> | undefined)?.invite
+    const rawAccessMap =
+      (props as Record<string, unknown> | undefined)?.shareAccessMap
+      ?? (props as Record<string, unknown> | undefined)?.['share-access-map']
+    const sharees = parseInviteSharees(rawInvite, rawAccessMap)
+    const mailboxEmail =
+      ownerType === 'MAILBOX' ? parseInviteOrganizerEmail(rawInvite) : undefined
+
     const displayname = (props as Record<string, unknown> | undefined)?.displayname
     const displayName = typeof displayname === 'string'
       ? displayname
@@ -192,6 +205,8 @@ export class CalDavService {
       color: (props as Record<string, string | undefined> | undefined)?.calendarColor,
       includeInAvailability: !isTransparent,
       ownerType,
+      mailboxEmail,
+      sharees,
       ctag: (props as Record<string, string | undefined> | undefined)?.getctag,
       syncToken: (props as Record<string, string | undefined> | undefined)?.syncToken,
       timezone: (props as Record<string, string | undefined> | undefined)?.calendarTimezone,
@@ -1241,63 +1256,19 @@ export class CalDavService {
     return { success: true }
   }
 
+  /**
+   * Re-fetch the calendar and return its sharees. ``CS:invite`` is now
+   * part of the standard calendar PROPFIND, so this is a thin wrapper
+   * over ``fetchCalendar`` — kept as a public method to preserve the
+   * existing API surface and to give callers a single round-trip way
+   * to refresh the share list after an invite/update/delete.
+   */
   async getCalendarSharees(calendarUrl: string): Promise<CalDavResponse<CalDavSharee[]>> {
-    return withErrorHandling(async () => {
-      const response = await propfindLs({
-        url: calendarUrl,
-        props: {
-          [`${DAVNamespaceShort.CALENDAR_SERVER}:invite`]: {},
-          'LS:share-access-map': {},
-        },
-        depth: '0',
-        headers: this._account?.headers,
-        fetchOptions: this._account?.fetchOptions,
-      })
-
-      const invite = response[0]?.props?.invite
-      if (!invite?.user) {
-        return []
-      }
-
-      // Parse LS:share-access-map → href → access level. tsdav strips
-      // namespace prefixes and camelCases, so the key is "shareAccessMap".
-      const accessMap = new Map<string, string>()
-      const rawMap = response[0]?.props?.shareAccessMap
-        ?? response[0]?.props?.['share-access-map']
-      if (rawMap) {
-        const sharees = Array.isArray(rawMap.sharee)
-          ? rawMap.sharee
-          : rawMap.sharee
-            ? [rawMap.sharee]
-            : []
-        for (const s of sharees) {
-          // tsdav uses xml-js compact mode, so XML element attributes
-          // land under `_attributes`. The PHP plugin emits
-          // <LS:sharee href="..." access="freebusy"/> with attributes,
-          // not child elements.
-          const sharee = s as Record<string, unknown>
-          const attrs = (sharee._attributes as Record<string, string> | undefined)
-            ?? (sharee as Record<string, string>)
-          const href = attrs?.href
-          const access = attrs?.access
-          if (href && access) {
-            accessMap.set(href, access)
-          }
-        }
-      }
-
-      const users = Array.isArray(invite.user) ? invite.user : [invite.user]
-      return users.map((user: Record<string, unknown>) => {
-        const href = (user.href as string) || ''
-        const shareAccess = accessMap.get(href)
-        return {
-          href,
-          displayName: user['common-name'] as string | undefined,
-          privilege: parseSharePrivilege(user.access, shareAccess),
-          status: parseShareStatus(user['invite-accepted'], user['invite-noresponse']),
-        }
-      })
-    }, 'Failed to get sharees')
+    const result = await this.fetchCalendar(calendarUrl)
+    if (!result.success || !result.data) {
+      return { success: false, error: result.error }
+    }
+    return { success: true, data: result.data.sharees ?? [] }
   }
 
   // ============================================================================

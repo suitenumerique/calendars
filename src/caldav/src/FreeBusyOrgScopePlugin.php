@@ -4,6 +4,7 @@ namespace Calendars\SabreDav;
 
 use Sabre\DAV;
 use Sabre\HTTP\RequestInterface;
+use Sabre\VObject\Reader as VObjectReader;
 
 /**
  * Enforces organization-scoped freebusy access.
@@ -38,6 +39,10 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
 
     /**
      * Block VFREEBUSY outbox queries when sharing level is "none".
+     *
+     * Detects VFREEBUSY structurally via ``VObject\Reader`` so the check
+     * cannot be tricked by an iTIP REQUEST whose ``SUMMARY`` /
+     * ``DESCRIPTION`` happens to contain the literal text ``VFREEBUSY``.
      */
     public function beforePost(RequestInterface $request)
     {
@@ -56,11 +61,29 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
         $body = $request->getBodyAsString();
         $request->setBody($body);
 
-        if (stripos($body, 'VFREEBUSY') !== false) {
-            throw new DAV\Exception\Forbidden(
-                'Free/busy queries are not allowed when organization sharing is disabled'
-            );
+        if ($body === '' || !$this->bodyContainsVFreebusyComponent($body)) {
+            return;
         }
+
+        throw new DAV\Exception\Forbidden(
+            'Free/busy queries are not allowed when organization sharing is disabled'
+        );
+    }
+
+    /**
+     * Whether the iCalendar body contains an actual ``VFREEBUSY``
+     * component (not just the literal text in some property value).
+     */
+    private function bodyContainsVFreebusyComponent(string $body): bool
+    {
+        try {
+            $vobject = VObjectReader::read($body);
+        } catch (\Exception $e) {
+            // Malformed body — leave the rejection to the next handler
+            // rather than masking it as a freebusy block here.
+            return false;
+        }
+        return isset($vobject->VFREEBUSY);
     }
 
     /**
@@ -71,13 +94,19 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
      * - Cross-org: always blocked
      * - Same-org, sharing_level=none: blocked
      * - Same-org, sharing_level=freebusy/read/write: allowed
+     *
+     * Detects ``free-busy-query`` REPORTs structurally via SabreDAV's
+     * own XML deserializer (``$server->xml->parse``) so the check
+     * cannot be tricked by a calendar-query whose body happens to
+     * contain the literal text ``free-busy-query`` (e.g. inside a
+     * ``<C:text-match>`` filter).
      */
     public function beforeReport(RequestInterface $request)
     {
         $body = $request->getBodyAsString();
         $request->setBody($body);
 
-        if (stripos($body, 'free-busy-query') === false) {
+        if ($body === '' || !$this->bodyIsFreeBusyQuery($body, $request->getUrl())) {
             return;
         }
 
@@ -139,6 +168,23 @@ class FreeBusyOrgScopePlugin extends DAV\ServerPlugin
                 'Cannot verify organization for freebusy query'
             );
         }
+    }
+
+    /**
+     * Whether the XML body is a CalDAV ``{caldav}free-busy-query`` REPORT.
+     *
+     * Routes through ``$server->xml->parse``, the same deserializer
+     * SabreDAV's own ``CalDAV\Plugin`` uses to dispatch the REPORT, so
+     * the document type comes from the parser, not from a substring.
+     */
+    private function bodyIsFreeBusyQuery(string $body, string $url): bool
+    {
+        try {
+            $this->server->xml->parse($body, $url, $documentType);
+        } catch (\Exception $e) {
+            return false;
+        }
+        return $documentType === '{urn:ietf:params:xml:ns:caldav}free-busy-query';
     }
 
     public function getPluginName()

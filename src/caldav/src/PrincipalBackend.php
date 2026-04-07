@@ -91,8 +91,19 @@ class PrincipalBackend extends BasePDO
     /**
      * Find a principal by URI (e.g. mailto:bob@company.com).
      *
-     * Auto-creates the principal if it doesn't exist, so that
-     * CS:share can resolve any mailto: URI to a principal.
+     * Auto-creates a USER principal when the email is unknown so that
+     * CS:share can resolve any mailto: URI to a principal — but ONLY
+     * when the caller is iterating the ``principals/users`` collection
+     * and ONLY when the email does not already belong to a principal
+     * in another collection (e.g. ``principals/resources``).
+     *
+     * Without those guards, ``DAVACL\Plugin::getPrincipalByUri`` —
+     * which iterates ``principalCollectionSet = ['principals/users',
+     * 'principals/resources']`` and returns the first match — would
+     * see our override mint a fresh user row for a resource email and
+     * stop iterating before ever asking the ``principals/resources``
+     * collection. iTIP delivery to resources would then never reach
+     * ``ResourceAutoSchedulePlugin``.
      *
      * @param string $uri
      * @param string $principalPrefix
@@ -101,16 +112,56 @@ class PrincipalBackend extends BasePDO
     public function findByUri($uri, $principalPrefix)
     {
         $result = parent::findByUri($uri, $principalPrefix);
-
-        if (!$result && str_starts_with($uri, 'mailto:')) {
-            $email = substr($uri, 7);
-            $principal = $this->ensurePrincipal($email);
-            if ($principal) {
-                return $principal['uri'];
-            }
+        if ($result) {
+            return $result;
         }
 
-        return $result;
+        if (!str_starts_with($uri, 'mailto:')) {
+            return null;
+        }
+        $email = substr($uri, 7);
+
+        // Before falling through to auto-create, check whether this
+        // email already belongs to a principal in ANY collection. If
+        // so, return null and let ``DAVACL\Plugin::getPrincipalByUri``
+        // continue iterating until it asks the matching collection's
+        // own ``findByUri`` round, where the parent implementation
+        // will resolve it via the prefix-aware query.
+        if ($this->principalExistsForEmail($email)) {
+            return null;
+        }
+
+        // Auto-create only user principals. Resources are provisioned
+        // via the internal API and never auto-created here.
+        if ($principalPrefix !== 'principals/users') {
+            return null;
+        }
+
+        $principal = $this->ensurePrincipal($email);
+        return $principal['uri'] ?? null;
+    }
+
+    /**
+     * Whether any principal (in any collection) currently has the
+     * given email. Used by ``findByUri`` to avoid auto-creating a
+     * user when a resource (or another collection) already owns the
+     * address.
+     */
+    private function principalExistsForEmail(string $email): bool
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT 1 FROM ' . $this->tableName
+                . ' WHERE lower(email) = lower(?) LIMIT 1'
+            );
+            $stmt->execute([$email]);
+            return (bool) $stmt->fetchColumn();
+        } catch (\Exception $e) {
+            error_log("[PrincipalBackend] principalExistsForEmail failed: " . $e->getMessage());
+            // Fail-closed: when in doubt, don't auto-create — better to
+            // leak a "no such recipient" than to overwrite a resource.
+            return true;
+        }
     }
 
     /**

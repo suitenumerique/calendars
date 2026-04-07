@@ -13,7 +13,14 @@
  * 2. **MKCALENDAR blocking**: Resources have exactly one calendar (created
  *    during provisioning). Additional calendar creation is rejected.
  *
- * Runs after Schedule\Plugin delivers the iTIP message (priority 120 > 110).
+ * Runs BEFORE Schedule\Plugin's scheduleLocalDelivery (default priority 100)
+ * so that:
+ *   - acceptInvitation's PARTSTAT mutation persists into the file that
+ *     scheduleLocalDelivery writes (priority 90 < 100).
+ *   - declineInvitation can return false to short-circuit event
+ *     propagation, preventing scheduleLocalDelivery from delivering
+ *     a declined message at all.
+ *
  * Sets $message->scheduleStatus before HttpCallbackIMipPlugin runs, which
  * prevents email delivery to resource addresses.
  */
@@ -54,14 +61,84 @@ class ResourceAutoSchedulePlugin extends ServerPlugin
     public function initialize(Server $server)
     {
         $this->server = $server;
-        // Priority 120: runs after Schedule\Plugin (110)
-        $server->on('schedule', [$this, 'autoSchedule'], 120);
+        // Priority 90: runs BEFORE Schedule\Plugin::scheduleLocalDelivery
+        // (default priority 100). This is critical: the auto-accept path
+        // mutates $message->message in place to set PARTSTAT=ACCEPTED on
+        // the resource attendee, and that mutation must be visible when
+        // scheduleLocalDelivery runs and writes the file. Running AFTER
+        // (the previous priority 120) would lose the mutation entirely.
+        // For decline, autoSchedule returns false to stop propagation
+        // so scheduleLocalDelivery never runs at all.
+        $server->on('schedule', [$this, 'autoSchedule'], 90);
         // Priority 200: runs BEFORE Schedule\Plugin's propFindEarly (150)
         // which hardcodes calendar-user-type to 'INDIVIDUAL'. By setting
         // the real value first, the Schedule\Plugin's handle() becomes a no-op.
         $server->on('propFind', [$this, 'propFindResourceType'], 200);
         // Block additional calendar creation on resource principals
         $server->on('beforeMethod:MKCALENDAR', [$this, 'blockMkCalendar'], 90);
+        // Cross-org isolation for read access on resource calendars.
+        // ResourceCalendar grants {DAV:}read to {DAV:}authenticated so
+        // same-org users can see what is booked on a shared room; this
+        // hook prevents that grant from leaking content cross-org.
+        $server->on('beforeMethod:GET', [$this, 'restrictCrossOrgRead'], 99);
+        $server->on('beforeMethod:PROPFIND', [$this, 'restrictCrossOrgRead'], 99);
+        $server->on('beforeMethod:REPORT', [$this, 'restrictCrossOrgRead'], 99);
+    }
+
+    /**
+     * Reject reads on resource calendars when the requester's org does
+     * not match the resource principal's org.
+     *
+     * Looks up the resource principal directly via the URL's
+     * ``calendars/resources/{id}`` segment so we never have to wait for
+     * SabreDAV to instantiate the node and run the ACL plugin (the
+     * grant in ``ResourceCalendar`` would already have admitted the
+     * cross-org caller by the time the ACL check ran).
+     *
+     * @return bool|null
+     */
+    public function restrictCrossOrgRead($request)
+    {
+        $path = $request->getPath();
+        if (!preg_match('#^calendars/resources/([^/]+)#', $path, $matches)) {
+            return null;
+        }
+        $resourceId = urldecode($matches[1]);
+        $principalUri = 'principals/resources/' . $resourceId;
+
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT org_id FROM principals WHERE uri = ? LIMIT 1'
+            );
+            $stmt->execute([$principalUri]);
+            $resourceOrgId = $stmt->fetchColumn();
+        } catch (\Exception $e) {
+            error_log(
+                "[ResourceAutoSchedulePlugin] DB error in restrictCrossOrgRead: "
+                . $e->getMessage()
+            );
+            // Fail-closed: refuse rather than leak.
+            throw new \Sabre\DAV\Exception\Forbidden(
+                'Cannot verify organization for resource calendar'
+            );
+        }
+
+        if ($resourceOrgId === false || $resourceOrgId === null || $resourceOrgId === '') {
+            // Resource has no org_id at all — should never happen for
+            // properly provisioned resources. Fail-closed.
+            throw new \Sabre\DAV\Exception\Forbidden(
+                'Resource has no organization'
+            );
+        }
+
+        $requesterOrgId = $request->getHeader('X-LS-Org-Id');
+        if (!$requesterOrgId || $requesterOrgId !== $resourceOrgId) {
+            throw new \Sabre\DAV\Exception\Forbidden(
+                'Cross-organization access to resource calendars is not allowed'
+            );
+        }
+
+        return null;
     }
 
     /**
@@ -103,24 +180,32 @@ class ResourceAutoSchedulePlugin extends ServerPlugin
     /**
      * Handle scheduling messages to resource principals.
      *
+     * Returning ``false`` from this listener stops event propagation,
+     * which is how decline (and manual-pending) paths prevent
+     * ``Schedule\Plugin::scheduleLocalDelivery`` from writing the
+     * declined message to the resource calendar. Accept paths return
+     * null so the chain continues to scheduleLocalDelivery, which then
+     * writes the (already PARTSTAT-mutated) message.
+     *
      * @param Message $message
+     * @return bool|null false = stop propagation; null = continue
      */
     public function autoSchedule(Message $message)
     {
         // Only handle REQUEST method (new invitations and updates)
         if ($message->method !== 'REQUEST') {
-            return;
+            return null;
         }
 
         // Only handle messages to resource principals
         $recipientPrincipal = $this->resolveRecipientPrincipal($message->recipient);
         if (!$recipientPrincipal) {
-            return;
+            return null;
         }
 
         $cutype = $recipientPrincipal['calendar_user_type'] ?? 'INDIVIDUAL';
         if (!in_array($cutype, ['ROOM', 'RESOURCE'], true)) {
-            return;
+            return null;
         }
 
         // Enforce org scoping: reject cross-org bookings
@@ -132,7 +217,7 @@ class ResourceAutoSchedulePlugin extends ServerPlugin
         if ($resourceOrgId) {
             if (!$requestOrgId || $requestOrgId !== $resourceOrgId) {
                 $this->declineInvitation($message, 'Cross-organization booking not allowed');
-                return;
+                return false;
             }
         }
 
@@ -142,26 +227,28 @@ class ResourceAutoSchedulePlugin extends ServerPlugin
         switch ($mode) {
             case 'accept-always':
                 $this->acceptInvitation($message);
-                break;
+                return null;
 
             case 'decline-always':
                 $this->declineInvitation($message, 'Resource is offline');
-                break;
+                return false;
 
             case 'manual':
                 // Leave as NEEDS-ACTION for manual approval
                 // But still set scheduleStatus to prevent email delivery
+                // and stop propagation so scheduleLocalDelivery does
+                // not auto-deliver the pending request.
                 $message->scheduleStatus = '1.0;Pending manual approval';
-                break;
+                return false;
 
             case 'automatic':
             default:
                 if ($this->hasConflict($recipientPrincipal, $message)) {
                     $this->declineInvitation($message, 'Resource is busy');
-                } else {
-                    $this->acceptInvitation($message);
+                    return false;
                 }
-                break;
+                $this->acceptInvitation($message);
+                return null;
         }
     }
 

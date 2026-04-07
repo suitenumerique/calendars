@@ -10,7 +10,6 @@ import {
 } from "@gouvfr-lasuite/cunningham-react";
 
 import { useAuth } from "@/features/auth/Auth";
-import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { DeleteEventModal } from "./DeleteEventModal";
 import { RecurringEditModal } from "./RecurringEditModal";
@@ -55,10 +54,13 @@ export const EventModal = ({
   const [showEditRecurringModal, setShowEditRecurringModal] = useState(false);
 
   const { resources: availableResources } = useResourcePrincipals();
-  const { getMailboxEmail } = useMailboxContext();
 
-  // For mailbox calendars, use the mailbox email as ORGANIZER
-  const mailboxEmail = calendarUrl ? getMailboxEmail(calendarUrl) : undefined;
+  // For mailbox calendars, use the mailbox email as ORGANIZER. The
+  // value comes from the parsed CS:invite payload on the calendar
+  // object — no extra context lookup, no hydration race.
+  const mailboxEmail = calendarUrl
+    ? calendars.find((c) => c.url === calendarUrl)?.mailboxEmail
+    : undefined;
 
   const organizer: IcsOrganizer | undefined =
     event?.organizer ||

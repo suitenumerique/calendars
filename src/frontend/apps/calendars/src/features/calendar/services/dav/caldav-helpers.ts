@@ -369,7 +369,19 @@ export async function executeDavRequest(options: DavRequestOptions): Promise<Cal
   }
 }
 
-/** Standard PROPFIND props for calendar fetching */
+/** Standard PROPFIND props for calendar fetching.
+ *
+ * Includes ``CS:invite`` so the parsed calendar already carries:
+ *   - The owner principal (used to derive the mailbox email when
+ *     ``LS:calendar-owner-type`` is ``MAILBOX``).
+ *   - The list of sharees, so the share modal can render without a
+ *     second PROPFIND round-trip.
+ *
+ * ``LS:share-access-map`` is fetched alongside because freebusy/admin
+ * levels are not expressible via the standard CalendarServer access
+ * tokens — ``parseSharePrivilege`` needs the override map to round-trip
+ * those levels correctly.
+ */
 export const CALENDAR_PROPS = {
   [`${DAVNamespaceShort.CALDAV}:calendar-description`]: {},
   [`${DAVNamespaceShort.CALDAV}:calendar-timezone`]: {},
@@ -380,7 +392,9 @@ export const CALENDAR_PROPS = {
   [`${DAVNamespaceShort.CALDAV}:supported-calendar-component-set`]: {},
   [`${DAVNamespaceShort.DAV}:sync-token`]: {},
   [`${DAVNamespaceShort.CALDAV}:schedule-calendar-transp`]: {},
+  [`${DAVNamespaceShort.CALENDAR_SERVER}:invite`]: {},
   'LS:calendar-owner-type': {},
+  'LS:share-access-map': {},
 } as const
 
 /**
@@ -491,6 +505,103 @@ export function parseShareStatus(
   if (accepted) return 'accepted'
   if (noResponse) return 'pending'
   return 'declined'
+}
+
+/**
+ * Build the ``href → access`` map from a parsed ``LS:share-access-map``
+ * payload. The plugin emits ``<LS:sharee href="..." access="..."/>``
+ * with attributes (not child elements), and tsdav lands those under
+ * ``_attributes`` in xml-js compact mode. Used to recover ``freebusy``
+ * and ``admin`` levels that the standard CalendarServer ``access``
+ * tokens cannot express.
+ */
+export function parseShareAccessMap(rawMap: unknown): Map<string, string> {
+  const accessMap = new Map<string, string>()
+  if (!rawMap) return accessMap
+  const map = rawMap as Record<string, unknown>
+  const sharees = Array.isArray(map.sharee)
+    ? map.sharee
+    : map.sharee
+      ? [map.sharee]
+      : []
+  for (const s of sharees) {
+    const sharee = s as Record<string, unknown>
+    const attrs = (sharee._attributes as Record<string, string> | undefined)
+      ?? (sharee as Record<string, string>)
+    const href = attrs?.href
+    const access = attrs?.access
+    if (href && access) {
+      accessMap.set(href, access)
+    }
+  }
+  return accessMap
+}
+
+/**
+ * Parse the ``CS:invite`` payload returned by SabreDAV for a calendar
+ * collection into the typed sharee list the UI uses. ``rawAccessMap``
+ * is the matching ``LS:share-access-map`` payload (may be undefined).
+ *
+ * Returns ``[]`` when no invite is present.
+ */
+export function parseInviteSharees(
+  rawInvite: unknown,
+  rawAccessMap?: unknown,
+): SharePrivilegeAndStatus[] {
+  if (!rawInvite) return []
+  const invite = rawInvite as Record<string, unknown>
+  if (!invite.user) return []
+  const accessMap = parseShareAccessMap(rawAccessMap)
+  const users = Array.isArray(invite.user) ? invite.user : [invite.user]
+  return users.map((u) => {
+    const user = u as Record<string, unknown>
+    const href = (user.href as string) || ''
+    const shareAccess = accessMap.get(href)
+    return {
+      href,
+      displayName: user['common-name'] as string | undefined,
+      privilege: parseSharePrivilege(user.access, shareAccess),
+      status: parseShareStatus(user['invite-accepted'], user['invite-noresponse']),
+    }
+  })
+}
+
+/** Shape returned by ``parseInviteSharees`` — kept here to avoid a
+ *  cycle with ``types/caldav-service``. Identical structure to the
+ *  ``CalDavSharee`` re-exported there. */
+export type SharePrivilegeAndStatus = {
+  href: string
+  displayName?: string
+  privilege: SharePrivilege
+  status: 'pending' | 'accepted' | 'declined'
+}
+
+/**
+ * Parse the owning principal href from a ``CS:invite`` payload and
+ * extract the email out of the principal URI.
+ *
+ * Used to derive the mailbox email for ``MAILBOX``-owned calendars
+ * directly from the standard PROPFIND, with no dependency on the
+ * Messages-side ``useMailboxSync`` hydration.
+ */
+export function parseInviteOrganizerEmail(rawInvite: unknown): string | undefined {
+  if (!rawInvite) return undefined
+  const organizer = (rawInvite as Record<string, unknown>).organizer as
+    | Record<string, unknown>
+    | undefined
+  const href = organizer?.href as string | undefined
+  if (!href) return undefined
+  // The href looks like ``/caldav/principals/users/team@example.com``
+  // (sometimes with a trailing slash). The email is always the last
+  // path segment, URL-decoded.
+  const trimmed = href.replace(/\/+$/, '')
+  const lastSegment = trimmed.split('/').pop()
+  if (!lastSegment) return undefined
+  try {
+    return decodeURIComponent(lastSegment)
+  } catch {
+    return lastSegment
+  }
 }
 
 /** Extract calendar URL from event URL */

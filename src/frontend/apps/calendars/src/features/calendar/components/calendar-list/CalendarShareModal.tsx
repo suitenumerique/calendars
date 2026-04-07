@@ -16,6 +16,7 @@ import {
 } from "../../../ui/components/toaster/Toaster";
 import type {
   CalDavCalendar,
+  CalDavSharee,
   SharePrivilege,
 } from "../../services/dav/types/caldav-service";
 import { fetchAPI } from "@/features/api/fetchApi";
@@ -64,34 +65,22 @@ export const CalendarShareModal = ({
   const { t } = useTranslation();
   const { caldavService, shareCalendar } = useCalendarContext();
   const { user } = useAuth();
-  const { isMailboxCalendar, getMailboxEmail, availableMailboxes } = useMailboxContext();
-  const [accesses, setAccesses] = useState<ShareAccess[]>([]);
+  const { availableMailboxes } = useMailboxContext();
+  // ``rawSharees`` is the latest source of truth for the share list:
+  // it starts as ``calendar.sharees`` (already parsed from the standard
+  // PROPFIND CS:invite payload) and gets replaced after every
+  // invite/update/delete by re-fetching the calendar.
+  const [rawSharees, setRawSharees] = useState<CalDavSharee[]>([]);
   const [searchResults, setSearchResults] = useState<ShareUser[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const buildAccesses = useCallback(
-    (sharees: ShareAccess[], skipOwner = false) => {
-      if (skipOwner) return sharees;
-      const ownerAccess: ShareAccess | null = user
-        ? {
-            id: "owner",
-            role: "owner",
-            can_delete: false,
-            user: {
-              id: user.id,
-              full_name: user.email,
-              email: user.email,
-            },
-          }
-        : null;
-      return ownerAccess ? [ownerAccess, ...sharees] : sharees;
-    },
-    [user],
-  );
+  // Mailbox detection comes straight from the calendar's DAV
+  // properties — both ``ownerType`` and ``mailboxEmail`` are populated
+  // by ``parseCalendarPropfindResponse``, so they are stable from the
+  // first render and never depend on ``useMailboxSync`` hydration.
+  const isMailbox = calendar?.ownerType === "MAILBOX";
+  const mailboxEmail = calendar?.mailboxEmail;
 
-  // For mailbox calendars, find the mailbox data and user's role
-  const isMailbox = calendar ? isMailboxCalendar(calendar.url, calendar) : false;
-  const mailboxEmail = calendar ? getMailboxEmail(calendar.url, calendar) : undefined;
   const mailboxData = useMemo(() => {
     if (!mailboxEmail) return null;
     return availableMailboxes.find((mb) => mb.email === mailboxEmail) ?? null;
@@ -104,19 +93,40 @@ export const CalendarShareModal = ({
 
   const isMailboxAdmin = mailboxData?.role === "admin";
 
+  // Seed/reset the share list when the modal opens or the calendar
+  // changes. The initial sharees come from ``calendar.sharees`` —
+  // already parsed by ``CalDavService`` — so we don't need an extra
+  // PROPFIND just to render.
+  useEffect(() => {
+    if (isOpen && calendar) {
+      setRawSharees(calendar.sharees ?? []);
+    }
+    if (!isOpen) {
+      setRawSharees([]);
+      setSearchResults([]);
+    }
+  }, [isOpen, calendar]);
 
-  const fetchSharees = useCallback(async () => {
+  // Re-fetch the calendar to refresh its sharees after a mutation.
+  // ``CS:invite`` rides on the standard calendar fetch, so this is a
+  // single round-trip that keeps the modal in sync.
+  const refreshSharees = useCallback(async () => {
     if (!calendar) return;
-
-    const result = await caldavService.getCalendarSharees(calendar.url);
+    const result = await caldavService.fetchCalendar(calendar.url);
     if (result.success && result.data) {
-      const shareeAccesses = result.data
-        // For mailbox calendars, filter out the owner row (the mailbox principal)
-        .filter(
-          (sharee) =>
-            !(isMailbox && (sharee.privilege as string) === "owner"),
-        )
-        .map((sharee) => {
+      setRawSharees(result.data.sharees ?? []);
+    }
+  }, [calendar, caldavService]);
+
+  // Project the raw sharee list into the ShareModal's expected shape,
+  // injecting the owner row at the top for non-mailbox calendars and
+  // marking sync-managed entries as non-deletable.
+  const accesses: ShareAccess[] = useMemo(() => {
+    const shareeAccesses = rawSharees
+      .filter(
+        (sharee) => !(isMailbox && (sharee.privilege as string) === "owner"),
+      )
+      .map((sharee) => {
         const email = sharee.href.replace(/^mailto:/, "");
         const isSyncManaged = isMailbox && mailboxUsers.has(email);
         return {
@@ -129,23 +139,21 @@ export const CalendarShareModal = ({
             full_name: sharee.displayName || email,
             email,
           },
-        };
+        } as ShareAccess;
       });
-      setAccesses(buildAccesses(shareeAccesses, isMailbox));
-    } else {
-      setAccesses(buildAccesses([], isMailbox));
-    }
-  }, [calendar, caldavService, buildAccesses, isMailbox, mailboxUsers]);
-
-  useEffect(() => {
-    if (isOpen && calendar) {
-      fetchSharees();
-    }
-    if (!isOpen) {
-      setAccesses([]);
-      setSearchResults([]);
-    }
-  }, [isOpen, calendar, fetchSharees]);
+    if (isMailbox || !user) return shareeAccesses;
+    const ownerAccess: ShareAccess = {
+      id: "owner",
+      role: "owner",
+      can_delete: false,
+      user: {
+        id: user.id,
+        full_name: user.email,
+        email: user.email,
+      },
+    };
+    return [ownerAccess, ...shareeAccesses];
+  }, [rawSharees, isMailbox, mailboxUsers, user]);
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -232,7 +240,7 @@ export const CalendarShareModal = ({
               })}
             </ToasterItem>,
           );
-          await fetchSharees();
+          await refreshSharees();
         } else {
           addToast(
             <ToasterItem type="error">
@@ -251,12 +259,28 @@ export const CalendarShareModal = ({
         setSearchResults([]);
       }
     },
-    [calendar, shareCalendar, fetchSharees, t],
+    [calendar, shareCalendar, refreshSharees, t],
   );
 
   const handleUpdateAccess = useCallback(
     async (access: ShareAccess, role: string) => {
       if (!calendar) return;
+
+      // Sync-managed shares are owned by Messages — clicking the
+      // (single) role in the dropdown must be a no-op. Otherwise the
+      // ShareModal still fires onChange and we'd POST a CS:share that
+      // the MailboxPlugin rightfully rejects with 403 (mailbox
+      // calendars cannot be granted write access via manual sharing).
+      if (
+        (access as ShareAccess & { is_sync_managed?: boolean }).is_sync_managed
+      ) {
+        return;
+      }
+      // Clicking the same role on a non-sync-managed entry is also a
+      // no-op — there's nothing to update and the round-trip is wasted.
+      if (role === access.role) {
+        return;
+      }
 
       setLoading(true);
       try {
@@ -266,7 +290,7 @@ export const CalendarShareModal = ({
         const email = access.user.email;
         const result = await shareCalendar(calendar.url, email, privilege);
         if (result.success) {
-          await fetchSharees();
+          await refreshSharees();
         } else {
           addToast(
             <ToasterItem type="error">
@@ -284,12 +308,21 @@ export const CalendarShareModal = ({
         setLoading(false);
       }
     },
-    [calendar, shareCalendar, fetchSharees, t],
+    [calendar, shareCalendar, refreshSharees, t],
   );
 
   const handleDeleteAccess = useCallback(
     async (access: ShareAccess) => {
       if (!calendar) return;
+
+      // Same guard as handleUpdateAccess: sync-managed rows belong to
+      // Messages and must never be touched from this modal, even if a
+      // delete handler somehow makes it through the per-row UI gates.
+      if (
+        (access as ShareAccess & { is_sync_managed?: boolean }).is_sync_managed
+      ) {
+        return;
+      }
 
       setLoading(true);
       try {
@@ -301,7 +334,7 @@ export const CalendarShareModal = ({
           shareeHref,
         );
         if (result.success) {
-          await fetchSharees();
+          await refreshSharees();
         } else {
           addToast(
             <ToasterItem type="error">
@@ -319,7 +352,7 @@ export const CalendarShareModal = ({
         setLoading(false);
       }
     },
-    [calendar, caldavService, fetchSharees, t],
+    [calendar, caldavService, refreshSharees, t],
   );
 
   const makeRoles = (values: string[]) =>

@@ -505,7 +505,9 @@ class AvailabilityPlugin extends ServerPlugin
     }
 
     /**
-     * Inject FREEBUSY;FBTYPE=BUSY-UNAVAILABLE lines into a VFREEBUSY ICS string.
+     * Inject FREEBUSY;FBTYPE=BUSY-UNAVAILABLE periods into a VFREEBUSY
+     * ICS string by parsing with VObject, adding structured properties,
+     * and re-serializing — never via substring surgery.
      *
      * @param string $icsData
      * @param array $busyPeriods
@@ -513,21 +515,32 @@ class AvailabilityPlugin extends ServerPlugin
      */
     private function injectBusyUnavailable($icsData, array $busyPeriods)
     {
-        // Build FREEBUSY lines
-        $lines = '';
-        foreach ($busyPeriods as $period) {
-            $start = $period['start']->format('Ymd\THis\Z');
-            $end = $period['end']->format('Ymd\THis\Z');
-            $lines .= "FREEBUSY;FBTYPE=BUSY-UNAVAILABLE:{$start}/{$end}\r\n";
-        }
-
-        // Insert before END:VFREEBUSY
-        $pos = strpos($icsData, "END:VFREEBUSY");
-        if ($pos === false) {
+        try {
+            $vcalendar = Reader::read($icsData);
+        } catch (\Exception $e) {
+            error_log(
+                "[AvailabilityPlugin] Failed to parse VFREEBUSY ICS for "
+                . "injection: " . $e->getMessage()
+            );
             return null;
         }
 
-        return substr($icsData, 0, $pos) . $lines . substr($icsData, $pos);
+        if (!isset($vcalendar->VFREEBUSY)) {
+            return null;
+        }
+        $vfreebusy = $vcalendar->VFREEBUSY;
+
+        foreach ($busyPeriods as $period) {
+            $start = $period['start']->format('Ymd\THis\Z');
+            $end = $period['end']->format('Ymd\THis\Z');
+            $vfreebusy->add(
+                'FREEBUSY',
+                $start . '/' . $end,
+                ['FBTYPE' => 'BUSY-UNAVAILABLE']
+            );
+        }
+
+        return $vcalendar->serialize();
     }
 
     public function getPluginName()

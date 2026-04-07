@@ -101,11 +101,27 @@ class CustomCalendarHome extends CalendarHome
 
     /**
      * Wrap a calendar array into the appropriate node class.
+     *
+     * Routing decision tree:
+     *  - Backend without sharing support → plain Calendar
+     *  - Calendar lives under a resource principal → ResourceCalendar
+     *    (extends SharedCalendar with same-org read access; cross-org
+     *    isolation is enforced by ResourceAutoSchedulePlugin's
+     *    cross-org guard).
+     *  - Mailbox-owned shared instance → MailboxSharedCalendar
+     *  - Otherwise → SharedCalendar
      */
     private function wrapCalendar(array $calendar)
     {
         if (!($this->caldavBackend instanceof SharingSupport)) {
             return new Calendar($this->caldavBackend, $calendar);
+        }
+
+        // Resource calendars are detected from the home's principal URI
+        // (no DB query): the home was constructed with the principal
+        // info, so we already know if this is principals/resources/...
+        if (strpos($this->principalInfo['uri'] ?? '', 'principals/resources/') === 0) {
+            return new ResourceCalendar($this->caldavBackend, $calendar);
         }
 
         $access = $calendar['share-access'] ?? 0;

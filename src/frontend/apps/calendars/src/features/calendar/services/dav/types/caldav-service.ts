@@ -64,6 +64,19 @@ export type CalDavCalendar = Pick<DAVCalendar, 'url' | 'ctag' | 'syncToken' | 'c
   includeInAvailability: boolean
   /** Owner principal type: "MAILBOX" for mailbox calendars, undefined otherwise */
   ownerType?: string
+  /**
+   * Email of the owning mailbox principal, parsed from the
+   * ``CS:invite/CS:organizer`` href returned by SabreDAV. Only set when
+   * ``ownerType === "MAILBOX"``. Available immediately on every
+   * calendar fetch — does not depend on mailbox-context hydration.
+   */
+  mailboxEmail?: string
+  /**
+   * Sharees parsed from the ``CS:invite`` payload returned alongside
+   * the standard calendar properties. The share modal reads this
+   * directly instead of issuing a second PROPFIND.
+   */
+  sharees?: CalDavSharee[]
   resourcetype?: string[]
   headers?: Record<string, string>
   fetchOptions?: RequestInit

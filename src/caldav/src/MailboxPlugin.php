@@ -23,10 +23,13 @@
 
 namespace Calendars\SabreDav;
 
+use Sabre\CalDAV\Plugin as CalDAVPlugin;
+use Sabre\CalDAV\Xml\Request\Share as ShareRequest;
 use Sabre\DAV\Server;
 use Sabre\DAV\ServerPlugin;
 use Sabre\DAV\PropFind;
 use Sabre\DAV\INode;
+use Sabre\DAV\Sharing\Plugin as SharingPlugin;
 use Sabre\DAV\Xml\Property\Href;
 use Sabre\DAVACL\IPrincipal;
 use Sabre\HTTP\RequestInterface;
@@ -145,9 +148,26 @@ class MailboxPlugin extends ServerPlugin
     // ========================================================================
 
     /**
-     * Intercept CS:share POST requests and reject read-write shares
-     * on MAILBOX calendars. Write access must come via the internal
-     * sync-mailbox-acls API.
+     * Intercept CS:share POST requests on MAILBOX calendars and reject:
+     *
+     *  1. Any attempt to grant ``read-write`` (or its ``admin`` flavor)
+     *     via manual sharing — write access must come via the internal
+     *     sync-mailbox-acls API only.
+     *
+     *  2. Any attempt to set/update/remove a sharee whose row is
+     *     ``is_sync_managed = TRUE``. Sync-managed sharees represent
+     *     the source of truth from Messages — only another sync may
+     *     change them. Without this guard a user could downgrade a
+     *     Messages-managed ``read`` share to ``freebusy`` (or any other
+     *     level) by simply re-sharing with the same email, because
+     *     SabreDAV's ``CS:share`` handler ``ON CONFLICT``-updates the
+     *     existing row.
+     *
+     * Body parsing goes through ``$server->xml->parse()`` so we use the
+     * exact same deserializer ``Sabre\CalDAV\SharingPlugin`` runs a
+     * moment later — no hand-rolled regex, no namespace assumptions,
+     * and ``Sharee::access`` already distinguishes set/remove via
+     * ``ACCESS_READ``/``ACCESS_READWRITE``/``ACCESS_NOACCESS``.
      *
      * @return bool|null
      *
@@ -164,33 +184,156 @@ class MailboxPlugin extends ServerPlugin
         }
 
         $body = $request->getBodyAsString();
+        // Re-populate so the next handler (SharingPlugin) can read it.
         $request->setBody($body);
+        if ($body === '') {
+            return;
+        }
 
-        // Quick checks: only CS:share with read-write
-        if (false === strpos($body, 'share') || false === strpos($body, 'read-write')) {
+        // Use SabreDAV's own XML deserializer. ``parse()`` returns a
+        // typed message and fills ``$documentType`` with the root
+        // element's qualified name. Anything other than CalendarServer
+        // ``share`` (e.g. ``invite-reply``) is left for the next plugin.
+        try {
+            $message = $this->server->xml->parse(
+                $body,
+                $request->getUrl(),
+                $documentType
+            );
+        } catch (\Exception $e) {
+            // Malformed XML — let the downstream plugin produce its
+            // canonical error rather than masking it here.
+            return;
+        }
+
+        if ($documentType !== '{' . CalDAVPlugin::NS_CALENDARSERVER . '}share'
+            || !$message instanceof ShareRequest
+        ) {
             return;
         }
 
         $path = $request->getPath();
-
         if (!preg_match('#^calendars/users/([^/]+)/([^/]+)#', $path, $matches)) {
             return;
         }
-
         $principalUri = 'principals/users/' . urldecode($matches[1]);
         $calendarUri = urldecode($matches[2]);
 
-        // Look up the actual owner's principal type via the calendar's
-        // underlying calendarid. This handles both direct ownership and
-        // shared instances (any URI format — sync-managed or UUID).
-        if (!$this->isMailboxOwnedCalendar($principalUri, $calendarUri)) {
+        // Resolve the calendarid via the request's (principaluri, uri)
+        // pair so the rest of the checks operate on the underlying
+        // shared calendar, not the per-user sharee instance URI.
+        $calendarId = $this->resolveCalendarId($principalUri, $calendarUri);
+        if ($calendarId === null || !$this->isMailboxOwnedCalendarId($calendarId)) {
             return;
         }
 
-        throw new \Sabre\DAV\Exception\Forbidden(
-            'Mailbox calendars can only be shared with read-only access. '
-            . 'To grant write access, update the mailbox permissions in Messages.'
-        );
+        foreach ($message->sharees as $sharee) {
+            // Rule 1 — manual sharing on mailbox calendars cannot grant
+            // write access. ``admin`` rides on top of ``<CS:read-write/>``
+            // so the deserializer reports ``ACCESS_READWRITE`` for both.
+            if ($sharee->access === SharingPlugin::ACCESS_READWRITE) {
+                throw new \Sabre\DAV\Exception\Forbidden(
+                    'Mailbox calendars can only be shared with read-only '
+                    . 'access. To grant write access, update the mailbox '
+                    . 'permissions in Messages.'
+                );
+            }
+
+            // Rule 2 — sync-managed sharees are off-limits to manual
+            // ops. Applies to set AND remove (a CS:remove deserializes
+            // with ACCESS_NOACCESS, which falls past Rule 1 above).
+            if ($this->isSyncManagedSharee($calendarId, (string) $sharee->href)) {
+                throw new \Sabre\DAV\Exception\Forbidden(
+                    'This sharee is managed by Messages and can only be '
+                    . 'changed there. Update the mailbox permissions in '
+                    . 'Messages instead.'
+                );
+            }
+        }
+    }
+
+    /**
+     * Look up whether ``$shareeHref`` (a ``mailto:...`` or principal
+     * URL) currently has a sync-managed instance row for the given
+     * ``$calendarId``. Sync-managed rows are owned by Messages and
+     * must not be touched by user-initiated CalDAV operations.
+     */
+    private function isSyncManagedSharee(int $calendarId, string $shareeHref): bool
+    {
+        // Resolve the sharee's principal URI from the href. Manual
+        // CS:share normally uses ``mailto:`` form, but a principal
+        // URL is also valid per RFC 6638.
+        $principalUri = null;
+        if (stripos($shareeHref, 'mailto:') === 0) {
+            $email = substr($shareeHref, 7);
+            $principalUri = 'principals/users/' . $email;
+        } elseif (stripos($shareeHref, 'principals/users/') !== false) {
+            $principalUri = preg_replace('#^.*?(principals/users/[^/]+).*$#', '$1', $shareeHref);
+        }
+        if (!$principalUri) {
+            return false;
+        }
+
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT 1 FROM calendarinstances '
+                . 'WHERE calendarid = ? AND principaluri = ? '
+                . '  AND is_sync_managed = TRUE '
+                . 'LIMIT 1'
+            );
+            $stmt->execute([$calendarId, $principalUri]);
+            return (bool) $stmt->fetchColumn();
+        } catch (\Exception $e) {
+            error_log("[MailboxPlugin] DB error in isSyncManagedSharee: " . $e->getMessage());
+            // Fail closed: when in doubt, refuse to overwrite a
+            // potentially sync-managed row.
+            return true;
+        }
+    }
+
+    /**
+     * Resolve the underlying calendarid for a (principaluri, uri)
+     * pair. ``uri`` may be the owner-side URI or a per-user sharee
+     * instance URI — both row types live in ``calendarinstances`` and
+     * point to the same ``calendarid``.
+     */
+    private function resolveCalendarId(string $principalUri, string $calendarUri): ?int
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT calendarid FROM calendarinstances '
+                . 'WHERE principaluri = ? AND uri = ? LIMIT 1'
+            );
+            $stmt->execute([$principalUri, $calendarUri]);
+            $value = $stmt->fetchColumn();
+            return $value === false ? null : (int) $value;
+        } catch (\Exception $e) {
+            error_log("[MailboxPlugin] DB error in resolveCalendarId: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Whether the calendar with the given id is owned by a MAILBOX
+     * principal. Cheaper variant of ``isMailboxOwnedCalendar`` for
+     * callers that have already resolved ``$calendarId``.
+     */
+    private function isMailboxOwnedCalendarId(int $calendarId): bool
+    {
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT p.calendar_user_type '
+                . 'FROM calendarinstances owner_ci '
+                . 'JOIN principals p ON p.uri = owner_ci.principaluri '
+                . 'WHERE owner_ci.calendarid = ? AND owner_ci.access = 1 '
+                . 'LIMIT 1'
+            );
+            $stmt->execute([$calendarId]);
+            return $stmt->fetchColumn() === PrincipalBackend::TYPE_MAILBOX;
+        } catch (\Exception $e) {
+            error_log("[MailboxPlugin] DB error in isMailboxOwnedCalendarId: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**

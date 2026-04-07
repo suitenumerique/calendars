@@ -25,7 +25,7 @@ export const VideoConferenceSection = ({
   const handleCreateVisio = () => {
     if (!baseUrl) return;
     const roomId = generateVisioRoomId();
-    onChange(`${baseUrl}/${roomId}`);
+    onChange(`${baseUrl.replace(/\/$/, "")}/${roomId}`);
   };
 
   const handleRemove = () => {

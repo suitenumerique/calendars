@@ -2105,6 +2105,163 @@ class TestMailboxShareRestriction:
         )
 
 
+class TestSyncManagedShareProtection:
+    """Sync-managed shares (created via /internal-api/sync-mailbox-acls/)
+    represent the source of truth from Messages. **No** user-initiated
+    CalDAV operation may change them — not freebusy, not read, not
+    read-write, not admin, not unshare. The only thing allowed to
+    overwrite a sync-managed row is another sync.
+    """
+
+    def _setup(self, slug, sync_privilege):
+        """Create owner + mailbox + a sync-managed sharee.
+
+        Returns ``cal_id`` as the URI of the OWNER's own sharee row
+        for the mailbox calendar — that's the URL the modal POSTs
+        manual CS:share requests against.
+        """
+        org = factories.OrganizationFactory(external_id=f"sync-prot-{slug}")
+        owner, owner_client, _ = _create_user_with_calendar(org, f"o-{slug}")
+        sharee = factories.UserFactory(
+            email=f"sharee-{slug}@sync-prot.com", organization=org
+        )
+        mailbox_email = f"team-{slug}@sync-prot.com"
+        _create_mailbox_calendar(owner, mailbox_email, org)
+
+        # Sync the owner first so they get a sharee instance under
+        # their own principal, then snapshot before syncing the actual
+        # ``sharee`` so the look-up of the owner-side URL is unambiguous.
+        before_urls = _list_calendar_urls(owner)
+        _sync_mailbox_acls(
+            owner,
+            [
+                {
+                    "user_email": owner.email,
+                    "mailbox_email": mailbox_email,
+                    "privilege": "read-write",
+                },
+                {
+                    "user_email": sharee.email,
+                    "mailbox_email": mailbox_email,
+                    "privilege": sync_privilege,
+                },
+            ],
+        )
+        cal_id = _find_shared_cal_uri(owner, before_urls=before_urls)
+        return org, owner, owner_client, sharee, mailbox_email, cal_id
+
+    # ----- manual share is blocked at every level on sync-managed --------
+
+    @pytest.mark.parametrize(
+        ("sync_privilege", "manual_attempt"),
+        [
+            # Sync-managed READ — every manual level must be rejected,
+            # including a same-level reshare (no-op writes still go
+            # through SabreDAV's ON CONFLICT and would clobber the row).
+            ("read", "freebusy"),
+            ("read", "read"),
+            ("read", "read-write"),
+            ("read", "admin"),
+            # Sync-managed READ-WRITE — every downgrade must be rejected.
+            ("read-write", "freebusy"),
+            ("read-write", "read"),
+        ],
+    )
+    def test_manual_share_blocked_on_sync_managed_sharee(
+        self, sync_privilege, manual_attempt
+    ):
+        """No user-initiated CS:share level may touch a sync-managed sharee.
+
+        Regression: ``MailboxPlugin::restrictSharing`` only matched
+        ``read-write`` in the body, so ``freebusy`` and plain ``read``
+        rode straight through to SabreDAV's ``ON CONFLICT`` upsert and
+        silently overwrote the Messages-managed access.
+        """
+        slug = f"{manual_attempt}-on-{sync_privilege}"
+        _, owner, owner_client, sharee, _, cal_id = self._setup(slug, sync_privilege)
+        resp = _share_calendar_via_caldav(
+            owner_client, owner, cal_id, sharee.email, manual_attempt
+        )
+        assert resp.status_code == 403, (
+            f"Manual {manual_attempt!r} share on a sync-managed "
+            f"{sync_privilege!r} sharee should return 403, got "
+            f"{resp.status_code}: "
+            f"{resp.content.decode('utf-8', errors='ignore')[:500]}"
+        )
+        actual = _read_share_level(owner_client, owner.email, cal_id, sharee.email)
+        assert actual == sync_privilege, (
+            f"After blocked manual {manual_attempt!r}, sync-managed "
+            f"sharee should still be at {sync_privilege!r}, got {actual!r}"
+        )
+
+    # ----- unshare (CS:remove) is also blocked --------------------------
+
+    def test_unshare_blocked_on_sync_managed_sharee(self):
+        """CS:remove of a sync-managed sharee must be 403, row preserved."""
+        _, owner, owner_client, sharee, _, cal_id = self._setup("rm", "read")
+        resp = _unshare_calendar(owner_client, owner, cal_id, sharee.email)
+        assert resp.status_code == 403, (
+            f"Unshare on a sync-managed sharee should return 403, got "
+            f"{resp.status_code}: "
+            f"{resp.content.decode('utf-8', errors='ignore')[:500]}"
+        )
+        actual = _read_share_level(owner_client, owner.email, cal_id, sharee.email)
+        assert actual == "read", (
+            f"After blocked unshare, sync-managed sharee should still "
+            f"be at 'read', got {actual!r}"
+        )
+
+    # ----- non-sync-managed users can still be shared with manually -----
+
+    def test_manual_share_still_works_for_non_sync_managed_user(self):
+        """A user who has never been sync-managed can still get a manual
+        read or freebusy share — the protection only applies to rows
+        that are actually sync-managed."""
+        _, owner, owner_client, _, _, cal_id = self._setup("clean", "read")
+        # ``other`` has no sync-managed row at all.
+        org = factories.OrganizationFactory(external_id="sync-prot-clean-other")
+        other = factories.UserFactory(
+            email="other@sync-prot-clean.com", organization=org
+        )
+        resp = _share_calendar_via_caldav(
+            owner_client, owner, cal_id, other.email, "read"
+        )
+        assert resp.status_code in (200, 204), (
+            f"Manual read share on a non-sync-managed user should "
+            f"succeed, got {resp.status_code}: "
+            f"{resp.content.decode('utf-8', errors='ignore')[:500]}"
+        )
+        actual = _read_share_level(owner_client, owner.email, cal_id, other.email)
+        assert actual == "read"
+
+    # ----- another sync IS allowed to update a sync-managed sharee ------
+
+    def test_sync_can_still_update_a_sync_managed_sharee(self):
+        """The sync-managed protection only blocks user-initiated
+        actions. The internal API (used by SetupService.sync_*) must
+        keep working — re-syncing a sharee with a different role is the
+        only legitimate way to change a sync-managed level."""
+        _, owner, owner_client, sharee, mailbox_email, cal_id = self._setup(
+            "resync", "read"
+        )
+        # Re-sync with read-write — Messages now grants more access.
+        _sync_mailbox_acls(
+            owner,
+            [
+                {
+                    "user_email": sharee.email,
+                    "mailbox_email": mailbox_email,
+                    "privilege": "read-write",
+                }
+            ],
+        )
+        actual = _read_share_level(owner_client, owner.email, cal_id, sharee.email)
+        assert actual == "read-write", (
+            f"After re-sync to read-write, sharee should be at "
+            f"'read-write', got {actual!r}"
+        )
+
+
 # ===================================================================
 # MailboxAddressPlugin (moved from test_plugins_e2e)
 # ===================================================================
@@ -2423,6 +2580,55 @@ class TestSyncAclEdgeCases:
         # User A should still see the shared calendar
         a_cals_after = CalDAVHTTPClient().get_dav_client(user_a).principal().calendars()
         assert len(a_cals_after) == 1, "User A should still see 1 shared calendar"
+
+    def test_sync_fans_out_to_all_calendars_under_mailbox(self):
+        """A single share entry per (user, mailbox) must fan out to every
+        calendar under that mailbox principal — not just ``default``.
+
+        Regression: ``sync-mailbox-acls`` used to require a per-share
+        ``calendar_uri`` and silently dropped shares whose URI did not
+        match. A mailbox can back several calendars (the second create
+        allocates a UUID URI), and the sync must reach all of them.
+        """
+        org = factories.OrganizationFactory(external_id="sync-multi-cal")
+        owner, _, _ = _create_user_with_calendar(org, "owner-syncmulti")
+        sharee = factories.UserFactory(
+            email="sharee@sync-multi-cal.com", organization=org
+        )
+        mailbox_email = "team@sync-multi-cal.com"
+
+        # Two calendars under the same mailbox: first gets "default",
+        # second gets a fresh UUID.
+        _create_mailbox_calendar(owner, mailbox_email, org, name="Project A")
+        _create_mailbox_calendar(owner, mailbox_email, org, name="Project B")
+
+        resp = _sync_mailbox_acls(
+            owner,
+            [
+                {
+                    "user_email": sharee.email,
+                    "mailbox_email": mailbox_email,
+                    "privilege": "read-write",
+                }
+            ],
+        )
+        active = resp.json().get("active", [])
+        # One entry per concrete mailbox calendar.
+        assert len(active) == 2, (
+            f"Expected fan-out to both mailbox calendars, got {active}"
+        )
+        uris = sorted(a["calendar_uri"] for a in active)
+        assert "default" in uris, f"Default calendar not in fan-out: {uris}"
+        assert any(u != "default" for u in uris), (
+            f"Second (UUID) calendar not in fan-out: {uris}"
+        )
+
+        # Sharee must see BOTH shared calendars.
+        cals = CalDAVHTTPClient().get_dav_client(sharee).principal().calendars()
+        assert len(cals) == 2, (
+            f"Sharee should see 2 shared mailbox calendars, "
+            f"got {len(cals)}: {[str(c.url) for c in cals]}"
+        )
 
     def test_sync_idempotent(self):
         """Running the same sync twice produces the same result."""

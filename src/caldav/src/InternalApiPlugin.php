@@ -653,12 +653,19 @@ class InternalApiPlugin extends ServerPlugin
      * Body: {
      *   "shares": [
      *     {"user_email": "alice@co", "mailbox_email": "contact@co",
-     *      "calendar_uri": "default", "privilege": "read-write"},
+     *      "privilege": "read-write"},
      *     {"user_email": "bob@co", "mailbox_email": "contact@co",
-     *      "calendar_uri": "default", "privilege": "read"}
+     *      "privilege": "read"}
      *   ],
      *   "full_sync_users": ["alice@co"]
      * }
+     *
+     * Each share entry grants access at the **mailbox** level: the
+     * privilege is fanned out to every owner calendar that lives under
+     * the mailbox principal. A single mailbox can back several
+     * calendars (the second create allocates a UUID URI), and Messages
+     * tracks access per mailbox — not per calendar — so the share
+     * naturally applies to all of them.
      *
      * "shares" is a flat list of all desired sync-managed shares.
      * "full_sync_users" lists users whose stale shares should be removed
@@ -708,7 +715,7 @@ class InternalApiPlugin extends ServerPlugin
                 ]));
                 return false;
             }
-            foreach (['user_email', 'mailbox_email', 'calendar_uri', 'privilege'] as $f) {
+            foreach (['user_email', 'mailbox_email', 'privilege'] as $f) {
                 if (empty($share[$f])) {
                     $response->setStatus(400);
                     $response->setHeader('Content-Type', 'application/json');
@@ -735,11 +742,16 @@ class InternalApiPlugin extends ServerPlugin
 
         $this->pdo->beginTransaction();
         try {
-            // 1. Batch-fetch all owner calendar instances (one query)
+            // 1. Batch-fetch all owner calendar instances (one query).
+            // Indexed by mailbox email so a single share entry can fan
+            // out to every calendar under that mailbox principal — a
+            // mailbox can back several calendars (the second create
+            // allocates a UUID URI) and Messages tracks access at the
+            // mailbox level, not per calendar.
             $mailboxEmails = array_unique(
                 array_filter(array_column($shares, 'mailbox_email'))
             );
-            $ownerCalendars = []; // "mailbox_email:uri" → row
+            $ownerCalendarsByMailbox = []; // mailbox_email → [row, ...]
             if ($mailboxEmails) {
                 $ownerPrincipals = array_map(
                     fn($e) => 'principals/users/' . $e,
@@ -753,8 +765,8 @@ class InternalApiPlugin extends ServerPlugin
                 );
                 $stmt->execute($ownerPrincipals);
                 foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
-                    $email = str_replace('principals/users/', '',$row['principaluri']);
-                    $ownerCalendars[$email . ':' . $row['uri']] = $row;
+                    $email = str_replace('principals/users/', '', $row['principaluri']);
+                    $ownerCalendarsByMailbox[$email][] = $row;
                 }
             }
 
@@ -788,45 +800,48 @@ class InternalApiPlugin extends ServerPlugin
                 $existing[$row['principaluri']][(int)$row['calendarid']] = $row;
             }
 
-            // 4. Group desired shares by user
+            // 4. Group desired shares by user. Each input share fans out
+            // to every owner calendar under the mailbox principal, so a
+            // single (user, mailbox, privilege) entry yields one
+            // desired/active row per concrete calendar.
             // desired[principaluri][calendarid] → {access, uri, displayname}
             $desired = [];
             $active = [];
             foreach ($shares as $share) {
                 $userEmail = $share['user_email'];
                 $mailboxEmail = $share['mailbox_email'];
-                $calendarUri = $share['calendar_uri'];
                 $privilege = $share['privilege'];
 
-                $key = $mailboxEmail . ':' . $calendarUri;
-                if (!isset($ownerCalendars[$key])) {
+                $mailboxCalendars = $ownerCalendarsByMailbox[$mailboxEmail] ?? [];
+                if (empty($mailboxCalendars)) {
                     continue;
                 }
 
-                $ownerCal = $ownerCalendars[$key];
                 $principal = 'principals/users/' . $userEmail;
-                $calendarId = (int)$ownerCal['calendarid'];
                 $access = $privilegeMap[$privilege];
 
-                $desired[$principal][$calendarId] = [
-                    'access' => $access,
-                    'displayname' => $ownerCal['displayname'],
-                    'share_href' => 'mailto:' . $userEmail,
-                    'share_displayname' => $userEmail,
-                    // Color is strictly personal: each sharee starts
-                    // with the default and is free to PROPPATCH their
-                    // own. Do NOT inherit from the owner — for mailbox
-                    // calendars the owner-side color is meaningless,
-                    // and for individual calendars sharing the owner's
-                    // color into a sharee's view would be confusing.
-                    'color' => '#3788d8',
-                ];
-                $active[] = [
-                    'user_email' => $userEmail,
-                    'mailbox_email' => $mailboxEmail,
-                    'calendar_uri' => $calendarUri,
-                    'privilege' => $privilege,
-                ];
+                foreach ($mailboxCalendars as $ownerCal) {
+                    $calendarId = (int)$ownerCal['calendarid'];
+                    $desired[$principal][$calendarId] = [
+                        'access' => $access,
+                        'displayname' => $ownerCal['displayname'],
+                        'share_href' => 'mailto:' . $userEmail,
+                        'share_displayname' => $userEmail,
+                        // Color is strictly personal: each sharee starts
+                        // with the default and is free to PROPPATCH their
+                        // own. Do NOT inherit from the owner — for mailbox
+                        // calendars the owner-side color is meaningless,
+                        // and for individual calendars sharing the owner's
+                        // color into a sharee's view would be confusing.
+                        'color' => '#3788d8',
+                    ];
+                    $active[] = [
+                        'user_email' => $userEmail,
+                        'mailbox_email' => $mailboxEmail,
+                        'calendar_uri' => $ownerCal['uri'],
+                        'privilege' => $privilege,
+                    ];
+                }
             }
 
             // 5. Prepare upsert statement (reused across all users)

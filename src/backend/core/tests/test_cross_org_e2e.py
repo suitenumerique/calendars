@@ -1141,6 +1141,132 @@ class TestFreeBusyOrgScope:
         )
 
 
+class TestFreeBusyOrgScopeBodyDetection:
+    """``FreeBusyOrgScopePlugin`` must detect freebusy queries by parsing
+    the request body, not by substring matching. Substring checks against
+    raw XML / iCalendar trip on legitimate text content (a calendar-query
+    text-match filter, an event SUMMARY mentioning the word…).
+
+    Regression: ``beforeReport`` and ``beforePost`` both used ``stripos``
+    on the raw body, so a calendar-query containing the literal string
+    ``free-busy-query`` (or an outbox iTIP REQUEST whose SUMMARY contained
+    ``VFREEBUSY``) was wrongly subjected to the freebusy enforcement and
+    blocked when ``sharing_level=none``.
+    """
+
+    _FREEBUSY_PLUGIN_ERROR_FRAGMENTS = (
+        "free/busy queries are not allowed",
+        "cross-organization free/busy queries are not allowed",
+    )
+
+    def _assert_no_freebusy_plugin_error(self, resp):
+        """Assert the response did NOT come from FreeBusyOrgScopePlugin.
+
+        We cannot always assert success on these tests — ACL may block
+        the calendar-query for unrelated reasons (cross-org REPORT,
+        missing share). What we *can* assert is that the response body
+        is not one of the plugin's canonical error messages: any other
+        outcome means ``beforeReport``/``beforePost`` correctly let the
+        request fall through.
+        """
+        body = resp.content.decode("utf-8", errors="ignore").lower()
+        for fragment in self._FREEBUSY_PLUGIN_ERROR_FRAGMENTS:
+            assert fragment not in body, (
+                f"FreeBusyOrgScopePlugin mis-detected the request body as "
+                f"a freebusy query (response contains {fragment!r}). "
+                f"Status={resp.status_code}, body={body[:500]}"
+            )
+
+    def test_calendar_query_with_free_busy_query_in_text_match_not_blocked(self):
+        """A cross-org calendar-query REPORT whose body merely contains the
+        literal string ``free-busy-query`` (here inside a ``<C:text-match>``)
+        must NOT be intercepted by ``beforeReport``. Other layers (ACL,
+        404) may still reject the request — the test only asserts the
+        rejection didn't come from the freebusy plugin.
+        """
+        org_a = factories.OrganizationFactory(
+            external_id="fb-scope-cq-substring-a",
+            default_sharing_level="freebusy",
+        )
+        org_b = factories.OrganizationFactory(
+            external_id="fb-scope-cq-substring-b",
+            default_sharing_level="freebusy",
+        )
+        owner, _, cal_path = _create_user_with_calendar(org_b, "owner-fbcqs")
+        _, querier_client, _ = _create_user_with_calendar(org_a, "querier-fbcqs")
+        cal_id = _get_cal_id(cal_path)
+
+        body = (
+            '<?xml version="1.0" encoding="utf-8" ?>'
+            '<C:calendar-query xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:prop><D:getetag/></D:prop>"
+            "<C:filter>"
+            '<C:comp-filter name="VCALENDAR">'
+            '<C:comp-filter name="VEVENT">'
+            '<C:prop-filter name="SUMMARY">'
+            "<C:text-match>free-busy-query</C:text-match>"
+            "</C:prop-filter>"
+            "</C:comp-filter>"
+            "</C:comp-filter>"
+            "</C:filter>"
+            "</C:calendar-query>"
+        )
+        resp = querier_client.generic(
+            "REPORT",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+        self._assert_no_freebusy_plugin_error(resp)
+
+    def test_outbox_post_with_vfreebusy_in_summary_not_blocked(self):
+        """An iTIP REQUEST POSTed to outbox whose ``SUMMARY`` contains
+        the literal text ``VFREEBUSY`` must NOT be treated as a freebusy
+        request by ``beforePost``.
+        """
+        org = factories.OrganizationFactory(
+            external_id="fb-scope-summary-substring",
+            default_sharing_level="none",
+        )
+        organizer, organizer_client, _ = _create_user_with_calendar(
+            org, "organizer-fbss"
+        )
+        attendee = factories.UserFactory(
+            email="attendee@fb-scope-summary.com", organization=org
+        )
+
+        dtstart = (datetime.now() + timedelta(days=1)).strftime("%Y%m%dT%H%M%SZ")
+        dtend = (datetime.now() + timedelta(days=1, hours=1)).strftime("%Y%m%dT%H%M%SZ")
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "METHOD:REQUEST\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:not-a-freebusy-request@example.com\r\n"
+            f"DTSTAMP:{dtstart}\r\n"
+            f"DTSTART:{dtstart}\r\n"
+            f"DTEND:{dtend}\r\n"
+            "SUMMARY:Discuss VFREEBUSY rollout\r\n"
+            f"ORGANIZER:mailto:{organizer.email}\r\n"
+            f"ATTENDEE;RSVP=TRUE:mailto:{attendee.email}\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        resp = organizer_client.generic(
+            "POST",
+            f"/caldav/calendars/users/{organizer.email}/outbox/",
+            data=ical,
+            content_type="text/calendar",
+        )
+        # Schedule\Plugin may still 200, 207 or even 4xx for other
+        # reasons (DKIM, attendee resolution…); what matters here is
+        # that ``beforePost`` did NOT throw the freebusy-plugin error.
+        self._assert_no_freebusy_plugin_error(resp)
+
+
 # ===================================================================
 # ResourceAutoSchedulePlugin
 # ===================================================================
@@ -1267,30 +1393,69 @@ class TestResourceAutoSchedule:
             f"Organizer data: {unfolded[:1000]}"
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "iTIP delivery to resource principals is not currently functional: "
-            "SabreDAV's Schedule\\Plugin does not search the principals/resources "
-            "prefix when resolving attendees, so ResourceAutoSchedulePlugin's "
-            "accept/decline path never runs. When iTIP delivery to resources "
-            "is wired up (PrincipalBackend.findByUri must resolve resource "
-            "emails to the resources prefix), this test must start passing — "
-            "remove the xfail and the test enforces PARTSTAT=ACCEPTED on the "
-            "resource's own copy."
-        ),
-    )
+    @staticmethod
+    def _make_booking_ical(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        uid, summary, organizer_email, resource_email, *, days_ahead=2, hours=1
+    ):
+        dtstart = datetime.now() + timedelta(days=days_ahead)
+        dtend = dtstart + timedelta(hours=hours)
+        return (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"SUMMARY:{summary}\r\n"
+            f"ORGANIZER:mailto:{organizer_email}\r\n"
+            f"ATTENDEE;RSVP=TRUE:mailto:{resource_email}\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+
+    @staticmethod
+    def _report_resource_calendar(client, resource_id, *, props):
+        body = (
+            '<?xml version="1.0" encoding="utf-8" ?>'
+            '<C:calendar-query xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            f"<D:prop>{props}</D:prop>"
+            "<C:filter>"
+            '<C:comp-filter name="VCALENDAR">'
+            '<C:comp-filter name="VEVENT"/>'
+            "</C:comp-filter>"
+            "</C:filter>"
+            "</C:calendar-query>"
+        )
+        return client.generic(
+            "REPORT",
+            f"/caldav/calendars/resources/{resource_id}/default/",
+            data=body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+
     def test_resource_auto_accepts_booking_via_itip(self):
-        """Resource auto-schedule must deliver an ACCEPTED copy into its
-        own calendar.
+        """Resource auto-schedule must deliver an ACCEPTED copy into the
+        resource's own calendar — and a same-org user (typically the
+        booking organizer) must be able to read it back, including the
+        ``PARTSTAT=ACCEPTED`` on the resource attendee.
 
-        This is the canonical contract of ResourceAutoSchedulePlugin
-        (acceptInvitation → updatePartstat ACCEPTED, in
-        src/caldav/src/ResourceAutoSchedulePlugin.php).
+        Regressions covered:
 
-        Without this assertion, the plugin could silently drop bookings or
-        stop setting PARTSTAT=ACCEPTED and the existing tests would all
-        still pass.
+        1. ``PrincipalBackend::findByUri`` used to auto-create a
+           ``principals/users/`` row on miss for any prefix, blocking
+           SabreDAV from ever resolving the resource via the
+           ``principals/resources/`` collection.
+        2. ``ResourceAutoSchedulePlugin::autoSchedule`` ran at priority
+           120 — *after* ``Schedule\\Plugin::scheduleLocalDelivery``
+           (default 100) — so the ``PARTSTAT`` mutation in
+           ``acceptInvitation`` was a no-op for the delivered file.
+        3. The resource calendar's ``getACL()`` only granted
+           ``read-free-busy`` to authenticated users, so the booking
+           organizer could not even read the delivered event back to
+           verify the accept.
         """
         org = factories.OrganizationFactory(external_id="res-autosched-itip")
         user, client, _ = _create_user_with_calendar(org, "user-resauto")
@@ -1300,70 +1465,152 @@ class TestResourceAutoSchedule:
         resource_id = resource["id"]
         resource_email = resource.get("email", f"{resource_id}@resource.local")
 
-        dtstart = datetime.now() + timedelta(days=2)
-        dtend = dtstart + timedelta(hours=1)
-        ical = (
-            "BEGIN:VCALENDAR\r\n"
-            "VERSION:2.0\r\n"
-            "PRODID:-//Test//Test//EN\r\n"
-            "BEGIN:VEVENT\r\n"
-            "UID:res-auto-booking\r\n"
-            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
-            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
-            "SUMMARY:Team Standup\r\n"
-            f"ORGANIZER:mailto:{user.email}\r\n"
-            f"ATTENDEE;RSVP=TRUE:mailto:{resource_email}\r\n"
-            "END:VEVENT\r\n"
-            "END:VCALENDAR\r\n"
+        ical = self._make_booking_ical(
+            "res-auto-booking", "Team Standup", user.email, resource_email
         )
         dav = CalDAVHTTPClient().get_dav_client(user)
         cals = dav.principal().calendars()
         cals[0].save_event(ical)
 
-        # The resource calendar must now contain a copy of the booking with
-        # PARTSTAT=ACCEPTED on the resource attendee.
-        report_body = (
-            '<?xml version="1.0" encoding="utf-8" ?>'
-            '<C:calendar-query xmlns:D="DAV:" '
-            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
-            "<D:prop><D:getetag/><C:calendar-data/></D:prop>"
-            "<C:filter>"
-            '<C:comp-filter name="VCALENDAR">'
-            '<C:comp-filter name="VEVENT"/>'
-            "</C:comp-filter>"
-            "</C:filter>"
-            "</C:calendar-query>"
-        )
-        report = client.generic(
-            "REPORT",
-            f"/caldav/calendars/resources/{resource_id}/default/",
-            data=report_body,
-            content_type="application/xml",
-            HTTP_DEPTH="1",
+        report = self._report_resource_calendar(
+            client, resource_id, props="<D:getetag/><C:calendar-data/>"
         )
         assert report.status_code == HTTP_207_MULTI_STATUS, (
             f"REPORT on resource calendar failed: {report.status_code} "
             f"{report.content[:500]}"
         )
-        resource_body = report.content.decode("utf-8", errors="ignore")
+        body = report.content.decode("utf-8", errors="ignore")
 
-        assert "res-auto-booking" in resource_body, (
-            "Resource calendar should contain the booking — "
-            "auto-schedule plugin did not deliver iTIP message. "
-            f"Body: {resource_body[:1000]}"
+        assert "res-auto-booking" in body, (
+            "Resource calendar should contain the booking — auto-schedule "
+            "plugin did not deliver iTIP message. "
+            f"Body: {body[:1000]}"
         )
-        assert "PARTSTAT=ACCEPTED" in resource_body, (
+        assert "PARTSTAT=ACCEPTED" in body, (
             "Resource attendee must have PARTSTAT=ACCEPTED on the resource's "
             "own copy. The auto-schedule plugin's accept path is broken. "
-            f"Body: {resource_body[:1000]}"
+            f"Body: {body[:1000]}"
         )
-        assert "PARTSTAT=DECLINED" not in resource_body, (
-            "Non-conflicting booking should not be declined. "
-            f"Body: {resource_body[:1000]}"
+        assert "PARTSTAT=DECLINED" not in body, (
+            f"Non-conflicting booking should not be declined. Body: {body[:1000]}"
         )
-        assert "PARTSTAT=NEEDS-ACTION" not in resource_body, (
+        assert "PARTSTAT=NEEDS-ACTION" not in body, (
             "Auto-scheduled booking should not be left as NEEDS-ACTION. "
-            f"Body: {resource_body[:1000]}"
+            f"Body: {body[:1000]}"
+        )
+
+    def test_resource_decline_does_not_deliver_to_resource_calendar(self):
+        """A booking that conflicts with an existing one on the same
+        resource must be auto-DECLINED, and the declined message must
+        NOT land in the resource's own calendar.
+
+        Regression: ``ResourceAutoSchedulePlugin::declineInvitation``
+        used to mutate the in-memory iTIP message but ran at priority
+        120 — *after* ``Schedule\\Plugin::scheduleLocalDelivery`` had
+        already written the file. So declined bookings ended up
+        polluting the resource calendar (with ``PARTSTAT=NEEDS-ACTION``
+        from the original, since the ``DECLINED`` mutation was lost).
+        The fix is twofold: run at priority 90 (before
+        ``scheduleLocalDelivery``) AND ``return false`` from
+        ``autoSchedule`` on the decline path so event propagation
+        stops.
+        """
+        org = factories.OrganizationFactory(external_id="res-autosched-decline")
+        user, client, _ = _create_user_with_calendar(org, "user-resdecline")
+
+        service = ResourceService()
+        resource = service.create_resource(user, "Decline Room", "ROOM")
+        resource_id = resource["id"]
+        resource_email = resource.get("email", f"{resource_id}@resource.local")
+
+        # First booking — should auto-accept and land on the resource.
+        first_ical = self._make_booking_ical(
+            "res-decline-first", "First Booking", user.email, resource_email
+        )
+        dav = CalDAVHTTPClient().get_dav_client(user)
+        cals = dav.principal().calendars()
+        cals[0].save_event(first_ical)
+
+        # Second booking on the same time slot — must be declined.
+        second_ical = self._make_booking_ical(
+            "res-decline-second", "Conflicting Booking", user.email, resource_email
+        )
+        cals[0].save_event(second_ical)
+
+        # Use ``getetag`` only — works regardless of whether the user
+        # has read access to ``calendar-data`` — and count the
+        # delivered ``.ics`` hrefs. After the fix exactly one file
+        # should exist on the resource calendar (the first booking);
+        # before the fix two files exist because both bookings were
+        # delivered before ``declineInvitation`` could mutate the
+        # second one.
+        report = self._report_resource_calendar(
+            client, resource_id, props="<D:getetag/>"
+        )
+        assert report.status_code == HTTP_207_MULTI_STATUS, (
+            f"REPORT on resource calendar failed: {report.status_code}"
+        )
+        body = report.content.decode("utf-8", errors="ignore")
+        ics_hrefs = re.findall(r"sabredav-[0-9a-f-]+\.ics", body)
+        assert len(ics_hrefs) == 1, (
+            "Exactly one delivered iTIP file expected on the resource "
+            "calendar after one accept + one decline, "
+            f"got {len(ics_hrefs)} ({ics_hrefs}). The declined booking "
+            "leaked into the resource calendar — "
+            "ResourceAutoSchedulePlugin's decline path is racing with "
+            "Schedule\\Plugin::scheduleLocalDelivery. "
+            f"Body: {body[:1000]}"
+        )
+
+    def test_cross_org_user_cannot_read_resource_calendar(self):
+        """Granting same-org users read access to a resource calendar
+        must NOT widen the door cross-org. A user from a different org
+        must still be unable to read ``calendar-data`` (or any property
+        beyond what was already publicly exposed) on someone else's
+        resource calendar.
+
+        Regression guard for the same-org read grant added alongside
+        the auto-accept fix: without a cross-org check, exposing
+        ``{DAV:}read`` to ``{DAV:}authenticated`` would let any
+        authenticated principal in any org read every resource's
+        booking history.
+        """
+        org_a = factories.OrganizationFactory(external_id="res-cross-a")
+        org_b = factories.OrganizationFactory(external_id="res-cross-b")
+        owner, owner_client, _ = _create_user_with_calendar(org_a, "owner-rescross")
+        attacker, attacker_client, _ = _create_user_with_calendar(
+            org_b, "attacker-rescross"
+        )
+
+        service = ResourceService()
+        resource = service.create_resource(owner, "Private Room", "ROOM")
+        resource_id = resource["id"]
+        resource_email = resource.get("email", f"{resource_id}@resource.local")
+
+        # Owner books the room so there is something on the calendar.
+        ical = self._make_booking_ical(
+            "res-cross-booking", "Confidential", owner.email, resource_email
+        )
+        dav = CalDAVHTTPClient().get_dav_client(owner)
+        cals = dav.principal().calendars()
+        cals[0].save_event(ical)
+
+        # Cross-org attacker tries to read the resource's calendar-data.
+        report = self._report_resource_calendar(
+            attacker_client, resource_id, props="<D:getetag/><C:calendar-data/>"
+        )
+        body = report.content.decode("utf-8", errors="ignore")
+
+        # Either the request is rejected outright (403/404) or the
+        # multistatus body returns 403/404 for calendar-data — what
+        # matters is that the booking content never leaks.
+        assert "res-cross-booking" not in body, (
+            "Cross-org attacker must not see the resource booking content. "
+            f"Status={report.status_code}, body={body[:1000]}"
+        )
+        assert "Confidential" not in body, (
+            "Cross-org attacker must not see the booking SUMMARY. "
+            f"Status={report.status_code}, body={body[:1000]}"
         )
 
 

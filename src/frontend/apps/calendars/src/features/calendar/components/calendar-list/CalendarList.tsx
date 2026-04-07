@@ -7,7 +7,6 @@ import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useCalendarContext } from "../../contexts";
-import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import { setupCalendar } from "@/features/mailbox/api";
 
 import { CalendarModal } from "./CalendarModal";
@@ -35,8 +34,6 @@ export const CalendarList = () => {
     calendarRef,
     isLoading: isCalendarLoading,
   } = useCalendarContext();
-
-  const { getMailboxEmail } = useMailboxContext();
 
   const {
     modalState,
@@ -171,7 +168,7 @@ export const CalendarList = () => {
                   calendar={calendar}
                   isVisible={visibleCalendarUrls.has(calendar.url)}
                   isMenuOpen={openMenuUrl === calendar.url}
-                  mailboxEmail={getMailboxEmail(calendar.url, calendar)}
+                  mailboxEmail={calendar.mailboxEmail}
                   onToggleVisibility={toggleCalendarVisibility}
                   onMenuToggle={handleMenuToggle}
                   onEdit={handleOpenEditModal}
@@ -216,7 +213,7 @@ export const CalendarList = () => {
                     calendar={calendar}
                     isVisible={visibleCalendarUrls.has(calendar.url)}
                     isMenuOpen={openMenuUrl === calendar.url}
-                    mailboxEmail={getMailboxEmail(calendar.url, calendar)}
+                    mailboxEmail={calendar.mailboxEmail}
                     onToggleVisibility={toggleCalendarVisibility}
                     onMenuToggle={handleMenuToggle}
                     onEdit={handleOpenEditModal}
