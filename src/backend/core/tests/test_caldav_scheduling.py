@@ -440,36 +440,6 @@ def _create_user_with_calendar(org, email_prefix, domain="sched-test.com"):
     return user, client, caldav_path
 
 
-def _get_cal_id(caldav_path):
-    """Extract calendar ID from path like calendars/users/email/cal-id/."""
-    parts = caldav_path.strip("/").split("/")
-    return parts[-1] if len(parts) >= 4 else "default"
-
-
-def _put_event(client, user_email, cal_id, event_uid, summary="Test Event"):
-    """PUT a VCALENDAR event into a calendar via the CalDAV proxy."""
-    dtstart = datetime.now() + timedelta(days=1)
-    dtend = dtstart + timedelta(hours=1)
-    ical = (
-        "BEGIN:VCALENDAR\r\n"
-        "VERSION:2.0\r\n"
-        "PRODID:-//Test//Test//EN\r\n"
-        "BEGIN:VEVENT\r\n"
-        f"UID:{event_uid}\r\n"
-        f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
-        f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
-        f"SUMMARY:{summary}\r\n"
-        "END:VEVENT\r\n"
-        "END:VCALENDAR\r\n"
-    )
-    return client.generic(
-        "PUT",
-        f"/caldav/calendars/users/{user_email}/{cal_id}/{event_uid}.ics",
-        data=ical,
-        content_type="text/calendar",
-    )
-
-
 @pytest.fixture()
 def _avail_entitlements(settings):
     """Use local entitlements for availability tests."""
@@ -566,9 +536,7 @@ class TestAvailabilityPlugin:
             external_id="avail-inject",
             default_sharing_level="freebusy",
         )
-        target, target_client, target_cal_path = _create_user_with_calendar(
-            org, "target-avail"
-        )
+        target, target_client, _ = _create_user_with_calendar(org, "target-avail")
         querier, querier_client, _ = _create_user_with_calendar(org, "querier-avail")
 
         # Set calendar-availability on target's calendar home
@@ -623,12 +591,12 @@ class TestAvailabilityPlugin:
             f"Availability property not stored! PROPFIND: {pf_content[:500]}"
         )
 
-        # Add an event so freebusy has something to report
-        target_cal_id = _get_cal_id(target_cal_path)
-        _put_event(
-            target_client, target.email, target_cal_id, "avail-ev", "Working Meeting"
-        )
-
+        # AvailabilityPlugin computes BUSY-UNAVAILABLE blocks from the
+        # user's stored VAVAILABILITY across the freebusy query window —
+        # it does not depend on any seeded events on the target's
+        # calendar. Schedule\Plugin always emits a VFREEBUSY block
+        # whether the calendar contains events or not, which gives the
+        # plugin a hook to attach the BUSY-UNAVAILABLE lines to.
         # Use a weekday (Monday) range for the freebusy query
         now = datetime.now(dt_tz.utc)
         days_ahead = (7 - now.weekday()) % 7  # 0=Monday
@@ -675,13 +643,13 @@ class TestAvailabilityPlugin:
             external_id="avail-none",
             default_sharing_level="freebusy",
         )
-        target, target_client, target_cal_path = _create_user_with_calendar(
-            org, "target-noavail"
-        )
+        target, _, _ = _create_user_with_calendar(org, "target-noavail")
         querier, querier_client, _ = _create_user_with_calendar(org, "querier-noavail")
-        target_cal_id = _get_cal_id(target_cal_path)
-        _put_event(target_client, target.email, target_cal_id, "noavail-ev", "Meeting")
 
+        # No VAVAILABILITY is stored on the target, so AvailabilityPlugin
+        # bails out at ``getCalendarAvailability`` returning null. The
+        # delivered VFREEBUSY response must therefore be free of any
+        # BUSY-UNAVAILABLE lines regardless of what's on the calendar.
         now = datetime.now(dt_tz.utc)
         dtstart = (now + timedelta(days=1)).strftime("%Y%m%dT%H%M%SZ")
         dtend = (now + timedelta(days=2)).strftime("%Y%m%dT%H%M%SZ")

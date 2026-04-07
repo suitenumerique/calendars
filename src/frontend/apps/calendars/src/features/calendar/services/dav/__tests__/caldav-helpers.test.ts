@@ -18,6 +18,7 @@ import {
   buildSyncCollectionXml,
   buildPrincipalSearchXml,
   parseCalendarComponents,
+  parseDavErrorMessage,
   parseShareStatus,
   getCalendarUrlFromEventUrl,
 } from '../caldav-helpers'
@@ -406,6 +407,65 @@ describe('caldav-helpers', () => {
 
       it('returns declined as default', () => {
         expect(parseShareStatus(false, false)).toBe('declined')
+      })
+    })
+
+    describe('parseDavErrorMessage', () => {
+      const SABREDAV_FORBIDDEN = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        + '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">\n'
+        + '  <s:sabredav-version>4.7.0</s:sabredav-version>\n'
+        + '  <s:exception>Sabre\\DAV\\Exception\\Forbidden</s:exception>\n'
+        + '  <s:message>This sharee is managed by Messages and can only be '
+        + 'changed there. Update the mailbox permissions in Messages '
+        + 'instead.</s:message>\n'
+        + '</d:error>'
+      )
+
+      it('extracts the s:message from a SabreDAV Forbidden error', () => {
+        expect(parseDavErrorMessage(SABREDAV_FORBIDDEN)).toBe(
+          'This sharee is managed by Messages and can only be '
+          + 'changed there. Update the mailbox permissions in Messages '
+          + 'instead.',
+        )
+      })
+
+      it('returns undefined for an empty body', () => {
+        expect(parseDavErrorMessage('')).toBeUndefined()
+      })
+
+      it('returns undefined for malformed XML', () => {
+        expect(parseDavErrorMessage('not <xml at all >>>')).toBeUndefined()
+      })
+
+      it('returns undefined when no s:message element is present', () => {
+        const body = (
+          '<?xml version="1.0"?>'
+          + '<d:error xmlns:d="DAV:"><d:other/></d:error>'
+        )
+        expect(parseDavErrorMessage(body)).toBeUndefined()
+      })
+
+      it('returns undefined when s:message is empty / whitespace only', () => {
+        const body = (
+          '<?xml version="1.0"?>'
+          + '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">'
+          + '<s:message>   </s:message>'
+          + '</d:error>'
+        )
+        expect(parseDavErrorMessage(body)).toBeUndefined()
+      })
+
+      it('handles multi-element bodies and picks the first s:message', () => {
+        const body = (
+          '<?xml version="1.0"?>'
+          + '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">'
+          + '<s:exception>X</s:exception>'
+          + '<s:message>first</s:message>'
+          + '<s:message>second</s:message>'
+          + '</d:error>'
+        )
+        expect(parseDavErrorMessage(body)).toBe('first')
       })
     })
 

@@ -85,6 +85,14 @@ $nodes = [
     new CardDAV\AddressBookRoot($principalBackend, $carddavBackend),
 ];
 
+// Suppress every place SabreDAV self-identifies its version: the
+// ``<s:sabredav-version>`` element in error bodies, the
+// ``X-Sabre-Version`` response header, the version footers in
+// Browser/Plugin and ICSExportPlugin, and the equivalent in IMip
+// outbound mail. Useless to legitimate clients and a free
+// fingerprinting hint for attackers.
+DAV\Server::$exposeVersion = false;
+
 // Create server
 $server = new DAV\Server($nodes);
 $server->setBaseUri($baseUri);

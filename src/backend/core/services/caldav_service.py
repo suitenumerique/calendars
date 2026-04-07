@@ -5,7 +5,7 @@ import re
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Optional
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 from uuid import uuid4
 
 from django.conf import settings
@@ -49,11 +49,35 @@ class CalDAVHTTPClient:
     def build_base_headers(cls, user) -> dict:
         """Build authentication headers for CalDAV requests.
 
+        The CalDAV server identifies the caller via header-based auth,
+        not HTTP Basic / Bearer tokens. Every request must carry:
+
+        - ``X-LS-Api-Key``       — outbound shared secret
+          (``CALDAV_OUTBOUND_API_KEY``), validated by ``ApiKeyAuthBackend``.
+        - ``X-LS-User``          — the email of the principal acting.
+        - ``X-LS-Org-Id``        — the principal's organization id, used
+          by ``FreeBusyOrgScopePlugin`` and ``PrincipalBackend`` for
+          org-scoped discovery and cross-org isolation.
+
+        And, when available:
+
+        - ``X-LS-Org-Sharing-Level`` — the organization's effective
+          sharing level (``none`` / ``freebusy`` / ``read`` / ``write``),
+          consumed by ``FreeBusyOrgScopePlugin``. Added only when the
+          user object has an ``organization`` with an
+          ``effective_sharing_level`` attribute.
+
+        Both ``user.email`` and ``user.organization_id`` are mandatory:
+        the CalDAV-side plugins fail closed without them.
+
         Args:
-            user: Object with .email and .organization_id attributes.
+            user: Object with ``.email`` and ``.organization_id``
+                attributes (and optionally ``.organization``).
 
         Raises:
-            ValueError: If user.email is not set.
+            ValueError: If ``user.email`` or ``user.organization_id`` is
+                not set, or if ``CALDAV_OUTBOUND_API_KEY`` is not
+                configured.
         """
         if not user.email:
             raise ValueError("User has no email address")
@@ -126,15 +150,21 @@ class CalDAVHTTPClient:
     ) -> requests.Response:
         """Make an internal API request to the CalDAV server.
 
-        Automatically adds the X-Internal-Api-Key header. Additional
-        headers can be passed via *extra_headers*.
+        Adds the ``X-LS-Internal-Api-Key`` header (the dedicated
+        internal API key, distinct from ``X-LS-Api-Key``) on top of
+        the standard auth headers built by ``build_base_headers``
+        (``X-LS-Api-Key``, ``X-LS-User``, ``X-LS-Org-Id``, and
+        optionally ``X-LS-Org-Sharing-Level``). Additional headers
+        can be passed via *extra_headers*.
 
         Pass *json* to send a JSON body — it will be serialized
         and the content type set automatically. Mutually exclusive
         with *data* and *content_type*.
 
         Raises:
-            ValueError: If CALDAV_INTERNAL_API_KEY is not configured.
+            ValueError: If CALDAV_INTERNAL_API_KEY is not configured,
+                or if ``build_base_headers`` rejects the user (missing
+                email or organization_id).
         """
         import json as json_lib  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
 
@@ -278,9 +308,13 @@ class CalDAVClient:
         """
         Get a CalDAV client for the given user.
 
-        The CalDAV server requires API key authentication via Authorization header
-        and X-LS-User header for user identification.
-        Includes X-LS-Org-Id when the user has an org.
+        Authentication uses header-based auth, not HTTP Basic / Bearer:
+        every request carries ``X-LS-Api-Key`` (the outbound shared
+        secret), ``X-LS-User`` (the principal email) and ``X-LS-Org-Id``
+        (the organization id, mandatory). When the user object also
+        exposes an ``organization.effective_sharing_level``,
+        ``X-LS-Org-Sharing-Level`` is added too. See
+        ``CalDAVHTTPClient.build_base_headers`` for the contract.
         """
         return self._http.get_dav_client(user)
 
@@ -629,11 +663,46 @@ CalendarService = CalDAVClient
 # CalDAV path utilities
 # ---------------------------------------------------------------------------
 
-# Pattern: /calendars/users/<email-or-encoded>/<calendar-id>/
-# or /calendars/resources/<resource-id>/<calendar-id>/
-CALDAV_PATH_PATTERN = re.compile(
-    r"^/calendars/(users|resources)/[^/]+/[a-zA-Z0-9-]+/$",
+# Patterns for CalDAV calendar paths.
+#
+# Two collection shapes are accepted:
+#   /calendars/users/<email-or-encoded>/<calendar-id>/
+#   /calendars/resources/<resource-id>/<calendar-id>/
+#
+# The user segment is intentionally permissive (``[^/]+``) because
+# CalDAV clients legitimately percent-encode the ``@`` in email
+# addresses (and in principle any other reserved character). It is
+# only ever URL-decoded for an in-memory string comparison against
+# ``user.email`` — never interpolated into an outbound URL — so
+# encoded characters cannot turn into dot-segments at the receiving
+# end.
+#
+# The resource segment is locked down to the UUID-safe alphabet that
+# ``ResourceService`` actually emits, so an attacker cannot smuggle a
+# percent-encoded ``..`` into the path: the resource id IS interpolated
+# into an internal-api URL by ``_resource_belongs_to_org`` and any
+# decoded ``..`` would risk resolving to a different SabreDAV route
+# after server-side path normalisation. Anything outside that alphabet
+# must be rejected at the validation step, before any unquoting can
+# take place.
+_CALDAV_USER_SEGMENT = r"[^/]+"
+_CALDAV_RESOURCE_SEGMENT = r"[a-zA-Z0-9-]+"
+_CALDAV_CALENDAR_ID = r"[a-zA-Z0-9-]+"
+
+CALDAV_USER_PATH_PATTERN = re.compile(
+    rf"^/calendars/users/{_CALDAV_USER_SEGMENT}/{_CALDAV_CALENDAR_ID}/$"
 )
+CALDAV_RESOURCE_PATH_PATTERN = re.compile(
+    rf"^/calendars/resources/{_CALDAV_RESOURCE_SEGMENT}/{_CALDAV_CALENDAR_ID}/$"
+)
+
+
+def _matches_caldav_path(caldav_path: str) -> bool:
+    """Whether ``caldav_path`` is a recognised user OR resource calendar path."""
+    return bool(
+        CALDAV_USER_PATH_PATTERN.match(caldav_path)
+        or CALDAV_RESOURCE_PATH_PATTERN.match(caldav_path)
+    )
 
 
 def normalize_caldav_path(caldav_path):
@@ -662,25 +731,33 @@ def verify_caldav_access(user, caldav_path):  # noqa: PLR0911  # pylint: disable
     2. For user calendars: the user's email matches the email in the path
     3. For resource calendars: the resource belongs to the user's org
     """
-    if not CALDAV_PATH_PATTERN.match(caldav_path):
+    if not _matches_caldav_path(caldav_path):
         return False
     parts = caldav_path.strip("/").split("/")
     if len(parts) < 3 or parts[0] != "calendars":
         return False
     # User calendars: calendars/users/<email>/<calendar-id>
+    # ``parts[2]`` is the (possibly percent-encoded) email and is only
+    # used for an in-memory comparison against ``user.email`` — never
+    # interpolated into a URL — so unquoting here is safe and
+    # necessary (clients commonly send ``%40`` for ``@``).
     if parts[1] == "users":
         if not user.email:
             return False
         path_email = unquote(parts[2])
         return path_email.lower() == user.email.lower()
     # Resource calendars: calendars/resources/<resource-id>/<calendar-id>
-    # Verify the resource belongs to the user's org via CalDAV internal API.
+    # ``parts[2]`` is constrained by ``CALDAV_RESOURCE_PATH_PATTERN``
+    # to the UUID-safe alphabet ``[a-zA-Z0-9-]+`` so it cannot carry
+    # encoded dot-segments. We deliberately do NOT call ``unquote`` on
+    # it: the value is interpolated into an internal-api URL and any
+    # decoded ``..`` would risk resolving to a different route after
+    # server-side path normalisation.
     if parts[1] == "resources":
         org_id = getattr(user, "organization_id", None)
         if not org_id:
             return False
-        resource_id = unquote(parts[2])
-        return _resource_belongs_to_org(user, resource_id, str(org_id))
+        return _resource_belongs_to_org(user, parts[2], str(org_id))
     return False
 
 
@@ -688,12 +765,22 @@ def _resource_belongs_to_org(user, resource_id: str, org_id: str) -> bool:
     """Check whether a resource principal belongs to the given organization.
 
     Queries the CalDAV internal API. Returns False on any error (fail-closed).
+
+    ``resource_id`` is expected to come from a path segment that
+    ``CALDAV_RESOURCE_PATH_PATTERN`` has already constrained to
+    ``[a-zA-Z0-9-]+``, so percent-encoding is structurally impossible.
+    We still pass it through ``urllib.parse.quote`` (with ``-`` as the
+    safe set) before interpolating into the URL — a no-op for valid
+    inputs, but a second line of defence the day either the regex or
+    a future
+    caller relaxes the alphabet.
     """
+    safe_id = quote(resource_id, safe="-")
     try:
         resp = CalDAVHTTPClient().internal_request(
             "GET",
             user,
-            f"internal-api/resources/{resource_id}",
+            f"internal-api/resources/{safe_id}",
         )
         if resp.status_code != 200:
             return False

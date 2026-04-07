@@ -19,7 +19,8 @@ from core import factories
 from core.entitlements import EntitlementsUnavailableError
 from core.entitlements.factory import get_entitlements_backend
 from core.services.caldav_service import (
-    CALDAV_PATH_PATTERN,
+    CALDAV_RESOURCE_PATH_PATTERN,
+    CALDAV_USER_PATH_PATTERN,
     normalize_caldav_path,
     verify_caldav_access,
 )
@@ -115,10 +116,36 @@ class TestVerifyCaldavAccessResourcePaths:
         assert verify_caldav_access(user, path) is False
 
     def test_resource_path_pattern_matches(self):
-        """The CALDAV_PATH_PATTERN regex matches resource paths."""
-        assert CALDAV_PATH_PATTERN.match("/calendars/resources/abc-123/default/")
-        assert CALDAV_PATH_PATTERN.match(
+        """The resource pattern matches UUID-shaped resource paths."""
+        assert CALDAV_RESOURCE_PATH_PATTERN.match(
+            "/calendars/resources/abc-123/default/"
+        )
+        assert CALDAV_RESOURCE_PATH_PATTERN.match(
             "/calendars/resources/a1b2c3d4-e5f6-7890-abcd-ef1234567890/default/"
+        )
+        # Resource segment must NOT accept percent-encoded payloads —
+        # the value is interpolated into an internal-api URL and any
+        # decoded ``..`` would risk hitting a different route after
+        # server-side path normalisation.
+        assert not CALDAV_RESOURCE_PATH_PATTERN.match(
+            "/calendars/resources/%2e%2e/default/"
+        )
+        # And it must NOT accept the user collection.
+        assert not CALDAV_RESOURCE_PATH_PATTERN.match(
+            "/calendars/users/alice@example.com/default/"
+        )
+
+    def test_user_path_pattern_matches(self):
+        """The user pattern accepts emails (raw or percent-encoded)."""
+        assert CALDAV_USER_PATH_PATTERN.match(
+            "/calendars/users/alice@example.com/default/"
+        )
+        assert CALDAV_USER_PATH_PATTERN.match(
+            "/calendars/users/alice%40example.com/default/"
+        )
+        # User pattern must NOT accept the resource collection.
+        assert not CALDAV_USER_PATH_PATTERN.match(
+            "/calendars/resources/abc-123/default/"
         )
 
     def test_resource_path_denied_when_user_has_no_org(self):

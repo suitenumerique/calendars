@@ -70,8 +70,15 @@ def sync_all_mailbox_acls():
 
     User = get_user_model()  # pylint: disable=invalid-name
 
+    # Eagerly probe ``service.messages`` so a missing Messages
+    # configuration fails fast with a single error log instead of
+    # silently exploding once per user inside the loop below. We can't
+    # do this from ``SetupService.__init__`` itself: ``SetupService``
+    # is also used for standalone (non-mailbox) calendar creation,
+    # which legitimately runs without Messages settings configured.
     try:
         service = SetupService()
+        _ = service.messages
     except MessagesServiceError as exc:
         logger.error("sync_all_mailbox_acls: cannot init service: %s", exc)
         return

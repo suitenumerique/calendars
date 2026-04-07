@@ -372,6 +372,15 @@ export const CalendarShareModal = ({
     if ((access as ShareAccess & { is_sync_managed?: boolean }).is_sync_managed) {
       return makeRoles([access.role]);
     }
+    // Mailbox calendars cap manual sharing at read-only (``freebusy``
+    // rides on top of ``CS:read``). ``read-write`` and ``admin`` must
+    // come via the Messages sync — ``MailboxPlugin::restrictSharing``
+    // rejects them with 403 — so we don't even offer them in the
+    // dropdown. This mirrors the same limitation already applied to
+    // ``invitationRoles`` above.
+    if (isMailbox) {
+      return makeRoles(["read", "freebusy"]);
+    }
     return makeRoles(["freebusy", "read", "read-write", "admin"]);
   };
 

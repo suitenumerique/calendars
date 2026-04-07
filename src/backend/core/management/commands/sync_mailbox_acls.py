@@ -41,8 +41,15 @@ class Command(BaseCommand):
             self.stderr.write("FEATURE_MESSAGES_INTEGRATION is disabled.")
             return
 
+        # Eagerly probe ``service.messages`` so a missing Messages
+        # configuration fails fast here instead of silently exploding
+        # once per user inside the loop below. ``SetupService.__init__``
+        # itself stays lazy on purpose: standalone calendar creation
+        # uses ``SetupService`` too and legitimately runs without
+        # Messages settings configured.
         try:
             service = SetupService()
+            _ = service.messages
         except MessagesServiceError as exc:
             self.stderr.write(f"Cannot initialize sync service: {exc}")
             return

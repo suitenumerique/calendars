@@ -6,6 +6,7 @@
 
 import { davRequest, DAVNamespaceShort } from 'tsdav'
 import type { DAVMethods } from 'tsdav'
+import { xml2js, type ElementCompact } from 'xml-js'
 
 type HTTPMethods = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'CONNECT' | 'OPTIONS' | 'TRACE' | 'PATCH'
 type AllowedMethods = DAVMethods | HTTPMethods
@@ -326,9 +327,15 @@ export async function executeDavRequest(options: DavRequestOptions): Promise<Cal
           status: response.status,
           error: errorText,
         });
+        // Prefer the SabreDAV ``<s:message>`` over the raw XML body so
+        // users see "This sharee is managed by Messages..." instead of
+        // a wall of escaped angle brackets.
+        const friendly = parseDavErrorMessage(errorText);
         return {
           success: false,
-          error: `Request failed: ${response.status} ${errorText}`,
+          error: friendly
+            ? `Request failed: ${response.status} ${friendly}`
+            : `Request failed: ${response.status} ${errorText}`,
           status: response.status,
         };
       }
@@ -505,6 +512,57 @@ export function parseShareStatus(
   if (accepted) return 'accepted'
   if (noResponse) return 'pending'
   return 'declined'
+}
+
+/**
+ * Extract the human-readable ``<s:message>`` from a SabreDAV-style
+ * XML error body. Returns ``undefined`` when the body is empty,
+ * malformed, missing the ``s:message`` element, or whitespace-only.
+ *
+ * Background: SabreDAV serialises errors as
+ * ``<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">
+ *   <s:exception>...</s:exception>
+ *   <s:message>human-readable text</s:message>
+ *  </d:error>``
+ * Surfacing the raw XML to the user is unhelpful — the message child
+ * is what we actually want to display.
+ *
+ * Uses ``xml-js``'s ``xml2js`` (the same parser tsdav itself uses
+ * internally), with namespace prefixes stripped so ``<s:message>``
+ * lands at ``parsed.error.message`` regardless of which prefix the
+ * server happens to bind. Works in both browser and ``node``
+ * jest environments — no ``DOMParser`` dependency.
+ *
+ * Safe to render in React: the value is plain text from our own
+ * SabreDAV server (not user-supplied), and ``server.php``'s exception
+ * handler already masks any non-DAV exception's message as
+ * ``Internal server error`` so internal details (DB errors, file
+ * paths, SQL state) cannot leak through this channel.
+ */
+export function parseDavErrorMessage(xmlBody: string): string | undefined {
+  if (!xmlBody) return undefined
+  let parsed: ElementCompact
+  try {
+    parsed = xml2js(xmlBody, {
+      compact: true,
+      trim: true,
+      // Strip namespace prefixes (``s:message`` → ``message``) so the
+      // resulting object is prefix-agnostic. Mirrors how tsdav parses
+      // its own DAV responses internally.
+      elementNameFn: (name) => name.replace(/^.+:/, ''),
+    }) as ElementCompact
+  } catch {
+    return undefined
+  }
+  const error = parsed.error as ElementCompact | undefined
+  const messageNode = error?.message as ElementCompact | ElementCompact[] | undefined
+  if (!messageNode) return undefined
+  // xml-js compact mode: multiple same-named children → array.
+  const first = Array.isArray(messageNode) ? messageNode[0] : messageNode
+  const text = first?._text
+  if (typeof text !== 'string') return undefined
+  const trimmed = text.trim()
+  return trimmed ? trimmed : undefined
 }
 
 /**

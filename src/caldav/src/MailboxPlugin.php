@@ -296,6 +296,14 @@ class MailboxPlugin extends ServerPlugin
      * pair. ``uri`` may be the owner-side URI or a per-user sharee
      * instance URI — both row types live in ``calendarinstances`` and
      * point to the same ``calendarid``.
+     *
+     * Returns ``null`` when the row genuinely does not exist.
+     * **Throws** on DB errors so the caller fails closed: silently
+     * returning ``null`` would let ``restrictSharing()`` skip its
+     * mailbox-only checks and SabreDAV would then process an unfiltered
+     * ``CS:share`` (including read-write/admin grants).
+     *
+     * @throws \RuntimeException on DB error
      */
     private function resolveCalendarId(string $principalUri, string $calendarUri): ?int
     {
@@ -309,14 +317,23 @@ class MailboxPlugin extends ServerPlugin
             return $value === false ? null : (int) $value;
         } catch (\Exception $e) {
             error_log("[MailboxPlugin] DB error in resolveCalendarId: " . $e->getMessage());
-            return null;
+            throw new \RuntimeException(
+                'Failed to resolve calendar id for sharing restriction',
+                0,
+                $e
+            );
         }
     }
 
     /**
      * Whether the calendar with the given id is owned by a MAILBOX
-     * principal. Cheaper variant of ``isMailboxOwnedCalendar`` for
-     * callers that have already resolved ``$calendarId``.
+     * principal.
+     *
+     * **Throws** on DB errors so ``restrictSharing()`` fails closed:
+     * silently returning ``false`` would skip the mailbox-only checks
+     * and let an unfiltered ``CS:share`` reach SabreDAV's handler.
+     *
+     * @throws \RuntimeException on DB error
      */
     private function isMailboxOwnedCalendarId(int $calendarId): bool
     {
@@ -332,34 +349,11 @@ class MailboxPlugin extends ServerPlugin
             return $stmt->fetchColumn() === PrincipalBackend::TYPE_MAILBOX;
         } catch (\Exception $e) {
             error_log("[MailboxPlugin] DB error in isMailboxOwnedCalendarId: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Check if a calendar instance belongs to a MAILBOX-owned calendar.
-     *
-     * Resolves the owner via the calendarid → owner instance → principal
-     * chain. Works for both directly-owned calendars and shared instances
-     * (any URI format).
-     */
-    private function isMailboxOwnedCalendar(string $principalUri, string $calendarUri): bool
-    {
-        try {
-            $stmt = $this->pdo->prepare(
-                'SELECT p.calendar_user_type '
-                . 'FROM calendarinstances ci '
-                . 'JOIN calendarinstances owner_ci ON owner_ci.calendarid = ci.calendarid AND owner_ci.access = 1 '
-                . 'JOIN principals p ON p.uri = owner_ci.principaluri '
-                . 'WHERE ci.principaluri = ? AND ci.uri = ? '
-                . 'LIMIT 1'
+            throw new \RuntimeException(
+                'Failed to verify mailbox ownership for sharing restriction',
+                0,
+                $e
             );
-            $stmt->execute([$principalUri, $calendarUri]);
-            return $stmt->fetchColumn() === PrincipalBackend::TYPE_MAILBOX;
-        } catch (\Exception $e) {
-            error_log("[MailboxPlugin] DB error in isMailboxOwnedCalendar: " . $e->getMessage());
-            return false;
         }
     }
-
 }
