@@ -186,9 +186,7 @@ class SetupService:
         self.sync_mailbox(user, mailbox_email, users=user_mailbox.get("users", []))
 
         return {
-            "calendar_path": (
-                f"calendars/users/{user.email}/{caller_calendar_uri}"
-            ),
+            "calendar_path": (f"calendars/users/{user.email}/{caller_calendar_uri}"),
             "mailbox_email": mailbox_email,
             "principal_uri": f"principals/users/{mailbox_email}",
         }

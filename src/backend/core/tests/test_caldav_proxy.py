@@ -528,7 +528,15 @@ class TestCalDAVFreeBusy:
 
     @responses.activate
     def test_freebusy_post_includes_organization_header(self):
-        """POST to outbox should include X-LS-Org-Id header."""
+        """POST to outbox forwards X-LS-Org-Id and returns the freebusy
+        schedule-response intact.
+
+        Header forwarding is the org-isolation contract — without it,
+        FreeBusyOrgScopePlugin can't enforce per-org sharing rules.
+        We also assert the proxy returns the schedule-response payload
+        unchanged (recipient href, request-status, calendar-data with
+        VFREEBUSY) instead of just trusting the upstream status code.
+        """
         user = factories.UserFactory(email="alice@example.com")
         client = APIClient()
         client.force_login(user)
@@ -548,15 +556,49 @@ class TestCalDAVFreeBusy:
         body = self.FREEBUSY_REQUEST.format(
             organizer=user.email, attendee="bob@example.com"
         )
-        client.generic(
+        response = client.generic(
             "POST",
             f"/caldav/{outbox_path}",
             data=body,
             content_type="text/calendar; charset=utf-8",
         )
 
+        # Header forwarding contract.
         forwarded = responses.calls[0].request
         assert forwarded.headers["X-LS-Org-Id"] == str(user.organization_id)
+
+        # Body forwarding / response correctness — the schedule-response
+        # must come back to the client intact.
+        assert response.status_code == HTTP_200_OK
+        root = ET.fromstring(response.content)
+        ns = {"cal": "urn:ietf:params:xml:ns:caldav", "d": "DAV:"}
+
+        # Exactly one cal:response per recipient.
+        responses_elems = root.findall(".//cal:response", ns)
+        assert len(responses_elems) == 1, (
+            f"Expected one schedule-response per attendee, got "
+            f"{len(responses_elems)}: {response.content[:500]}"
+        )
+
+        recipient_href = responses_elems[0].find(".//cal:recipient/d:href", ns)
+        assert recipient_href is not None
+        assert recipient_href.text == "mailto:bob@example.com"
+
+        status = responses_elems[0].find("cal:request-status", ns)
+        assert status is not None
+        assert status.text and status.text.startswith("2.0"), (
+            f"Expected request-status 2.0 (Success), got {status.text!r}"
+        )
+
+        # The cal:calendar-data must contain a VFREEBUSY block (otherwise
+        # the freebusy data was stripped or never embedded).
+        cal_data = responses_elems[0].find("cal:calendar-data", ns)
+        assert cal_data is not None and cal_data.text
+        assert "BEGIN:VFREEBUSY" in cal_data.text
+        assert "END:VFREEBUSY" in cal_data.text
+        assert "FREEBUSY:" in cal_data.text, (
+            f"freebusy time block missing from calendar-data: {cal_data.text[:500]}"
+        )
 
 
 class TestValidateCaldavProxyPath:

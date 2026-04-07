@@ -325,9 +325,12 @@ export const CalendarShareModal = ({
   const makeRoles = (values: string[]) =>
     values.map((v) => ({ label: t(ROLE_KEYS[v] || v), value: v }));
 
+  // The first entry is shown as the default in the invite dropdown
+  // (ui-kit ShareModal uses ``invitationRoles[0].value``). Reader is
+  // the safest, most common share level, so it leads.
   const invitationRoles = isMailbox
-    ? makeRoles(["freebusy", "read"])
-    : makeRoles(["freebusy", "read", "read-write", "admin"]);
+    ? makeRoles(["read", "freebusy"])
+    : makeRoles(["read", "freebusy", "read-write", "admin"]);
 
   const getAccessRoles = (access: ShareAccess) => {
     if (access.role === "owner") {

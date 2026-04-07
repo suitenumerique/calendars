@@ -165,17 +165,41 @@ class TestClassConfidentialEnforcement:
             data = str(ev.data)
             if "conf-event" in data:
                 found_target = True
-                assert "Secret Board Meeting" not in data, (
+                # Unfold long iCalendar lines for substring assertions.
+                unfolded = (
+                    data.replace("\r\n ", "")
+                    .replace("\r\n\t", "")
+                    .replace("\n ", "")
+                    .replace("\n\t", "")
+                )
+                assert "Secret Board Meeting" not in unfolded, (
                     "SECURITY: CONFIDENTIAL event SUMMARY visible to sharee"
                 )
-                assert "Discussing layoffs" not in data, (
+                assert "Discussing layoffs" not in unfolded, (
                     "SECURITY: CONFIDENTIAL event DESCRIPTION visible to sharee"
                 )
-                assert "CEO Suite" not in data, (
+                assert "CEO Suite" not in unfolded, (
                     "SECURITY: CONFIDENTIAL event LOCATION visible to sharee"
                 )
-                assert "Busy" in data, "CONFIDENTIAL event should show as 'Busy'"
-                assert "DTSTART" in data, "Time info should be preserved"
+                # The CONFIDENTIAL replacement summary must be exactly
+                # ``SUMMARY:Busy`` — checking just ``"Busy" in data`` would
+                # match e.g. ``X-WR-CALNAME:Busybox`` or any future property
+                # that contains the substring.
+                assert "SUMMARY:Busy" in unfolded, (
+                    "CONFIDENTIAL event SUMMARY should be replaced with 'Busy'. "
+                    f"Got: {unfolded[:500]}"
+                )
+                # No DESCRIPTION or LOCATION should be present at all on
+                # the rewritten event (the privacy plugin strips them).
+                assert "DESCRIPTION:" not in unfolded, (
+                    "CONFIDENTIAL event must have no DESCRIPTION property "
+                    f"at all. Got: {unfolded[:500]}"
+                )
+                assert "LOCATION:" not in unfolded, (
+                    "CONFIDENTIAL event must have no LOCATION property "
+                    f"at all. Got: {unfolded[:500]}"
+                )
+                assert "DTSTART" in unfolded, "Time info should be preserved"
         assert found_target, "Target CONFIDENTIAL event not found in shared calendar"
 
     def test_confidential_event_visible_to_owner(self):

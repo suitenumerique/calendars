@@ -165,8 +165,10 @@ describe('caldav-helpers', () => {
         expect(sharePrivilegeToXml('read-write')).toBe('<CS:read-write/>')
       })
 
-      it('converts admin privilege', () => {
-        expect(sharePrivilegeToXml('admin')).toBe('<CS:admin/>')
+      it('rides admin on top of read-write (no <CS:admin/> upstream)', () => {
+        // Upstream sabre/dav silently demotes <CS:admin/> to read; we
+        // carry the admin marker via LS:share-access instead.
+        expect(sharePrivilegeToXml('admin')).toBe('<CS:read-write/>')
       })
 
       it('converts freebusy privilege to read (CalDAV level)', () => {
@@ -179,12 +181,8 @@ describe('caldav-helpers', () => {
     })
 
     describe('parseSharePrivilege', () => {
-      it('returns read-write when present', () => {
+      it('returns read-write when present and no override', () => {
         expect(parseSharePrivilege({ 'read-write': true })).toBe('read-write')
-      })
-
-      it('returns admin when present', () => {
-        expect(parseSharePrivilege({ admin: true })).toBe('admin')
       })
 
       it('returns read-write when camelCase key from tsdav (readWrite)', () => {
@@ -196,21 +194,21 @@ describe('caldav-helpers', () => {
         expect(parseSharePrivilege(null)).toBe('read')
       })
 
-      it('returns freebusy when access is read and shareAccess is freebusy', () => {
+      it('LS:share-access "freebusy" wins over CS:read', () => {
         expect(parseSharePrivilege({}, 'freebusy')).toBe('freebusy')
       })
 
-      it('returns read when access is read and shareAccess is not freebusy', () => {
+      it('LS:share-access "admin" wins over CS:read-write', () => {
+        // Admin shares are stored as ACCESS_READWRITE upstream + an
+        // LS:share-access "admin" override; the override must take
+        // precedence so the UI shows "admin" instead of "read-write".
+        expect(parseSharePrivilege({ 'read-write': true }, 'admin')).toBe('admin')
+        expect(parseSharePrivilege({ readWrite: true }, 'admin')).toBe('admin')
+      })
+
+      it('returns read when no override and access is empty', () => {
         expect(parseSharePrivilege({}, 'something-else')).toBe('read')
         expect(parseSharePrivilege({}, undefined)).toBe('read')
-      })
-
-      it('ignores freebusy shareAccess when access is read-write', () => {
-        expect(parseSharePrivilege({ 'read-write': true }, 'freebusy')).toBe('read-write')
-      })
-
-      it('ignores freebusy shareAccess when access is admin', () => {
-        expect(parseSharePrivilege({ admin: true }, 'freebusy')).toBe('admin')
       })
     })
 
@@ -234,7 +232,7 @@ describe('caldav-helpers', () => {
         expect(result).toContain('<CS:common-name>John Doe</CS:common-name>')
       })
 
-      it('includes LS:share-access for freebusy privilege', () => {
+      it('includes LS:share-access "freebusy" for freebusy privilege', () => {
         const result = buildShareeSetXml({
           href: 'mailto:user@example.com',
           privilege: 'freebusy',
@@ -243,20 +241,34 @@ describe('caldav-helpers', () => {
         expect(result).toContain('<LS:share-access>freebusy</LS:share-access>')
       })
 
-      it('does not include LS:share-access for non-freebusy privileges', () => {
+      it('includes LS:share-access "admin" for admin privilege', () => {
         const result = buildShareeSetXml({
           href: 'mailto:user@example.com',
-          privilege: 'read-write',
+          privilege: 'admin',
         })
-        expect(result).not.toContain('share-access')
+        // Admin rides on read-write because upstream sabre/dav has no
+        // CS:admin element; the marker is what makes it admin.
+        expect(result).toContain('<CS:read-write/>')
+        expect(result).toContain('<LS:share-access>admin</LS:share-access>')
       })
 
-      it('does not include LS:share-access for read privilege', () => {
+      it('emits empty LS:share-access for read so backend resets the override', () => {
+        // The empty marker tells the backend to clear any previously
+        // stored override (e.g. a sharee being moved off freebusy).
+        // Without it, the share_access_level column stays pinned.
         const result = buildShareeSetXml({
           href: 'mailto:user@example.com',
           privilege: 'read',
         })
-        expect(result).not.toContain('share-access')
+        expect(result).toContain('<LS:share-access></LS:share-access>')
+      })
+
+      it('emits empty LS:share-access for read-write so backend resets the override', () => {
+        const result = buildShareeSetXml({
+          href: 'mailto:user@example.com',
+          privilege: 'read-write',
+        })
+        expect(result).toContain('<LS:share-access></LS:share-access>')
       })
     })
 

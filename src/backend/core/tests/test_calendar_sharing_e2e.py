@@ -55,18 +55,40 @@ def _get_cal_id(caldav_path):
 
 
 def _share_calendar_via_caldav(owner_client, owner, cal_id, sharee_email, privilege):
-    """Share a calendar using CS:share POST via the CalDAV proxy."""
+    """Share a calendar using CS:share POST via the CalDAV proxy.
+
+    Mirrors the frontend ``buildShareeSetXml`` wire format exactly:
+
+    - ``freebusy`` and ``admin`` ride on top of standard CalDAV access
+      levels (``CS:read`` / ``CS:read-write``) because upstream
+      sabre/dav has no ``<CS:admin/>`` element and silently demotes
+      anything other than ``<CS:read-write/>`` to read.
+    - The actual logical level is carried by an ``<LS:share-access>``
+      marker. The element is ALWAYS emitted (empty for plain
+      ``read``/``read-write``) so the backend's ``afterPost`` hook can
+      reset any prior override — without that, a sharee being moved
+      off ``freebusy`` would stay pinned to it forever.
+    """
     privilege_xml = {
+        "freebusy": "<CS:read/>",
         "read": "<CS:read/>",
         "read-write": "<CS:read-write/>",
-        "admin": "<CS:admin/>",
+        "admin": "<CS:read-write/>",
+    }[privilege]
+    override = {
+        "freebusy": "freebusy",
+        "read": "",
+        "read-write": "",
+        "admin": "admin",
     }[privilege]
 
     body = (
         '<?xml version="1.0" encoding="utf-8"?>'
-        '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/">'
+        '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"'
+        ' xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
         "<CS:set>"
         f"<D:href>mailto:{sharee_email}</D:href>"
+        f"<LS:share-access>{override}</LS:share-access>"
         f"{privilege_xml}"
         "</CS:set>"
         "</CS:share>"
@@ -76,6 +98,92 @@ def _share_calendar_via_caldav(owner_client, owner, cal_id, sharee_email, privil
         f"/caldav/calendars/users/{owner.email}/{cal_id}/",
         data=body,
         content_type="application/xml",
+    )
+
+
+def _read_share_level(owner_client, owner_email, cal_id, sharee_email):
+    """Return the persisted share level for ``sharee_email`` on the
+    owner's calendar by PROPFINDing both ``CS:invite`` and
+    ``LS:share-access-map`` and reconciling them the same way the
+    frontend does (override wins over CalDAV access). Returns ``None``
+    if the sharee is not present.
+    """
+    body = (
+        '<?xml version="1.0"?>'
+        '<D:propfind xmlns:D="DAV:" '
+        'xmlns:CS="http://calendarserver.org/ns/" '
+        'xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+        "<D:prop>"
+        "<CS:invite/>"
+        "<LS:share-access-map/>"
+        "</D:prop>"
+        "</D:propfind>"
+    )
+    resp = owner_client.generic(
+        "PROPFIND",
+        f"/caldav/calendars/users/{owner_email}/{cal_id}/",
+        data=body,
+        content_type="application/xml",
+        HTTP_DEPTH="0",
+    )
+    assert resp.status_code == 207, (
+        f"PROPFIND failed: {resp.status_code} {resp.content.decode()[:500]}"
+    )
+
+    ns = {
+        "d": "DAV:",
+        "cs": "http://calendarserver.org/ns/",
+        "ls": "http://lasuite.numerique.gouv.fr/ns/",
+    }
+    root = ET.fromstring(resp.content)
+    href_target = f"mailto:{sharee_email}"
+
+    # 1) Custom override (freebusy / admin), if any.
+    override = None
+    for sharee_el in root.findall(".//ls:share-access-map/ls:sharee", ns):
+        if sharee_el.get("href") == href_target:
+            override = sharee_el.get("access")
+            break
+
+    # 2) Underlying CalDAV access from CS:invite.
+    cs_access = None
+    found_in_invite = False
+    for user_el in root.findall(".//cs:invite/cs:user", ns):
+        href_el = user_el.find("d:href", ns)
+        if href_el is None or (href_el.text or "").strip() != href_target:
+            continue
+        found_in_invite = True
+        access_el = user_el.find("cs:access", ns)
+        if access_el is None:
+            break
+        if access_el.find("cs:read-write", ns) is not None:
+            cs_access = "read-write"
+        elif access_el.find("cs:read", ns) is not None:
+            cs_access = "read"
+        break
+
+    if not found_in_invite:
+        return None
+
+    # 3) Reconcile — override wins (same as frontend parseSharePrivilege).
+    if override == "freebusy":
+        return "freebusy"
+    if override == "admin":
+        return "admin"
+    if cs_access == "read-write":
+        return "read-write"
+    if cs_access == "read":
+        return "read"
+    return None
+
+
+def _assert_share_level(owner_client, owner_email, cal_id, sharee_email, expected):
+    """Round-trip assertion: share/PROPFIND/reconcile and assert the
+    sharee is persisted at the requested level. Use this in every
+    sharing test instead of just checking the POST status code."""
+    actual = _read_share_level(owner_client, owner_email, cal_id, sharee_email)
+    assert actual == expected, (
+        f"Expected sharee {sharee_email!r} at level {expected!r}, got {actual!r}"
     )
 
 
@@ -315,61 +423,107 @@ def _sync_mailbox_acls(owner, shares, full_sync_users=None):
 
 
 class TestCalendarSharingSetup:
-    """Test that sharing creates invite entries correctly."""
+    """Test that sharing creates invite entries correctly.
 
-    def test_share_calendar_read(self):
-        """Sharing with read privilege creates a sharee entry."""
-        org = factories.OrganizationFactory(external_id="share-setup-read")
-        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-r")
+    Every test here ROUND-TRIPS via PROPFIND (using
+    ``_assert_share_level``) instead of just checking the POST status
+    code — historically these tests only verified that SabreDAV accepted
+    the share request, which silently let the upstream
+    ``<CS:admin/>``-demoted-to-read bug AND the
+    ``share_access_level`` leak ride for free.
+    """
+
+    def _share_and_assert(self, privilege, slug):
+        """Share a fresh calendar at ``privilege`` and assert the
+        round-tripped level matches."""
+        org = factories.OrganizationFactory(external_id=f"share-setup-{slug}")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, f"owner-{slug}")
         sharee = factories.UserFactory(
-            email="sharee-r@share-test.com", organization=org
+            email=f"sharee-{slug}@share-test.com", organization=org
         )
         cal_id = _get_cal_id(cal_path)
 
         response = _share_calendar_via_caldav(
-            owner_client, owner, cal_id, sharee.email, "read"
+            owner_client, owner, cal_id, sharee.email, privilege
         )
         assert response.status_code in (200, 204), (
             f"Share failed: {response.status_code} "
             f"{response.content.decode('utf-8', errors='ignore')[:500]}"
         )
 
-        # Verify sharee appears in invite list
-        invite_resp = _get_sharees(owner_client, owner.email, cal_id)
-        assert invite_resp.status_code == 207
-        content = invite_resp.content.decode("utf-8", errors="ignore")
-        assert sharee.email in content
+        _assert_share_level(owner_client, owner.email, cal_id, sharee.email, privilege)
+
+    def test_share_calendar_freebusy(self):
+        """Freebusy share must round-trip as freebusy (carried by
+        LS:share-access on top of CS:read)."""
+        self._share_and_assert("freebusy", "fb")
+
+    def test_share_calendar_read(self):
+        """Read share must round-trip as read."""
+        self._share_and_assert("read", "r")
 
     def test_share_calendar_read_write(self):
-        """Sharing with read-write privilege creates a sharee entry."""
-        org = factories.OrganizationFactory(external_id="share-setup-rw")
-        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-rw")
-        sharee = factories.UserFactory(
-            email="sharee-rw@share-test.com", organization=org
-        )
-        cal_id = _get_cal_id(cal_path)
-
-        response = _share_calendar_via_caldav(
-            owner_client, owner, cal_id, sharee.email, "read-write"
-        )
-        assert response.status_code in (200, 204)
+        """Read-write share must round-trip as read-write."""
+        self._share_and_assert("read-write", "rw")
 
     def test_share_calendar_admin(self):
-        """Sharing with admin privilege creates a sharee entry."""
-        org = factories.OrganizationFactory(external_id="share-setup-admin")
-        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-admin")
+        """Admin share must round-trip as admin.
+
+        Regression: upstream sabre/dav has no ``<CS:admin/>`` element
+        and silently demotes anything other than ``<CS:read-write/>``
+        to ``ACCESS_READ``. The fix carries the admin marker via
+        ``LS:share-access`` on top of CS:read-write, and the test
+        proves it round-trips end-to-end.
+        """
+        self._share_and_assert("admin", "adm")
+
+    def test_share_transitions_walk_the_full_state_machine(self):
+        """Walk a single sharee through every interesting transition
+        between the four share levels and assert the persisted level
+        after each change.
+
+        Regression: ``ShareAccessPlugin::afterPost`` used to early-
+        return when the new CS:share body had no ``LS:share-access``
+        element, leaving stale ``share_access_level`` values pinned
+        forever. A user moving a sharee freebusy → read would still
+        read back as freebusy. This walk catches that and any future
+        directional regression in either direction.
+        """
+        org = factories.OrganizationFactory(external_id="share-transitions")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-trans")
         sharee = factories.UserFactory(
-            email="sharee-admin@share-test.com", organization=org
+            email="sharee-trans@share-test.com", organization=org
         )
         cal_id = _get_cal_id(cal_path)
 
-        response = _share_calendar_via_caldav(
-            owner_client, owner, cal_id, sharee.email, "admin"
-        )
-        assert response.status_code in (200, 204)
+        # Each step: (target level, label for the failure message).
+        # The walk hits every directional transition that exercises
+        # both setting an LS:share-access override and clearing one.
+        walk = [
+            "freebusy",  # fresh → freebusy (sets override)
+            "read",  # freebusy → read (clears override) ← was broken
+            "read-write",  # read → read-write
+            "admin",  # read-write → admin (sets admin override)
+            "read",  # admin → read (clears admin override) ← was broken
+            "freebusy",  # read → freebusy (sets override again)
+            "admin",  # freebusy → admin (swap override)
+            "read-write",  # admin → read-write (clears override)
+            "freebusy",  # read-write → freebusy
+        ]
+        for step, target in enumerate(walk):
+            resp = _share_calendar_via_caldav(
+                owner_client, owner, cal_id, sharee.email, target
+            )
+            assert resp.status_code in (200, 204), (
+                f"step {step} ({target}) POST failed: {resp.status_code}\n"
+                f"{resp.content.decode('utf-8', errors='ignore')[:400]}"
+            )
+            actual = _read_share_level(owner_client, owner.email, cal_id, sharee.email)
+            assert actual == target, f"step {step}: expected {target!r}, got {actual!r}"
 
-    def test_unshare_calendar(self):
-        """Unsharing removes the sharee entry."""
+    def test_unshare_calendar_removes_sharee_from_invite(self):
+        """Unsharing must actually remove the sharee from the
+        CS:invite block — not just return 200."""
         org = factories.OrganizationFactory(external_id="share-setup-unshare")
         owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-un")
         sharee = factories.UserFactory(
@@ -377,36 +531,22 @@ class TestCalendarSharingSetup:
         )
         cal_id = _get_cal_id(cal_path)
 
-        # Share then unshare
         _share_calendar_via_caldav(
             owner_client, owner, cal_id, sharee.email, "read-write"
         )
+        # Sanity: the sharee is there at read-write before we unshare.
+        _assert_share_level(
+            owner_client, owner.email, cal_id, sharee.email, "read-write"
+        )
+
         response = _unshare_calendar(owner_client, owner, cal_id, sharee.email)
         assert response.status_code in (200, 204)
 
-    def test_share_privilege_returned_correctly_in_invite(self):
-        """CS:invite PROPFIND returns the correct privilege for each share level."""
-        org = factories.OrganizationFactory(external_id="share-priv-check")
-        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-pc")
-        cal_id = _get_cal_id(cal_path)
-
-        for privilege in ["read", "read-write"]:
-            sharee = factories.UserFactory(
-                email=f"sharee-{privilege}@priv-check.com", organization=org
-            )
-            _share_calendar_via_caldav(
-                owner_client, owner, cal_id, sharee.email, privilege
-            )
-
-        # PROPFIND CS:invite to check what SabreDAV stored
-        invite_resp = _get_sharees(owner_client, owner.email, cal_id)
-        assert invite_resp.status_code == 207
-        content = invite_resp.content.decode("utf-8", errors="ignore")
-
-        # The read-write sharee should have <cs:read-write/> in their access
-        assert "read-write" in content.lower() or "readwrite" in content.lower(), (
-            f"Expected read-write privilege in CS:invite response but got:\n"
-            f"{content[:2000]}"
+        # After unshare the sharee must no longer be reachable via
+        # PROPFIND CS:invite — _read_share_level returns None.
+        actual = _read_share_level(owner_client, owner.email, cal_id, sharee.email)
+        assert actual is None, (
+            f"Sharee still present in invite after unshare, got {actual!r}"
         )
 
     def test_share_with_user_without_principal(self):
@@ -431,11 +571,10 @@ class TestCalendarSharingSetup:
             f"{response.content.decode('utf-8', errors='ignore')[:500]}"
         )
 
-        # Verify the sharee appears in the invite list
-        invite_resp = _get_sharees(owner_client, owner.email, cal_id)
-        assert invite_resp.status_code == 207
-        content = invite_resp.content.decode("utf-8", errors="ignore")
-        assert sharee.email in content
+        # Round-trip-assert at the requested level (catches the case
+        # where SabreDAV accepts the share but the principal is in a
+        # weird half-created state and the level doesn't persist).
+        _assert_share_level(owner_client, owner.email, cal_id, sharee.email, "read")
 
 
 class TestFreebusySharePersistence:
@@ -487,12 +626,41 @@ class TestFreebusySharePersistence:
             content_type="application/xml",
             HTTP_DEPTH="0",
         )
-        content = map_resp.content.decode("utf-8", errors="ignore")
-        assert "freebusy" in content, (
-            f"Expected freebusy in LS:share-access-map response "
-            f"but got:\n{content[:1000]}"
+        assert map_resp.status_code == 207, (
+            f"PROPFIND returned {map_resp.status_code}: "
+            f"{map_resp.content.decode()[:500]}"
         )
-        assert sharee.email in content, "Expected sharee email in LS:share-access-map"
+
+        # Parse the multistatus XML structurally — substring matching on
+        # "freebusy" in the body would also match the literal element name
+        # ``<LS:share-access>freebusy</LS:share-access>`` echoed in DAV:not-found
+        # property responses, or the namespace declaration text. The whole
+        # point of share-access-map is the per-sharee access value, so we
+        # assert *exactly* that and nothing else.
+        ns = {
+            "d": "DAV:",
+            "ls": "http://lasuite.numerique.gouv.fr/ns/",
+        }
+        root = ET.fromstring(map_resp.content)
+        sam_elements = root.findall(".//ls:share-access-map", ns)
+        assert len(sam_elements) == 1, (
+            f"Expected exactly one share-access-map element, got "
+            f"{len(sam_elements)}. Response: {map_resp.content.decode()[:1000]}"
+        )
+
+        sharees = sam_elements[0].findall("ls:sharee", ns)
+        assert len(sharees) == 1, (
+            f"Expected exactly one sharee child element, got {len(sharees)}. "
+            f"Response: {map_resp.content.decode()[:1000]}"
+        )
+        assert sharees[0].get("href") == f"mailto:{sharee.email}", (
+            f"sharee href mismatch: got {sharees[0].get('href')!r}"
+        )
+        assert sharees[0].get("access") == "freebusy", (
+            f"sharee access must be 'freebusy', got "
+            f"{sharees[0].get('access')!r}. The roundtrip persisted a "
+            f"different access level than the one we requested."
+        )
 
     def test_share_access_map_returns_proper_xml_elements(self):
         """LS:share-access-map must contain real <LS:sharee/> child elements,
@@ -590,6 +758,158 @@ class TestFreebusySharePersistence:
         )
         assert sharees[0].get("access") == "freebusy", (
             f"sharee access mismatch: got {sharees[0].get('access')!r}"
+        )
+
+    def test_freebusy_to_read_transition_clears_override(self):
+        """Moving a sharee from freebusy back to plain read must clear
+        ``share_access_level`` so the share-access-map no longer reports
+        them as freebusy.
+
+        Regression: ``ShareAccessPlugin::afterPost`` early-returned when
+        the new CS:share body had no ``LS:share-access`` element, so the
+        old freebusy marker stayed pinned and the frontend kept showing
+        the sharee as Free/Busy even after the owner picked Reader.
+        """
+        org = factories.OrganizationFactory(external_id="fb-clear-override")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-fbc")
+        sharee = factories.UserFactory(
+            email="sharee-fbc@share-test.com", organization=org
+        )
+        cal_id = _get_cal_id(cal_path)
+
+        # 1. Share as freebusy (sets share_access_level=freebusy).
+        body_fb = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"'
+            ' xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<CS:set>"
+            f"<D:href>mailto:{sharee.email}</D:href>"
+            "<LS:share-access>freebusy</LS:share-access>"
+            "<CS:read/>"
+            "</CS:set>"
+            "</CS:share>"
+        )
+        resp = owner_client.generic(
+            "POST",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=body_fb,
+            content_type="application/xml",
+        )
+        assert resp.status_code in (200, 204)
+
+        # 2. Update to plain read (the frontend now always emits an
+        # explicit empty LS:share-access element so the backend knows
+        # to clear any prior override).
+        body_read = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"'
+            ' xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<CS:set>"
+            f"<D:href>mailto:{sharee.email}</D:href>"
+            "<LS:share-access></LS:share-access>"
+            "<CS:read/>"
+            "</CS:set>"
+            "</CS:share>"
+        )
+        resp = owner_client.generic(
+            "POST",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=body_read,
+            content_type="application/xml",
+        )
+        assert resp.status_code in (200, 204)
+
+        # 3. The share-access-map should no longer carry this sharee
+        # at all (the row's share_access_level is NULL → excluded by
+        # the SELECT in propFindShareAccessMap).
+        propfind_body = (
+            '<?xml version="1.0"?>'
+            '<propfind xmlns="DAV:" '
+            'xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<prop><LS:share-access-map/></prop>"
+            "</propfind>"
+        )
+        map_resp = owner_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=propfind_body,
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        ns = {
+            "d": "DAV:",
+            "ls": "http://lasuite.numerique.gouv.fr/ns/",
+        }
+        root = ET.fromstring(map_resp.content)
+        sharees = root.findall(".//ls:share-access-map/ls:sharee", ns)
+        for s in sharees:
+            assert s.get("href") != f"mailto:{sharee.email}", (
+                "freebusy override leaked: sharee still appears in the "
+                "map after being moved to plain read. Raw response:\n"
+                f"{map_resp.content.decode()[:1000]}"
+            )
+
+    def test_admin_share_persists_via_ls_share_access(self):
+        """An admin share rides on ``<CS:read-write/>`` (since upstream
+        sabre/dav has no ``<CS:admin/>``) plus an ``LS:share-access>admin``
+        marker. The marker must round-trip via the share-access-map so
+        the frontend can render the sharee as Administrator and not as
+        plain Editor."""
+        org = factories.OrganizationFactory(external_id="admin-marker")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-adm")
+        sharee = factories.UserFactory(
+            email="sharee-adm@share-test.com", organization=org
+        )
+        cal_id = _get_cal_id(cal_path)
+
+        body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"'
+            ' xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<CS:set>"
+            f"<D:href>mailto:{sharee.email}</D:href>"
+            "<LS:share-access>admin</LS:share-access>"
+            "<CS:read-write/>"
+            "</CS:set>"
+            "</CS:share>"
+        )
+        resp = owner_client.generic(
+            "POST",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=body,
+            content_type="application/xml",
+        )
+        assert resp.status_code in (200, 204)
+
+        propfind_body = (
+            '<?xml version="1.0"?>'
+            '<propfind xmlns="DAV:" '
+            'xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<prop><LS:share-access-map/></prop>"
+            "</propfind>"
+        )
+        map_resp = owner_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=propfind_body,
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        ns = {
+            "d": "DAV:",
+            "ls": "http://lasuite.numerique.gouv.fr/ns/",
+        }
+        root = ET.fromstring(map_resp.content)
+        sharees = root.findall(".//ls:share-access-map/ls:sharee", ns)
+        target = next(
+            (s for s in sharees if s.get("href") == f"mailto:{sharee.email}"),
+            None,
+        )
+        assert target is not None, (
+            f"Expected admin sharee in map, got {[s.get('href') for s in sharees]}"
+        )
+        assert target.get("access") == "admin", (
+            f"Expected access=admin, got {target.get('access')!r}"
         )
 
     def test_per_share_freebusy_strips_event_details(self):
@@ -729,44 +1049,45 @@ class TestSyncTakesOverManualShare:
         )
         assert resp.status_code == 200
 
-        # 4. Verify the share was upgraded via CS:invite on the shared instance
+        # 4. Round-trip-assert the upgraded level via PROPFIND on the
+        # sharee's own view of the calendar. The sharee instance URI is
+        # a fresh UUID under their principal — discover it dynamically.
         sharee_client = APIClient()
         sharee_client.force_login(sharee)
-        # Find the shared calendar URI dynamically (UUID-based)
         dav_sharee = CalDAVHTTPClient().get_dav_client(sharee)
         sharee_cals = dav_sharee.principal().calendars()
-        # The shared instance is the one not created by the sharee
-        shared_cal_url = None
+        shared_uri = None
         for c in sharee_cals:
-            cal_url = str(c.url)
-            if sharee.email not in cal_url or len(sharee_cals) > 1:
-                shared_cal_url = cal_url
-        shared_path = (
-            shared_cal_url.rsplit("/caldav/", maxsplit=1)[-1]
-            if shared_cal_url and "/caldav/" in shared_cal_url
-            else ""
+            uri = unquote(str(c.url)).rstrip("/").rsplit("/", maxsplit=1)[-1]
+            # The sharee may have their own ``default`` plus the new
+            # shared instance. The shared instance URI is a UUID.
+            if uri != "default":
+                shared_uri = uri
+                break
+        assert shared_uri, (
+            f"Could not find shared calendar URI for {sharee.email} "
+            f"in {[str(c.url) for c in sharee_cals]}"
         )
-        assert shared_path, f"Could not find shared calendar for {sharee.email}"
-        invite_resp = sharee_client.generic(
-            "PROPFIND",
-            f"/caldav/{shared_path}",
-            data=(
-                '<?xml version="1.0" encoding="utf-8"?>'
-                '<D:propfind xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/">'
-                "<D:prop><CS:invite/></D:prop>"
-                "</D:propfind>"
-            ),
-            content_type="application/xml",
-            HTTP_DEPTH="0",
+
+        # The substring check this test originally used would have
+        # silently passed even if the share had been mis-stored as
+        # ``freebusy`` or ``admin`` because both the broken and fixed
+        # responses contain the literal "read-write" somewhere. Going
+        # through ``_assert_share_level`` reconciles CS:invite +
+        # LS:share-access-map the same way the frontend does.
+        _assert_share_level(
+            sharee_client, sharee.email, shared_uri, sharee.email, "read-write"
         )
-        content = invite_resp.content.decode("utf-8", errors="ignore")
-        assert sharee.email in content, (
-            f"Expected {sharee.email} in invite list but got:\n{content[:500]}"
-        )
-        assert "read-write" in content.lower() or "readwrite" in content.lower(), (
-            f"Expected read-write access for {sharee.email} after sync, "
-            f"but got:\n{content[:1000]}"
-        )
+
+    # NOTE: a "sync downgrade clears prior admin override" test would
+    # be valuable but isn't reachable through any current code path.
+    # The MailboxPlugin actively blocks direct CS:share with read-write
+    # on mailbox calendars (by design — Messages is the source of
+    # truth) and the sync code path never writes ``share_access_level``
+    # at all, so a mailbox sharee can never carry an ``admin`` marker
+    # in the first place. If admin is ever added to ROLE_TO_PRIVILEGE,
+    # add a regression test that walks: sync admin → sync viewer →
+    # assert level == read.
 
 
 class TestSyncPreservesUserCustomizations:
@@ -2480,14 +2801,13 @@ class TestInternalApiCreateCalendarColor:
         second_uri = second.json()["calendar_uri"]
         assert second_uri != first_uri
 
-        assert self._read_calendar_props(user, user.email, first_uri)[
-            "displayname"
-        ] == "First Name"
+        assert (
+            self._read_calendar_props(user, user.email, first_uri)["displayname"]
+            == "First Name"
+        )
         assert self._read_calendar_props(user, user.email, second_uri)[
             "displayname"
-        ] == (
-            "Second Name"
-        )
+        ] == ("Second Name")
 
 
 class TestInternalApiCreateMailboxCalendar:
@@ -2700,9 +3020,5 @@ class TestInternalApiCreateMailboxCalendar:
         assert second_caller_uri in caller_uris, (
             f"Expected {second_caller_uri} in caller's home, got {caller_uris}"
         )
-        assert self._read_color(caller, caller.email, first_caller_uri) == (
-            "#111111"
-        )
-        assert self._read_color(caller, caller.email, second_caller_uri) == (
-            "#222222"
-        )
+        assert self._read_color(caller, caller.email, first_caller_uri) == ("#111111")
+        assert self._read_color(caller, caller.email, second_caller_uri) == ("#222222")

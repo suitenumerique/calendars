@@ -122,33 +122,51 @@ export function buildProppatchXml(props: CalendarProps): string {
 // Sharing XML Builders
 // ============================================================================
 
-/** Convert SharePrivilege to CalDAV XML element (freebusy maps to read) */
+/** Convert SharePrivilege to CalDAV XML element.
+ *
+ * Both ``freebusy`` and ``admin`` ride on standard CalDAV access levels
+ * because upstream SabreDAV's CS:share parser only recognizes
+ * ``<CS:read/>`` and ``<CS:read-write/>`` (everything else, including
+ * a hypothetical ``<CS:admin/>``, is silently demoted to read — see
+ * sabre/dav lib/CalDAV/Xml/Request/Share.php). The actual logical
+ * level is then carried by an LS:share-access marker (see
+ * ``buildShareeSetXml``):
+ *
+ *   - freebusy → ``<CS:read/>`` + ``<LS:share-access>freebusy</LS:share-access>``
+ *   - read     → ``<CS:read/>``
+ *   - r/write  → ``<CS:read-write/>``
+ *   - admin    → ``<CS:read-write/>`` + ``<LS:share-access>admin</LS:share-access>``
+ */
 export function sharePrivilegeToXml(privilege: SharePrivilege): string {
   const map: Record<SharePrivilege, string> = {
     freebusy: '<CS:read/>',
     read: '<CS:read/>',
     'read-write': '<CS:read-write/>',
-    admin: '<CS:admin/>',
+    admin: '<CS:read-write/>',
   }
   return map[privilege] ?? '<CS:read/>'
 }
 
 /** Parse access object to SharePrivilege.
  *
- * The CalDAV-level access (CS:read, CS:read-write, CS:admin) is augmented
- * by a custom LS:share-access property on the calendar instance. When
- * shareAccess is "freebusy", the share is freebusy-only even though the
- * CalDAV access level is CS:read.
+ * The CalDAV-level access (CS:read, CS:read-write) is augmented by a
+ * custom LS:share-access property on the calendar instance. The
+ * override (if any) wins over the underlying CalDAV access:
+ *
+ *   - LS:share-access "freebusy" → freebusy (CS:read underlying)
+ *   - LS:share-access "admin"    → admin (CS:read-write underlying)
+ *   - else CS:read-write         → read-write
+ *   - else                       → read
  *
  * Note: tsdav's XML parser camelCases element names (e.g. cs:read-write -> readWrite),
  * so we check both kebab-case and camelCase variants.
  */
 export function parseSharePrivilege(access: unknown, shareAccess?: string): SharePrivilege {
+  if (shareAccess === 'freebusy') return 'freebusy'
+  if (shareAccess === 'admin') return 'admin'
   if (!access) return 'read'
   const accessObj = access as Record<string, unknown>
   if (accessObj['read-write'] || accessObj['readWrite']) return 'read-write'
-  if (accessObj['admin']) return 'admin'
-  if (shareAccess === 'freebusy') return 'freebusy'
   return 'read'
 }
 
@@ -158,15 +176,26 @@ export type ShareeXmlParams = {
   privilege: SharePrivilege
 }
 
-/** Build share set XML for a single sharee */
+/** Build share set XML for a single sharee.
+ *
+ * Always emits an ``<LS:share-access>`` element so the backend knows
+ * the precise logical level — including the empty case which signals
+ * "this is a plain CS:read or CS:read-write, clear any previous
+ * override". Without that marker the backend's afterPost hook would
+ * leave a stale ``share_access_level`` row pinned to its previous
+ * value (e.g. a sharee being moved from ``freebusy`` back to ``read``
+ * would still read back as ``freebusy``).
+ */
 export function buildShareeSetXml(params: ShareeXmlParams): string {
   const privilege = sharePrivilegeToXml(params.privilege)
   const commonName = params.displayName
     ? `<CS:common-name>${escapeXml(params.displayName)}</CS:common-name>`
     : ''
-  const shareAccess = params.privilege === 'freebusy'
-    ? '<LS:share-access>freebusy</LS:share-access>'
+  const overrideLevel =
+    params.privilege === 'freebusy' ? 'freebusy'
+    : params.privilege === 'admin' ? 'admin'
     : ''
+  const shareAccess = `<LS:share-access>${overrideLevel}</LS:share-access>`
 
   return `
     <CS:set>

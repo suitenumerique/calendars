@@ -99,8 +99,15 @@ class ShareAccessPlugin extends ServerPlugin
     }
 
     /**
-     * After a CS:share POST, extract LS:share-access from the request body
-     * and persist it on the sharee's calendar instance.
+     * After a CS:share POST, reconcile LS:share-access for every sharee
+     * mentioned in the request body.
+     *
+     * Critically this runs even when the body has NO ``LS:share-access``
+     * elements: a sharee may be transitioning from ``freebusy`` (or any
+     * other custom level) back to a regular CS:read share, in which
+     * case we must clear the previously-stored level — otherwise the
+     * stale row pins the sharee at ``freebusy`` forever and the
+     * frontend reads it back at the wrong level.
      *
      * Uses SabreDAV's XML parser (same as CalDAV\SharingPlugin) to parse
      * the CS:share body. The LS:share-access element is captured as part
@@ -109,7 +116,10 @@ class ShareAccessPlugin extends ServerPlugin
     public function afterPost($request, $response)
     {
         $body = $this->postBody ?? '';
-        if (!$body || strpos($body, 'share-access') === false) {
+        // Cheap pre-filter: only CS:share bodies are interesting. Other
+        // POSTs (ICS imports, MKCALENDAR followups, …) reach this hook
+        // too and we don't want to parse them.
+        if (!$body || strpos($body, ':share') === false) {
             return;
         }
 
@@ -137,6 +147,16 @@ class ShareAccessPlugin extends ServerPlugin
 
             if (!is_array($result)) return;
 
+            // Resolve calendarid once for the path. The same statement
+            // is reused inside the loop with the right param shape.
+            $update = $this->pdo->prepare(
+                'UPDATE calendarinstances SET share_access_level = ? '
+                . 'WHERE share_href = ? AND calendarid = ('
+                . '  SELECT calendarid FROM calendarinstances '
+                . '  WHERE principaluri = ? AND uri = ?'
+                . ')'
+            );
+
             foreach ($result as $elem) {
                 if ($elem['name'] !== $cs . 'set' || !is_array($elem['value'])) {
                     continue;
@@ -144,20 +164,17 @@ class ShareAccessPlugin extends ServerPlugin
 
                 $setValues = $elem['value'];
                 $href = $setValues['{DAV:}href'] ?? null;
-                $accessLevel = $setValues[self::SHARE_ACCESS_PROP] ?? null;
-
-                if ($href && $accessLevel) {
-                    // Resolve calendarid from the instance at this path.
-                    // The path may be the owner's calendar or a shared instance.
-                    $stmt = $this->pdo->prepare(
-                        'UPDATE calendarinstances SET share_access_level = ? '
-                        . 'WHERE share_href = ? AND calendarid = ('
-                        . '  SELECT calendarid FROM calendarinstances '
-                        . '  WHERE principaluri = ? AND uri = ?'
-                        . ')'
-                    );
-                    $stmt->execute([trim($accessLevel), $href, $ownerPrincipal, $calendarUri]);
+                if (!$href) {
+                    continue;
                 }
+                $rawLevel = $setValues[self::SHARE_ACCESS_PROP] ?? null;
+                $level = ($rawLevel !== null) ? trim($rawLevel) : null;
+                if ($level === '') {
+                    $level = null;
+                }
+                // Bind NULL when there's no override → resets the
+                // column for sharees being moved off freebusy/admin.
+                $update->execute([$level, $href, $ownerPrincipal, $calendarUri]);
             }
         } catch (\Exception $e) {
             error_log("[ShareAccessPlugin] Failed to save access level: " . $e->getMessage());

@@ -12,6 +12,7 @@ Requires: CalDAV server running (skipped otherwise).
 import re
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from xml.etree import ElementTree as ET
 
 import pytest
 from rest_framework.status import (
@@ -448,9 +449,10 @@ class TestResourceCalendarAccessE2E:
         org = factories.OrganizationFactory(external_id="put-direct-org")
         user, client = _create_org_admin(org)
         resource = _create_resource_via_internal_api(user, "ACL Room")
+        resource_id = resource["id"]
 
         response = _put_event_on_resource(
-            client, resource["id"], "direct-put-uid", user.email
+            client, resource_id, "direct-put-uid", user.email
         )
 
         # Direct PUT on resource calendar is blocked by ACLs
@@ -458,6 +460,37 @@ class TestResourceCalendarAccessE2E:
             f"Expected 403/404 for direct PUT on resource calendar, "
             f"got {response.status_code}: "
             f"{response.content.decode('utf-8', errors='ignore')[:500]}"
+        )
+
+        # State check: verify no event with this UID actually landed in
+        # the resource's calendar. A 403 from SabreDAV after the row was
+        # written would still pass the status assertion.
+        report_body = (
+            '<?xml version="1.0" encoding="utf-8" ?>'
+            '<C:calendar-query xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:prop><D:getetag/></D:prop>"
+            "<C:filter>"
+            '<C:comp-filter name="VCALENDAR">'
+            '<C:comp-filter name="VEVENT"/>'
+            "</C:comp-filter>"
+            "</C:filter>"
+            "</C:calendar-query>"
+        )
+        report = client.generic(
+            "REPORT",
+            f"/caldav/calendars/resources/{resource_id}/default/",
+            data=report_body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+        # The REPORT itself must succeed (we can read the calendar collection
+        # listing) but its body must NOT mention our malicious UID.
+        assert report.status_code == HTTP_207_MULTI_STATUS
+        body = report.content.decode("utf-8", errors="ignore")
+        assert "direct-put-uid" not in body, (
+            "Direct-PUT event must not exist in resource calendar after "
+            f"blocked write. Body: {body[:1000]}"
         )
 
     def test_cross_org_put_on_resource_calendar_blocked(self):
@@ -798,6 +831,18 @@ class TestEventCRUDIsolationE2E:
         # SabreDAV should block with 403 (ACL)
         assert response.status_code in (403, 404, 409), (
             f"Expected 403/404 for cross-user PUT, got {response.status_code}"
+        )
+
+        # State check: verify the malicious event was NOT created in user
+        # B's calendar. A 403 status code from SabreDAV is necessary but
+        # not sufficient — a regression where the proxy returns 403 *after*
+        # the write goes through would still pass the status assertion.
+        ical_data, _, _ = CalDAVHTTPClient().find_event_by_uid(
+            user_b, "malicious-event-uid"
+        )
+        assert ical_data is None, (
+            "Malicious event must not exist in victim's calendar after "
+            f"blocked PUT. Got: {ical_data!r}"
         )
 
     def test_user_cannot_delete_other_users_event(self):
@@ -1148,21 +1193,115 @@ class TestResourceAutoSchedule:
     conflicting ones. Cross-org bookings should be declined.
     """
 
-    def test_resource_auto_accepts_booking(self):
-        """Resource with auto-schedule accepts non-conflicting booking."""
-        org = factories.OrganizationFactory(external_id="res-autosched")
+    def test_resource_booking_event_organizer_copy_saved(self):
+        """The organizer can save an event with a resource as attendee, and
+        SabreDAV's Schedule\\Plugin attaches a SCHEDULE-STATUS to the
+        resource attendee.
+
+        This is the WEAK precondition for resource booking. It verifies:
+            1. The organizer's copy is persisted.
+            2. SabreDAV's scheduling pipeline ran (SCHEDULE-STATUS is set).
+
+        It does NOT verify that the resource actually auto-accepted with
+        PARTSTAT=ACCEPTED on its own copy. That stricter assertion lives
+        in test_resource_auto_accepts_booking_via_itip and is currently
+        xfailed because iTIP local delivery to resource principals is
+        not yet wired up.
+        """
+        org = factories.OrganizationFactory(external_id="res-autosched-saved")
+        user, _, _ = _create_user_with_calendar(org, "user-ressave")
+
+        service = ResourceService()
+        resource = service.create_resource(user, "Save Room", "ROOM")
+        resource_id = resource["id"]
+        resource_email = resource.get("email", f"{resource_id}@resource.local")
+
+        dtstart = datetime.now() + timedelta(days=2)
+        dtend = dtstart + timedelta(hours=1)
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:res-save-booking\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            "SUMMARY:Team Standup\r\n"
+            f"ORGANIZER:mailto:{user.email}\r\n"
+            f"ATTENDEE;RSVP=TRUE:mailto:{resource_email}\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        dav = CalDAVHTTPClient().get_dav_client(user)
+        cals = dav.principal().calendars()
+        assert len(cals) > 0, "User should have at least one calendar"
+        cals[0].save_event(ical)
+
+        organizer_data, _, _ = CalDAVHTTPClient().find_event_by_uid(
+            user, "res-save-booking"
+        )
+        assert organizer_data is not None, "Organizer's copy of booking missing"
+
+        # Unfold long iCalendar lines (RFC 5545: a line can be folded with
+        # CRLF + space/tab) so substring assertions work on the email.
+        unfolded = (
+            organizer_data.replace("\r\n ", "")
+            .replace("\r\n\t", "")
+            .replace("\n ", "")
+            .replace("\n\t", "")
+        )
+
+        assert "UID:res-save-booking" in unfolded
+        assert resource_email in unfolded, (
+            f"Resource attendee email missing from organizer copy: {unfolded[:500]}"
+        )
+
+        # Schedule\\Plugin must have processed the attendee (SCHEDULE-STATUS
+        # is added to ATTENDEE properties when iTIP processing runs). The
+        # exact value depends on whether delivery succeeded or fell back to
+        # external/pending — what matters is that scheduling DID run.
+        assert "SCHEDULE-STATUS=" in unfolded, (
+            "SabreDAV's Schedule\\Plugin did not process the attendee — "
+            "no SCHEDULE-STATUS was added. This means iTIP scheduling is "
+            "completely broken, not just resource delivery. "
+            f"Organizer data: {unfolded[:1000]}"
+        )
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "iTIP delivery to resource principals is not currently functional: "
+            "SabreDAV's Schedule\\Plugin does not search the principals/resources "
+            "prefix when resolving attendees, so ResourceAutoSchedulePlugin's "
+            "accept/decline path never runs. When iTIP delivery to resources "
+            "is wired up (PrincipalBackend.findByUri must resolve resource "
+            "emails to the resources prefix), this test must start passing — "
+            "remove the xfail and the test enforces PARTSTAT=ACCEPTED on the "
+            "resource's own copy."
+        ),
+    )
+    def test_resource_auto_accepts_booking_via_itip(self):
+        """Resource auto-schedule must deliver an ACCEPTED copy into its
+        own calendar.
+
+        This is the canonical contract of ResourceAutoSchedulePlugin
+        (acceptInvitation → updatePartstat ACCEPTED, in
+        src/caldav/src/ResourceAutoSchedulePlugin.php).
+
+        Without this assertion, the plugin could silently drop bookings or
+        stop setting PARTSTAT=ACCEPTED and the existing tests would all
+        still pass.
+        """
+        org = factories.OrganizationFactory(external_id="res-autosched-itip")
         user, client, _ = _create_user_with_calendar(org, "user-resauto")
 
         service = ResourceService()
         resource = service.create_resource(user, "Auto Room", "ROOM")
         resource_id = resource["id"]
-
-        # Book the resource by creating an event with ATTENDEE=resource
-        dtstart = datetime.now() + timedelta(days=2)
-        dtend = dtstart + timedelta(hours=1)
         resource_email = resource.get("email", f"{resource_id}@resource.local")
 
-        # We need to book via scheduling (organizer creates event with attendee)
+        dtstart = datetime.now() + timedelta(days=2)
+        dtend = dtstart + timedelta(hours=1)
         ical = (
             "BEGIN:VCALENDAR\r\n"
             "VERSION:2.0\r\n"
@@ -1177,17 +1316,55 @@ class TestResourceAutoSchedule:
             "END:VEVENT\r\n"
             "END:VCALENDAR\r\n"
         )
-        # Find user's calendar to PUT the event
         dav = CalDAVHTTPClient().get_dav_client(user)
         cals = dav.principal().calendars()
-        assert len(cals) > 0, "User should have at least one calendar"
         cals[0].save_event(ical)
 
-        # Check that the event was saved (scheduling processed it)
-        event_data, _, _ = CalDAVHTTPClient().find_event_by_uid(
-            user, "res-auto-booking"
+        # The resource calendar must now contain a copy of the booking with
+        # PARTSTAT=ACCEPTED on the resource attendee.
+        report_body = (
+            '<?xml version="1.0" encoding="utf-8" ?>'
+            '<C:calendar-query xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:prop><D:getetag/><C:calendar-data/></D:prop>"
+            "<C:filter>"
+            '<C:comp-filter name="VCALENDAR">'
+            '<C:comp-filter name="VEVENT"/>'
+            "</C:comp-filter>"
+            "</C:filter>"
+            "</C:calendar-query>"
         )
-        assert event_data is not None, "Booking event should be saved"
+        report = client.generic(
+            "REPORT",
+            f"/caldav/calendars/resources/{resource_id}/default/",
+            data=report_body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+        assert report.status_code == HTTP_207_MULTI_STATUS, (
+            f"REPORT on resource calendar failed: {report.status_code} "
+            f"{report.content[:500]}"
+        )
+        resource_body = report.content.decode("utf-8", errors="ignore")
+
+        assert "res-auto-booking" in resource_body, (
+            "Resource calendar should contain the booking — "
+            "auto-schedule plugin did not deliver iTIP message. "
+            f"Body: {resource_body[:1000]}"
+        )
+        assert "PARTSTAT=ACCEPTED" in resource_body, (
+            "Resource attendee must have PARTSTAT=ACCEPTED on the resource's "
+            "own copy. The auto-schedule plugin's accept path is broken. "
+            f"Body: {resource_body[:1000]}"
+        )
+        assert "PARTSTAT=DECLINED" not in resource_body, (
+            "Non-conflicting booking should not be declined. "
+            f"Body: {resource_body[:1000]}"
+        )
+        assert "PARTSTAT=NEEDS-ACTION" not in resource_body, (
+            "Auto-scheduled booking should not be left as NEEDS-ACTION. "
+            f"Body: {resource_body[:1000]}"
+        )
 
 
 # ===================================================================
@@ -1220,16 +1397,53 @@ class TestCalDAVProtocolSecurity:
         # Should fail — sharee doesn't own the calendar
         # SabreDAV returns 207 with 403 status per property
         if resp.status_code == 207:
-            content = resp.content.decode("utf-8", errors="ignore")
-            assert "403" in content or "forbidden" in content.lower(), (
-                f"PROPPATCH by read-only sharee should show 403 per-prop: "
-                f"{content[:500]}"
+            # Verify the per-property status is 403 specifically — checking
+            # ``"403" in content`` would also match e.g. ``HTTP/1.1 403`` in
+            # an unrelated header echo. Parse and assert structurally.
+            pp_root = ET.fromstring(resp.content)
+            pp_ns = {"d": "DAV:"}
+            propstats = pp_root.findall(".//d:propstat", pp_ns)
+            assert propstats, (
+                f"PROPPATCH 207 must contain a propstat element: "
+                f"{resp.content.decode()[:500]}"
+            )
+            saw_forbidden = False
+            for ps in propstats:
+                status = ps.find("d:status", pp_ns)
+                if status is not None and status.text and "403" in status.text:
+                    saw_forbidden = True
+                    break
+            assert saw_forbidden, (
+                "PROPPATCH by read-only sharee should report 403 in at "
+                f"least one propstat: {resp.content.decode()[:500]}"
             )
         else:
             assert resp.status_code in (403, 404), (
                 f"Expected 403/404/207 for PROPPATCH by read sharee, "
                 f"got {resp.status_code}"
             )
+
+        # State check: owner's displayname must NOT have been mutated.
+        check = owner_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=(
+                '<?xml version="1.0"?>'
+                '<propfind xmlns="DAV:"><prop><displayname/></prop></propfind>'
+            ),
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        assert check.status_code == 207
+        check_root = ET.fromstring(check.content)
+        check_ns = {"d": "DAV:"}
+        dn = check_root.find(".//d:displayname", check_ns)
+        assert dn is not None, (
+            f"Owner PROPFIND must return displayname: {check.content.decode()[:500]}"
+        )
+        assert dn.text != "Hacked Name", (
+            f"Owner's displayname was mutated by sharee PROPPATCH! Got: {dn.text!r}"
+        )
 
     def test_delete_calendar_you_dont_own(self):
         """DELETE on a calendar you don't own must be blocked."""
@@ -1270,7 +1484,9 @@ class TestCalDAVProtocolSecurity:
         attacker, attacker_client, _ = _create_user_with_calendar(
             org, "attacker-sharesec"
         )
+        victim_client = APIClient()
         victim = factories.UserFactory(email="victim@proto-share.com", organization=org)
+        victim_client.force_login(victim)
         cal_id = _get_cal_id(cal_path)
 
         # Attacker tries to share owner's calendar with victim
@@ -1280,6 +1496,19 @@ class TestCalDAVProtocolSecurity:
         assert resp.status_code in (403, 404), (
             f"CS:share on non-owned calendar should be blocked, got {resp.status_code}"
         )
+
+        # State check: victim's calendar list must NOT contain the owner's
+        # calendar. A 403 returned after the share row was written would
+        # still pass the status assertion.
+        victim_calendars = (
+            CalDAVHTTPClient().get_dav_client(victim).principal().calendars()
+        )
+        owner_cal_url_fragment = f"/{cal_id}/"
+        for cal in victim_calendars:
+            assert owner_cal_url_fragment not in str(cal.url), (
+                f"Owner's calendar {cal_id} must not be present in victim's "
+                f"calendar list after blocked share. Found: {cal.url}"
+            )
 
     def test_mkcalendar_under_other_user(self):
         """MKCALENDAR under another user's home must be blocked."""
@@ -1303,6 +1532,23 @@ class TestCalDAVProtocolSecurity:
         )
         assert resp.status_code in (403, 404), (
             f"MKCALENDAR under other user should be blocked, got {resp.status_code}"
+        )
+
+        # State check: the injected calendar must NOT exist under the
+        # owner's principal. A 403 returned after the row was written would
+        # still pass the status assertion.
+        owner_calendars = (
+            CalDAVHTTPClient().get_dav_client(owner).principal().calendars()
+        )
+        names = [c.name for c in owner_calendars]
+        urls = [str(c.url) for c in owner_calendars]
+        assert "Injected" not in names, (
+            f"Injected calendar must not exist after blocked MKCALENDAR. "
+            f"Owner's calendars: {names}"
+        )
+        assert not any("injected-calendar" in url for url in urls), (
+            f"Injected calendar URL must not exist after blocked MKCALENDAR. "
+            f"Owner's calendar URLs: {urls}"
         )
 
     def test_post_to_other_users_outbox_blocked(self):
