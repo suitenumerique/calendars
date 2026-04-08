@@ -11,17 +11,20 @@ server (sabre/dav) needs to send invitations to external attendees.
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from email import encoders
 from email.mime.base import MIMEBase
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.core.signing import TimestampSigner
 from django.template.loader import render_to_string
+from django.utils import timezone
+
+import icalendar
 
 from core.models import User
 from core.services.translation_service import TranslationService
@@ -51,226 +54,237 @@ class EventDetails:  # pylint: disable=too-many-instance-attributes
 
 class ICalendarParser:
     """
-    Simple iCalendar parser for extracting event details.
+    Thin wrapper around the ``icalendar`` library that returns a flat
+    ``EventDetails`` dataclass for the email-template / RSVP code paths.
 
-    This is a lightweight parser focused on extracting the information
-    needed for invitation emails. For full iCalendar handling, consider
-    using a library like icalendar.
+    History: this used to be a hand-rolled regex parser. The regex
+    approach was load-bearing on a fragile invariant — that every byte
+    reaching it had been re-serialized by sabre/vobject upstream — and
+    a security audit (see N1 in the ICS deep-dive) flagged it as a
+    line-injection / header-smuggling primitive waiting for the wrong
+    code path to feed it raw bytes. The fix is to use a real RFC 5545
+    parser. The ``icalendar`` library is already a transitive dependency
+    of ``caldav``/``tsdav`` and is used elsewhere in the codebase.
     """
 
-    @staticmethod
-    def extract_vevent_block(icalendar: str) -> Optional[str]:
-        """
-        Extract the VEVENT block from iCalendar data.
-
-        This is important because VTIMEZONE blocks also contain DTSTART/DTEND
-        properties (for DST rules with dates like 1970), and we need to parse
-        only the VEVENT properties.
-        """
-        # Handle multi-line values first
-        icalendar = re.sub(r"\r?\n[ \t]", "", icalendar)
-
-        # Find VEVENT block
-        pattern = r"BEGIN:VEVENT\s*\n(.+?)\nEND:VEVENT"
-        match = re.search(pattern, icalendar, re.DOTALL | re.IGNORECASE)
-        if match:
-            return match.group(0)
-        return None
-
-    @staticmethod
-    def extract_property(icalendar: str, property_name: str) -> Optional[str]:
-        """Extract a simple property value from iCalendar data."""
-        # Handle multi-line values (lines starting with space/tab are continuations)
-        icalendar = re.sub(r"\r?\n[ \t]", "", icalendar)
-
-        pattern = rf"^{property_name}(;[^:]*)?:(.+)$"
-        match = re.search(pattern, icalendar, re.MULTILINE | re.IGNORECASE)
-        if match:
-            return match.group(2).strip()
-        return None
-
-    @staticmethod
-    def extract_property_with_params(
-        icalendar: str, property_name: str
-    ) -> tuple[Optional[str], dict]:
-        """
-        Extract a property value and its parameters.
-
-        Returns (value, {param_name: param_value, ...})
-        """
-        # Handle multi-line values
-        icalendar = re.sub(r"\r?\n[ \t]", "", icalendar)
-
-        pattern = rf"^{property_name}((?:;[^:]+)*):(.+)$"
-        match = re.search(pattern, icalendar, re.MULTILINE | re.IGNORECASE)
-        if not match:
-            return None, {}
-
-        params_str = match.group(1)
-        value = match.group(2).strip()
-
-        # Parse parameters
-        params = {}
-        if params_str:
-            # Split by ; but not within quotes
-            param_matches = re.findall(r";([^=]+)=([^;]+)", params_str)
-            for param_name, raw_value in param_matches:
-                # Remove quotes if present
-                params[param_name.upper()] = raw_value.strip('"')
-
-        return value, params
-
-    @staticmethod
-    def parse_datetime(
-        value: Optional[str], tzid: Optional[str] = None
-    ) -> Optional[datetime]:
-        """Parse iCalendar datetime value with optional timezone."""
-        if not value:
-            return None
-
-        value = value.strip()
-
-        # Try different formats
-        formats = [
-            "%Y%m%dT%H%M%SZ",  # UTC format
-            "%Y%m%dT%H%M%S",  # Local format
-            "%Y%m%d",  # Date only (all-day event)
-        ]
-
-        for fmt in formats:
-            try:
-                dt = datetime.strptime(value, fmt)
-                if fmt == "%Y%m%dT%H%M%SZ":
-                    # Already UTC
-                    dt = dt.replace(tzinfo=dt_timezone.utc)
-                elif tzid:
-                    # Has timezone info - try to convert using zoneinfo
-                    try:
-                        from zoneinfo import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
-                            ZoneInfo,
-                        )
-
-                        tz = ZoneInfo(tzid)
-                        dt = dt.replace(tzinfo=tz)
-                    except (KeyError, ValueError):
-                        # If timezone conversion fails, keep as naive datetime
-                        logger.debug(
-                            "Unknown timezone %s, keeping naive datetime", tzid
-                        )
-                return dt
-            except ValueError:
-                continue
-
-        logger.warning("Could not parse datetime: %s (tzid: %s)", value, tzid)
-        return None
+    # URL schemes we are willing to render in invitation email bodies.
+    # An ICS ``URL:`` value can be anything per RFC 5545 — including
+    # ``javascript:``, ``data:`` or ``vbscript:`` — and we render it
+    # straight into an HTML <a href=...> in the calendar_invitation*
+    # templates. An attacker who can put an event on your calendar
+    # (which is the whole point of an invitation) could otherwise
+    # smuggle script-bearing URLs into the recipient's mail client.
+    # Most modern clients block ``javascript:`` in href, but the safe
+    # default is to allowlist instead of relying on the client.
+    _SAFE_URL_SCHEMES = frozenset({"http", "https", "mailto", "tel"})
 
     @classmethod
-    def parse(  # pylint: disable=too-many-locals,too-many-branches
-        cls, icalendar: str, recipient_email: str
-    ) -> Optional[EventDetails]:
+    def sanitize_url(cls, raw: Optional[str]) -> Optional[str]:
+        """Return ``raw`` only if it parses as a URL with a safe scheme.
+
+        Returns ``None`` for any value whose scheme is not in the
+        allowlist (``http``, ``https``, ``mailto``, ``tel``) — including
+        scheme-less values, which would otherwise be interpreted as
+        same-origin relative URLs by some mail clients.
         """
-        Parse iCalendar data and extract event details.
-
-        Args:
-            icalendar: Raw iCalendar string (VCALENDAR with VEVENT)
-            recipient_email: The email of the attendee receiving this invitation
-
-        Returns:
-            EventDetails object or None if parsing fails
-        """
-        try:
-            # Extract VEVENT block to avoid parsing VTIMEZONE properties
-            # (VTIMEZONE contains DTSTART/DTEND with 1970 dates for DST rules)
-            vevent_block = cls.extract_vevent_block(icalendar)
-            if not vevent_block:
-                logger.error("No VEVENT block found in iCalendar data")
-                return None
-
-            # Extract basic properties from VEVENT block
-            uid = cls.extract_property(vevent_block, "UID")
-            summary = cls.extract_property(vevent_block, "SUMMARY") or ""
-            description = cls.extract_property(vevent_block, "DESCRIPTION")
-            location = cls.extract_property(vevent_block, "LOCATION")
-            url = cls.extract_property(vevent_block, "URL")
-
-            # Parse dates with timezone support - from VEVENT block only
-            dtstart_raw, dtstart_params = cls.extract_property_with_params(
-                vevent_block, "DTSTART"
-            )
-            dtend_raw, dtend_params = cls.extract_property_with_params(
-                vevent_block, "DTEND"
-            )
-            dtstart_tzid = dtstart_params.get("TZID")
-            dtend_tzid = dtend_params.get("TZID")
-            dtstart = cls.parse_datetime(dtstart_raw, dtstart_tzid)
-            dtend = cls.parse_datetime(dtend_raw, dtend_tzid)
-
-            # Check if all-day event (date only, no time component)
-            is_all_day = (
-                dtstart_raw and "T" not in dtstart_raw if dtstart_raw else False
-            )
-
-            # Extract organizer from VEVENT block
-            organizer_value, organizer_params = cls.extract_property_with_params(
-                vevent_block, "ORGANIZER"
-            )
-            organizer_email = ""
-            if organizer_value:
-                organizer_email = re.sub(
-                    r"^mailto:", "", organizer_value, flags=re.IGNORECASE
-                ).strip()
-            organizer_name = organizer_params.get("CN")
-
-            # Extract attendee info for the recipient from VEVENT block
-            # Find the ATTENDEE line that matches the recipient
-            recipient_clean = re.sub(
-                r"^mailto:", "", recipient_email, flags=re.IGNORECASE
-            ).lower()
-            attendee_name = None
-
-            # Look for ATTENDEE lines in VEVENT block
-            attendee_pattern = rf"^ATTENDEE[^:]*:mailto:{re.escape(recipient_clean)}$"
-            attendee_match = re.search(
-                attendee_pattern, vevent_block, re.MULTILINE | re.IGNORECASE
-            )
-            if attendee_match:
-                full_line = attendee_match.group(0)
-                cn_match = re.search(r"CN=([^;:]+)", full_line, re.IGNORECASE)
-                if cn_match:
-                    attendee_name = cn_match.group(1).strip('"')
-
-            # Get sequence number from VEVENT block
-            sequence_str = cls.extract_property(vevent_block, "SEQUENCE")
-            sequence = (
-                int(sequence_str) if sequence_str and sequence_str.isdigit() else 0
-            )
-
-            if not uid or not dtstart:
-                logger.error(
-                    "Missing required fields: UID=%s, DTSTART=%s", uid, dtstart
-                )
-                return None
-
-            return EventDetails(
-                uid=uid,
-                summary=summary,
-                description=description,
-                location=location,
-                url=url,
-                dtstart=dtstart,
-                dtend=dtend,
-                organizer_email=organizer_email,
-                organizer_name=organizer_name,
-                attendee_email=recipient_clean,
-                attendee_name=attendee_name,
-                sequence=sequence,
-                is_all_day=is_all_day,
-                raw_icalendar=icalendar,
-            )
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.exception("Failed to parse iCalendar data: %s", e)
+        if not raw:
             return None
+        try:
+            parsed = urlparse(raw.strip())
+        except ValueError:
+            return None
+        scheme = (parsed.scheme or "").lower()
+        if scheme not in cls._SAFE_URL_SCHEMES:
+            logger.info(
+                "Dropping ICS URL with disallowed scheme %r from invitation",
+                scheme or "(none)",
+            )
+            return None
+        return raw.strip()
+
+    @staticmethod
+    def _parse_calendar(icalendar_data: str) -> Optional[icalendar.Calendar]:
+        """Wrap ``icalendar.Calendar.from_ical`` with logging."""
+        try:
+            return icalendar.Calendar.from_ical(icalendar_data)
+        except (ValueError, TypeError, KeyError) as exc:
+            logger.error("Failed to parse iCalendar data: %s", exc)
+            return None
+
+    @staticmethod
+    def _first_vevent(cal: icalendar.Calendar):
+        """Return the first VEVENT in the calendar (skipping VTIMEZONE)."""
+        for component in cal.walk("VEVENT"):
+            return component
+        return None
+
+    @staticmethod
+    def _coerce_aware(value) -> Optional[datetime]:
+        """Coerce a date/datetime to a timezone-aware datetime in UTC.
+
+        ``icalendar`` returns naive ``datetime`` for floating times,
+        ``date`` for all-day events, and ``datetime`` with ``tzinfo``
+        otherwise. The downstream past-event check needs an aware
+        datetime; render code only needs a value to format. Anchoring
+        all values to UTC keeps comparisons monotonic.
+        """
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=dt_timezone.utc)
+            return value
+        if isinstance(value, date):
+            # All-day: treat as midnight UTC.
+            return datetime(value.year, value.month, value.day, tzinfo=dt_timezone.utc)
+        return None
+
+    @staticmethod
+    def _is_all_day(value) -> bool:
+        """True iff the value is a bare ``date`` (DTSTART;VALUE=DATE)."""
+        return isinstance(value, date) and not isinstance(value, datetime)
+
+    @staticmethod
+    def _strip_mailto(raw: Optional[str]) -> str:
+        if not raw:
+            return ""
+        return re.sub(r"^mailto:", "", str(raw), flags=re.IGNORECASE).strip()
+
+    @classmethod
+    def parse(  # noqa: PLR0915  # pylint: disable=too-many-statements,too-many-locals
+        cls, icalendar_data: str, recipient_email: str
+    ) -> Optional[EventDetails]:
+        """Parse iCalendar data and return ``EventDetails``, or None on failure."""
+        cal = cls._parse_calendar(icalendar_data)
+        if cal is None:
+            return None
+
+        vevent = cls._first_vevent(cal)
+        if vevent is None:
+            logger.error("No VEVENT component found in iCalendar data")
+            return None
+
+        recipient_clean = cls._strip_mailto(recipient_email).lower()
+
+        # Required fields
+        uid_prop = vevent.get("UID")
+        if not uid_prop:
+            logger.error("VEVENT missing UID")
+            return None
+        uid = str(uid_prop)
+
+        dtstart_prop = vevent.get("DTSTART")
+        if dtstart_prop is None:
+            logger.error("VEVENT missing DTSTART")
+            return None
+
+        dtstart_value = dtstart_prop.dt
+        dtend_prop = vevent.get("DTEND")
+        dtend_value = dtend_prop.dt if dtend_prop is not None else None
+
+        is_all_day = cls._is_all_day(dtstart_value)
+        dtstart = cls._coerce_aware(dtstart_value)
+        dtend = cls._coerce_aware(dtend_value)
+
+        if dtstart is None:
+            logger.error("VEVENT DTSTART could not be coerced to a datetime")
+            return None
+
+        # Optional text fields. ``icalendar`` returns vText (strings)
+        # which already have RFC 5545 escaping decoded — \n inside
+        # DESCRIPTION becomes a real newline.
+        summary = str(vevent.get("SUMMARY") or "")
+        description_prop = vevent.get("DESCRIPTION")
+        description = str(description_prop) if description_prop is not None else None
+        location_prop = vevent.get("LOCATION")
+        location = str(location_prop) if location_prop is not None else None
+        url_prop = vevent.get("URL")
+        url = cls.sanitize_url(str(url_prop)) if url_prop is not None else None
+
+        # ORGANIZER: vCalAddress with optional CN parameter.
+        organizer_prop = vevent.get("ORGANIZER")
+        organizer_email = ""
+        organizer_name: Optional[str] = None
+        if organizer_prop is not None:
+            organizer_email = cls._strip_mailto(str(organizer_prop))
+            cn = (
+                organizer_prop.params.get("CN")
+                if hasattr(organizer_prop, "params")
+                else None
+            )
+            organizer_name = str(cn) if cn else None
+
+        # ATTENDEE matching the recipient — may be a single value or a list.
+        attendee_name: Optional[str] = None
+        attendees = vevent.get("ATTENDEE")
+        if attendees is not None:
+            if not isinstance(attendees, list):
+                attendees = [attendees]
+            for att in attendees:
+                if cls._strip_mailto(str(att)).lower() == recipient_clean:
+                    cn = att.params.get("CN") if hasattr(att, "params") else None
+                    if cn:
+                        attendee_name = str(cn)
+                    break
+
+        # SEQUENCE
+        sequence_prop = vevent.get("SEQUENCE")
+        try:
+            sequence = int(sequence_prop) if sequence_prop is not None else 0
+        except (TypeError, ValueError):
+            sequence = 0
+
+        return EventDetails(
+            uid=uid,
+            summary=summary,
+            description=description,
+            location=location,
+            url=url,
+            dtstart=dtstart,
+            dtend=dtend,
+            organizer_email=organizer_email,
+            organizer_name=organizer_name,
+            attendee_email=recipient_clean,
+            attendee_name=attendee_name,
+            sequence=sequence,
+            is_all_day=bool(is_all_day),
+            raw_icalendar=icalendar_data,
+        )
+
+    @classmethod
+    def is_event_past(cls, icalendar_data: str) -> bool:
+        """Return True if the event has already ended.
+
+        Recurring events (with RRULE) are never considered past — the
+        recurrence may extend indefinitely. Falls back to DTSTART when
+        DTEND is absent.
+        """
+        cal = cls._parse_calendar(icalendar_data)
+        if cal is None:
+            return False
+        vevent = cls._first_vevent(cal)
+        if vevent is None:
+            return False
+        if vevent.get("RRULE"):
+            return False
+        prop = vevent.get("DTEND") or vevent.get("DTSTART")
+        if prop is None:
+            return False
+        dt = cls._coerce_aware(prop.dt)
+        if dt is None:
+            return False
+        return dt < timezone.now()
+
+    @classmethod
+    def extract_summary(cls, icalendar_data: str) -> str:
+        """Return the SUMMARY of the first VEVENT, or '' if none."""
+        cal = cls._parse_calendar(icalendar_data)
+        if cal is None:
+            return ""
+        vevent = cls._first_vevent(cal)
+        if vevent is None:
+            return ""
+        return str(vevent.get("SUMMARY") or "")
 
 
 class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes

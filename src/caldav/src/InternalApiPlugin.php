@@ -541,13 +541,44 @@ class InternalApiPlugin extends ServerPlugin
 
         $this->pdo->beginTransaction();
         try {
+            // Refuse to downgrade an existing MAILBOX principal back to
+            // INDIVIDUAL (or any other type). The principal type controls
+            // which auth/ACL rules apply (mailbox shares are sync-managed,
+            // freebusy scoping differs, login is forbidden, …) so a silent
+            // flip via upsert would break invariants other plugins rely on.
+            // The check runs inside the transaction with FOR UPDATE so a
+            // concurrent upsert can't race past it.
+            $existing = $this->pdo->prepare(
+                'SELECT calendar_user_type FROM principals WHERE uri = ? FOR UPDATE'
+            );
+            $existing->execute([$principalUri]);
+            $existingType = $existing->fetchColumn();
+            if ($existingType !== false && $existingType !== $calendarUserType) {
+                $this->pdo->rollBack();
+                error_log(
+                    "[InternalApiPlugin] Refusing to change calendar_user_type for "
+                    . "{$principalUri}: existing={$existingType} requested={$calendarUserType}"
+                );
+                $response->setStatus(409);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode([
+                    'error' => 'Principal already exists with a different calendar_user_type',
+                    'existing_type' => $existingType,
+                    'requested_type' => $calendarUserType,
+                ]));
+                return false;
+            }
+
+            // ON CONFLICT path: only org_id and displayname may be refreshed.
+            // calendar_user_type is intentionally NOT in the SET list — the
+            // pre-check above already enforces immutability, and dropping it
+            // here removes the silent-downgrade primitive entirely.
             $stmt = $this->pdo->prepare(
                 'INSERT INTO principals (uri, email, displayname, calendar_user_type, org_id)'
                 . ' VALUES (?, ?, ?, ?, ?)'
                 . ' ON CONFLICT (uri) DO UPDATE SET'
                 . ' org_id = EXCLUDED.org_id,'
-                . ' displayname = EXCLUDED.displayname,'
-                . ' calendar_user_type = EXCLUDED.calendar_user_type'
+                . ' displayname = EXCLUDED.displayname'
             );
             $stmt->execute([$principalUri, $email, $name, $calendarUserType, $orgId]);
 
@@ -758,10 +789,23 @@ class InternalApiPlugin extends ServerPlugin
                     $mailboxEmails
                 );
                 $ph = implode(',', array_fill(0, count($ownerPrincipals), '?'));
+                // INVARIANT: sync-managed rows must only ever land under
+                // a MAILBOX-owned calendar. ``MailboxPlugin::restrictSharing``
+                // and ``ShareAccessPlugin::afterPost`` rely on this — if a
+                // sync-managed row existed on an INDIVIDUAL calendar, manual
+                // CS:share/CS:remove ops would silently overwrite it. We
+                // enforce the invariant at the source by JOINing on the
+                // owning principal's ``calendar_user_type``: a caller that
+                // accidentally (or maliciously) passes an INDIVIDUAL
+                // ``mailbox_email`` gets zero rows back and the share entry
+                // is silently dropped instead of producing a malformed row.
                 $stmt = $this->pdo->prepare(
                     'SELECT ci.calendarid, ci.principaluri, ci.uri, ci.displayname, ci.calendarcolor '
                     . 'FROM calendarinstances ci '
-                    . 'WHERE ci.principaluri IN (' . $ph . ') AND ci.access = 1'
+                    . 'JOIN principals p ON p.uri = ci.principaluri '
+                    . 'WHERE ci.principaluri IN (' . $ph . ') '
+                    . '  AND ci.access = 1 '
+                    . '  AND p.calendar_user_type = \'' . PrincipalBackend::TYPE_MAILBOX . '\''
                 );
                 $stmt->execute($ownerPrincipals);
                 foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {

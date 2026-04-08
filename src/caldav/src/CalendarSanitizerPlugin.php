@@ -134,12 +134,45 @@ class CalendarSanitizerPlugin extends ServerPlugin
                 return;
             }
 
-            if ($this->sanitizeVCalendar($vcalendar)) {
-                $data = $vcalendar->serialize();
+            // Run the structural sanitizer first (binary attachments,
+            // long text truncation, RRULE caps, …). The return value
+            // tells us whether anything was structurally changed, but we
+            // do NOT use it to decide whether to re-serialize.
+            $this->sanitizeVCalendar($vcalendar);
+
+            // SECURITY INVARIANT: every byte that lands in calendarobjects
+            // (and therefore in every downstream consumer — SabreDAV reads,
+            // SharedCalendarPrivacyPlugin parses, the iMIP callback chain,
+            // the Django regex/icalendar parser, the frontend ts-ics
+            // parser) MUST first round-trip through vobject's serializer.
+            //
+            // Why: vobject normalizes line folding, escapes control
+            // characters in TEXT properties (CR/LF → \n, comma/semicolon
+            // → \,/\;), strips control chars from parameter values, and
+            // canonicalizes property ordering. Without that round-trip,
+            // raw client bytes (which can contain literal CR/LF inside
+            // a value, malformed line folds, or property collisions)
+            // can flow through to downstream parsers and create field-
+            // smuggling primitives. We pin the invariant by re-serializing
+            // unconditionally — even when ``sanitizeVCalendar`` didn't
+            // structurally modify anything — so the stored form is
+            // ALWAYS the canonical vobject output, not the raw bytes.
+            //
+            // The cost is one extra serialize() per CalDAV write
+            // (microseconds for typical events). The benefit is that
+            // every downstream "is the byte stream safe" check has a
+            // single, simple, easy-to-test answer: yes, because every
+            // write passes through this plugin and this plugin always
+            // canonicalizes. The N1 line-injection regression suite in
+            // the backend tests pins the contract; this plugin makes
+            // the contract structurally true.
+            $serialized = $vcalendar->serialize();
+            if ($serialized !== $dataStr) {
+                $data = $serialized;
                 $modified = true;
             }
 
-            // Enforce max resource size after sanitization
+            // Enforce max resource size after canonicalization
             $finalSize = is_string($data) ? strlen($data) : strlen($dataStr);
             if ($this->maxResourceSize > 0 && $finalSize > $this->maxResourceSize) {
                 throw new InsufficientStorage(

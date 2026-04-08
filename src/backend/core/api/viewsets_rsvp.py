@@ -1,25 +1,28 @@
 """RSVP view for handling invitation responses from email links.
 
-GET  /rsvp/?token=...&action=accepted  -> renders a confirmation page that
-     auto-submits via JavaScript (no extra click for the user).
-POST /api/v1.0/rsvp/                   -> processes the RSVP and returns a
-     result page. Link previewers / prefetchers only issue GET, so the
-     state-changing work is safely behind POST.
+Both verbs hit the same route ``/rsvp/``:
+
+  - GET  /rsvp/?t=<signed-token>  renders a confirmation page that
+    auto-submits the form via JavaScript. State-changing work is
+    safely behind POST so link previewers / prefetchers can't act on
+    the user's behalf.
+  - POST /rsvp/                   processes the RSVP and renders the
+    result page (also reached by the noscript fallback on the GET
+    confirmation page).
 """
 
 import logging
 import re
-from datetime import timezone as dt_timezone
 
 from django.conf import settings
 from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 from django.shortcuts import render
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from core.services.caldav_service import CalDAVHTTPClient
+from core.services.calendar_invitation_service import ICalendarParser
 from core.services.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
@@ -58,39 +61,6 @@ def _render_error(request, message, lang="en"):
         },
         status=400,
     )
-
-
-def _is_event_past(icalendar_data):
-    """Check if the event has already ended.
-
-    For recurring events without DTEND, falls back to DTSTART.
-    If the event has an RRULE, it is never considered past (the
-    recurrence may extend indefinitely).
-    """
-    from core.services.calendar_invitation_service import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
-        ICalendarParser,
-    )
-
-    vevent = ICalendarParser.extract_vevent_block(icalendar_data)
-    if not vevent:
-        return False
-
-    # Recurring events may have future occurrences — don't reject them
-    rrule, _ = ICalendarParser.extract_property_with_params(vevent, "RRULE")
-    if rrule:
-        return False
-
-    # Use DTEND if available, otherwise DTSTART
-    for prop in ("DTEND", "DTSTART"):
-        raw, params = ICalendarParser.extract_property_with_params(vevent, prop)
-        dt = ICalendarParser.parse_datetime(raw, params.get("TZID"))
-        if dt:
-            # Make timezone-aware if naive (assume UTC)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=dt_timezone.utc)
-            return dt < timezone.now()
-
-    return False
 
 
 def _validate_token(token, max_age=None):
@@ -194,8 +164,45 @@ class RSVPConfirmView(View):
         )
 
     def post(self, request):
-        """Noscript fallback: process RSVP and render result page."""
-        return _rsvp_post(request)
+        """Process the RSVP and render the result page.
+
+        Reached by the auto-submitting form on the GET confirmation
+        page (the common path) and by the noscript fallback (the
+        progressive-enhancement path).
+        """
+        # Support both DRF's request.data and Django's request.POST.
+        data = getattr(request, "data", None) or request.POST
+        token = data.get("token", "") or data.get("t", "")
+        lang = TranslationService.resolve_language(request=request)
+        t = TranslationService.t
+
+        payload, error_response = _validate_and_render_error(request, token, lang)
+        if error_response:
+            return error_response
+
+        action = payload["action"]
+        result = _process_rsvp(request, payload, action, lang)
+
+        # ``result`` is either an error HttpResponse or a calendar-data string.
+        if not isinstance(result, str):
+            return result
+
+        summary = ICalendarParser.extract_summary(result)
+        label = t(f"rsvp.{action}", lang)
+
+        return render(
+            request,
+            "rsvp/response.html",
+            {
+                "page_title": label,
+                "heading": label,
+                "message": t("rsvp.responseSent", lang),
+                "status_icon": PARTSTAT_ICONS[action],
+                "header_color": PARTSTAT_COLORS[action],
+                "event_summary": summary,
+                "lang": lang,
+            },
+        )
 
 
 def _process_rsvp(request, payload, action, lang):
@@ -215,7 +222,7 @@ def _process_rsvp(request, payload, action, lang):
     if not calendar_data or not href:
         return _render_error(request, t("rsvp.error.eventNotFound", lang), lang)
 
-    if _is_event_past(calendar_data):
+    if ICalendarParser.is_event_past(calendar_data):
         return _render_error(request, t("rsvp.error.eventPast", lang), lang)
 
     updated_data = CalDAVHTTPClient.update_attendee_partstat(
@@ -228,47 +235,6 @@ def _process_rsvp(request, payload, action, lang):
         return _render_error(request, t("rsvp.error.updateFailed", lang), lang)
 
     return calendar_data
-
-
-def _rsvp_post(request):
-    """Shared RSVP POST logic for both the API and noscript fallback."""
-    # Support both DRF's request.data and Django's request.POST
-    data = getattr(request, "data", None) or request.POST
-    token = data.get("token", "") or data.get("t", "")
-    lang = TranslationService.resolve_language(request=request)
-    t = TranslationService.t
-
-    payload, error_response = _validate_and_render_error(request, token, lang)
-    if error_response:
-        return error_response
-
-    action = payload["action"]
-    result = _process_rsvp(request, payload, action, lang)
-
-    # result is either an error HttpResponse or calendar data string
-    if not isinstance(result, str):
-        return result
-
-    from core.services.calendar_invitation_service import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
-        ICalendarParser,
-    )
-
-    summary = ICalendarParser.extract_property(result, "SUMMARY") or ""
-    label = t(f"rsvp.{action}", lang)
-
-    return render(
-        request,
-        "rsvp/response.html",
-        {
-            "page_title": label,
-            "heading": label,
-            "message": t("rsvp.responseSent", lang),
-            "status_icon": PARTSTAT_ICONS[action],
-            "header_color": PARTSTAT_COLORS[action],
-            "event_summary": summary,
-            "lang": lang,
-        },
-    )
 
 
 class _MailboxPrincipalProxy:

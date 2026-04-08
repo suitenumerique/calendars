@@ -1,6 +1,7 @@
 import {
   slotsToVCalendar,
   vCalendarToSlots,
+  InvalidAvailabilityValueError,
 } from "../availability-ics";
 import type { AvailabilitySlots } from "../types";
 
@@ -161,6 +162,93 @@ END:VCALENDAR`;
       const result = slotsToVCalendar(slots);
       expect(result).not.toContain("20200101");
       expect(result).toContain("BYDAY=MO");
+    });
+  });
+
+  describe("input validation (regression)", () => {
+    // The serializer hand-builds VAVAILABILITY because ts-ics doesn't
+    // support RFC 7953. To compensate for the lack of a real generator,
+    // it validates every time/date string at the boundary so a malformed
+    // value can never line-inject into the ICS body. These tests pin
+    // that contract — if someone removes the validators, the smuggled
+    // bytes come back and these tests must fail.
+
+    it.each([
+      "9:00",          // missing leading zero on hour
+      "09:0",          // missing leading zero on minute
+      "24:00",         // hour out of range
+      "12:60",         // minute out of range
+      "09:00\nMETHOD:CANCEL", // line-injection attempt
+      "09:00\rinjected",
+      "09-00",         // wrong separator
+      "morning",
+      "",
+    ])("rejects malformed recurring start time %s", (badStart) => {
+      const slots: AvailabilitySlots = [
+        {
+          id: "1",
+          when: { type: "recurring", day: "monday" },
+          start: badStart,
+          end: "17:00",
+        },
+      ];
+      expect(() => slotsToVCalendar(slots)).toThrow(
+        InvalidAvailabilityValueError,
+      );
+    });
+
+    it.each([
+      "09:00\nDTSTART:19700101T000000",
+      "09:00;HACK",
+    ])("rejects malformed specific-slot end time %s", (badEnd) => {
+      const slots: AvailabilitySlots = [
+        {
+          id: "1",
+          when: { type: "specific", date: "2026-12-25" },
+          start: "09:00",
+          end: badEnd,
+        },
+      ];
+      expect(() => slotsToVCalendar(slots)).toThrow(
+        InvalidAvailabilityValueError,
+      );
+    });
+
+    it.each([
+      "2026/01/01",      // wrong separator
+      "2026-01-01\nMETHOD:CANCEL",
+      "2026-01-01\rinjected",
+      "tomorrow",
+      "20260101",        // missing separators
+    ])("rejects malformed specific-slot date %s", (badDate) => {
+      const slots: AvailabilitySlots = [
+        {
+          id: "1",
+          when: { type: "specific", date: badDate },
+          start: "09:00",
+          end: "17:00",
+        },
+      ];
+      expect(() => slotsToVCalendar(slots)).toThrow(
+        InvalidAvailabilityValueError,
+      );
+    });
+
+    it("error message identifies which field failed", () => {
+      try {
+        slotsToVCalendar([
+          {
+            id: "1",
+            when: { type: "recurring", day: "monday" },
+            start: "09:00",
+            end: "bad",
+          },
+        ]);
+        throw new Error("expected throw");
+      } catch (e) {
+        expect(e).toBeInstanceOf(InvalidAvailabilityValueError);
+        expect((e as Error).message).toContain("end");
+      }
     });
   });
 });

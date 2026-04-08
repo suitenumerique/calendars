@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
 import { generateVisioRoomId } from "./generateVisioRoomId";
+import { sanitizeIcsUrl } from "../../../services/dav/EventCalendarAdapter";
 
 interface VideoConferenceSectionProps {
   url: string;
@@ -22,6 +23,14 @@ export const VideoConferenceSection = ({
 }: VideoConferenceSectionProps) => {
   const { t } = useTranslation();
 
+  // SECURITY: even though EventCalendarAdapter sanitizes the ICS URL
+  // property at the data boundary, also sanitize here at the sink so
+  // any future code path that constructs ``url`` from a different
+  // source still gets filtered before it lands in <a href={url}>.
+  // The cost is one extra parse on render; the benefit is a hard
+  // guarantee that this <a> can never carry javascript:/data:/file:.
+  const safeUrl = sanitizeIcsUrl(url);
+
   const handleCreateVisio = () => {
     if (!baseUrl) return;
     const roomId = generateVisioRoomId();
@@ -41,15 +50,15 @@ export const VideoConferenceSection = ({
       isExpanded={isExpanded}
       onToggle={onToggle}
     >
-      {url ? (
+      {safeUrl ? (
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <a
-            href={url}
+            href={safeUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={{ wordBreak: "break-all" }}
           >
-            {url}
+            {safeUrl}
           </a>
           <Button
             size="small"

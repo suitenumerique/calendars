@@ -44,6 +44,49 @@ type ExtendedOrganizer = {
   displayName?: string
 }
 
+/**
+ * URL schemes we are willing to render in the UI.
+ *
+ * The ICS ``URL:`` property is a free-form URI per RFC 5545. An attacker
+ * who can put an event on a calendar (e.g. an external organizer sending
+ * an invitation, or a sharee writing to a shared calendar) controls the
+ * value, and the UI renders it as ``<a href={url}>``. React only blocks
+ * ``javascript:`` URLs in development; production builds let them
+ * through. Mirror the backend's ``sanitize_url`` allowlist
+ * (``calendar_invitation_service.py``) here so the property is sanitized
+ * once at the data boundary and every UI consumer is safe by default.
+ */
+const SAFE_URL_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:'])
+
+/**
+ * Return ``raw`` only if it parses as a URL with a safe scheme.
+ *
+ * Returns ``undefined`` for any value whose scheme is not in the
+ * allowlist — including scheme-less / protocol-relative values, which
+ * would otherwise be interpreted as same-origin relative URLs.
+ *
+ * IMPORTANT: this is the SOLE place URL sanitization happens for ICS
+ * data flowing into the UI. Do NOT skip it in any consumer; do NOT
+ * accept the raw ``icsEvent.url`` value anywhere downstream.
+ */
+export function sanitizeIcsUrl(raw: string | undefined | null): string | undefined {
+  if (!raw) return undefined
+  const trimmed = String(raw).trim()
+  if (!trimmed) return undefined
+  let parsed: URL
+  try {
+    // Use a base so relative paths fail closed (we want absolute URLs only).
+    // The base origin is irrelevant — we only inspect the *original* protocol.
+    parsed = new URL(trimmed)
+  } catch {
+    return undefined
+  }
+  if (!SAFE_URL_SCHEMES.has(parsed.protocol.toLowerCase())) {
+    return undefined
+  }
+  return trimmed
+}
+
 // ============================================================================
 // Timezone Conversion Types
 // ============================================================================
@@ -270,7 +313,11 @@ export class EventCalendarAdapter {
       }))),
       categories: icsEvent.categories,
       priority: icsEvent.priority != null ? Number(icsEvent.priority) : undefined,
-      url: icsEvent.url,
+      // SECURITY: scheme-allowlist the ICS URL property at the data boundary
+      // so every UI consumer (VideoConferenceSection, eventContent, etc.)
+      // is safe by default. javascript:/data:/file: URLs are dropped here
+      // and never reach the DOM.
+      url: sanitizeIcsUrl(icsEvent.url),
       created: icsEvent.created ? this.icsDateToJsDate(icsEvent.created) : undefined,
       lastModified: icsEvent.lastModified ? this.icsDateToJsDate(icsEvent.lastModified) : undefined,
     }
@@ -408,7 +455,15 @@ export class EventCalendarAdapter {
     }
     if (extProps.categories) icsEvent.categories = extProps.categories
     if (extProps.priority != null) icsEvent.priority = String(extProps.priority)
-    if (extProps.url) icsEvent.url = extProps.url
+    // SECURITY: re-sanitize on the way out too. The forward path
+    // (toEventCalendarEvent) sanitizes inbound data so this should
+    // always be safe; this guard exists so that ANY future code path
+    // that constructs an extProps with a hand-built URL still gets
+    // filtered before the bytes are written back to CalDAV.
+    if (extProps.url) {
+      const safeOutbound = sanitizeIcsUrl(extProps.url)
+      if (safeOutbound) icsEvent.url = safeOutbound
+    }
     if (extProps.created) icsEvent.created = this.jsDateToIcsDate(extProps.created, false, timezone)
     if (extProps.recurrenceRule) icsEvent.recurrenceRule = extProps.recurrenceRule
 

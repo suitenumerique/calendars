@@ -219,8 +219,13 @@ $server->addPlugin(new CalendarSanitizerPlugin(
 $server->addPlugin(new AttendeeNormalizerPlugin());
 
 // Add internal API plugin for resource provisioning and ICS import
-// Gated by X-LS-Internal-Api-Key header (separate from X-LS-Api-Key used by proxy)
-$internalApiKey = getenv('CALDAV_INTERNAL_API_KEY') ?: $apiKey;
+// Gated by X-LS-Internal-Api-Key header (separate from X-LS-Api-Key used by proxy).
+// MUST be set explicitly.
+$internalApiKey = getenv('CALDAV_INTERNAL_API_KEY');
+if (!$internalApiKey) {
+    error_log("[sabre/dav] CALDAV_INTERNAL_API_KEY environment variable is required");
+    exit(1);
+}
 $server->addPlugin(new InternalApiPlugin($pdo, $caldavBackend, $internalApiKey));
 
 // Add custom IMipPlugin that forwards scheduling messages via HTTP callback

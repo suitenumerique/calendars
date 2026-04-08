@@ -732,6 +732,66 @@ class TestInternalApiErrors:
             f"Missing email should return 400, got {resp.status_code}"
         )
 
+    def test_create_calendar_refuses_type_change(self):
+        """POST /internal-api/calendars/ must not silently flip an existing
+        principal's calendar_user_type. A second call with a different type
+        must return 409 and leave the original principal untouched.
+
+        Regression guard for the upsert-downgrade issue: previously the
+        ON CONFLICT clause used ``calendar_user_type = EXCLUDED.calendar_user_type``,
+        which let a colliding INDIVIDUAL upsert silently demote a MAILBOX
+        principal — collapsing the auth/ACL invariants other plugins rely on.
+        """
+        org = factories.OrganizationFactory(external_id="intapi-typechange")
+        user = factories.UserFactory(
+            email="user@intapi-typechange.com", organization=org
+        )
+        target = "shared@intapi-typechange.com"
+
+        # First call creates the principal as MAILBOX.
+        resp = _intapi_http.request(
+            "POST",
+            user,
+            "internal-api/calendars/",
+            data=json.dumps(
+                {
+                    "email": target,
+                    "name": "Shared",
+                    "calendar_user_type": "MAILBOX",
+                    "org_id": str(user.organization_id),
+                    "caller_email": user.email,
+                }
+            ).encode("utf-8"),
+            content_type="application/json",
+            extra_headers=_INTAPI_HEADERS,
+        )
+        assert resp.status_code in (200, 201), (
+            f"Initial mailbox create failed: {resp.status_code} {resp.text}"
+        )
+
+        # Second call asks for INDIVIDUAL on the same URI → must be refused.
+        resp = _intapi_http.request(
+            "POST",
+            user,
+            "internal-api/calendars/",
+            data=json.dumps(
+                {
+                    "email": target,
+                    "name": "Shared",
+                    "calendar_user_type": "INDIVIDUAL",
+                    "org_id": str(user.organization_id),
+                }
+            ).encode("utf-8"),
+            content_type="application/json",
+            extra_headers=_INTAPI_HEADERS,
+        )
+        assert resp.status_code == 409, (
+            f"Type-change should be refused with 409, got {resp.status_code} {resp.text}"
+        )
+        body = resp.json()
+        assert body.get("existing_type") == "MAILBOX"
+        assert body.get("requested_type") == "INDIVIDUAL"
+
     def test_sync_acls_malformed_json(self):
         """POST /internal-api/sync-mailbox-acls/ with bad JSON returns 400."""
         org = factories.OrganizationFactory(external_id="intapi-badjson")

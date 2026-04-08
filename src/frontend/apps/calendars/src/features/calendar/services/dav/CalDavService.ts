@@ -74,6 +74,7 @@ import {
   type CalendarProps,
 } from './caldav-helpers'
 import { getIcalTimezoneBlock } from './helpers/ical-timezones'
+import { buildFreeBusyRequestIcs } from './helpers/freebusy-builder'
 
 export class CalDavService {
   private _account: CalDavAccount | null = null
@@ -1406,28 +1407,7 @@ export class CalDavService {
         throw new Error('Scheduling outbox not found')
       }
 
-      const startStr =
-        typeof request.timeRange.start === 'string'
-          ? request.timeRange.start
-          : request.timeRange.start.toISOString()
-      const endStr =
-        typeof request.timeRange.end === 'string'
-          ? request.timeRange.end
-          : request.timeRange.end.toISOString()
-
-      const attendeeLines = request.attendees.map((email) => `ATTENDEE:mailto:${email}`).join('\n')
-
-      const fbRequest = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//CalDavService//NONSGML v1.0//EN
-METHOD:REQUEST
-BEGIN:VFREEBUSY
-DTSTART:${startStr.replace(/[-:]/g, '').split('.')[0]}Z
-DTEND:${endStr.replace(/[-:]/g, '').split('.')[0]}Z
-${request.organizer ? `ORGANIZER:mailto:${request.organizer.email}` : ''}
-${attendeeLines}
-END:VFREEBUSY
-END:VCALENDAR`
+      const fbRequest = buildFreeBusyRequestIcs(request)
 
       // Construct full URL - outboxUrl from PROPFIND is an absolute path (e.g. /caldav/calendars/...)
       // so we only need to prepend the origin, not the full serverUrl (which already has /caldav/)

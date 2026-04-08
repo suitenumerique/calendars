@@ -117,6 +117,26 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         // Ensure URL ends with trailing slash for Django's APPEND_SLASH middleware
         $callbackUrl = rtrim($callbackUrl, '/') . '/';
 
+        // SSRF guard: only allow http(s). Without this, a caller that
+        // reaches caldav directly (bypassing the Django proxy) and holds
+        // the outbound API key could set ``X-LS-Callback-URL`` to e.g.
+        // ``file:///etc/passwd``, ``gopher://internal-redis:6379/_SET…``
+        // or ``dict://…`` and have curl deliver the iCalendar payload —
+        // and the outbound API key in the headers — wherever they want.
+        // The Django proxy already strips ``HTTP_X_LS_*`` from incoming
+        // requests and overrides this header, so legit users can't reach
+        // here at all; the guard exists to keep the blast radius small
+        // when someone with the outbound key talks to caldav directly.
+        $callbackScheme = strtolower((string) parse_url($callbackUrl, PHP_URL_SCHEME));
+        if ($callbackScheme !== 'http' && $callbackScheme !== 'https') {
+            error_log(
+                "[HttpCallbackIMipPlugin] ERROR: refusing callback URL with "
+                . "non-http(s) scheme: " . $callbackScheme
+            );
+            $iTipMessage->scheduleStatus = '5.4;Callback URL must use http(s) scheme';
+            return;
+        }
+
         // Serialize the iCalendar message
         $vcalendar = $iTipMessage->message ? $iTipMessage->message->serialize() : '';
         
@@ -146,7 +166,11 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             }
         }
         
-        // Make HTTP POST request to Django callback endpoint
+        // Make HTTP POST request to Django callback endpoint.
+        // CURLOPT_PROTOCOLS / CURLOPT_REDIR_PROTOCOLS pin curl to http(s)
+        // so even a (currently disabled) redirect cannot escape into
+        // file://, gopher://, dict://, ldap://, etc. — defense in depth
+        // alongside the scheme allowlist above.
         $ch = curl_init($callbackUrl);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
@@ -154,6 +178,9 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_POSTFIELDS => $vcalendar,
             CURLOPT_TIMEOUT => 10,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_FOLLOWLOCATION => false,
         ]);
         
         $response = curl_exec($ch);

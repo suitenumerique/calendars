@@ -46,6 +46,20 @@ class ShareAccessPlugin extends ServerPlugin
     /** Custom DAV property on the sharee's calendar instance: their access level */
     const SHARE_ACCESS_PROP = '{http://lasuite.numerique.gouv.fr/ns/}share-access';
 
+    /**
+     * Allowlist of valid share_access_level values.
+     *
+     * Anything outside this set is coerced to ``null`` before being
+     * persisted. The column is consumed by ``SharedCalendarPrivacyPlugin``
+     * (which checks ``=== 'freebusy'`` to enable the freebusy filter)
+     * and by the frontend ``parseSharePrivilege`` helper (which maps
+     * both ``'freebusy'`` and ``'admin'`` to UI badges riding on top of
+     * the standard CalDAV access levels). Storing arbitrary attacker-
+     * supplied strings would let a future reader misinterpret them —
+     * harden at write time so the column can never carry surprises.
+     */
+    const ALLOWED_LEVELS = ['freebusy', 'admin'];
+
     /** Custom DAV property: the owner principal's type (e.g., "MAILBOX").
      *  Injected into calendarInfo by CustomCalendarHome, read here via propFind.
      *  Zero extra DB queries — the value is cached in calendarInfo at load time. */
@@ -170,6 +184,18 @@ class ShareAccessPlugin extends ServerPlugin
                 $rawLevel = $setValues[self::SHARE_ACCESS_PROP] ?? null;
                 $level = ($rawLevel !== null) ? trim($rawLevel) : null;
                 if ($level === '') {
+                    $level = null;
+                }
+                // Coerce anything outside the allowlist to NULL. The
+                // privacy plugin only acts on ``'freebusy'`` and the
+                // frontend only badges ``'freebusy'`` / ``'admin'`` —
+                // any other value is meaningless today and storing it
+                // would create a future-bug primitive.
+                if ($level !== null && !in_array($level, self::ALLOWED_LEVELS, true)) {
+                    error_log(
+                        "[ShareAccessPlugin] Coercing unknown share_access_level "
+                        . "to NULL: " . $level
+                    );
                     $level = null;
                 }
                 // Bind NULL when there's no override → resets the

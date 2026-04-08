@@ -251,6 +251,100 @@ END:VCALENDAR"""
             server.shutdown()
             server.server_close()
 
+    @pytest.mark.parametrize(
+        "scheme_url",
+        [
+            "file:///etc/passwd",
+            "gopher://backend-test:8001/_GET",
+            "dict://backend-test:8001/info",
+            "ldap://backend-test:8001/",
+            "ftp://backend-test:8001/",
+        ],
+    )
+    def test_scheduling_callback_rejects_non_http_scheme(self, scheme_url):
+        """X-LS-Callback-URL with a non-http(s) scheme must be refused.
+
+        Regression for the HttpCallbackIMipPlugin SSRF: previously the
+        plugin handed the header value straight to ``curl_init`` with no
+        scheme/protocol restriction. A caller that reached caldav directly
+        (bypassing the Django proxy) and held the outbound API key could
+        set the header to ``file://``, ``gopher://``, ``dict://``, etc.
+        and have curl deliver the iCalendar payload — and the outbound
+        API key in the headers — to any reachable endpoint.
+
+        We assert two things:
+          1. The PUT itself succeeds (the plugin must fail gracefully,
+             not crash, when the scheme is rejected).
+          2. The test HTTP server we started on the *control* port is
+             NEVER contacted, because curl is also pinned to http(s) via
+             ``CURLOPT_PROTOCOLS`` so a ``gopher://`` URL with the same
+             host:port can't reach it.
+        """
+        organizer = factories.UserFactory(
+            email=f"organizer-ssrf-{secrets.token_hex(4)}@example.com"
+        )
+        service = CalendarService()
+        caldav_path = service.create_calendar(
+            organizer, name="SSRF Test Calendar", color="#ff0000"
+        )
+
+        # Start a real test server on the same host:port the gopher/dict
+        # URLs target. If the rejection is broken and curl follows through
+        # in some weird way, the server would observe the request.
+        server, port, callback_data = create_test_server()
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        time.sleep(0.5)
+
+        try:
+            # Build a hostile callback URL on the SAME host:port the test
+            # server is listening on, so we can detect any leak.
+            callback_host = os.environ.get("CALDAV_CALLBACK_HOST", "backend-test")
+            hostile_url = scheme_url.replace(
+                "backend-test:8001", f"{callback_host}:{port}"
+            )
+
+            client = service._get_client(organizer)  # pylint: disable=protected-access
+            client.headers["X-LS-Callback-URL"] = hostile_url
+            calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
+
+            try:
+                caldav_calendar = client.calendar(url=calendar_url)
+                dtstart = datetime.now() + timedelta(days=1)
+                dtend = dtstart + timedelta(hours=1)
+                ical_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test Client//EN
+BEGIN:VEVENT
+UID:ssrf-test-{datetime.now().timestamp()}
+DTSTART:{dtstart.strftime("%Y%m%dT%H%M%SZ")}
+DTEND:{dtend.strftime("%Y%m%dT%H%M%SZ")}
+SUMMARY:SSRF Probe
+ORGANIZER;CN=Organizer:mailto:{organizer.email}
+ATTENDEE;CN=External;RSVP=TRUE:mailto:external-ssrf@external-domain.com
+END:VEVENT
+END:VCALENDAR"""
+
+                # The PUT must SUCCEED — rejection happens inside the
+                # schedule plugin and is reported via Schedule-Status,
+                # not via an HTTP error on the calendar object PUT.
+                caldav_calendar.save_event(ical_content)
+
+                # Give any (mistakenly-fired) callback time to land.
+                time.sleep(2)
+
+                assert not callback_data["called"], (
+                    f"Hostile callback URL {hostile_url!r} reached the test "
+                    f"server — the SSRF guard in HttpCallbackIMipPlugin "
+                    f"failed to reject the non-http scheme. Captured request: "
+                    f"{callback_data['request_data']}"
+                )
+            except NotFoundError:
+                pytest.skip("Calendar not found - CalDAV server may not be running")
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_scheduling_callback_for_shared_mailbox_calendar(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements,redefined-outer-name,unused-variable,no-member
         self,
     ):
@@ -438,6 +532,220 @@ def _create_user_with_calendar(org, email_prefix, domain="sched-test.com"):
     service = CalendarService()
     caldav_path = service.create_calendar(user, name=f"{email_prefix}'s Calendar")
     return user, client, caldav_path
+
+
+@pytest.mark.django_db
+@pytest.mark.xdist_group("caldav")
+class TestOrganizerSpoofingRejection:
+    """Pin SabreDAV's enforcement that ORGANIZER must belong to the
+    authenticated principal's calendar-user-address-set.
+
+    Without this enforcement, user A could PUT an event with
+    ``ORGANIZER:mailto:victim@target.com`` (or with the email of a
+    mailbox they don't have read-write access to) and trigger the
+    iMIP callback to send invitations "as" that identity. The check
+    is implemented by sabre's ``Schedule\\Plugin::scheduleLocalDelivery``
+    and the ACL grant on the principal home; ``MailboxPlugin``
+    extends the address set with mailbox emails the user has
+    read-write access to.
+
+    These tests pin BOTH directions:
+      1. PUTs with a foreign ORGANIZER are rejected (403/Forbidden /
+         412 / 207 multistatus with an error — sabre's exact response
+         varies by version).
+      2. The negative-control PUT with the user's OWN ORGANIZER
+         succeeds, so we can be sure we're not just observing a
+         general "PUTs broken" failure.
+    """
+
+    @staticmethod
+    def _build_event(organizer_email: str, summary: str = "Spoof test") -> str:
+        dtstart = datetime.now() + timedelta(days=1)
+        dtend = dtstart + timedelta(hours=1)
+        return (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Spoof//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:spoof-test-{secrets.token_hex(6)}\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"SUMMARY:{summary}\r\n"
+            f"ORGANIZER;CN=Spoofed:mailto:{organizer_email}\r\n"
+            "ATTENDEE;CN=Outside;RSVP=TRUE:"
+            "mailto:bystander@external-target.com\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+
+    def test_imip_callback_does_not_fire_with_foreign_organizer(self):
+        """When user A PUTs an event with ``ORGANIZER:mailto:victim@…``
+        (an address outside their calendar-user-address-set), the iMIP
+        callback to Django must NOT fire with that spoofed sender —
+        regardless of whether sabre/dav accepts the PUT itself.
+
+        sabre/dav's behavior here is implementation-defined: it may
+        accept the PUT and silently skip the schedule fan-out (treating
+        the event as "client-side scheduling"), or it may reject the
+        PUT with 403/412. Either is acceptable from a security point of
+        view. What is NOT acceptable is firing the iMIP callback with
+        ``X-LS-Sender: victim@…`` — that would let any authenticated
+        user trigger outbound mail "from" any chosen identity.
+        """
+        org = factories.OrganizationFactory(external_id=f"spoof-{secrets.token_hex(4)}")
+        user, _, cal_path = _create_user_with_calendar(org, "spoof-attacker")
+
+        server, port, callback_data = create_test_server()
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        time.sleep(0.5)
+
+        try:
+            callback_host = os.environ.get("CALDAV_CALLBACK_HOST", "backend-test")
+            service = CalendarService()
+            client = service._get_client(user)  # pylint: disable=protected-access
+            client.headers["X-LS-Callback-URL"] = f"http://{callback_host}:{port}/"
+            calendar_url = service._calendar_url(cal_path)  # pylint: disable=protected-access
+            caldav_calendar = client.calendar(url=calendar_url)
+
+            spoofed = "victim@external-victim.com"
+            ical_content = self._build_event(spoofed)
+
+            try:
+                caldav_calendar.save_event(ical_content)
+            except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                # PUT rejected — that's also acceptable. Either path is fine
+                # so long as the callback doesn't fire with the spoof.
+                pass
+
+            time.sleep(2)
+
+            if callback_data["called"]:
+                sender = callback_data["request_data"]["headers"].get("X-LS-Sender", "")
+                assert spoofed not in sender, (
+                    f"iMIP callback fired with SPOOFED sender: {sender}. "
+                    f"sabre/dav must NOT honor an ORGANIZER outside the "
+                    f"authenticated principal's calendar-user-address-set "
+                    f"when delivering iMIP messages — otherwise any user "
+                    f"can send invitations 'as' any other identity."
+                )
+                # If we got here, the callback fired with a sender that
+                # is NOT the spoofed one (e.g. sabre rewrote it to the
+                # authenticated principal). That's defensible behavior.
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_user_can_put_event_with_own_organizer(self):
+        """Negative control: same shape as the spoof test but with the
+        user's own ORGANIZER. Must succeed and fire the callback."""
+        org = factories.OrganizationFactory(
+            external_id=f"spoof-ctrl-{secrets.token_hex(4)}"
+        )
+        user, _, cal_path = _create_user_with_calendar(org, "spoof-control")
+
+        server, port, callback_data = create_test_server()
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        time.sleep(0.5)
+
+        try:
+            callback_host = os.environ.get("CALDAV_CALLBACK_HOST", "backend-test")
+            service = CalendarService()
+            client = service._get_client(user)  # pylint: disable=protected-access
+            client.headers["X-LS-Callback-URL"] = f"http://{callback_host}:{port}/"
+            calendar_url = service._calendar_url(cal_path)  # pylint: disable=protected-access
+            caldav_calendar = client.calendar(url=calendar_url)
+
+            ical_content = self._build_event(user.email)
+            caldav_calendar.save_event(ical_content)
+            time.sleep(2)
+            assert callback_data["called"], (
+                "Negative control failed: own-ORGANIZER PUT did not "
+                "trigger the scheduling callback. The spoofing test "
+                "above is not meaningful unless this control passes."
+            )
+            sender = callback_data["request_data"]["headers"].get("X-LS-Sender", "")
+            assert user.email in sender
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_readonly_mailbox_sharee_cannot_organize_as_mailbox(self):
+        """A read-only sharee on a MAILBOX calendar must NOT be able
+        to PUT events with ORGANIZER set to the mailbox email.
+
+        ``MailboxPlugin::propFindAddresses`` only injects mailbox
+        addresses for sharees with ``access >= ACCESS_READ_WRITE``;
+        a read-only sharee's calendar-user-address-set must therefore
+        NOT contain the mailbox email, and any ORGANIZER claim must
+        be rejected by sabre's Schedule plugin.
+        """
+        mailbox_email = f"mailbox-{secrets.token_hex(4)}@spoof-mb.com"
+        owner = factories.UserFactory(
+            email=f"owner-{secrets.token_hex(4)}@spoof-mb.com"
+        )
+        sharee = factories.UserFactory(
+            email=f"sharee-{secrets.token_hex(4)}@spoof-mb.com"
+        )
+
+        http = CalDAVHTTPClient()
+
+        # 1. Create the MAILBOX principal + default calendar.
+        resp = http.internal_request(
+            "POST",
+            owner,
+            "internal-api/calendars/",
+            json={
+                "email": mailbox_email,
+                "name": "Spoof Mailbox",
+                "calendar_user_type": "MAILBOX",
+                "org_id": str(owner.organization_id),
+            },
+        )
+        assert resp.status_code in (200, 201)
+
+        # 2. Share with the sharee READ-ONLY (privilege="read").
+        resp = http.internal_request(
+            "POST",
+            owner,
+            "internal-api/sync-mailbox-acls/",
+            json={
+                "shares": [
+                    {
+                        "user_email": sharee.email,
+                        "mailbox_email": mailbox_email,
+                        "privilege": "read",
+                    }
+                ],
+                "full_sync_users": [],
+            },
+        )
+        assert resp.status_code == 200
+
+        # 3. Sharee's calendar-user-address-set must NOT contain the mailbox
+        # — query the sharee's principal home.
+        sharee_client = DRFClient()
+        sharee_client.force_login(sharee)
+        cuas_propfind = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:prop><C:calendar-user-address-set/></D:prop>"
+            "</D:propfind>"
+        )
+        resp = sharee_client.generic(
+            "PROPFIND",
+            f"/caldav/principals/users/{sharee.email}/",
+            data=cuas_propfind,
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        body = resp.content.decode("utf-8", errors="ignore")
+        assert mailbox_email not in body, (
+            f"Read-only sharee's calendar-user-address-set leaked the "
+            f"mailbox email {mailbox_email}. MailboxPlugin::propFindAddresses "
+            f"must only inject for ACCESS_READ_WRITE sharees. Body: {body[:500]}"
+        )
 
 
 @pytest.fixture()

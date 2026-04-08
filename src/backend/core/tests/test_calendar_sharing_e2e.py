@@ -6,9 +6,11 @@ Requires: CalDAV server running.
 
 # pylint: disable=no-member,broad-exception-caught,unused-variable,too-many-lines
 
+import secrets
 from datetime import datetime, timedelta
 from urllib.parse import unquote
 from xml.etree import ElementTree as ET
+from xml.sax.saxutils import escape
 
 import pytest
 from rest_framework.test import APIClient
@@ -661,6 +663,165 @@ class TestFreebusySharePersistence:
             f"{sharees[0].get('access')!r}. The roundtrip persisted a "
             f"different access level than the one we requested."
         )
+
+    @pytest.mark.parametrize(
+        "hostile_level",
+        [
+            "owner",
+            "read-write",
+            "../etc/passwd",
+            "freebusy; DROP TABLE",
+            "<script>alert(1)</script>",
+            "FREEBUSY",  # case-mismatched (allowlist is exact match)
+            "fr33busy",
+            "x" * 200,
+        ],
+    )
+    def test_share_access_level_coerces_unknown_values(self, hostile_level):
+        """share_access_level must accept ONLY {null, 'freebusy', 'admin'}.
+
+        Anything else gets coerced to NULL at write time. The privacy
+        plugin currently checks ``=== 'freebusy'`` and the frontend only
+        badges ``'freebusy'``/``'admin'``, but a future reader might do
+        substring/like matching — keep arbitrary attacker-supplied
+        strings out of the column entirely so they can't become a
+        primitive for a future bug.
+
+        We assert via PROPFIND of LS:share-access-map: a coerced row
+        either reports no access attribute or reports a value other
+        than the hostile string. Importantly the SHAREE row must still
+        be created (the rest of the share is valid) — we're testing
+        the access-level field in isolation.
+        """
+        org = factories.OrganizationFactory(
+            external_id=f"hostile-{secrets.token_hex(4)}"
+        )
+        owner, owner_client, cal_path = _create_user_with_calendar(
+            org, f"owner-hostile-{secrets.token_hex(4)}"
+        )
+        sharee = factories.UserFactory(
+            email=f"sharee-hostile-{secrets.token_hex(4)}@share-test.com",
+            organization=org,
+        )
+        cal_id = _get_cal_id(cal_path)
+
+        body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"'
+            ' xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<CS:set>"
+            f"<D:href>mailto:{sharee.email}</D:href>"
+            f"<LS:share-access>{escape(hostile_level)}</LS:share-access>"
+            "<CS:read/>"
+            "</CS:set>"
+            "</CS:share>"
+        )
+        resp = owner_client.generic(
+            "POST",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=body,
+            content_type="application/xml",
+        )
+        assert resp.status_code in (200, 204), (
+            f"Hostile share POST failed: {resp.status_code} {resp.content[:300]!r}"
+        )
+
+        propfind_body = (
+            '<?xml version="1.0"?>'
+            '<propfind xmlns="DAV:" '
+            'xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<prop><LS:share-access-map/></prop>"
+            "</propfind>"
+        )
+        map_resp = owner_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=propfind_body,
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        assert map_resp.status_code == 207
+
+        ns = {"d": "DAV:", "ls": "http://lasuite.numerique.gouv.fr/ns/"}
+        root = ET.fromstring(map_resp.content)
+        # share-access-map only includes rows with non-NULL share_access_level.
+        # If the hostile value was coerced to NULL the row is absent — pass.
+        # If the row IS present the access attribute must NOT contain the
+        # hostile string.
+        for sharee_el in root.findall(".//ls:share-access-map/ls:sharee", ns):
+            if sharee_el.get("href") != f"mailto:{sharee.email}":
+                continue
+            access = sharee_el.get("access") or ""
+            assert access not in (hostile_level, hostile_level.strip()), (
+                f"share_access_level was NOT coerced for hostile input "
+                f"{hostile_level!r}; PROPFIND returned access={access!r}"
+            )
+            assert access in {"freebusy", "admin", ""}, (
+                f"share_access_level returned out-of-allowlist value "
+                f"{access!r} for hostile input {hostile_level!r}"
+            )
+
+    @pytest.mark.parametrize("good_level", ["freebusy", "admin"])
+    def test_share_access_level_accepts_allowlist(self, good_level):
+        """The two legitimate values (freebusy, admin) must round-trip."""
+        org = factories.OrganizationFactory(
+            external_id=f"good-{good_level}-{secrets.token_hex(4)}"
+        )
+        owner, owner_client, cal_path = _create_user_with_calendar(
+            org, f"owner-good-{good_level}"
+        )
+        sharee = factories.UserFactory(
+            email=f"sharee-good-{good_level}@share-test.com", organization=org
+        )
+        cal_id = _get_cal_id(cal_path)
+
+        # admin rides on CS:read-write, freebusy rides on CS:read
+        underlying = "<CS:read-write/>" if good_level == "admin" else "<CS:read/>"
+        body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<CS:share xmlns:D="DAV:" xmlns:CS="http://calendarserver.org/ns/"'
+            ' xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<CS:set>"
+            f"<D:href>mailto:{sharee.email}</D:href>"
+            f"<LS:share-access>{good_level}</LS:share-access>"
+            f"{underlying}"
+            "</CS:set>"
+            "</CS:share>"
+        )
+        resp = owner_client.generic(
+            "POST",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=body,
+            content_type="application/xml",
+        )
+        assert resp.status_code in (200, 204)
+
+        propfind_body = (
+            '<?xml version="1.0"?>'
+            '<propfind xmlns="DAV:" '
+            'xmlns:LS="http://lasuite.numerique.gouv.fr/ns/">'
+            "<prop><LS:share-access-map/></prop>"
+            "</propfind>"
+        )
+        map_resp = owner_client.generic(
+            "PROPFIND",
+            f"/caldav/calendars/users/{owner.email}/{cal_id}/",
+            data=propfind_body,
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        ns = {"d": "DAV:", "ls": "http://lasuite.numerique.gouv.fr/ns/"}
+        root = ET.fromstring(map_resp.content)
+        sharees = [
+            s
+            for s in root.findall(".//ls:share-access-map/ls:sharee", ns)
+            if s.get("href") == f"mailto:{sharee.email}"
+        ]
+        assert len(sharees) == 1, (
+            f"Allowlisted level {good_level!r} should round-trip; found "
+            f"{len(sharees)} sharee rows for {sharee.email}"
+        )
+        assert sharees[0].get("access") == good_level
 
     def test_share_access_map_returns_proper_xml_elements(self):
         """LS:share-access-map must contain real <LS:sharee/> child elements,
@@ -2660,6 +2821,66 @@ class TestSyncAclEdgeCases:
         assert len(cals) == 1, (
             f"Idempotent sync should produce exactly 1 share, "
             f"got {len(cals)}: {[str(c.url) for c in cals]}"
+        )
+
+    def test_sync_refuses_non_mailbox_principal(self):
+        """sync-mailbox-acls must NEVER create sync-managed rows under a
+        non-MAILBOX principal.
+
+        Invariant pin (security): ``MailboxPlugin::restrictSharing`` and
+        ``ShareAccessPlugin::afterPost`` rely on the rule that
+        ``is_sync_managed = TRUE`` rows only exist on calendars whose
+        owning principal is of type ``MAILBOX``. If sync-managed rows
+        ever landed on an INDIVIDUAL calendar, manual CS:share/CS:remove
+        ops on that calendar would silently overwrite them — collapsing
+        the Messages-managed share into something the sharee or owner
+        could tamper with.
+
+        We pin the invariant by trying to share an INDIVIDUAL principal's
+        calendar via sync-mailbox-acls (passing the individual's email as
+        ``mailbox_email``). The endpoint must accept the call (returning
+        200, since it accepts empty share lists for full-sync use), but
+        must skip the entry: the target user must NOT see a new shared
+        calendar, and ``active`` must not list it.
+        """
+        org = factories.OrganizationFactory(external_id="sync-not-mailbox")
+        # An INDIVIDUAL principal (created the normal way via the
+        # CalendarService → /internal-api/calendars/ with type=INDIVIDUAL).
+        individual, _, _ = _create_user_with_calendar(org, "individual-notmbx")
+        sharee = factories.UserFactory(
+            email="sharee@sync-not-mailbox.com", organization=org
+        )
+
+        # Snapshot before so a baseline diff is unambiguous.
+        sharee_calendars_before = _list_calendar_urls(sharee)
+
+        resp = _sync_mailbox_acls(
+            individual,
+            [
+                {
+                    "user_email": sharee.email,
+                    # Deliberately point at the INDIVIDUAL's email — the
+                    # SQL must filter this out via the principal-type JOIN.
+                    "mailbox_email": individual.email,
+                    "privilege": "read-write",
+                }
+            ],
+        )
+
+        # The fan-out must be empty: no MAILBOX-typed owner calendar
+        # matched, so the share entry is silently dropped.
+        active = resp.json().get("active", [])
+        assert active == [], (
+            f"sync-mailbox-acls must not fan out to non-MAILBOX principals, "
+            f"got active={active}"
+        )
+
+        # Sharee must NOT see any new calendar.
+        sharee_calendars_after = _list_calendar_urls(sharee)
+        new_urls = sharee_calendars_after - sharee_calendars_before
+        assert new_urls == set(), (
+            f"Sharee must not gain a calendar from a non-mailbox sync, "
+            f"got new urls: {new_urls}"
         )
 
 
