@@ -35,6 +35,7 @@ pytestmark = pytest.mark.django_db
     FEATURE_MESSAGES_INTEGRATION=False,
     FEATURE_ADMIN_AVAILABILITIES=True,
     FEATURE_ADMIN_RESOURCES=False,
+    FEATURE_EVENT_SCHEDULING=True,
     MEDIA_BASE_URL="http://testserver/",
     SENTRY_DSN="https://sentry.test/123",
     THEME_CUSTOMIZATION_FILE_PATH="",
@@ -68,6 +69,7 @@ def test_api_config(is_authenticated):
         "FEATURE_ADMIN_CHANNELS": True,
         "FEATURE_ADMIN_AVAILABILITIES": True,
         "FEATURE_ADMIN_RESOURCES": False,
+        "FEATURE_EVENT_SCHEDULING": True,
         "LANGUAGES": [
             ["en-us", "English"],
             ["fr-fr", "French"],

@@ -4,6 +4,7 @@ export enum FeatureFlag {
   ADMIN_CHANNELS = "ADMIN_CHANNELS",
   ADMIN_AVAILABILITIES = "ADMIN_AVAILABILITIES",
   ADMIN_RESOURCES = "ADMIN_RESOURCES",
+  EVENT_SCHEDULING = "EVENT_SCHEDULING",
 }
 
 export const useFeatureFlag = (flag: FeatureFlag): boolean => {
@@ -16,6 +17,8 @@ export const useFeatureFlag = (flag: FeatureFlag): boolean => {
       return config?.FEATURE_ADMIN_AVAILABILITIES ?? true;
     case FeatureFlag.ADMIN_RESOURCES:
       return config?.FEATURE_ADMIN_RESOURCES ?? true;
+    case FeatureFlag.EVENT_SCHEDULING:
+      return config?.FEATURE_EVENT_SCHEDULING ?? true;
     default:
       return false;
   }

@@ -565,6 +565,12 @@ class Base(Configuration):
     FEATURE_ADMIN_RESOURCES = values.BooleanValue(
         default=True, environ_name="FEATURE_ADMIN_RESOURCES", environ_prefix=None
     )
+    # Toggles the "Find a time" (FreeBusySection) pill in the event edit
+    # modal. The section issues VFREEBUSY queries against the CalDAV
+    # scheduling outbox.
+    FEATURE_EVENT_SCHEDULING = values.BooleanValue(
+        default=True, environ_name="FEATURE_EVENT_SCHEDULING", environ_prefix=None
+    )
 
     THEME_CUSTOMIZATION_FILE_PATH = values.Value(
         os.path.join(BASE_DIR, "calendars/configuration/theme/default.json"),

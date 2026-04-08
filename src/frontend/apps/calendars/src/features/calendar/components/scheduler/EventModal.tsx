@@ -27,6 +27,7 @@ import { SectionPills } from "./event-modal-sections/SectionPills";
 import { useResourcePrincipals } from "@/features/resources/api/useResourcePrincipals";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useConfig } from "@/features/config/ConfigProvider";
+import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 import type {
   EventModalProps,
   RecurringDeleteOption,
@@ -187,6 +188,11 @@ export const EventModal = ({
 
   const { config } = useConfig();
   const meetBaseUrl = config?.FRONTEND_MEET_BASE_URL;
+  // Gate the "Find a time" (FreeBusySection) pill behind a feature
+  // flag. The section issues VFREEBUSY queries against the CalDAV
+  // scheduling outbox; deployments without that capability can hide
+  // the pill entirely by setting FEATURE_EVENT_SCHEDULING=false.
+  const isSchedulingEnabled = useFeatureFlag(FeatureFlag.EVENT_SCHEDULING);
 
   const pills = useMemo(
     () => [
@@ -228,13 +234,17 @@ export const EventModal = ({
             },
           ]
         : []),
-      {
-        id: "scheduling" as const,
-        icon: "event_available",
-        label: t("scheduling.findATime"),
-      },
+      ...(isSchedulingEnabled
+        ? [
+            {
+              id: "scheduling" as const,
+              icon: "event_available",
+              label: t("scheduling.findATime"),
+            },
+          ]
+        : []),
     ],
-    [t, meetBaseUrl, availableResources.length],
+    [t, meetBaseUrl, availableResources.length, isSchedulingEnabled],
   );
 
   return (
@@ -363,7 +373,7 @@ export const EventModal = ({
               alwaysOpen
             />
           )}
-          {form.isSectionExpanded("scheduling") && (
+          {isSchedulingEnabled && form.isSectionExpanded("scheduling") && (
             <FreeBusySection
               attendees={form.attendees}
               resourceEmails={form.resources

@@ -172,6 +172,7 @@ class ConfigView(views.APIView):
             "FEATURE_MESSAGES_INTEGRATION",
             "FEATURE_ADMIN_AVAILABILITIES",
             "FEATURE_ADMIN_RESOURCES",
+            "FEATURE_EVENT_SCHEDULING",
             "MEDIA_BASE_URL",
             "LANGUAGES",
             "LANGUAGE_CODE",
