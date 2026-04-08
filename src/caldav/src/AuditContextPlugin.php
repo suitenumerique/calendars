@@ -7,8 +7,14 @@
  * that the audit context is available when the backend write happens.
  *
  * Reads:
- *   X-Forwarded-User header → setCurrentPrincipal()
- *   X-CalDAV-Channel-Id header → setCurrentChannelId() (with UUID validation)
+ *   X-LS-User header → setCurrentPrincipal()
+ *     Same header ApiKeyAuthBackend uses for authentication, so the
+ *     audit principal can NEVER drift from the authenticated principal
+ *     and there is exactly one header carrying "who is acting".
+ *   X-LS-Channel-Id header → setCurrentChannelId() (with UUID validation)
+ *     X-LS-* prefix matches every other internal proxy→SabreDAV
+ *     header, so the proxy's defensive HTTP_X_LS_* strip covers it
+ *     and there are no leftover non-X-LS-* internal headers.
  */
 
 namespace Calendars\SabreDav;
@@ -53,14 +59,18 @@ class AuditContextPlugin extends ServerPlugin
     {
         $request = $this->server->httpRequest;
 
-        // Set principal from X-Forwarded-User header
-        $user = $request->getHeader('X-Forwarded-User');
+        // Set principal from the same X-LS-User header that
+        // ApiKeyAuthBackend uses for authentication. Reusing the
+        // auth header guarantees the audit principal cannot drift
+        // from the authenticated one — there is exactly one source
+        // of "who is acting" on the request.
+        $user = $request->getHeader('X-LS-User');
         if ($user) {
             $this->caldavBackend->setCurrentPrincipal($user);
         }
 
-        // Set channel ID from X-CalDAV-Channel-Id header (with UUID validation)
-        $channelId = $request->getHeader('X-CalDAV-Channel-Id');
+        // Set channel ID from X-LS-Channel-Id header (with UUID validation)
+        $channelId = $request->getHeader('X-LS-Channel-Id');
         if ($channelId && $this->isValidUuid($channelId)) {
             $this->caldavBackend->setCurrentChannelId($channelId);
         } else {

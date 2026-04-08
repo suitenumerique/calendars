@@ -63,17 +63,17 @@ def _make_sabredav_response(status_code=200, **body_fields):
 
 
 # ---------------------------------------------------------------------------
-# Unit: CalDAV proxy X-CalDAV-Channel-Id header
+# Unit: CalDAV proxy X-LS-Channel-Id header
 # ---------------------------------------------------------------------------
 
 
 class TestCalDAVProxyChannelIdHeader:
-    """Verify the proxy passes X-CalDAV-Channel-Id for channel auth."""
+    """Verify the proxy passes X-LS-Channel-Id for channel auth."""
 
     @patch("core.api.viewsets_caldav.CalDAVHTTPClient")
     @patch("core.api.viewsets_caldav.requests.request")
     def test_channel_put_sends_channel_id_header(self, mock_request, mock_http_cls):
-        """PUT via channel token must include X-CalDAV-Channel-Id."""
+        """PUT via channel token must include X-LS-Channel-Id."""
         user = factories.UserFactory()
         channel = factories.ChannelFactory(
             user=user,
@@ -103,14 +103,14 @@ class TestCalDAVProxyChannelIdHeader:
 
         mock_request.assert_called_once()
         headers = mock_request.call_args.kwargs["headers"]
-        assert headers["X-CalDAV-Channel-Id"] == str(channel.pk)
+        assert headers["X-LS-Channel-Id"] == str(channel.pk)
 
     @patch("core.api.viewsets_caldav.CalDAVHTTPClient")
     @patch("core.api.viewsets_caldav.requests.request")
     def test_channel_propfind_sends_channel_id_header(
         self, mock_request, mock_http_cls
     ):
-        """PROPFIND via channel token also includes X-CalDAV-Channel-Id."""
+        """PROPFIND via channel token also includes X-LS-Channel-Id."""
         user = factories.UserFactory()
         channel = factories.ChannelFactory(
             user=user,
@@ -140,7 +140,7 @@ class TestCalDAVProxyChannelIdHeader:
 
         mock_request.assert_called_once()
         headers = mock_request.call_args.kwargs["headers"]
-        assert headers["X-CalDAV-Channel-Id"] == str(channel.pk)
+        assert headers["X-LS-Channel-Id"] == str(channel.pk)
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ class TestImportChannelId:
         )
 
         headers = mock_request.call_args.kwargs["headers"]
-        assert headers["X-CalDAV-Channel-Id"] == channel_id
+        assert headers["X-LS-Channel-Id"] == channel_id
 
     @patch("core.services.caldav_service.requests.request")
     def test_import_without_channel_id_omits_header(self, mock_request):
@@ -183,7 +183,7 @@ class TestImportChannelId:
         service.import_events(user, caldav_path, ICS_SINGLE_EVENT)
 
         headers = mock_request.call_args.kwargs["headers"]
-        assert "X-CalDAV-Channel-Id" not in headers
+        assert "X-LS-Channel-Id" not in headers
 
 
 # ---------------------------------------------------------------------------
@@ -248,12 +248,12 @@ class TestInternalRequest:
             "POST",
             user,
             "internal-api/test",
-            extra_headers={"X-CalDAV-Channel-Id": "abc-123"},
+            extra_headers={"X-LS-Channel-Id": "abc-123"},
         )
 
         headers = mock_request.call_args.kwargs["headers"]
         assert headers["X-LS-Internal-Api-Key"] == "test-internal-key"
-        assert headers["X-CalDAV-Channel-Id"] == "abc-123"
+        assert headers["X-LS-Channel-Id"] == "abc-123"
 
 
 # ---------------------------------------------------------------------------
@@ -397,8 +397,9 @@ class TestAuditTrackingE2E:
         yield
         get_entitlements_backend.cache_clear()
 
-    def test_session_user_put_sets_created_by(self):
-        """Regular user PUT sets created_by, channel_id stays NULL."""
+    def test_session_user_put_no_channel_id(self):
+        """Regular session-auth PUT must NOT tag the event with any
+        channel_id (no channel header in the request)."""
         org = factories.OrganizationFactory()
         user = factories.UserFactory(email="audit-user@test.com", organization=org)
         client = APIClient()
@@ -417,6 +418,88 @@ class TestAuditTrackingE2E:
         fake_channel_id = str(uuid.uuid4())
         count = chan_service.count_events(user, fake_channel_id)
         assert count == 0
+
+    def test_put_populates_created_by_with_authenticated_email(self):  # pylint: disable=too-many-locals
+        """Every CalDAV write through the proxy must stamp the
+        authenticated user's email into ``calendarobjects.created_by``.
+
+        ``AuditContextPlugin`` reads the same ``X-LS-User`` header that
+        ``ApiKeyAuthBackend`` validates for authentication, so the
+        audit principal can never drift from the authenticated one.
+        We attach a channel to the calendar so we can query the audit
+        columns via the ``channel-events`` internal endpoint (the only
+        HTTP path that surfaces ``created_by``).
+        """
+        org = factories.OrganizationFactory()
+        user = factories.UserFactory(email="audit-by@test.com", organization=org)
+        client = APIClient()
+        client.force_login(user)
+
+        # Create a calendar via the production-style internal-api
+        # endpoint so the test mirrors real-user setup.
+        http = CalDAVHTTPClient()
+        resp = http.internal_request(
+            "POST",
+            user,
+            "internal-api/calendars/",
+            json={
+                "email": user.email,
+                "name": "Audit Cal",
+                "org_id": str(user.organization_id),
+                "calendar_user_type": "INDIVIDUAL",
+            },
+        )
+        assert resp.status_code == 201
+        cal_uri = resp.json().get("calendar_uri", "default")
+
+        # Attach a channel — used as a query lens to read created_by
+        # back via channel-events.
+        channel = factories.ChannelFactory(
+            user=user,
+            settings={"role": "editor"},
+            caldav_path=f"/calendars/users/{user.email}/{cal_uri}/",
+        )
+
+        chan_client = APIClient()
+        unique = uuid.uuid4().hex[:8]
+        event_uid = f"audit-by-{unique}"
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Audit//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{event_uid}\r\n"
+            "DTSTART:20260601T100000Z\r\n"
+            "DTEND:20260601T110000Z\r\n"
+            "SUMMARY:audit-by test\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        put_resp = chan_client.generic(
+            "PUT",
+            f"/caldav/calendars/users/{user.email}/{cal_uri}/{event_uid}.ics",
+            data=ical,
+            content_type="text/calendar",
+            HTTP_X_CHANNEL_ID=str(channel.pk),
+            HTTP_X_CHANNEL_TOKEN=channel.encrypted_settings["token"],
+        )
+        assert put_resp.status_code in (200, 201, 204), (
+            f"PUT failed: {put_resp.status_code} {put_resp.content[:300]}"
+        )
+
+        chan_service = ChannelEventService()
+        events = chan_service.list_events(user, str(channel.pk))
+        target = next((e for e in events if e.get("uid") == event_uid), None)
+        assert target is not None, (
+            f"Event {event_uid} missing from channel-events: {events!r}"
+        )
+        assert target.get("created_by") == user.email, (
+            "AUDIT GAP: created_by should be populated with the "
+            f"authenticated user's email. Got {target.get('created_by')!r} "
+            f"(expected {user.email!r}). AuditContextPlugin reads the "
+            "same X-LS-User header as the auth backend — if this is "
+            "NULL, the proxy is not setting X-LS-User correctly."
+        )
 
     def test_channel_put_sets_channel_id(self):
         """PUT via channel token sets channel_id; other channel sees nothing."""

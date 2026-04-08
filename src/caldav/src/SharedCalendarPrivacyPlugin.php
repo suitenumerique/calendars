@@ -36,6 +36,10 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
     const FREEBUSY_PROP = '{http://lasuite.numerique.gouv.fr/ns/}freebusy-access';
     const CALDAV_CALENDAR_DATA = '{urn:ietf:params:xml:ns:caldav}calendar-data';
 
+    /** Access constants — must match PrincipalBackend / SabreDAV's sharing model */
+    const ACCESS_OWNER = 1;
+    const ACCESS_READ = 2;
+
     /** Properties kept for CONFIDENTIAL / freebusy events (whitelist) */
     const CONFIDENTIAL_ALLOWED = [
         'UID', 'DTSTART', 'DTEND', 'DURATION', 'RRULE', 'EXDATE', 'RDATE',
@@ -79,6 +83,18 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
      * Get share info for a calendar path.
      * Returns ['access' => int, 'freebusy' => bool] or null if not found.
      * access: 1=owner, 2=read, 3=readwrite
+     *
+     * Resource calendars (``calendars/resources/...``) are special:
+     * they expose ``{DAV:}read`` to ``{DAV:}authenticated`` via
+     * ``ResourceCalendar::getACL`` so that same-org users can see what
+     * is booked on a shared room. There is no per-sharee instance row
+     * for those reads — every reader hits the single owner-side
+     * instance — so the standard ``calendarinstances`` lookup below
+     * would return ``access = 1`` (owner) and the privacy filter would
+     * be skipped, leaking ``CLASS:PRIVATE`` / ``CLASS:CONFIDENTIAL``
+     * booking content (and the booker's ``VALARM``s) to every other
+     * user in the org. Treat any access to a resource calendar as a
+     * "share" so the per-event filter applies.
      */
     private function getShareInfo(string $path): ?array
     {
@@ -92,7 +108,27 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
             return $this->cache[$calKey];
         }
 
-        $email = $parts[2];
+        // Resource calendars: no sharee rows, ACL grants read to
+        // authenticated. Treat every access as shared (read level)
+        // so CLASS / VALARM filtering kicks in. ``freebusy`` does not
+        // apply — there is no share_access_level row for resources.
+        if ($parts[1] === 'resources') {
+            return $this->cache[$calKey] = [
+                'access' => self::ACCESS_READ,
+                'freebusy' => false,
+            ];
+        }
+
+        if ($parts[1] !== 'users') {
+            return $this->cache[$calKey] = null;
+        }
+
+        // Path segments are URL-decoded by SabreDAV's request layer
+        // before the propFind hook fires, so the raw email here is
+        // already in canonical form (no ``%40``). Lowercase for the
+        // SQL match — principals are stored lowercased and the path
+        // may carry mixed case from the client.
+        $email = strtolower(urldecode($parts[2]));
         $calUri = $parts[3];
 
         $stmt = $this->pdo->prepare(
@@ -199,6 +235,16 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
     /**
      * Apply all privacy rules to iCalendar data on a shared calendar.
      *
+     * Iterates ALL non-VTIMEZONE components — VEVENT, VTODO, VJOURNAL —
+     * even though our calendars are configured with
+     * ``supported-calendar-component-set = VEVENT``. The HTTP PUT path
+     * enforces that constraint via SabreDAV's ``validateICalendar``,
+     * but the internal-api ICS import endpoint writes through the
+     * backend directly and so can plant a VTODO/VJOURNAL into a
+     * VEVENT-only calendar. Filtering only VEVENTs would leave those
+     * components unfiltered for sharees. Defense in depth: treat any
+     * scheduling component the same way.
+     *
      * @param string $icalData  Raw iCalendar string
      * @param bool   $freebusy  If true, ALL events are treated as CONFIDENTIAL
      * @return string Filtered iCalendar string
@@ -216,30 +262,38 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
         $modified = false;
         $toRemove = [];
 
-        foreach ($vcal->select('VEVENT') as $vevent) {
+        foreach ($vcal->getComponents() as $component) {
+            $name = strtoupper($component->name);
+            if ($name === 'VTIMEZONE') {
+                continue;
+            }
+            if (!in_array($name, ['VEVENT', 'VTODO', 'VJOURNAL'], true)) {
+                continue;
+            }
+
             $class = $freebusy
                 ? 'CONFIDENTIAL'
-                : (isset($vevent->CLASS) ? strtoupper((string)$vevent->CLASS) : 'PUBLIC');
+                : (isset($component->CLASS) ? strtoupper((string)$component->CLASS) : 'PUBLIC');
 
             if ($class === 'PRIVATE') {
-                $toRemove[] = $vevent;
+                $toRemove[] = $component;
                 $modified = true;
                 continue;
             }
 
             if ($class === 'CONFIDENTIAL') {
-                $this->stripToConfidential($vevent);
+                $this->stripToConfidential($component);
                 $modified = true;
             }
 
             // Always strip VALARM from shared calendars
-            if ($this->stripValarms($vevent)) {
+            if ($this->stripValarms($component)) {
                 $modified = true;
             }
         }
 
-        foreach ($toRemove as $vevent) {
-            $vcal->remove($vevent);
+        foreach ($toRemove as $component) {
+            $vcal->remove($component);
         }
 
         return $modified ? $vcal->serialize() : $icalData;

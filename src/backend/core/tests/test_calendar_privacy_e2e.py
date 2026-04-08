@@ -7,7 +7,9 @@ Requires: CalDAV server running.
 
 # pylint: disable=no-member,broad-exception-caught,unused-variable,too-many-lines
 
+import uuid
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 import pytest
 from rest_framework.test import APIClient
@@ -15,6 +17,7 @@ from rest_framework.test import APIClient
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
+from core.services.import_service import ICSImportService
 
 pytestmark = [
     pytest.mark.django_db,
@@ -472,3 +475,120 @@ class TestRRuleCap:
         assert "UNTIL=" not in data, (
             f"Bounded RRULE should not get UNTIL added. Got: {data[:500]}"
         )
+
+
+class TestNonVeventComponentPrivacy:
+    """``SharedCalendarPrivacyPlugin::applyRules`` must filter every
+    scheduling component, not just VEVENT.
+
+    Calendars are configured with ``supported-calendar-component-set =
+    VEVENT`` and the HTTP PUT path enforces that. The internal-api
+    import endpoint short-circuits to the backend so it must apply
+    the same filter (see test_import_events.py for the import side),
+    but as defense-in-depth the privacy plugin should ALSO strip
+    VTODO/VJOURNAL components on shared-calendar reads in case any
+    slip through (legacy data, future code paths, etc.).
+    """
+
+    def _vtodo_ics(self, uid, summary, description):
+        return (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Privacy//EN\r\n"
+            "BEGIN:VTODO\r\n"
+            f"UID:{uid}\r\n"
+            f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"SUMMARY:{summary}\r\n"
+            f"DESCRIPTION:{description}\r\n"
+            "STATUS:NEEDS-ACTION\r\n"
+            "CLASS:PRIVATE\r\n"
+            "END:VTODO\r\n"
+            "END:VCALENDAR\r\n"
+        ).encode("utf-8")
+
+    def test_vtodo_does_not_leak_to_sharee(self):  # pylint: disable=too-many-locals
+        """A VTODO present on a shared calendar must NOT leak its
+        SUMMARY/DESCRIPTION to a read-only sharee, even though the
+        privacy plugin's per-component filter was historically only
+        wired for VEVENT.
+
+        We bypass the (correctly) blocking PUT path by using the
+        internal-api import endpoint and a calendar that allows
+        VTODO. Production calendars are VEVENT-only and the import
+        endpoint filters them out, but the test mounts a deliberately
+        permissive setup to exercise the privacy plugin in isolation.
+        """
+        org = factories.OrganizationFactory(external_id="vtodo-leak")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-vtodo")
+        sharee, sharee_client, _ = _create_user_with_calendar(org, "sharee-vtodo")
+        cal_id = _get_cal_id(cal_path)
+
+        unique = uuid.uuid4().hex[:8]
+        leak_text = f"Secret Personal Task {unique}"
+        leak_desc = f"Buy gift for spouse {unique}"
+        ics = self._vtodo_ics(
+            f"privacy-vtodo-{unique}",
+            leak_text,
+            leak_desc,
+        )
+
+        # Plant the VTODO via the import endpoint. The default test
+        # helper above creates calendars via the caldav library's
+        # MKCALENDAR with no explicit component-set, which makes
+        # SabreDAV fall back to its built-in default of
+        # ``VEVENT,VTODO`` — so the VTODO is accepted here. Real
+        # production calendars are VEVENT-only and would reject it
+        # at the import filter (see test_import_events.py).
+        importer = ICSImportService()
+        result = importer.import_events(owner, cal_path, ics)
+        if result.imported_count == 0:
+            pytest.skip(
+                "VTODO was filtered at import — leak path is closed at "
+                "the import layer for this calendar."
+            )
+
+        share_resp = _share_calendar(owner_client, owner, cal_id, sharee.email, "read")
+        assert share_resp.status_code in (200, 204), (
+            f"Share failed: {share_resp.status_code} {share_resp.content[:500]}"
+        )
+
+        # Probe ALL of the sharee's calendars via calendar-query
+        # REPORT — the privacy filter must strip the VTODO content
+        # from any of them.
+        dav_sharee = CalDAVHTTPClient().get_dav_client(sharee)
+        sharee_cal_paths = [
+            urlparse(str(cal.url)).path
+            for cal in dav_sharee.principal().calendars()
+            if urlparse(str(cal.url)).path
+        ]
+        assert sharee_cal_paths, (
+            "Sharee has no calendars to probe — share didn't propagate."
+        )
+
+        report_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<C:calendar-query xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:prop><C:calendar-data/></D:prop>"
+            '<C:filter><C:comp-filter name="VCALENDAR"/></C:filter>'
+            "</C:calendar-query>"
+        )
+        for cal_path_to_probe in sharee_cal_paths:
+            report_resp = sharee_client.generic(
+                "REPORT",
+                cal_path_to_probe,
+                data=report_body,
+                content_type="application/xml",
+                HTTP_DEPTH="1",
+            )
+            report_text = report_resp.content.decode("utf-8", errors="ignore")
+            assert leak_text not in report_text, (
+                "SECURITY: VTODO SUMMARY leaked to sharee via "
+                "calendar-query REPORT — privacy filter only iterates "
+                f"VEVENT. Path={cal_path_to_probe}, "
+                f"Body: {report_text[:1500]}"
+            )
+            assert leak_desc not in report_text, (
+                "SECURITY: VTODO DESCRIPTION leaked to sharee. "
+                f"Path={cal_path_to_probe}, Body: {report_text[:1500]}"
+            )

@@ -595,6 +595,52 @@ class TestResourceDiscoveryE2E:
         content = response.content.decode("utf-8", errors="ignore")
         assert resource["id"] in content or "Discoverable Room" in content
 
+    def test_resource_principal_propfind_returns_room_cutype(self):
+        """PROPFIND on a ROOM resource principal must return ``ROOM``,
+        not ``INDIVIDUAL``.
+
+        Regression: ``ResourceAutoSchedulePlugin::propFindResourceType``
+        used to gate on ``$node instanceof ResourcePrincipal``, a class
+        that doesn't exist in the namespace, so the listener was dead
+        code and ``Sabre\\CalDAV\\Schedule\\Plugin::propFindEarly``'s
+        hardcoded ``INDIVIDUAL`` default won. The fix identifies
+        resource principals by URL prefix instead.
+        """
+        org = factories.OrganizationFactory(external_id="disc-cutype")
+        user, client = _create_org_admin(org)
+        resource = _create_resource_via_internal_api(user, "Cutype Room")
+        resource_id = resource["id"]
+
+        body = (
+            '<?xml version="1.0"?>'
+            '<propfind xmlns="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<prop>"
+            "<displayname/>"
+            "<C:calendar-user-type/>"
+            "</prop>"
+            "</propfind>"
+        )
+        resp = client.generic(
+            "PROPFIND",
+            f"/caldav/principals/resources/{resource_id}/",
+            data=body,
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        assert resp.status_code == HTTP_207_MULTI_STATUS, (
+            f"PROPFIND failed: {resp.status_code} {resp.content[:300]}"
+        )
+        text = resp.content.decode("utf-8", errors="ignore")
+        assert "ROOM" in text, (
+            "calendar-user-type for a ROOM resource should be 'ROOM'. "
+            f"Body: {text[:1500]}"
+        )
+        assert "INDIVIDUAL" not in text, (
+            "calendar-user-type leaked 'INDIVIDUAL' for a ROOM resource — "
+            "Schedule\\Plugin's hardcoded default beat the field map. "
+            f"Body: {text[:1500]}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # 6. User deletion cleanup — real SabreDAV
@@ -1611,6 +1657,287 @@ class TestResourceAutoSchedule:
         assert "Confidential" not in body, (
             "Cross-org attacker must not see the booking SUMMARY. "
             f"Status={report.status_code}, body={body[:1000]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Resource calendar privacy: CLASS / VALARM filtering must apply for
+# same-org viewers, not just user-to-user shares.
+# ---------------------------------------------------------------------------
+
+
+class TestResourceCalendarPrivacyE2E:
+    """``SharedCalendarPrivacyPlugin`` must filter resource calendar reads.
+
+    ``ResourceCalendar`` grants ``{DAV:}read`` to ``{DAV:}authenticated``
+    so booking organizers (and other same-org users) can see what's on
+    the room. The privacy plugin's per-event filter (CLASS, VALARM) is
+    expected to apply to those reads in the same way it does for
+    user-to-user sharing — otherwise marking a booking as ``PRIVATE``
+    or ``CONFIDENTIAL`` is meaningless on a shared room.
+
+    Regression: ``getShareInfo`` only handled ``calendars/users/...``
+    paths and queried ``principals/users/<segment>``, so it never
+    matched a resource principal. Resource calendars were therefore
+    considered "not shared" and the filter was a no-op.
+    """
+
+    @staticmethod
+    def _booking_ical_with_class(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        uid,
+        summary,
+        organizer_email,
+        resource_email,
+        *,
+        classification="PUBLIC",
+        description=None,
+        location=None,
+        valarm=False,
+    ):
+        dtstart = datetime.now() + timedelta(days=2)
+        dtend = dtstart + timedelta(hours=1)
+        desc_line = f"DESCRIPTION:{description}\r\n" if description else ""
+        loc_line = f"LOCATION:{location}\r\n" if location else ""
+        alarm_block = ""
+        if valarm:
+            alarm_block = (
+                "BEGIN:VALARM\r\n"
+                "ACTION:DISPLAY\r\n"
+                "DESCRIPTION:Reminder\r\n"
+                "TRIGGER:-PT15M\r\n"
+                "END:VALARM\r\n"
+            )
+        return (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            f"DTSTART:{dtstart.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"DTEND:{dtend.strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"SUMMARY:{summary}\r\n"
+            f"CLASS:{classification}\r\n"
+            f"{desc_line}"
+            f"{loc_line}"
+            f"ORGANIZER:mailto:{organizer_email}\r\n"
+            f"ATTENDEE;RSVP=TRUE:mailto:{resource_email}\r\n"
+            f"{alarm_block}"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+
+    @staticmethod
+    def _report_resource_calendar(client, resource_id):
+        body = (
+            '<?xml version="1.0" encoding="utf-8" ?>'
+            '<C:calendar-query xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:prop><D:getetag/><C:calendar-data/></D:prop>"
+            "<C:filter>"
+            '<C:comp-filter name="VCALENDAR">'
+            '<C:comp-filter name="VEVENT"/>'
+            "</C:comp-filter>"
+            "</C:filter>"
+            "</C:calendar-query>"
+        )
+        return client.generic(
+            "REPORT",
+            f"/caldav/calendars/resources/{resource_id}/default/",
+            data=body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+
+    def test_resource_booking_marked_private_is_hidden_from_other_viewers(self):
+        """A CLASS:PRIVATE booking on a resource calendar must NOT leak
+        its SUMMARY/DESCRIPTION/LOCATION to other same-org users.
+        """
+        org = factories.OrganizationFactory(external_id="res-priv-class")
+        organizer, _, _ = _create_user_with_calendar(org, "organizer-priv")
+        _viewer, viewer_client, _ = _create_user_with_calendar(org, "viewer-priv")
+
+        service = ResourceService()
+        resource = service.create_resource(organizer, "Private Room", "ROOM")
+        resource_id = resource["id"]
+        resource_email = resource["email"]
+
+        ical = self._booking_ical_with_class(
+            "res-priv-booking",
+            "Top Secret 1:1",
+            organizer.email,
+            resource_email,
+            classification="PRIVATE",
+            description="Layoff discussion",
+            location="CEO Suite",
+        )
+        dav = CalDAVHTTPClient().get_dav_client(organizer)
+        cals = dav.principal().calendars()
+        cals[0].save_event(ical)
+
+        report = self._report_resource_calendar(viewer_client, resource_id)
+        assert report.status_code == HTTP_207_MULTI_STATUS, (
+            f"REPORT on resource calendar failed: {report.status_code} "
+            f"{report.content[:500]}"
+        )
+        body = report.content.decode("utf-8", errors="ignore")
+
+        assert "Top Secret 1:1" not in body, (
+            "SECURITY: CLASS:PRIVATE booking SUMMARY visible to other "
+            f"same-org user via resource calendar. Body: {body[:1000]}"
+        )
+        assert "Layoff discussion" not in body, (
+            "SECURITY: CLASS:PRIVATE booking DESCRIPTION visible via "
+            f"resource calendar. Body: {body[:1000]}"
+        )
+        assert "CEO Suite" not in body, (
+            "SECURITY: CLASS:PRIVATE booking LOCATION visible via "
+            f"resource calendar. Body: {body[:1000]}"
+        )
+
+    def test_resource_booking_marked_confidential_shows_only_busy(self):
+        """A CLASS:CONFIDENTIAL booking on a resource calendar must
+        appear as ``Busy`` to other same-org users — same contract as
+        for user-to-user sharing.
+        """
+        org = factories.OrganizationFactory(external_id="res-priv-conf")
+        organizer, _, _ = _create_user_with_calendar(org, "organizer-conf")
+        _viewer, viewer_client, _ = _create_user_with_calendar(org, "viewer-conf")
+
+        service = ResourceService()
+        resource = service.create_resource(organizer, "Conf Room", "ROOM")
+        resource_id = resource["id"]
+        resource_email = resource["email"]
+
+        ical = self._booking_ical_with_class(
+            "res-conf-booking",
+            "Performance Review",
+            organizer.email,
+            resource_email,
+            classification="CONFIDENTIAL",
+            description="Q4 ratings",
+            location="Manager Office",
+        )
+        dav = CalDAVHTTPClient().get_dav_client(organizer)
+        cals = dav.principal().calendars()
+        cals[0].save_event(ical)
+
+        report = self._report_resource_calendar(viewer_client, resource_id)
+        assert report.status_code == HTTP_207_MULTI_STATUS, (
+            f"REPORT failed: {report.status_code}"
+        )
+        body = report.content.decode("utf-8", errors="ignore")
+
+        assert "Performance Review" not in body, (
+            "SECURITY: CLASS:CONFIDENTIAL booking SUMMARY visible via "
+            f"resource calendar. Body: {body[:1000]}"
+        )
+        assert "Q4 ratings" not in body, (
+            "SECURITY: CLASS:CONFIDENTIAL booking DESCRIPTION visible "
+            f"via resource calendar. Body: {body[:1000]}"
+        )
+        assert "Manager Office" not in body, (
+            "SECURITY: CLASS:CONFIDENTIAL booking LOCATION visible "
+            f"via resource calendar. Body: {body[:1000]}"
+        )
+
+    def test_resource_calendar_get_filters_individual_event(self):
+        """A direct GET on a CLASS:CONFIDENTIAL booking on a resource
+        calendar (the ``.ics`` URL) must also be filtered.
+
+        Some clients PROPFIND the calendar to discover hrefs and then
+        GET each ``.ics`` directly. ``filterGetResponse`` is the hook
+        that catches that path; it must apply CLASS filtering for
+        resource calendar reads too, not just user-to-user shares.
+        """
+        org = factories.OrganizationFactory(external_id="res-priv-direct-get")
+        organizer, _, _ = _create_user_with_calendar(org, "organizer-dg")
+        _viewer, viewer_client, _ = _create_user_with_calendar(org, "viewer-dg")
+
+        service = ResourceService()
+        resource = service.create_resource(organizer, "Direct Room", "ROOM")
+        resource_id = resource["id"]
+        resource_email = resource["email"]
+
+        ical = self._booking_ical_with_class(
+            "res-direct-get-booking",
+            "Direct Get Secret",
+            organizer.email,
+            resource_email,
+            classification="CONFIDENTIAL",
+            description="Sensitive notes",
+        )
+        dav = CalDAVHTTPClient().get_dav_client(organizer)
+        cals = dav.principal().calendars()
+        cals[0].save_event(ical)
+
+        # Discover the delivered href on the resource calendar.
+        report = self._report_resource_calendar(viewer_client, resource_id)
+        body = report.content.decode("utf-8", errors="ignore")
+        m = re.search(
+            rf"/caldav/calendars/resources/{resource_id}/default/[^<]+\.ics",
+            body,
+        )
+        assert m, f"No .ics href found in REPORT response: {body[:1000]}"
+        ics_href = m.group(0)
+
+        # GET the .ics object directly — without going through REPORT.
+        get_resp = viewer_client.get(ics_href)
+        assert get_resp.status_code == 200, (
+            f"GET on resource calendar object failed: {get_resp.status_code}"
+        )
+        get_body = get_resp.content.decode("utf-8", errors="ignore")
+        assert "Direct Get Secret" not in get_body, (
+            "SECURITY: CLASS:CONFIDENTIAL booking SUMMARY visible via "
+            f"direct GET on resource calendar object. Body: {get_body[:1000]}"
+        )
+        assert "Sensitive notes" not in get_body, (
+            "SECURITY: CLASS:CONFIDENTIAL booking DESCRIPTION visible via "
+            f"direct GET. Body: {get_body[:1000]}"
+        )
+
+    def test_resource_booking_valarm_stripped_from_other_viewers(self):
+        """A booking with a VALARM must not deliver the alarm to other
+        same-org viewers of the resource calendar (only the booker
+        wants their reminder).
+        """
+        org = factories.OrganizationFactory(external_id="res-priv-valarm")
+        organizer, _, _ = _create_user_with_calendar(org, "organizer-va")
+        _viewer, viewer_client, _ = _create_user_with_calendar(org, "viewer-va")
+
+        service = ResourceService()
+        resource = service.create_resource(organizer, "Alarm Room", "ROOM")
+        resource_id = resource["id"]
+        resource_email = resource["email"]
+
+        ical = self._booking_ical_with_class(
+            "res-valarm-booking",
+            "Alarm Booking",
+            organizer.email,
+            resource_email,
+            classification="PUBLIC",
+            valarm=True,
+        )
+        dav = CalDAVHTTPClient().get_dav_client(organizer)
+        cals = dav.principal().calendars()
+        cals[0].save_event(ical)
+
+        report = self._report_resource_calendar(viewer_client, resource_id)
+        assert report.status_code == HTTP_207_MULTI_STATUS
+        body = report.content.decode("utf-8", errors="ignore")
+
+        # Sanity: the booking itself is visible (PUBLIC).
+        assert "res-valarm-booking" in body, (
+            f"Booking missing from resource calendar: {body[:1000]}"
+        )
+        # ...but VALARM must be stripped before the response leaves
+        # the server.
+        assert "VALARM" not in body, (
+            "SECURITY: VALARM leaked to other resource calendar viewers. "
+            f"Body: {body[:1000]}"
+        )
+        assert "TRIGGER" not in body, (
+            "SECURITY: VALARM TRIGGER leaked to other resource calendar "
+            f"viewers. Body: {body[:1000]}"
         )
 
 

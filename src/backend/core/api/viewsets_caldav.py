@@ -210,14 +210,21 @@ class CalDAVProxyView(View):
                 status=500, content="CalDAV authentication not configured"
             )
 
-        # Pass channel ID for audit tracking on CalDAV writes
+        # Pass channel ID for audit tracking on CalDAV writes.
+        # Uses the X-LS-* prefix like every other internal proxy→
+        # SabreDAV header so the defensive HTTP_X_LS_* strip above
+        # cannot be subverted by a client smuggling its own value.
         if channel:
-            headers["X-CalDAV-Channel-Id"] = str(channel.pk)
+            headers["X-LS-Channel-Id"] = str(channel.pk)
 
         headers["Content-Type"] = request.content_type or "application/xml"
         headers["X-Forwarded-For"] = request.META.get("REMOTE_ADDR", "")
         headers["X-Forwarded-Host"] = request.get_host()
         headers["X-Forwarded-Proto"] = request.scheme
+        # Note: X-LS-User is set by build_base_headers() above and
+        # doubles as the audit principal — AuditContextPlugin reads
+        # the same header for setCurrentPrincipal(). One header,
+        # one source of "who is acting".
 
         # Add callback URL for CalDAV scheduling (iTip/iMip)
         # The CalDAV server will call this URL when it needs to send invitations

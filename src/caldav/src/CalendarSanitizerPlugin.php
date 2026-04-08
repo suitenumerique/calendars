@@ -80,6 +80,14 @@ class CalendarSanitizerPlugin extends ServerPlugin
      */
     public function beforeCreateCalendarObject($path, &$data, $parentNode = null, &$modified = false)
     {
+        // Only sanitize files going into a calendar collection.
+        // beforeCreateFile fires for ANY file in any collection, including
+        // scheduling inboxes and notifications — we don't want to mangle
+        // those. Gating on the parent node type is the same check
+        // SabreDAV's CalDAV\Plugin uses to decide whether to validate.
+        if (!$parentNode instanceof \Sabre\CalDAV\ICalendar) {
+            return;
+        }
         $this->sanitizeCalendarData($path, $data, $modified);
     }
 
@@ -89,20 +97,28 @@ class CalendarSanitizerPlugin extends ServerPlugin
      */
     public function beforeUpdateCalendarObject($path, $node, &$data, &$modified = false)
     {
+        if (!$node instanceof \Sabre\CalDAV\ICalendarObject) {
+            return;
+        }
         $this->sanitizeCalendarData($path, $data, $modified);
     }
 
     /**
      * Sanitize raw calendar data from a beforeCreateFile/beforeWriteContent hook.
+     *
+     * Runs for every object in a calendar collection regardless of file
+     * extension. CalDAV places no constraint on the basename of a
+     * calendar resource — clients are free to use ``UID``, ``UID.ics``,
+     * ``ev.txt``, or anything else — and SabreDAV's own
+     * ``validateICalendar`` runs on every write to a calendar
+     * collection. Pinning the sanitizer on a ``.ics`` suffix would let
+     * an attacker bypass the binary attachment / description-length /
+     * max-resource-size limits by uploading the same payload under a
+     * different name. The parent-node-type check above is what gates
+     * the call, not the file extension.
      */
     private function sanitizeCalendarData($path, &$data, &$modified)
     {
-        // Only process .ics files
-        if (!preg_match('/\.ics$/i', $path)) {
-            return;
-        }
-
-
         try {
             // Get the data as string
             if (is_resource($data)) {

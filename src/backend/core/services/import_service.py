@@ -20,13 +20,23 @@ class ImportResult:
 
     errors contains event names (summaries) of failed events,
     at most 10 entries.
+
+    filtered contains titles (SUMMARY, falling back to UID) of events
+    that were silently dropped because their component type is not in
+    the target calendar's ``supported-calendar-component-set`` (e.g.
+    a VTODO uploaded into a VEVENT-only calendar). filtered_count is
+    the total number of such events; filtered is capped at 100 titles
+    so the import-modal payload stays bounded. Filtered events also
+    count toward skipped_count.
     """
 
     total_events: int = 0
     imported_count: int = 0
     duplicate_count: int = 0
     skipped_count: int = 0
+    filtered_count: int = 0
     errors: list[str] = field(default_factory=list)
+    filtered: list[str] = field(default_factory=list)
 
 
 class ICSImportService:
@@ -80,7 +90,7 @@ class ICSImportService:
         timeout = 1200  # 20 minutes
         extra_headers = {}
         if channel_id:
-            extra_headers["X-CalDAV-Channel-Id"] = channel_id
+            extra_headers["X-LS-Channel-Id"] = channel_id
         try:
             response = self._http.internal_request(
                 "POST",
@@ -116,6 +126,15 @@ class ICSImportService:
         result.imported_count = data.get("imported_count", 0)
         result.duplicate_count = data.get("duplicate_count", 0)
         result.skipped_count = data.get("skipped_count", 0)
+        result.filtered_count = data.get("filtered_count", 0)
+
+        # Filtered titles — events whose component type is not in the
+        # calendar's supported-calendar-component-set (e.g. VTODO in a
+        # VEVENT-only calendar). The backend caps the list at 100; we
+        # pass it through as-is for the import modal to display.
+        filtered = data.get("filtered", [])
+        if isinstance(filtered, list):
+            result.filtered = [str(t) for t in filtered]
 
         # SabreDAV returns structured errors {uid, summary, error}.
         # Log full details server-side, expose only event names to the frontend.

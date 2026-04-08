@@ -922,14 +922,20 @@ class InternalApiPlugin extends ServerPlugin
     {
         $principalUri = 'principals/users/' . $principalUser;
 
-        // Look up calendarId
-        $calendarId = $this->resolveCalendarId($principalUri, $calendarUri);
-        if ($calendarId === null) {
+        // Look up calendarId AND the calendar's supported component set
+        // — we need to enforce the latter on every imported component
+        // because this endpoint short-circuits straight to the backend,
+        // bypassing CalDAV\Plugin::validateICalendar (which is what
+        // enforces the constraint on the HTTP PUT path).
+        $calendarInfo = $this->resolveCalendarInfo($principalUri, $calendarUri);
+        if ($calendarInfo === null) {
             $response->setStatus(404);
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(json_encode(['error' => 'Calendar not found']));
             return false;
         }
+        $calendarId = $calendarInfo['id'];
+        $supportedComponents = $calendarInfo['supportedComponents'];
 
         // Read and parse the raw ICS body
         $icsBody = $request->getBodyAsString();
@@ -964,15 +970,23 @@ class InternalApiPlugin extends ServerPlugin
         $importedCount = 0;
         $duplicateCount = 0;
         $skippedCount = 0;
+        $filteredCount = 0;
+        // Titles of events that were filtered out because their
+        // component type isn't in the calendar's supported set. Capped
+        // at 100 so a hostile import can't blow up the response.
+        $filteredTitles = [];
         $errors = [];
 
-        // Set audit context once before the import loop
+        // Set audit context once before the import loop. Reuses the
+        // X-LS-User auth header so the audit principal can never drift
+        // from the authenticated principal (same contract as
+        // AuditContextPlugin for the regular write path).
         if ($this->caldavBackend instanceof AuditCalDAVBackend) {
-            $user = $request->getHeader('X-Forwarded-User');
+            $user = $request->getHeader('X-LS-User');
             if ($user) {
                 $this->caldavBackend->setCurrentPrincipal($user);
             }
-            $channelId = $request->getHeader('X-CalDAV-Channel-Id');
+            $channelId = $request->getHeader('X-LS-Channel-Id');
             $this->caldavBackend->setCurrentChannelId($channelId ?: null);
         }
 
@@ -981,6 +995,25 @@ class InternalApiPlugin extends ServerPlugin
                 $totalEvents++;
 
                 try {
+                    // Filter components whose type is not in the
+                    // calendar's supported-calendar-component-set.
+                    // Counts as skipped (NOT an error) and the event
+                    // SUMMARY is added to the filteredTitles list so
+                    // the frontend can show "X events were filtered".
+                    $componentType = $this->detectComponentType($splitVcal);
+                    if (
+                        $componentType !== null
+                        && !in_array($componentType, $supportedComponents, true)
+                    ) {
+                        $skippedCount++;
+                        $filteredCount++;
+                        if (count($filteredTitles) < 100) {
+                            $title = $this->extractTitle($splitVcal, $componentType);
+                            $filteredTitles[] = $title;
+                        }
+                        continue;
+                    }
+
                     // Extract UID from the first VEVENT
                     $uid = null;
                     foreach ($splitVcal->VEVENT as $vevent) {
@@ -1042,7 +1075,7 @@ class InternalApiPlugin extends ServerPlugin
             "[InternalApiPlugin] Import complete: "
             . "{$importedCount} imported, "
             . "{$duplicateCount} duplicates, "
-            . "{$skippedCount} failed "
+            . "{$skippedCount} skipped ({$filteredCount} filtered by component-set) "
             . "out of {$totalEvents} total"
         );
 
@@ -1053,10 +1086,39 @@ class InternalApiPlugin extends ServerPlugin
             'imported_count' => $importedCount,
             'duplicate_count' => $duplicateCount,
             'skipped_count' => $skippedCount,
+            'filtered_count' => $filteredCount,
+            'filtered' => $filteredTitles,
             'errors' => $errors,
         ]));
 
         return false;
+    }
+
+    /**
+     * Pull a human-readable title from a split VCALENDAR for the
+     * import response. Falls back to the UID, then a placeholder.
+     */
+    private function extractTitle(VObject\Component\VCalendar $vcal, string $componentType): string
+    {
+        if (!isset($vcal->{$componentType})) {
+            return 'Untitled';
+        }
+        foreach ($vcal->{$componentType} as $component) {
+            if (isset($component->SUMMARY)) {
+                $summary = trim((string)$component->SUMMARY);
+                if ($summary !== '') {
+                    return $summary;
+                }
+            }
+            if (isset($component->UID)) {
+                $uid = trim((string)$component->UID);
+                if ($uid !== '') {
+                    return $uid;
+                }
+            }
+            break;
+        }
+        return 'Untitled';
     }
 
     /**
@@ -1189,14 +1251,73 @@ class InternalApiPlugin extends ServerPlugin
      */
     private function resolveCalendarId(string $principalUri, string $calendarUri)
     {
+        $info = $this->resolveCalendarInfo($principalUri, $calendarUri);
+        return $info === null ? null : $info['id'];
+    }
+
+    /**
+     * Resolve calendar metadata needed by the import endpoint.
+     *
+     * Returns the SabreDAV calendarId pair AND the calendar's
+     * ``supported-calendar-component-set`` (as an upper-cased array of
+     * component names like ``['VEVENT']``). The component set is what
+     * the import endpoint uses to filter out non-supported components
+     * — without it the import would let an attacker plant
+     * ``VTODO`` / ``VJOURNAL`` items in a VEVENT-only calendar by
+     * sidestepping ``CalDAV\Plugin::validateICalendar``.
+     *
+     * @return array|null ``['id' => mixed, 'supportedComponents' => string[]]``
+     */
+    private function resolveCalendarInfo(string $principalUri, string $calendarUri)
+    {
         $calendars = $this->caldavBackend->getCalendarsForUser($principalUri);
+        $sccsKey = '{urn:ietf:params:xml:ns:caldav}supported-calendar-component-set';
 
         foreach ($calendars as $calendar) {
-            if ($calendar['uri'] === $calendarUri) {
-                return $calendar['id'];
+            if ($calendar['uri'] !== $calendarUri) {
+                continue;
             }
+
+            // Default matches SabreDAV's PDO backend default when the
+            // column is empty: VEVENT and VTODO. We override that for
+            // calendars created via our internal-api/calendars endpoint
+            // (those are VEVENT-only) but accept the broader default
+            // for any calendar that doesn't carry the property.
+            $supported = ['VEVENT', 'VTODO'];
+            if (isset($calendar[$sccsKey])) {
+                $prop = $calendar[$sccsKey];
+                if ($prop instanceof \Sabre\CalDAV\Xml\Property\SupportedCalendarComponentSet) {
+                    $supported = $prop->getValue();
+                } elseif (is_array($prop)) {
+                    $supported = $prop;
+                }
+            }
+            $supported = array_map('strtoupper', $supported);
+
+            return [
+                'id' => $calendar['id'],
+                'supportedComponents' => $supported,
+            ];
         }
 
+        return null;
+    }
+
+    /**
+     * Determine the principal scheduling component type of a split
+     * VCALENDAR (VEVENT, VTODO, or VJOURNAL). VTIMEZONE-only files
+     * have no scheduling component and return null. Returns the FIRST
+     * non-VTIMEZONE component name found.
+     */
+    private function detectComponentType(VObject\Component\VCalendar $vcal): ?string
+    {
+        foreach ($vcal->getComponents() as $component) {
+            $name = strtoupper($component->name);
+            if ($name === 'VTIMEZONE') {
+                continue;
+            }
+            return $name;
+        }
         return null;
     }
 

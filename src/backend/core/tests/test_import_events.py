@@ -14,7 +14,11 @@ import requests as req
 from rest_framework.test import APIClient
 
 from core import factories
-from core.services.caldav_service import CalDAVClient, CalendarService
+from core.services.caldav_service import (
+    CalDAVClient,
+    CalDAVHTTPClient,
+    CalendarService,
+)
 from core.services.import_service import MAX_FILE_SIZE, ICSImportService, ImportResult
 
 pytestmark = pytest.mark.django_db
@@ -1078,6 +1082,209 @@ class TestCalendarSanitizerE2E:
         assert result.imported_count == 0
         assert result.skipped_count == 1
 
+    def test_caldav_put_truncates_oversized_description_for_non_ics_uri(self):
+        """CalDAV places no constraint on the basename of a calendar
+        object — clients can use ``UID``, ``UID.ics``, or anything
+        else, and SabreDAV's own ``validateICalendar`` runs whenever
+        the parent is a calendar collection regardless of extension.
+        Pinning the sanitizer on a ``.ics`` suffix would let an
+        attacker bypass the binary attachment / description-length /
+        max-resource-size limits by uploading the same payload under
+        a different name.
+
+        Regression: ``CalendarSanitizerPlugin`` used to gate on
+        ``preg_match('/\\.ics$/i', $path)``. The fix gates on the
+        parent node being an ``ICalendar`` instead — same check
+        SabreDAV's own validator uses.
+        """
+        user = factories.UserFactory(email="sanitizer-noext@example.com")
+        org = factories.OrganizationFactory(external_id="sanitizer-noext-org")
+        user.organization = org
+        user.save()
+        caldav_path = self._create_calendar(user)
+        cal_id = _get_cal_id(caldav_path)
+
+        client = APIClient()
+        client.force_login(user)
+
+        # 200 KB description — well above the 100 KB cap.
+        big = "X" * (200 * 1024)
+        ics = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Sanitizer//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID:sanitizer-noext-1\r\n"
+            "DTSTART:20260301T100000Z\r\n"
+            "DTEND:20260301T110000Z\r\n"
+            "SUMMARY:Sanitizer no-extension test\r\n"
+            f"DESCRIPTION:{big}\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+
+        # Use an extension other than .ics — SabreDAV accepts any
+        # filename in a calendar collection.
+        resp = client.generic(
+            "PUT",
+            f"/caldav/calendars/users/{user.email}/{cal_id}/sanitizer-noext-1",
+            data=ics,
+            content_type="text/calendar",
+        )
+        if resp.status_code not in (200, 201, 204):
+            pytest.skip(
+                f"PUT to non-.ics URI was rejected with {resp.status_code} — "
+                "the bypass path is already closed by SabreDAV's URI policy."
+            )
+
+        get_resp = client.get(
+            f"/caldav/calendars/users/{user.email}/{cal_id}/sanitizer-noext-1"
+        )
+        assert get_resp.status_code == 200, (
+            f"GET on stored object failed: {get_resp.status_code}"
+        )
+        body = get_resp.content.decode("utf-8", errors="ignore")
+        # The sanitizer caps DESCRIPTION at 100 KB. A 200 KB description
+        # should be visibly truncated.
+        assert len(body) < 150 * 1024, (
+            "SECURITY: oversized DESCRIPTION was NOT truncated by the "
+            f"sanitizer — got {len(body)} bytes back. Sanitizer hook "
+            "must run regardless of file extension."
+        )
+
+
+@pytest.mark.xdist_group("caldav")
+class TestImportComponentSetFilterE2E:
+    """The internal-api ICS import endpoint must filter out components
+    whose type is not in the target calendar's
+    ``supported-calendar-component-set``.
+
+    The HTTP PUT path enforces the constraint via SabreDAV's
+    ``validateICalendar``, but the import endpoint short-circuits
+    straight to the backend, so without an explicit filter a user
+    could plant VTODOs in their VEVENT-only calendar. The filter is
+    a soft skip (not a hard rejection) so a mixed-content ICS file
+    can still partially import the supported components, with the
+    titles of dropped events surfaced via the ``filtered`` field
+    (capped at 100) for the import-modal UI.
+    """
+
+    def test_import_filters_vtodo_on_vevent_only_calendar(self):  # pylint: disable=too-many-locals
+        """Mixed-content ICS: VEVENT imports, VTODO is filtered, the
+        VTODO title is surfaced in ``filtered``."""
+        org = factories.OrganizationFactory(external_id="import-vtodo-filter")
+        owner, _, cal_path = _create_user_with_vevent_only_calendar(
+            org, "owner-vtodo-filter"
+        )
+
+        unique = uuid.uuid4().hex[:8]
+        ics = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Import//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:keep-vevent-{unique}\r\n"
+            f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            "DTSTART:20260601T100000Z\r\n"
+            "DTEND:20260601T110000Z\r\n"
+            f"SUMMARY:keep-vevent-{unique}\r\n"
+            "END:VEVENT\r\n"
+            "BEGIN:VTODO\r\n"
+            f"UID:filter-vtodo-{unique}\r\n"
+            f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%SZ')}\r\n"
+            f"SUMMARY:filter-me-{unique}\r\n"
+            "STATUS:NEEDS-ACTION\r\n"
+            "END:VTODO\r\n"
+            "END:VCALENDAR\r\n"
+        ).encode("utf-8")
+
+        importer = ICSImportService()
+        result = importer.import_events(owner, cal_path, ics)
+
+        assert result.imported_count == 1, (
+            f"VEVENT should have imported. Result: {result!r}"
+        )
+        assert result.filtered_count == 1, (
+            "VTODO should have been filtered out by component-set "
+            f"check. Result: {result!r}"
+        )
+        assert result.skipped_count >= 1, (
+            "filtered events should also count toward skipped_count. "
+            f"Result: {result!r}"
+        )
+        assert f"filter-me-{unique}" in result.filtered, (
+            "VTODO summary should appear in the filtered list. "
+            f"Got: {result.filtered!r}"
+        )
+        # Filtering must NOT show up in `errors` — it isn't an error.
+        assert not any(f"filter-me-{unique}" in e for e in result.errors), (
+            f"Filtered events must not appear in errors. Got: {result.errors!r}"
+        )
+
+        # Cross-check via REPORT — the VTODO must NOT be reachable,
+        # the VEVENT must.
+        owner_client = APIClient()
+        owner_client.force_login(owner)
+        report_body = (
+            '<?xml version="1.0" encoding="utf-8"?>'
+            '<C:calendar-query xmlns:D="DAV:" '
+            'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+            "<D:prop><C:calendar-data/></D:prop>"
+            '<C:filter><C:comp-filter name="VCALENDAR"/></C:filter>'
+            "</C:calendar-query>"
+        )
+        report_resp = owner_client.generic(
+            "REPORT",
+            f"/caldav{cal_path}",
+            data=report_body,
+            content_type="application/xml",
+            HTTP_DEPTH="1",
+        )
+        body = report_resp.content.decode("utf-8", errors="ignore")
+        assert f"filter-me-{unique}" not in body, (
+            "VTODO was imported AND is reachable via REPORT — the "
+            f"component-set filter failed. Body: {body[:1500]}"
+        )
+        assert f"keep-vevent-{unique}" in body, (
+            "VEVENT should have been imported alongside the filtered "
+            f"VTODO. Body: {body[:1500]}"
+        )
+
+    def test_import_filtered_titles_capped_at_100(self):
+        """``filtered`` is capped at 100 entries even when many more
+        events are filtered, so a hostile import can't blow up the
+        response payload. ``filtered_count`` reflects the true total.
+        """
+        org = factories.OrganizationFactory(external_id="import-filter-cap")
+        owner, _, cal_path = _create_user_with_vevent_only_calendar(org, "owner-cap")
+
+        unique = uuid.uuid4().hex[:8]
+        # 150 VTODO entries — well above the 100 cap.
+        parts = ["BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Test//Cap//EN\r\n"]
+        for i in range(150):
+            parts.append(
+                "BEGIN:VTODO\r\n"
+                f"UID:cap-vtodo-{unique}-{i}\r\n"
+                f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%SZ')}\r\n"
+                f"SUMMARY:cap-{unique}-{i}\r\n"
+                "STATUS:NEEDS-ACTION\r\n"
+                "END:VTODO\r\n"
+            )
+        parts.append("END:VCALENDAR\r\n")
+        ics = "".join(parts).encode("utf-8")
+
+        result = ICSImportService().import_events(owner, cal_path, ics)
+
+        assert result.filtered_count == 150, (
+            f"All 150 VTODOs should count as filtered. Got: {result!r}"
+        )
+        assert len(result.filtered) == 100, (
+            "filtered titles list must be capped at 100. "
+            f"Got len={len(result.filtered)}"
+        )
+        assert result.imported_count == 0
+        assert result.skipped_count >= 150
+
 
 def _create_user_with_calendar(org, email_prefix):
     """Create a user with a calendar for E2E tests."""
@@ -1088,6 +1295,45 @@ def _create_user_with_calendar(org, email_prefix):
     client.force_login(user)
     service = CalendarService()
     caldav_path = service.create_calendar(user, name=f"{email_prefix}'s Calendar")
+    return user, client, caldav_path
+
+
+def _create_user_with_vevent_only_calendar(org, email_prefix):
+    """Create a user + calendar via the production-style internal-api
+    endpoint, which constrains the calendar to ``VEVENT`` only.
+
+    The default ``_create_user_with_calendar`` helper goes through the
+    caldav library's ``make_calendar`` (a plain MKCALENDAR with no
+    ``supported-calendar-component-set``), which makes SabreDAV fall
+    back to its built-in default of ``VEVENT,VTODO``. That is NOT
+    what real users get — production calendars are created via the
+    ``internal-api/calendars`` endpoint with explicit ``['VEVENT']``
+    — so any test that wants to assert behavior against the real
+    component-set must build the calendar this way.
+    """
+    user = factories.UserFactory(
+        email=f"{email_prefix}@norm-test.com", organization=org
+    )
+    client = APIClient()
+    client.force_login(user)
+    http = CalDAVHTTPClient()
+    resp = http.internal_request(
+        "POST",
+        user,
+        "internal-api/calendars/",
+        json={
+            "email": user.email,
+            "name": f"{email_prefix}'s Calendar",
+            "org_id": str(user.organization_id),
+            "calendar_user_type": "INDIVIDUAL",
+        },
+    )
+    assert resp.status_code == 201, (
+        f"internal-api calendar creation failed: {resp.status_code} {resp.text[:300]}"
+    )
+    payload = resp.json()
+    calendar_uri = payload.get("calendar_uri") or "default"
+    caldav_path = f"/calendars/users/{user.email}/{calendar_uri}/"
     return user, client, caldav_path
 
 
