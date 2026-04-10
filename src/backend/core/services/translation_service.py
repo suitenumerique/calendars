@@ -142,7 +142,7 @@ class TranslationService:
         or "Thursday, January 23, 2026" (en).
         """
         weekday = cls.t(f"calendar.weekdaysFull.{WEEKDAY_KEYS[dt.weekday()]}", lang)
-        month = cls.t(f"calendar.recurrence.months.{MONTH_KEYS[dt.month]}", lang)
+        month = cls.t(f"calendar.recurrence.monthNames.{MONTH_KEYS[dt.month]}", lang)
 
         if lang == "fr":
             month = month.lower()
