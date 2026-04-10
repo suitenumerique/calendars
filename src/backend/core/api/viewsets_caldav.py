@@ -7,7 +7,6 @@ import secrets
 from django.conf import settings
 from django.core.validators import validate_email
 from django.http import HttpResponse
-from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -213,21 +212,6 @@ class CalDAVProxyView(View):
         # doubles as the audit principal — AuditContextPlugin reads
         # the same header for setCurrentPrincipal(). One header,
         # one source of "who is acting".
-
-        # Add callback URL for CalDAV scheduling (iTip/iMip)
-        # The CalDAV server will call this URL when it needs to send invitations
-        # Use CALDAV_CALLBACK_BASE_URL if configured (for Docker environments where
-        # the CalDAV container needs to reach Django via internal network)
-        callback_path = reverse("caldav-scheduling-callback")
-        callback_base_url = settings.CALDAV_CALLBACK_BASE_URL
-        if callback_base_url:
-            # Use configured internal URL (e.g., http://backend:8000)
-            headers["X-LS-Callback-URL"] = (
-                f"{callback_base_url.rstrip('/')}{callback_path}"
-            )
-        else:
-            # Fall back to external URL (works when CalDAV can reach Django externally)
-            headers["X-LS-Callback-URL"] = request.build_absolute_uri(callback_path)
 
         # No Basic Auth - our custom backend uses X-LS-User header and API key
         auth = None

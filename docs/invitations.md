@@ -25,8 +25,8 @@ Frontend (EventModal)
    and `ORGANIZER` properties
 3. `CalDavService.createEvent()` sends a PUT to CalDAV through the
    Django proxy
-4. The proxy (`CalDAVProxyView`) injects an
-   `X-LS-Callback-URL` header pointing back to Django
+4. SabreDAV uses its `CALDAV_CALLBACK_BASE_URL` env var to call
+   back to Django
 
 The resulting `.ics` contains:
 
@@ -153,7 +153,7 @@ When an event with attendees is deleted:
 | `CALDAV_URL` | `http://caldav:80` | Internal CalDAV server URL |
 | `CALDAV_INBOUND_API_KEY` | None | API key for callbacks from CalDAV |
 | `CALDAV_OUTBOUND_API_KEY` | None | API key for requests to CalDAV |
-| `CALDAV_CALLBACK_BASE_URL` | None | Internal URL for CalDAV→Django (Docker: `http://backend:8000`) |
+| `CALDAV_CALLBACK_BASE_URL` | **required** | Base URL for CalDAV→Django callbacks (e.g. `http://backend:8000`). Set on the CalDAV container. |
 | `CALENDAR_ITIP_ENABLED` | False | Use iTIP METHOD headers in ICS attachments |
 | `CALENDAR_INVITATION_FROM_EMAIL` | `DEFAULT_FROM_EMAIL` | Sender address for invitation emails |
 | `APP_URL` | `""` | Base URL for RSVP links in emails |

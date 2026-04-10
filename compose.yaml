@@ -151,6 +151,9 @@ services:
     env_file:
       - env.d/development/caldav.defaults
       - env.d/development/caldav.local
+    environment:
+      # Allow shell override for tests (bin/pytest sets this to backend-test:8001)
+      CALDAV_CALLBACK_BASE_URL: ${CALDAV_CALLBACK_BASE_URL:-http://backend-dev:8000}
     volumes:
       - ./src/caldav/server.php:/var/www/sabredav/server.php
       - ./src/caldav/src:/var/www/sabredav/src

@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 
+# Point CalDAV scheduling callbacks to the test callback server (port 8001)
+# instead of the Django dev server. compose.yaml interpolates this into
+# the caldav service's environment.
+export CALDAV_CALLBACK_BASE_URL="http://backend-test:8001"
+
 source "$(dirname "${BASH_SOURCE[0]}")/_config.sh"
+
+# Ensure the caldav container uses the test callback URL
+_docker_compose up -d caldav
 
 # Use the dedicated backend-test compose service so tests don't inherit
 # env.d/development/backend.local. The Test settings class is selected

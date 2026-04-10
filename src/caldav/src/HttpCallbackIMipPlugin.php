@@ -34,26 +34,26 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     private $pdo;
 
     /**
-     * Default callback URL (fallback if header is not provided)
-     * @var string|null
+     * Callback URL set at startup from CALDAV_CALLBACK_BASE_URL
+     * @var string
      */
-    private $defaultCallbackUrl;
+    private $callbackUrl;
 
     /**
      * Constructor
      *
      * @param string $apiKey The API key for authenticating with the callback endpoint
      * @param \PDO $pdo Database connection for principal lookups
-     * @param string|null $defaultCallbackUrl Optional default callback URL
+     * @param string $callbackUrl The callback URL (base URL + path, built at startup)
      */
-    public function __construct($apiKey, \PDO $pdo, $defaultCallbackUrl = null)
+    public function __construct($apiKey, \PDO $pdo, $callbackUrl)
     {
         // Call parent constructor with empty email (we won't use it)
         parent::__construct('');
 
         $this->apiKey = $apiKey;
         $this->pdo = $pdo;
-        $this->defaultCallbackUrl = $defaultCallbackUrl;
+        $this->callbackUrl = rtrim($callbackUrl, '/') . '/';
     }
 
     /**
@@ -96,47 +96,6 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             return;
         }
 
-        // Get callback URL from the HTTP request header or use default
-        $callbackUrl = null;
-        if ($this->server && $this->server->httpRequest) {
-            $callbackUrl = $this->server->httpRequest->getHeader('X-LS-Callback-URL');
-        }
-
-        // Fall back to default callback URL if header is not provided
-        if (!$callbackUrl && $this->defaultCallbackUrl) {
-            $callbackUrl = $this->defaultCallbackUrl;
-            error_log("[HttpCallbackIMipPlugin] Using default callback URL: {$callbackUrl}");
-        }
-
-        if (!$callbackUrl) {
-            error_log("[HttpCallbackIMipPlugin] ERROR: X-LS-Callback-URL header or default URL is required");
-            $iTipMessage->scheduleStatus = '5.4;X-LS-Callback-URL header or default URL is required';
-            return;
-        }
-
-        // Ensure URL ends with trailing slash for Django's APPEND_SLASH middleware
-        $callbackUrl = rtrim($callbackUrl, '/') . '/';
-
-        // SSRF guard: only allow http(s). Without this, a caller that
-        // reaches caldav directly (bypassing the Django proxy) and holds
-        // the outbound API key could set ``X-LS-Callback-URL`` to e.g.
-        // ``file:///etc/passwd``, ``gopher://internal-redis:6379/_SET…``
-        // or ``dict://…`` and have curl deliver the iCalendar payload —
-        // and the outbound API key in the headers — wherever they want.
-        // The Django proxy already strips ``HTTP_X_LS_*`` from incoming
-        // requests and overrides this header, so legit users can't reach
-        // here at all; the guard exists to keep the blast radius small
-        // when someone with the outbound key talks to caldav directly.
-        $callbackScheme = strtolower((string) parse_url($callbackUrl, PHP_URL_SCHEME));
-        if ($callbackScheme !== 'http' && $callbackScheme !== 'https') {
-            error_log(
-                "[HttpCallbackIMipPlugin] ERROR: refusing callback URL with "
-                . "non-http(s) scheme: " . $callbackScheme
-            );
-            $iTipMessage->scheduleStatus = '5.4;Callback URL must use http(s) scheme';
-            return;
-        }
-
         // Serialize the iCalendar message
         $vcalendar = $iTipMessage->message ? $iTipMessage->message->serialize() : '';
         
@@ -167,19 +126,13 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         }
         
         // Make HTTP POST request to Django callback endpoint.
-        // CURLOPT_PROTOCOLS / CURLOPT_REDIR_PROTOCOLS pin curl to http(s)
-        // so even a (currently disabled) redirect cannot escape into
-        // file://, gopher://, dict://, ldap://, etc. — defense in depth
-        // alongside the scheme allowlist above.
-        $ch = curl_init($callbackUrl);
+        $ch = curl_init($this->callbackUrl);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_POSTFIELDS => $vcalendar,
             CURLOPT_TIMEOUT => 10,
-            CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
-            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_FOLLOWLOCATION => false,
         ]);
         

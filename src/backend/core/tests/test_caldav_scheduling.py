@@ -4,7 +4,6 @@
 
 import http.server
 import logging
-import os
 import secrets
 import socket
 import threading
@@ -89,8 +88,8 @@ class TestCalDAVScheduling:
         This test verifies that when an event is created with an attendee via CalDAV,
         the HttpCallbackIMipPlugin sends a scheduling message to the Django callback endpoint.
 
-        The test starts a local HTTP server to receive the callback, and passes the server URL
-        to the CalDAV server via the X-LS-Callback-URL header.
+        The test starts a local HTTP server on port 8001 to receive the callback.
+        The CalDAV server's CALDAV_CALLBACK_BASE_URL env var must point to this server.
         """
         # Create users: organizer
         # Note: attendee should be external (not in CalDAV server) to trigger scheduling
@@ -121,18 +120,10 @@ class TestCalDAVScheduling:
         except OSError as e:
             pytest.fail(f"Test server failed to start on port {port}: {e}")
 
-        # In Docker Compose, use the container hostname; on bare host (CI), use localhost
-        callback_host = os.environ.get("CALDAV_CALLBACK_HOST", "backend-test")
-        callback_url = f"http://{callback_host}:{port}/"
-
         try:
             # Create an event with an attendee
             client = service._get_client(organizer)  # pylint: disable=protected-access
             calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
-
-            # Add custom callback URL header to the client
-            # The CalDAV server will use this URL for the callback
-            client.headers["X-LS-Callback-URL"] = callback_url
 
             try:
                 caldav_calendar = client.calendar(url=calendar_url)
@@ -251,100 +242,6 @@ END:VCALENDAR"""
             server.shutdown()
             server.server_close()
 
-    @pytest.mark.parametrize(
-        "scheme_url",
-        [
-            "file:///etc/passwd",
-            "gopher://backend-test:8001/_GET",
-            "dict://backend-test:8001/info",
-            "ldap://backend-test:8001/",
-            "ftp://backend-test:8001/",
-        ],
-    )
-    def test_scheduling_callback_rejects_non_http_scheme(self, scheme_url):
-        """X-LS-Callback-URL with a non-http(s) scheme must be refused.
-
-        Regression for the HttpCallbackIMipPlugin SSRF: previously the
-        plugin handed the header value straight to ``curl_init`` with no
-        scheme/protocol restriction. A caller that reached caldav directly
-        (bypassing the Django proxy) and held the outbound API key could
-        set the header to ``file://``, ``gopher://``, ``dict://``, etc.
-        and have curl deliver the iCalendar payload — and the outbound
-        API key in the headers — to any reachable endpoint.
-
-        We assert two things:
-          1. The PUT itself succeeds (the plugin must fail gracefully,
-             not crash, when the scheme is rejected).
-          2. The test HTTP server we started on the *control* port is
-             NEVER contacted, because curl is also pinned to http(s) via
-             ``CURLOPT_PROTOCOLS`` so a ``gopher://`` URL with the same
-             host:port can't reach it.
-        """
-        organizer = factories.UserFactory(
-            email=f"organizer-ssrf-{secrets.token_hex(4)}@example.com"
-        )
-        service = CalendarService()
-        caldav_path = service.create_calendar(
-            organizer, name="SSRF Test Calendar", color="#ff0000"
-        )
-
-        # Start a real test server on the same host:port the gopher/dict
-        # URLs target. If the rejection is broken and curl follows through
-        # in some weird way, the server would observe the request.
-        server, port, callback_data = create_test_server()
-        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-        server_thread.start()
-        time.sleep(0.5)
-
-        try:
-            # Build a hostile callback URL on the SAME host:port the test
-            # server is listening on, so we can detect any leak.
-            callback_host = os.environ.get("CALDAV_CALLBACK_HOST", "backend-test")
-            hostile_url = scheme_url.replace(
-                "backend-test:8001", f"{callback_host}:{port}"
-            )
-
-            client = service._get_client(organizer)  # pylint: disable=protected-access
-            client.headers["X-LS-Callback-URL"] = hostile_url
-            calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
-
-            try:
-                caldav_calendar = client.calendar(url=calendar_url)
-                dtstart = datetime.now() + timedelta(days=1)
-                dtend = dtstart + timedelta(hours=1)
-                ical_content = f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Test//Test Client//EN
-BEGIN:VEVENT
-UID:ssrf-test-{datetime.now().timestamp()}
-DTSTART:{dtstart.strftime("%Y%m%dT%H%M%SZ")}
-DTEND:{dtend.strftime("%Y%m%dT%H%M%SZ")}
-SUMMARY:SSRF Probe
-ORGANIZER;CN=Organizer:mailto:{organizer.email}
-ATTENDEE;CN=External;RSVP=TRUE:mailto:external-ssrf@external-domain.com
-END:VEVENT
-END:VCALENDAR"""
-
-                # The PUT must SUCCEED — rejection happens inside the
-                # schedule plugin and is reported via Schedule-Status,
-                # not via an HTTP error on the calendar object PUT.
-                caldav_calendar.save_event(ical_content)
-
-                # Give any (mistakenly-fired) callback time to land.
-                time.sleep(2)
-
-                assert not callback_data["called"], (
-                    f"Hostile callback URL {hostile_url!r} reached the test "
-                    f"server — the SSRF guard in HttpCallbackIMipPlugin "
-                    f"failed to reject the non-http scheme. Captured request: "
-                    f"{callback_data['request_data']}"
-                )
-            except NotFoundError:
-                pytest.skip("Calendar not found - CalDAV server may not be running")
-        finally:
-            server.shutdown()
-            server.server_close()
-
     def test_scheduling_callback_for_shared_mailbox_calendar(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements,redefined-outer-name,unused-variable,no-member
         self,
     ):
@@ -453,14 +350,10 @@ END:VCALENDAR"""
         server_thread.start()
         time.sleep(0.5)
 
-        callback_host = os.environ.get("CALDAV_CALLBACK_HOST", "backend-test")
-        callback_url = f"http://{callback_host}:{port}/"
-
         try:
             # 4. Create a CalDAV client authenticated as the user
             service = CalendarService()
             client = service._get_client(user)  # pylint: disable=protected-access
-            client.headers["X-LS-Callback-URL"] = callback_url
 
             # Use the shared calendar URL discovered earlier
             calendar_url = shared_cal_url
@@ -595,16 +488,14 @@ class TestOrganizerSpoofingRejection:
         org = factories.OrganizationFactory(external_id=f"spoof-{secrets.token_hex(4)}")
         user, _, cal_path = _create_user_with_calendar(org, "spoof-attacker")
 
-        server, port, callback_data = create_test_server()
+        server, _, callback_data = create_test_server()
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
         server_thread.start()
         time.sleep(0.5)
 
         try:
-            callback_host = os.environ.get("CALDAV_CALLBACK_HOST", "backend-test")
             service = CalendarService()
             client = service._get_client(user)  # pylint: disable=protected-access
-            client.headers["X-LS-Callback-URL"] = f"http://{callback_host}:{port}/"
             calendar_url = service._calendar_url(cal_path)  # pylint: disable=protected-access
             caldav_calendar = client.calendar(url=calendar_url)
 
@@ -644,16 +535,14 @@ class TestOrganizerSpoofingRejection:
         )
         user, _, cal_path = _create_user_with_calendar(org, "spoof-control")
 
-        server, port, callback_data = create_test_server()
+        server, _, callback_data = create_test_server()
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
         server_thread.start()
         time.sleep(0.5)
 
         try:
-            callback_host = os.environ.get("CALDAV_CALLBACK_HOST", "backend-test")
             service = CalendarService()
             client = service._get_client(user)  # pylint: disable=protected-access
-            client.headers["X-LS-Callback-URL"] = f"http://{callback_host}:{port}/"
             calendar_url = service._calendar_url(cal_path)  # pylint: disable=protected-access
             caldav_calendar = client.calendar(url=calendar_url)
 

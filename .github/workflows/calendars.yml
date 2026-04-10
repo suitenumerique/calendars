@@ -66,7 +66,6 @@ jobs:
       CALDAV_OUTBOUND_API_KEY: test-outbound-key
       CALDAV_INBOUND_API_KEY: test-inbound-key
       CALDAV_INTERNAL_API_KEY: test-internal-key
-      CALDAV_CALLBACK_HOST: localhost
       TRANSLATIONS_JSON_PATH: ${{ github.workspace }}/src/frontend/apps/calendars/src/features/i18n/translations.json
 
     steps:
@@ -93,6 +92,7 @@ jobs:
             -e CALDAV_INBOUND_API_KEY=test-inbound-key \
             -e CALDAV_OUTBOUND_API_KEY=test-outbound-key \
             -e CALDAV_INTERNAL_API_KEY=test-internal-key \
+            -e CALDAV_CALLBACK_BASE_URL=http://localhost:8001 \
             caldav-test \
             sh -c "/usr/local/bin/init-database.sh && apache2-foreground"
 

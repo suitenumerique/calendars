@@ -230,18 +230,20 @@ $server->addPlugin(new InternalApiPlugin($pdo, $caldavBackend, $internalApiKey))
 
 // Add custom IMipPlugin that forwards scheduling messages via HTTP callback
 // This MUST be added BEFORE the Schedule\Plugin so that Schedule\Plugin finds it
-// The callback URL can be provided per-request via X-LS-Callback-URL header
-// or via CALDAV_CALLBACK_URL environment variable as fallback
+// The callback URL is built from CALDAV_CALLBACK_BASE_URL + fixed path
 $callbackApiKey = getenv('CALDAV_INBOUND_API_KEY');
 if (!$callbackApiKey) {
     error_log("[sabre/dav] CALDAV_INBOUND_API_KEY environment variable is required for scheduling callback");
     exit(1);
 }
-$defaultCallbackUrl = getenv('CALDAV_CALLBACK_URL') ?: null;
-if ($defaultCallbackUrl) {
-    error_log("[sabre/dav] Using default callback URL for scheduling: {$defaultCallbackUrl}");
+$callbackBaseUrl = getenv('CALDAV_CALLBACK_BASE_URL');
+if (!$callbackBaseUrl) {
+    error_log("[sabre/dav] CALDAV_CALLBACK_BASE_URL environment variable is required for scheduling callback");
+    exit(1);
 }
-$imipPlugin = new HttpCallbackIMipPlugin($callbackApiKey, $pdo, $defaultCallbackUrl);
+$callbackUrl = rtrim($callbackBaseUrl, '/') . '/api/v1.0/caldav-scheduling-callback/';
+error_log("[sabre/dav] Scheduling callback URL: {$callbackUrl}");
+$imipPlugin = new HttpCallbackIMipPlugin($callbackApiKey, $pdo, $callbackUrl);
 $server->addPlugin($imipPlugin);
 
 // Enforce org-level freebusy sharing settings

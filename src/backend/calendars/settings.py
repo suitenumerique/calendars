@@ -115,12 +115,6 @@ class Base(Configuration):
         environ_name="SALT_KEY",
         environ_prefix=None,
     )
-    # Base URL for CalDAV scheduling callbacks (must be accessible from CalDAV container)
-    # In Docker environments, use the internal Docker network URL (e.g., http://backend:8000)
-    CALDAV_CALLBACK_BASE_URL = values.Value(
-        None, environ_name="CALDAV_CALLBACK_BASE_URL", environ_prefix=None
-    )
-
     # Email configuration
     # Default settings - override in environment-specific classes
     EMAIL_BACKEND = values.Value(
