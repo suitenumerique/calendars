@@ -21,6 +21,16 @@
 - [ ] Entrer une URL invalide (ex: `pas-une-url`) → soumettre → erreur du serveur affichée
 - [ ] Entrer une URL HTTP (pas HTTPS, ex: `http://example.com/cal.ics`) → erreur
 
+#### Protection SSRF
+- [ ] `https://localhost/cal.ics` → rejet (hôte privé)
+- [ ] `https://127.0.0.1/cal.ics` → rejet
+- [ ] `https://[::1]/cal.ics` → rejet
+- [ ] `https://10.0.0.1/cal.ics` (RFC1918) → rejet
+- [ ] `https://192.168.1.1/cal.ics` (RFC1918) → rejet
+- [ ] `https://172.16.0.1/cal.ics` (RFC1918) → rejet
+- [ ] Hôte public qui résout vers une IP privée → rejet
+- [ ] URL dont la chaîne de redirection 3xx aboutit à une adresse privée ou locale → rejet au hop concerné
+
 ### 1.3 Ajout réussi
 - [ ] Entrer une URL ICS valide (HTTPS)
 - [ ] Optionnel : saisir un nom d'affichage

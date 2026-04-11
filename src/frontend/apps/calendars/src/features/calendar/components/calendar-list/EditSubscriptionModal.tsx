@@ -15,6 +15,7 @@ import { Spinner } from "@gouvfr-lasuite/ui-kit";
 
 import { useUpdateSubscriptionChannel } from "../../hooks/useCalendars";
 import type { SubscriptionChannel } from "../../api";
+import { errorToString } from "@/features/api/APIError";
 import { ColorPicker } from "./ColorPicker";
 import { DEFAULT_COLORS } from "./constants";
 
@@ -134,7 +135,8 @@ export const EditSubscriptionModal = ({
           state={updateMutation.isError ? "error" : "default"}
           text={
             updateMutation.isError
-              ? t("calendar.subscription.edit.error")
+              ? errorToString(updateMutation.error) ||
+                t("calendar.subscription.edit.error")
               : undefined
           }
         />

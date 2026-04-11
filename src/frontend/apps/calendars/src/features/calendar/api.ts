@@ -133,7 +133,7 @@ export interface SubscriptionChannel {
   is_active: boolean;
   source_url: string;
   last_sync_at: string | null;
-  last_sync_status: "pending" | "ok" | "error";
+  last_sync_status: "pending" | "ok" | "error" | "stopped";
   last_sync_error: string;
   error_count: number;
   sync_interval: number;

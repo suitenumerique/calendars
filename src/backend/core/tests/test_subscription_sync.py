@@ -225,7 +225,6 @@ class TestSyncChannel:
     def test_sync_survives_channel_deletion(self, mock_cache, mock_fetch):
         """If channel is deleted during sync, save should not crash."""
         mock_cache.add.return_value = True
-        mock_fetch.return_value = (304, None, '"etag"', "date")
 
         user = UserFactory()
         channel = Channel.objects.create(
@@ -246,12 +245,20 @@ class TestSyncChannel:
         service = SubscriptionSyncService()
         channel_id = str(channel.pk)
 
-        # Delete the channel to simulate deletion during sync
-        channel.delete()
+        # Delete the row *during* sync, after the channel has already
+        # been loaded into memory — this exercises the real race that
+        # _save_channel's existence check is meant to handle, unlike a
+        # pre-sync delete which only hits the "not found" branch.
+        def delete_during_fetch(*_args, **_kwargs):
+            Channel.objects.filter(pk=channel.pk).delete()
+            return (304, None, '"etag"', "date")
+
+        mock_fetch.side_effect = delete_during_fetch
 
         result = service.sync_channel(channel_id)
 
-        # Should not crash — channel not found returns False
+        # _save_channel's existence check must catch the deletion and
+        # propagate False up through sync_channel.
         assert result is False
 
 

@@ -403,20 +403,35 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
           onClose={handleModalClose}
         />
       ) : (
-        <EventModal
-          isOpen={modalState.isOpen}
-          mode={modalState.mode}
-          event={modalState.event}
-          calendarUrl={modalState.calendarUrl}
-          calendars={davCalendars.filter(
+        (() => {
+          const writableCalendars = davCalendars.filter(
             (cal) => !subscriptionCalendarUrls.has(cal.url),
-          )}
-          adapter={adapter}
-          onSave={handleModalSave}
-          onDelete={modalState.mode === "edit" ? handleModalDelete : undefined}
-          onRespondToInvitation={handleRespondToInvitation}
-          onClose={handleModalClose}
-        />
+          );
+          // If the modal was opened while a subscription calendar was
+          // selected, fall back to the first writable calendar so the
+          // form never shows a selection that's absent from the options.
+          const sanitizedCalendarUrl = subscriptionCalendarUrls.has(
+            modalState.calendarUrl,
+          )
+            ? (writableCalendars[0]?.url ?? "")
+            : modalState.calendarUrl;
+          return (
+            <EventModal
+              isOpen={modalState.isOpen}
+              mode={modalState.mode}
+              event={modalState.event}
+              calendarUrl={sanitizedCalendarUrl}
+              calendars={writableCalendars}
+              adapter={adapter}
+              onSave={handleModalSave}
+              onDelete={
+                modalState.mode === "edit" ? handleModalDelete : undefined
+              }
+              onRespondToInvitation={handleRespondToInvitation}
+              onClose={handleModalClose}
+            />
+          );
+        })()
       )}
 
       <RecurringEditModal

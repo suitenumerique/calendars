@@ -351,18 +351,17 @@ export const CalendarContextProvider = ({
     }
   }, []);
 
-  // Periodic refresh: poll calendars and events every 5 minutes
-  // to pick up subscription sync changes
+  // Periodic refresh: poll calendars every 5 minutes to pick up
+  // subscription sync changes. Scheduler.tsx already refetches events
+  // when davCalendars changes, so we don't call refetchEvents() here
+  // — doing both would double CalDAV traffic on every tick.
   useEffect(() => {
     if (!isConnected) return;
     const interval = setInterval(() => {
       refreshCalendars();
-      if (calendarRef.current) {
-        calendarRef.current.refetchEvents();
-      }
     }, SYNC_POLL_INTERVAL);
     return () => clearInterval(interval);
-  }, [isConnected, refreshCalendars, calendarRef]);
+  }, [isConnected, refreshCalendars]);
 
   // Connect to CalDAV server on mount
   useEffect(() => {

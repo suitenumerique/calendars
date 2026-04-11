@@ -2,11 +2,27 @@
 
 Validates subscription URLs against SSRF attacks and ensures they point
 to valid, reachable ICS resources.
+
+DNS rebinding defence
+---------------------
+``_resolve_and_check`` validates that the DNS answer is not a private
+address, but that answer would be looked up again when ``requests`` opens
+the socket, leaving a short TOCTOU window an attacker can exploit with a
+low-TTL rebinding record. To close it, the fetch helpers run the actual
+``requests.get`` call inside ``_pin_hostname``: a thread-local patch of
+``socket.getaddrinfo`` that re-routes the exact hostname → IP pair we
+just validated. TLS still uses the original hostname for SNI and cert
+verification (urllib3 passes it independently of DNS), so there is no
+cert mismatch. The patch is transparent for every hostname not pinned
+by the current thread. Operators are still encouraged to block egress
+to private CIDRs at the network layer as a second line of defence.
 """
 
+import contextlib
 import ipaddress
 import logging
 import socket
+import threading
 from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
@@ -65,6 +81,11 @@ def _resolve_and_check(hostname: str) -> str:
 
     Returns the resolved IP address string.
     Raises URLValidationError if the IP is private.
+
+    Safe to call while the DNS pinning patch is installed: every caller
+    in this module invokes ``_resolve_and_check`` *before* entering a
+    ``_pin_hostname`` context for the same hostname, and the patch falls
+    through whenever no pin is active for the current thread.
     """
     try:
         results = socket.getaddrinfo(
@@ -83,6 +104,61 @@ def _resolve_and_check(hostname: str) -> str:
             raise URLValidationError("URL resolves to a private network address")
 
     return results[0][4][0]
+
+
+# --- DNS pinning (rebinding mitigation) -------------------------------------
+
+_ORIG_GETADDRINFO = socket.getaddrinfo
+_DNS_PIN_LOCAL = threading.local()
+_DNS_PATCH_LOCK = threading.Lock()
+_DNS_PATCHED = False
+
+
+def _pinned_getaddrinfo(host, *args, **kwargs):
+    """Resolve a pinned hostname to its validated IP literal.
+
+    Falls through to the real resolver for every hostname not pinned by
+    the current thread, so this patch is invisible to the rest of the
+    process.
+    """
+    pin_map = getattr(_DNS_PIN_LOCAL, "map", None)
+    if pin_map and host in pin_map:
+        return _ORIG_GETADDRINFO(pin_map[host], *args, **kwargs)
+    return _ORIG_GETADDRINFO(host, *args, **kwargs)
+
+
+def _install_dns_patch() -> None:
+    """Install the ``socket.getaddrinfo`` patch once, lazily."""
+    global _DNS_PATCHED  # noqa: PLW0603  # pylint: disable=global-statement
+    with _DNS_PATCH_LOCK:
+        if not _DNS_PATCHED:
+            socket.getaddrinfo = _pinned_getaddrinfo
+            _DNS_PATCHED = True
+
+
+@contextlib.contextmanager
+def _pin_hostname(hostname: str, safe_ip: str):
+    """Thread-local DNS pin of ``hostname`` to ``safe_ip``.
+
+    Closes the TOCTOU window between ``_resolve_and_check`` and the TCP
+    connect performed by ``requests``: while the context is active, any
+    lookup of ``hostname`` in this thread resolves to the pre-validated
+    IP. Nested/re-entrant pins restore the previous value on exit.
+    """
+    _install_dns_patch()
+    pin_map = getattr(_DNS_PIN_LOCAL, "map", None)
+    if pin_map is None:
+        pin_map = {}
+        _DNS_PIN_LOCAL.map = pin_map
+    previous = pin_map.get(hostname)
+    pin_map[hostname] = safe_ip
+    try:
+        yield
+    finally:
+        if previous is None:
+            pin_map.pop(hostname, None)
+        else:
+            pin_map[hostname] = previous
 
 
 def normalize_url(url: str) -> str:
@@ -118,25 +194,43 @@ def validate_subscription_url(url: str) -> str:
     return url
 
 
+def _pinned_get(url: str, headers: dict, *, timeout_msg: str):
+    """Issue a streaming GET with the hostname pinned to a validated IP.
+
+    Validates the URL's hostname, pins DNS for the lifetime of the
+    ``requests.get`` call, and returns the streamed response. The TCP
+    socket is already open by the time the pin is released, so later
+    body reads on the returned response are safe.
+    """
+    parsed = urlparse(url)
+    if not parsed.hostname:
+        raise URLValidationError("URL without hostname")
+    safe_ip = _resolve_and_check(parsed.hostname)
+    try:
+        with _pin_hostname(parsed.hostname, safe_ip):
+            return requests.get(
+                url,
+                headers=headers,
+                timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+                stream=True,
+                allow_redirects=False,
+            )
+    except requests.exceptions.Timeout as exc:
+        raise URLValidationError(timeout_msg) from exc
+    except requests.exceptions.RequestException as exc:
+        raise URLValidationError(f"Failed to fetch URL: {_redact_url(url)}") from exc
+
+
 def _safe_get(url, headers):
     """Make a GET request with SSRF-safe redirect handling.
 
-    Responses are streamed; intermediate redirect responses are closed
-    as soon as the next request fires. Callers are responsible for
-    closing the final returned response.
+    Each hop re-validates the hostname and pins DNS before the TCP
+    connect, closing the rebinding TOCTOU window for both the initial
+    URL and every redirect target. Intermediate redirect responses are
+    closed as soon as the next request fires; callers are responsible
+    for closing the final returned response.
     """
-    try:
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
-            stream=True,
-            allow_redirects=False,
-        )
-    except requests.exceptions.Timeout as exc:
-        raise URLValidationError("Request timed out") from exc
-    except requests.exceptions.RequestException as exc:
-        raise URLValidationError(f"Failed to fetch URL: {_redact_url(url)}") from exc
+    response = _pinned_get(url, headers, timeout_msg="Request timed out")
 
     # Handle redirects manually to check each hop for SSRF
     current_url = url
@@ -165,27 +259,17 @@ def _safe_get(url, headers):
                 raise URLValidationError("Redirect to non-HTTPS URL")
             if not redirect_parsed.hostname:
                 raise URLValidationError("Redirect to URL without hostname")
-            _resolve_and_check(redirect_parsed.hostname)
 
             current_url = location
             # Release the previous streamed response before issuing the
             # next hop so we don't leak connections on long redirect
             # chains.
             response.close()
-            try:
-                response = requests.get(
-                    location,
-                    headers=redirect_headers,
-                    timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
-                    stream=True,
-                    allow_redirects=False,
-                )
-            except requests.exceptions.Timeout as exc:
-                raise URLValidationError("Request timed out during redirect") from exc
-            except requests.exceptions.RequestException as exc:
-                raise URLValidationError(
-                    f"Failed during redirect: {_redact_url(location)}"
-                ) from exc
+            response = _pinned_get(
+                location,
+                redirect_headers,
+                timeout_msg="Request timed out during redirect",
+            )
     except BaseException:
         response.close()
         raise
@@ -238,14 +322,10 @@ def fetch_ics(url: str, etag: str = "", last_modified: str = "") -> tuple:
     if parsed.scheme != "https":
         raise URLValidationError("Only HTTPS URLs are allowed")
 
-    # Re-validate IP at fetch time (best-effort DNS rebinding mitigation).
-    # Note: there is still a TOCTOU window between this check and the
-    # actual TCP connection made by requests. A complete fix would require
-    # a custom requests adapter that pins to the pre-resolved IP.
-    # Network-level controls (e.g. firewall blocking egress to private
-    # ranges) provide a stronger second layer of defence.
-    if parsed.hostname:
-        _resolve_and_check(parsed.hostname)
+    # DNS rebinding is handled inside ``_safe_get``: every hop validates
+    # and pins the hostname so the TCP connect lands on the pre-checked
+    # IP. Operators are still encouraged to block egress to private
+    # CIDRs at the network layer as a second line of defence.
 
     headers = {"User-Agent": USER_AGENT}
     if etag:
