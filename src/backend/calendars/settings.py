@@ -918,6 +918,11 @@ class Base(Configuration):
         """
         super().post_setup()
 
+        if cls.SUBSCRIPTION_SYNC_INTERVAL < 1:
+            raise ValueError("SUBSCRIPTION_SYNC_INTERVAL must be >= 1")
+        if cls.MAX_SUBSCRIPTIONS_PER_USER < 1:
+            raise ValueError("MAX_SUBSCRIPTIONS_PER_USER must be >= 1")
+
         # The SENTRY_DSN setting should be available to activate sentry for an environment
         if cls.SENTRY_DSN is not None:
             sentry_sdk.init(

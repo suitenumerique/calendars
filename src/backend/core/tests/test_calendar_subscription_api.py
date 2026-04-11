@@ -417,19 +417,17 @@ class TestSubscriptionChannelLimit:
 
     @patch("core.api.viewsets_channels.CalDAVClient")
     @patch("core.api.viewsets_channels.fetch_ics")
-    def test_create_subscription_limit_reached(self, mock_fetch, mock_caldav):
+    def test_create_subscription_limit_reached(self, mock_fetch, mock_caldav):  # pylint: disable=unused-argument
         """Cannot create a 21st subscription when limit is 20."""
         user = factories.UserFactory()
         client = APIClient()
         client.force_login(user)
 
         # Create 20 subscription channels
-        for i in range(20):
+        for _ in range(20):
             factories.ICalSubscriptionChannelFactory(user=user)
 
-        assert Channel.objects.filter(
-            user=user, type="ical-subscription"
-        ).count() == 20
+        assert Channel.objects.filter(user=user, type="ical-subscription").count() == 20
 
         response = client.post(
             CHANNELS_URL,
@@ -476,9 +474,7 @@ class TestSubscriptionChannelLimit:
         )
 
         assert response.status_code == HTTP_201_CREATED
-        assert Channel.objects.filter(
-            user=user, type="ical-subscription"
-        ).count() == 20
+        assert Channel.objects.filter(user=user, type="ical-subscription").count() == 20
 
 
 @pytest.mark.django_db
@@ -492,18 +488,12 @@ class TestSubscriptionUrlChangePurge:
         client.force_login(channel.user)
 
         with (
-            patch(
-                "core.api.viewsets_channels.fetch_ics"
-            ) as mock_fetch,
+            patch("core.api.viewsets_channels.fetch_ics") as mock_fetch,
             patch(
                 "core.services.subscription_sync_service.SubscriptionSyncService"
             ) as mock_svc_cls,
-            patch(
-                "core.api.viewsets_channels.CalDAVClient"
-            ),
-            patch(
-                "core.tasks.sync_one_subscription"
-            ),
+            patch("core.api.viewsets_channels.CalDAVClient"),
+            patch("core.tasks.sync_one_subscription"),
         ):
             mock_fetch.return_value = (200, VALID_ICS, '"new"', "Tue, 02 Jan")
             mock_svc = MagicMock()
@@ -516,9 +506,7 @@ class TestSubscriptionUrlChangePurge:
             )
 
         assert response.status_code == HTTP_200_OK
-        mock_svc.purge_events.assert_called_once_with(
-            channel.user, channel.caldav_path
-        )
+        mock_svc.purge_events.assert_called_once_with(channel.user, channel.caldav_path)
 
     def test_update_name_only_no_purge(self):
         """Changing only the name should not trigger purge."""
@@ -527,9 +515,7 @@ class TestSubscriptionUrlChangePurge:
         client.force_login(channel.user)
 
         with (
-            patch(
-                "core.api.viewsets_channels.CalDAVClient"
-            ),
+            patch("core.api.viewsets_channels.CalDAVClient"),
             patch(
                 "core.services.subscription_sync_service.SubscriptionSyncService"
             ) as mock_svc_cls,

@@ -1,5 +1,8 @@
 """Tests for CalDAV proxy read-only enforcement on subscription calendars."""
 
+# pylint: disable=missing-class-docstring,missing-function-docstring
+# pylint: disable=protected-access,redefined-outer-name,unused-argument
+
 import pytest
 
 from core.api.viewsets_caldav import CalDAVProxyView

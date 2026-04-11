@@ -1,10 +1,14 @@
 """Channel API for managing integration tokens."""
 
+# pylint: disable=broad-exception-caught,import-outside-toplevel,protected-access
+
 import logging
 import secrets
 from xml.sax.saxutils import escape as xml_escape
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils import timezone
 
 from rest_framework import status, viewsets
@@ -22,6 +26,12 @@ logger = logging.getLogger(__name__)
 
 # Custom property namespace for subscription source
 SUBSCRIPTION_SOURCE_PROP = "{http://lasuite.numerique.gouv.fr/ns/}subscription-source"
+
+
+class _SubscriptionQuotaExceeded(Exception):
+    """Marker exception raised inside the subscription-create transaction
+    when the per-user quota is already reached, so the atomic block can
+    roll back any intermediate state before the view returns a 400."""
 
 
 class ChannelViewSet(viewsets.GenericViewSet):
@@ -123,9 +133,12 @@ class ChannelViewSet(viewsets.GenericViewSet):
         )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    def _create_subscription(self, request):
+    def _create_subscription(self, request):  # noqa: PLR0912, PLR0915  # pylint: disable=too-many-branches,too-many-locals,too-many-statements
         """Create an ical-subscription channel with a SabreDAV calendar."""
-        # Enforce per-user subscription limit
+        # Fast-path check: fail early on obviously-over-quota requests
+        # so we don't waste a network fetch. The authoritative atomic
+        # re-check happens later inside transaction.atomic() to prevent
+        # concurrent POSTs from racing past this point.
         current_count = models.Channel.objects.filter(
             user=request.user, type="ical-subscription"
         ).count()
@@ -209,25 +222,55 @@ class ChannelViewSet(viewsets.GenericViewSet):
             logger.exception("Failed to set subscription-source property")
             # Non-fatal: the channel settings still track the source URL
 
-        # Create channel
-        channel = models.Channel(
-            name=name,
-            type="ical-subscription",
-            user=request.user,
-            caldav_path=caldav_path,
-            organization=request.user.organization,
-            settings={
-                "source_url": source_url,
-                "sync_interval": settings.SUBSCRIPTION_SYNC_INTERVAL,
-                "last_sync_status": "pending",
-                "last_sync_error": "",
-                "error_count": 0,
-                "etag": "",
-                "last_modified": "",
-            },
-        )
+        # Atomically enforce the per-user quota and persist the channel
+        # so concurrent POSTs can't both pass the count check. The
+        # select_for_update on the user row serializes subscription
+        # creation per user.
+        user_model = get_user_model()
         try:
-            channel.save()
+            with transaction.atomic():
+                user_locked = user_model.objects.select_for_update().get(
+                    pk=request.user.pk
+                )
+                current_count = models.Channel.objects.filter(
+                    user=user_locked, type="ical-subscription"
+                ).count()
+                if current_count >= settings.MAX_SUBSCRIPTIONS_PER_USER:
+                    raise _SubscriptionQuotaExceeded()
+
+                channel = models.Channel(
+                    name=name,
+                    type="ical-subscription",
+                    user=request.user,
+                    caldav_path=caldav_path,
+                    organization=request.user.organization,
+                    settings={
+                        "source_url": source_url,
+                        "sync_interval": settings.SUBSCRIPTION_SYNC_INTERVAL,
+                        "last_sync_status": "pending",
+                        "last_sync_error": "",
+                        "error_count": 0,
+                        "etag": "",
+                        "last_modified": "",
+                    },
+                )
+                channel.save()
+        except _SubscriptionQuotaExceeded:
+            try:
+                caldav_client._http.request(  # noqa: SLF001
+                    "DELETE", request.user, caldav_path
+                )
+            except Exception:
+                logger.exception("Failed to clean up SabreDAV calendar %s", caldav_path)
+            return Response(
+                {
+                    "detail": (
+                        f"Maximum number of subscriptions reached"
+                        f" ({settings.MAX_SUBSCRIPTIONS_PER_USER})."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception:
             logger.exception("Failed to save channel, cleaning up SabreDAV calendar")
             try:
@@ -240,24 +283,40 @@ class ChannelViewSet(viewsets.GenericViewSet):
 
         # Sync events immediately using the ICS data we already fetched
         try:
-            from core.services.subscription_sync_service import (  # noqa: PLC0415  # pylint: disable=C0415
+            from core.services.subscription_sync_service import (  # noqa: PLC0415
                 SubscriptionSyncService,
             )
 
             service = SubscriptionSyncService()
-            service.sync_events(request.user, caldav_path, ics_data)
-            channel.settings["last_sync_status"] = "ok"
+            sync_result = service.sync_events(
+                request.user, caldav_path, ics_data, channel_id=str(channel.pk)
+            )
             channel.settings["last_sync_at"] = timezone.now().isoformat()
             channel.settings["etag"] = etag
             channel.settings["last_modified"] = last_modified
+            if sync_result.errors:
+                channel.settings["last_sync_status"] = "error"
+                channel.settings["last_sync_error"] = (
+                    f"{len(sync_result.errors)} event error(s)"
+                )
+                channel.settings["error_count"] = 1
+            else:
+                channel.settings["last_sync_status"] = "ok"
+                channel.settings["last_sync_error"] = ""
+                channel.settings["error_count"] = 0
             channel.save(update_fields=["settings", "updated_at"])
-        except Exception:
+        except Exception as exc:
             logger.exception("Initial sync failed for channel %s", channel.pk)
+            channel.settings["last_sync_status"] = "error"
+            channel.settings["last_sync_error"] = str(exc)[:500]
+            channel.settings["error_count"] = 1
+            channel.settings["last_sync_at"] = timezone.now().isoformat()
+            channel.save(update_fields=["settings", "updated_at"])
 
         serializer = serializers.ChannelSubscriptionSerializer(channel)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    def partial_update(self, request, pk=None):
+    def partial_update(self, request, pk=None):  # noqa: PLR0912, PLR0915  # pylint: disable=too-many-branches,too-many-locals,too-many-statements
         """Update a subscription channel (name and/or source_url)."""
         channel = self._get_owned_channel(pk)
         if channel is None:
@@ -348,16 +407,34 @@ class ChannelViewSet(viewsets.GenericViewSet):
                     )
 
                     service = SubscriptionSyncService()
-                    service.sync_events(request.user, channel.caldav_path, ics_data)
-                    channel.settings["last_sync_status"] = "ok"
+                    sync_result = service.sync_events(
+                        request.user,
+                        channel.caldav_path,
+                        ics_data,
+                        channel_id=str(channel.pk),
+                    )
                     channel.settings["last_sync_at"] = timezone.now().isoformat()
                     channel.settings["etag"] = new_etag
                     channel.settings["last_modified"] = new_last_modified
-                except Exception:
+                    if sync_result.errors:
+                        channel.settings["last_sync_status"] = "error"
+                        channel.settings["last_sync_error"] = (
+                            f"{len(sync_result.errors)} event error(s)"
+                        )
+                        channel.settings["error_count"] = 1
+                    else:
+                        channel.settings["last_sync_status"] = "ok"
+                        channel.settings["last_sync_error"] = ""
+                        channel.settings["error_count"] = 0
+                except Exception as exc:
                     logger.exception(
                         "Immediate sync failed after URL update for channel %s",
                         channel.pk,
                     )
+                    channel.settings["last_sync_status"] = "error"
+                    channel.settings["last_sync_error"] = str(exc)[:500]
+                    channel.settings["error_count"] = 1
+                    channel.settings["last_sync_at"] = timezone.now().isoformat()
 
         # Update CalDAV properties (displayname + color) via PROPPATCH
         new_color = data.get("color")

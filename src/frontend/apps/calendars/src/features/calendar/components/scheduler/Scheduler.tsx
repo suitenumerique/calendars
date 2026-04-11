@@ -144,6 +144,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     calendarUrl,
     modalState,
     setModalState,
+    readOnlyCalendarUrls: subscriptionCalendarUrls,
   });
 
   // Callback to update toolbar state when calendar dates/view changes
@@ -215,12 +216,16 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     }
   }, [isConnected]);
 
-  // Update eventFilter when visible calendars change
+  // Update eventFilter when visible calendars change.
+  // Also refetch when subscriptionCalendarUrls changes so already-rendered
+  // events get their `editable` flag recomputed once the subscription
+  // list arrives — otherwise drag/resize stays enabled for subscription
+  // events until an unrelated refetch happens.
   useEffect(() => {
     if (calendarRef.current) {
       calendarRef.current.refetchEvents();
     }
-  }, [visibleCalendarUrls, davCalendars]);
+  }, [visibleCalendarUrls, davCalendars, subscriptionCalendarUrls]);
 
   const handleViewChange = useCallback(
     (view: string) => {

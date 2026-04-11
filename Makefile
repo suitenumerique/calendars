@@ -111,7 +111,7 @@ start: ## start all development services
 .PHONY: start
 
 start-back: ## start backend services only (for local frontend development)
-	@$(COMPOSE) up --force-recreate -d worker-dev subscription-scheduler
+	@$(COMPOSE) up --force-recreate -d backend-dev worker-dev subscription-scheduler
 .PHONY: start-back
 
 status: ## an alias for "docker compose ps"

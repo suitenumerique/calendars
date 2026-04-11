@@ -1,5 +1,7 @@
 """Tests for subscription sync Dramatiq tasks."""
 
+# pylint: disable=missing-class-docstring,unused-argument
+
 from unittest.mock import patch
 
 from django.utils import timezone

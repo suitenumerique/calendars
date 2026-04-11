@@ -5,9 +5,13 @@ existing events in the SabreDAV calendar, then creates/updates/deletes
 as needed.
 """
 
+# pylint: disable=broad-exception-caught,import-outside-toplevel,protected-access
+
 import logging
 import re
+import secrets
 import urllib.parse
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from django.core.cache import cache
@@ -22,6 +26,27 @@ logger = logging.getLogger(__name__)
 
 MAX_CONSECUTIVE_ERRORS = 3
 SYNC_LOCK_TIMEOUT = 120  # seconds
+
+
+@contextmanager
+def _channel_sync_lock(channel_id: str):
+    """Tokenized per-channel sync lock.
+
+    Yields True if the lock was acquired, False if another worker already
+    holds it. Only the worker that wrote the lock token deletes it, so a
+    finally block running after the TTL expired cannot evict a second
+    worker's lease.
+    """
+    lock_key = f"sync_lock:{channel_id}"
+    token = secrets.token_hex(16)
+    acquired = cache.add(lock_key, token, timeout=SYNC_LOCK_TIMEOUT)
+    try:
+        yield acquired
+    finally:
+        if acquired and cache.get(lock_key) == token:
+            cache.delete(lock_key)
+
+
 # Reject UIDs containing path traversal characters or null bytes.
 # All other characters are percent-encoded when used in CalDAV paths.
 UNSAFE_UID_RE = re.compile(r"[/\\\x00]|\.\.")
@@ -36,6 +61,16 @@ class SyncResult:
     deleted: int = 0
     unchanged: int = 0
     errors: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _SyncContext:
+    """Per-sync state shared between the create/update/delete helpers."""
+
+    user: object
+    caldav_path: str
+    new_events: dict[str, str]
+    existing: dict[str, dict]
 
 
 class SubscriptionSyncService:
@@ -74,20 +109,15 @@ class SubscriptionSyncService:
 
         Returns True if sync completed (success or 304), False on error.
         """
-        from core.models import Channel  # noqa: PLC0415
-
-        lock_key = f"sync_lock:{channel_id}"
-        if not cache.add(lock_key, "1", timeout=SYNC_LOCK_TIMEOUT):
-            logger.info("Sync already running for channel %s, skipping", channel_id)
-            return True
-
-        try:
+        with _channel_sync_lock(channel_id) as acquired:
+            if not acquired:
+                logger.info("Sync already running for channel %s, skipping", channel_id)
+                return True
             return self._do_sync(channel_id)
-        finally:
-            cache.delete(lock_key)
 
     def _do_sync(self, channel_id: str) -> bool:
         """Inner sync logic (lock already held)."""
+        # Local import avoids a circular dependency with core.models.
         from core.models import Channel  # noqa: PLC0415
 
         try:
@@ -115,6 +145,8 @@ class SubscriptionSyncService:
         if status_code == 304:
             channel.settings["last_sync_at"] = now
             channel.settings["last_sync_status"] = "ok"
+            channel.settings["last_sync_error"] = ""
+            channel.settings["error_count"] = 0
             return self._save_channel(channel)
 
         # 200 — diff sync
@@ -130,9 +162,7 @@ class SubscriptionSyncService:
         channel.settings["last_sync_at"] = now
         if result.errors:
             channel.settings["last_sync_status"] = "ok"
-            channel.settings["last_sync_error"] = (
-                f"{len(result.errors)} event error(s)"
-            )
+            channel.settings["last_sync_error"] = f"{len(result.errors)} event error(s)"
         else:
             channel.settings["last_sync_status"] = "ok"
             channel.settings["last_sync_error"] = ""
@@ -173,8 +203,7 @@ class SubscriptionSyncService:
     @staticmethod
     def _save_channel(channel) -> bool:
         """Save channel settings, handling deletion race condition."""
-        from django.utils import timezone  # noqa: PLC0415
-
+        # Local import avoids a circular dependency with core.models.
         from core.models import Channel  # noqa: PLC0415
 
         fields = ["settings", "updated_at"]
@@ -192,31 +221,77 @@ class SubscriptionSyncService:
             channel.updated_at = timezone.now()
             channel.save(update_fields=fields)
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.warning(
                 "Failed to save channel %s (likely deleted during sync)",
                 channel.pk,
             )
             return False
 
-    def sync_events(self, user, caldav_path: str, ics_data: bytes) -> SyncResult:
-        """Public entry point for syncing ICS data into a SabreDAV calendar."""
-        return self._sync_events(user, caldav_path, ics_data)
+    def sync_events(
+        self,
+        user,
+        caldav_path: str,
+        ics_data: bytes,
+        channel_id: str | None = None,
+    ) -> SyncResult:
+        """Public entry point for syncing ICS data into a SabreDAV calendar.
+
+        When ``channel_id`` is provided, acquires the same per-channel
+        lock used by :meth:`sync_channel` so request-thread syncs cannot
+        interleave SabreDAV writes with scheduler-driven syncs on the
+        same calendar.
+        """
+        if channel_id is None:
+            return self._sync_events(user, caldav_path, ics_data)
+
+        with _channel_sync_lock(channel_id) as acquired:
+            if not acquired:
+                # Another worker is already syncing this channel — skip
+                # to avoid interleaving. The caller can retry later.
+                logger.info(
+                    "Sync already running for channel %s, skipping sync_events",
+                    channel_id,
+                )
+                return SyncResult()
+            return self._sync_events(user, caldav_path, ics_data)
 
     def _sync_events(self, user, caldav_path: str, ics_data: bytes) -> SyncResult:
         """Diff-sync events from ICS data into a SabreDAV calendar."""
         result = SyncResult()
 
-        # Parse new ICS
         new_events = self._parse_ics_events(ics_data)
         new_uids = set(new_events.keys())
 
-        # Get existing events from SabreDAV
+        existing = self._fetch_existing_events(user, caldav_path)
+        existing_uids = set(existing.keys())
+
+        # Guard against empty source wiping all events (server error / maintenance)
+        if not new_uids and existing_uids:
+            raise ValueError(
+                f"Source returned 0 events but calendar has {len(existing_uids)}"
+                " — refusing to delete all events (possible source error)"
+            )
+
+        ctx = _SyncContext(
+            user=user,
+            caldav_path=caldav_path,
+            new_events=new_events,
+            existing=existing,
+        )
+        self._create_events(ctx, new_uids - existing_uids, result)
+        self._update_events(ctx, new_uids & existing_uids, result)
+        self._delete_events(ctx, existing_uids - new_uids, result)
+
+        return result
+
+    def _fetch_existing_events(self, user, caldav_path: str) -> dict[str, dict]:
+        """Return ``{uid: {"href", "data"}}`` for events currently in SabreDAV."""
         client = self._http.get_dav_client(user)
         calendar_url = self._caldav._calendar_url(caldav_path)  # noqa: SLF001
         calendar = client.calendar(url=calendar_url)
 
-        existing = {}  # uid -> (href, data_hash)
+        existing: dict[str, dict] = {}
         try:
             for event in calendar.events():
                 uid = str(event.icalendar_component.get("uid", ""))
@@ -228,66 +303,72 @@ class SubscriptionSyncService:
         except Exception:
             logger.exception("Failed to list existing events in %s", caldav_path)
             raise
+        return existing
 
-        existing_uids = set(existing.keys())
-
-        # Guard against empty source wiping all events (server error / maintenance)
-        if not new_uids and existing_uids:
-            raise ValueError(
-                f"Source returned 0 events but calendar has {len(existing_uids)}"
-                " — refusing to delete all events (possible source error)"
-            )
-
-        # Create new events
-        for uid in new_uids - existing_uids:
+    def _create_events(
+        self,
+        ctx: _SyncContext,
+        uids_to_create: set[str],
+        result: SyncResult,
+    ) -> None:
+        for uid in uids_to_create:
             if UNSAFE_UID_RE.search(uid):
                 result.errors.append(f"Skipped {uid!r}: unsafe UID characters")
                 continue
             safe_uid = urllib.parse.quote(uid, safe="@._-")
             try:
                 success = self._http.put_event(
-                    user,
-                    f"{caldav_path}{safe_uid}.ics",
-                    new_events[uid],
+                    ctx.user,
+                    f"{ctx.caldav_path}{safe_uid}.ics",
+                    ctx.new_events[uid],
                 )
-                if success:
-                    result.created += 1
-                else:
-                    result.errors.append(f"Create {uid}: PUT rejected by server")
             except Exception as exc:  # noqa: BLE001
                 result.errors.append(f"Create {uid}: {exc}")
-
-        # Update modified events
-        for uid in new_uids & existing_uids:
-            # Compare raw ICS data to detect changes
-            if self._events_differ(existing[uid]["data"], new_events[uid]):
-                try:
-                    success = self._http.put_event(
-                        user,
-                        existing[uid]["href"],
-                        new_events[uid],
-                    )
-                    if success:
-                        result.updated += 1
-                    else:
-                        result.errors.append(f"Update {uid}: PUT rejected by server")
-                except Exception as exc:  # noqa: BLE001
-                    result.errors.append(f"Update {uid}: {exc}")
+                continue
+            if success:
+                result.created += 1
             else:
-                result.unchanged += 1
+                result.errors.append(f"Create {uid}: PUT rejected by server")
 
-        # Delete removed events
-        for uid in existing_uids - new_uids:
+    def _update_events(
+        self,
+        ctx: _SyncContext,
+        uids_to_check: set[str],
+        result: SyncResult,
+    ) -> None:
+        for uid in uids_to_check:
+            if not self._events_differ(ctx.existing[uid]["data"], ctx.new_events[uid]):
+                result.unchanged += 1
+                continue
             try:
-                self._caldav.delete_event(user, caldav_path, uid)
+                success = self._http.put_event(
+                    ctx.user,
+                    ctx.existing[uid]["href"],
+                    ctx.new_events[uid],
+                )
+            except Exception as exc:  # noqa: BLE001
+                result.errors.append(f"Update {uid}: {exc}")
+                continue
+            if success:
+                result.updated += 1
+            else:
+                result.errors.append(f"Update {uid}: PUT rejected by server")
+
+    def _delete_events(
+        self,
+        ctx: _SyncContext,
+        uids_to_delete: set[str],
+        result: SyncResult,
+    ) -> None:
+        for uid in uids_to_delete:
+            try:
+                self._caldav.delete_event(ctx.user, ctx.caldav_path, uid)
                 result.deleted += 1
             except ValueError:
                 # Event already deleted externally — desired state achieved
                 result.deleted += 1
             except Exception as exc:  # noqa: BLE001
                 result.errors.append(f"Delete {uid}: {exc}")
-
-        return result
 
     @staticmethod
     def _normalize_ics_encoding(ics_data: bytes) -> bytes:
@@ -380,13 +461,58 @@ class SubscriptionSyncService:
     VOLATILE_PROPS = {"DTSTAMP", "LAST-MODIFIED", "SEQUENCE", "CREATED"}
 
     @staticmethod
-    def _event_props(component) -> dict:
-        """Extract non-volatile properties from a VEVENT as a comparable dict."""
-        return {
-            k: str(v)
-            for k, v in component.items()
-            if k not in SubscriptionSyncService.VOLATILE_PROPS
-        }
+    def _serialize_property(value) -> tuple:
+        """Serialize a property value with its parameters for comparison.
+
+        Returns a tuple ``(serialized_value, sorted_params)`` so two
+        properties compare equal iff their value *and* parameter set
+        (e.g. ``ATTENDEE;PARTSTAT=ACCEPTED``) are identical.
+        """
+        params = getattr(value, "params", None) or {}
+        sorted_params = tuple(sorted((k, str(v)) for k, v in params.items()))
+        try:
+            serialized = value.to_ical()
+            if isinstance(serialized, bytes):
+                serialized = serialized.decode("utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            serialized = str(value)
+        return serialized, sorted_params
+
+    @staticmethod
+    def _serialize_subcomponent(subcomponent) -> tuple:
+        """Serialize a subcomponent (e.g. VALARM) for comparison."""
+        name = getattr(subcomponent, "name", "")
+        props = tuple(
+            sorted(
+                (k, SubscriptionSyncService._serialize_property(v))
+                for k, v in subcomponent.items()
+                if k not in SubscriptionSyncService.VOLATILE_PROPS
+            )
+        )
+        return (name, props)
+
+    @staticmethod
+    def _event_props(component) -> tuple:
+        """Extract comparable representation of a VEVENT.
+
+        Includes property parameters (so ``ATTENDEE;PARTSTAT=ACCEPTED``
+        differs from ``ATTENDEE;PARTSTAT=DECLINED``) and subcomponents
+        like ``VALARM`` so alarm edits trigger an update.
+        """
+        props = tuple(
+            sorted(
+                (k, SubscriptionSyncService._serialize_property(v))
+                for k, v in component.items()
+                if k not in SubscriptionSyncService.VOLATILE_PROPS
+            )
+        )
+        subcomponents = tuple(
+            sorted(
+                SubscriptionSyncService._serialize_subcomponent(sub)
+                for sub in component.subcomponents
+            )
+        )
+        return (props, subcomponents)
 
     @staticmethod
     def _events_differ(existing_data: str, new_data: str) -> bool:
@@ -409,7 +535,9 @@ class SubscriptionSyncService:
             # Group by RECURRENCE-ID to handle reordered override instances
             def _keyed(events):
                 return {
-                    str(ev.get("RECURRENCE-ID", "")): SubscriptionSyncService._event_props(ev)
+                    str(
+                        ev.get("RECURRENCE-ID", "")
+                    ): SubscriptionSyncService._event_props(ev)
                     for ev in events
                 }
 

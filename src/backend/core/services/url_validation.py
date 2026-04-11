@@ -7,7 +7,7 @@ to valid, reachable ICS resources.
 import ipaddress
 import logging
 import socket
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
 
@@ -22,6 +22,22 @@ MAX_REDIRECTS = 3
 
 class URLValidationError(Exception):
     """Raised when a subscription URL fails validation."""
+
+
+def _redact_url(url: str) -> str:
+    """Strip query string and fragment to avoid leaking signed tokens.
+
+    Subscription URLs can embed HMAC or bearer tokens in the query
+    string (e.g. Google Calendar private ICS URLs). Those tokens end up
+    in ``channel.settings['last_sync_error']`` and from there into the
+    API response / frontend, so we strip them from any string that
+    might be logged or raised.
+    """
+    try:
+        parsed = urlparse(url)
+        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        return "[unparseable url]"
 
 
 def _is_private_ip(ip_str: str) -> bool:
@@ -103,7 +119,12 @@ def validate_subscription_url(url: str) -> str:
 
 
 def _safe_get(url, headers):
-    """Make a GET request with SSRF-safe redirect handling."""
+    """Make a GET request with SSRF-safe redirect handling.
+
+    Responses are streamed; intermediate redirect responses are closed
+    as soon as the next request fires. Callers are responsible for
+    closing the final returned response.
+    """
     try:
         response = requests.get(
             url,
@@ -115,48 +136,59 @@ def _safe_get(url, headers):
     except requests.exceptions.Timeout as exc:
         raise URLValidationError("Request timed out") from exc
     except requests.exceptions.RequestException as exc:
-        raise URLValidationError(f"Failed to fetch URL: {exc}") from exc
+        raise URLValidationError(f"Failed to fetch URL: {_redact_url(url)}") from exc
 
     # Handle redirects manually to check each hop for SSRF
     current_url = url
     redirect_count = 0
     # Strip conditional headers for redirect targets to avoid false 304s
     redirect_headers = {
-        k: v for k, v in headers.items()
+        k: v
+        for k, v in headers.items()
         if k not in ("If-None-Match", "If-Modified-Since")
     }
-    while response.status_code in (301, 302, 303, 307, 308):
-        redirect_count += 1
-        if redirect_count > MAX_REDIRECTS:
-            raise URLValidationError(f"Too many redirects (max {MAX_REDIRECTS})")
+    try:
+        while response.status_code in (301, 302, 303, 307, 308):
+            redirect_count += 1
+            if redirect_count > MAX_REDIRECTS:
+                raise URLValidationError(f"Too many redirects (max {MAX_REDIRECTS})")
 
-        location = response.headers.get("Location", "")
-        if not location:
-            raise URLValidationError("Redirect without Location header")
+            location = response.headers.get("Location", "")
+            if not location:
+                raise URLValidationError("Redirect without Location header")
 
-        # Resolve relative redirects against the current URL
-        location = urljoin(current_url, location)
-        redirect_parsed = urlparse(location)
+            # Resolve relative redirects against the current URL
+            location = urljoin(current_url, location)
+            redirect_parsed = urlparse(location)
 
-        if redirect_parsed.scheme != "https":
-            raise URLValidationError("Redirect to non-HTTPS URL")
-        if not redirect_parsed.hostname:
-            raise URLValidationError("Redirect to URL without hostname")
-        _resolve_and_check(redirect_parsed.hostname)
+            if redirect_parsed.scheme != "https":
+                raise URLValidationError("Redirect to non-HTTPS URL")
+            if not redirect_parsed.hostname:
+                raise URLValidationError("Redirect to URL without hostname")
+            _resolve_and_check(redirect_parsed.hostname)
 
-        current_url = location
-        try:
-            response = requests.get(
-                location,
-                headers=redirect_headers,
-                timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
-                stream=True,
-                allow_redirects=False,
-            )
-        except requests.exceptions.Timeout as exc:
-            raise URLValidationError("Request timed out during redirect") from exc
-        except requests.exceptions.RequestException as exc:
-            raise URLValidationError(f"Failed during redirect: {exc}") from exc
+            current_url = location
+            # Release the previous streamed response before issuing the
+            # next hop so we don't leak connections on long redirect
+            # chains.
+            response.close()
+            try:
+                response = requests.get(
+                    location,
+                    headers=redirect_headers,
+                    timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+                    stream=True,
+                    allow_redirects=False,
+                )
+            except requests.exceptions.Timeout as exc:
+                raise URLValidationError("Request timed out during redirect") from exc
+            except requests.exceptions.RequestException as exc:
+                raise URLValidationError(
+                    f"Failed during redirect: {_redact_url(location)}"
+                ) from exc
+    except BaseException:
+        response.close()
+        raise
 
     return response
 
@@ -168,18 +200,24 @@ def _read_response_body(response, url):
         "text/calendar" not in content_type
         and "application/octet-stream" not in content_type
     ):
-        logger.warning("Unexpected Content-Type %r for %s", content_type, url)
+        logger.warning(
+            "Unexpected Content-Type %r for %s", content_type, _redact_url(url)
+        )
 
     chunks = []
     total_size = 0
-    for chunk in response.iter_content(chunk_size=8192):
-        total_size += len(chunk)
-        if total_size > MAX_RESPONSE_SIZE:
-            response.close()
-            raise URLValidationError(
-                f"Response too large (max {MAX_RESPONSE_SIZE // (1024 * 1024)} MB)"
-            )
-        chunks.append(chunk)
+    try:
+        for chunk in response.iter_content(chunk_size=8192):
+            total_size += len(chunk)
+            if total_size > MAX_RESPONSE_SIZE:
+                raise URLValidationError(
+                    f"Response too large (max {MAX_RESPONSE_SIZE // (1024 * 1024)} MB)"
+                )
+            chunks.append(chunk)
+    except requests.exceptions.RequestException as exc:
+        raise URLValidationError(
+            f"Failed to read response body: {_redact_url(url)}"
+        ) from exc
 
     ics_data = b"".join(chunks)
     if not ics_data or b"BEGIN:VCALENDAR" not in ics_data:
@@ -216,14 +254,16 @@ def fetch_ics(url: str, etag: str = "", last_modified: str = "") -> tuple:
         headers["If-Modified-Since"] = last_modified
 
     response = _safe_get(url, headers)
+    try:
+        if response.status_code == 304:
+            return 304, None, etag, last_modified
 
-    if response.status_code == 304:
-        return 304, None, etag, last_modified
+        if response.status_code != 200:
+            raise URLValidationError(f"Server returned HTTP {response.status_code}")
 
-    if response.status_code != 200:
-        raise URLValidationError(f"Server returned HTTP {response.status_code}")
-
-    ics_data = _read_response_body(response, url)
-    new_etag = response.headers.get("ETag", "")
-    new_last_modified = response.headers.get("Last-Modified", "")
-    return 200, ics_data, new_etag, new_last_modified
+        ics_data = _read_response_body(response, url)
+        new_etag = response.headers.get("ETag", "")
+        new_last_modified = response.headers.get("Last-Modified", "")
+        return 200, ics_data, new_etag, new_last_modified
+    finally:
+        response.close()

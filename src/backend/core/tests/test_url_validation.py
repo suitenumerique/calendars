@@ -1,5 +1,7 @@
 """Tests for URL validation service."""
 
+# pylint: disable=missing-class-docstring,missing-function-docstring
+
 import socket
 from unittest.mock import MagicMock, patch
 
@@ -167,7 +169,7 @@ class TestFetchIcs:
         mock_response.status_code = 304
         mock_get.return_value = mock_response
 
-        status_code, data, etag, last_mod = fetch_ics(
+        status_code, data, etag, _last_mod = fetch_ics(
             "https://example.com/cal.ics", etag='"old"', last_modified="old-date"
         )
         assert status_code == 304

@@ -16,7 +16,11 @@ import requests
 
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
 from core.models import Channel
-from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy_path
+from core.services.caldav_service import (
+    CalDAVHTTPClient,
+    normalize_caldav_path,
+    validate_caldav_proxy_path,
+)
 from core.services.calendar_invitation_service import calendar_invitation_service
 
 logger = logging.getLogger(__name__)
@@ -113,16 +117,13 @@ class CalDAVProxyView(View):
         return False
 
     @staticmethod
-    def _check_subscription_readonly(user, path, method):
+    def _check_subscription_readonly(user, path, method):  # pylint: disable=unused-argument
         """Block write operations on calendars owned by ical-subscription channels.
 
         Returns an HttpResponse(403) if the path belongs to a subscription
-        calendar, None otherwise.
+        calendar, None otherwise. ``method`` is accepted for call-site
+        symmetry but not consulted — every write verb is equally blocked.
         """
-        from core.services.caldav_service import (  # noqa: PLC0415
-            normalize_caldav_path,
-        )
-
         full_path = "/" + path.lstrip("/") if path else "/"
         normalized = normalize_caldav_path(full_path)
 
@@ -130,13 +131,19 @@ class CalDAVProxyView(View):
         # The path could be /calendars/users/email/cal-uuid/event.ics
         # We need to match the calendar prefix
         # Note: no is_active filter — stopped subscriptions must stay read-only
-        subscription_paths = Channel.objects.filter(
-            user=user,
-            type="ical-subscription",
-        ).values_list("caldav_path", flat=True)
+        subscription_paths = (
+            Channel.objects.filter(
+                user=user,
+                type="ical-subscription",
+            )
+            .exclude(caldav_path__isnull=True)
+            .exclude(caldav_path="")
+            .values_list("caldav_path", flat=True)
+        )
 
         for sub_path in subscription_paths:
-            if normalized.startswith(sub_path) or full_path.startswith(sub_path):
+            normalized_sub = normalize_caldav_path(sub_path)
+            if normalized.startswith(normalized_sub):
                 return HttpResponse(
                     status=403,
                     content="Cannot modify events in a subscription calendar",

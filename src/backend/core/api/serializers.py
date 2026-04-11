@@ -227,24 +227,31 @@ class ChannelSubscriptionSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_source_url(self, obj) -> str:
+        """Resolve the source URL from the channel's settings JSON."""
         return obj.settings.get("source_url", "")
 
     def get_last_sync_at(self, obj) -> str | None:
+        """Resolve the last-sync timestamp from the channel's settings JSON."""
         return obj.settings.get("last_sync_at")
 
     def get_last_sync_status(self, obj) -> str:
+        """Resolve the last-sync status from the channel's settings JSON."""
         return obj.settings.get("last_sync_status", "pending")
 
     def get_last_sync_error(self, obj) -> str:
+        """Resolve the last-sync error string from the channel's settings JSON."""
         return obj.settings.get("last_sync_error", "")
 
     def get_error_count(self, obj) -> int:
+        """Resolve the consecutive-error count from the channel's settings JSON."""
         return obj.settings.get("error_count", 0)
 
     def get_sync_interval(self, obj) -> int:
-        return obj.settings.get("sync_interval", 300)
+        """Resolve the sync interval from the channel's settings JSON."""
+        return obj.settings.get("sync_interval", settings.SUBSCRIPTION_SYNC_INTERVAL)
 
 
+# pylint: disable-next=abstract-method
 class ChannelSubscriptionCreateSerializer(serializers.Serializer):
     """Write serializer for creating subscription channels."""
 
@@ -265,6 +272,7 @@ class ChannelSubscriptionCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(str(exc)) from exc
 
 
+# pylint: disable-next=abstract-method
 class ChannelSubscriptionUpdateSerializer(serializers.Serializer):
     """Write serializer for updating subscription channels."""
 

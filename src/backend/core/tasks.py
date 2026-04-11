@@ -39,7 +39,18 @@ def sync_all_subscriptions():
 
     dispatched = 0
     for channel in channels:
-        sync_interval = max(channel.settings.get("sync_interval", 300), 1)
+        raw_sync_interval = channel.settings.get(
+            "sync_interval", settings.SUBSCRIPTION_SYNC_INTERVAL
+        )
+        try:
+            sync_interval = max(int(raw_sync_interval), 1)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid sync_interval for channel %s: %r",
+                channel.pk,
+                raw_sync_interval,
+            )
+            sync_interval = settings.SUBSCRIPTION_SYNC_INTERVAL
         last_sync_at = channel.settings.get("last_sync_at")
 
         # Check if channel is due for sync

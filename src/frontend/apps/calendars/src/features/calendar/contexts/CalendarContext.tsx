@@ -121,25 +121,40 @@ export const CalendarContextProvider = ({
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  // Track subscription calendar URLs for read-only enforcement
+  // Track subscription calendar URLs for read-only enforcement.
+  // Must mirror the backend's normalize_caldav_path in
+  // core/services/caldav_service.py: strip any prefix before
+  // "/calendars/" so paths returned by SabreDAV (e.g.
+  // "/api/v1.0/caldav/calendars/users/…") compare equal to channel
+  // caldav_path values stored as "/calendars/users/…".
   const { data: subscriptionChannelsData } = useSubscriptionChannels();
   const subscriptionCalendarUrls = useMemo(() => {
     if (!subscriptionChannelsData?.length || !davCalendars.length)
       return new Set<string>();
+
+    const normalizeCaldavPath = (value: string): string => {
+      let pathname: string;
+      try {
+        pathname = value.startsWith("/") ? value : new URL(value).pathname;
+      } catch {
+        return "";
+      }
+      const calendarsIdx = pathname.indexOf("/calendars/");
+      const normalized =
+        calendarsIdx >= 0 ? pathname.slice(calendarsIdx) : pathname;
+      return normalized.replace(/\/$/, "");
+    };
+
     const subscriptionPaths = new Set(
-      subscriptionChannelsData.map((ch) => ch.caldav_path.replace(/\/$/, "")),
+      subscriptionChannelsData
+        .map((ch) => normalizeCaldavPath(ch.caldav_path))
+        .filter(Boolean),
     );
     return new Set(
       davCalendars
         .filter((cal) => {
-          // Extract path from full URL and compare exactly
-          try {
-            const calPath = new URL(cal.url).pathname.replace(/\/$/, "");
-            const normalizedPath = calPath.replace(/^\/caldav/, "");
-            return subscriptionPaths.has(normalizedPath);
-          } catch {
-            return false;
-          }
+          const normalizedPath = normalizeCaldavPath(cal.url);
+          return !!normalizedPath && subscriptionPaths.has(normalizedPath);
         })
         .map((cal) => cal.url),
     );

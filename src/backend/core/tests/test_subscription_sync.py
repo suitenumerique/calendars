@@ -1,15 +1,14 @@
 """Tests for subscription sync service."""
 
+# pylint: disable=missing-class-docstring,missing-function-docstring,protected-access
+
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from core.factories import UserFactory
 from core.models import Channel
-from core.services.subscription_sync_service import (
-    SubscriptionSyncService,
-    SyncResult,
-)
+from core.services.subscription_sync_service import SubscriptionSyncService
 from core.services.url_validation import URLValidationError
 
 VALID_ICS = (
@@ -257,9 +256,7 @@ class TestSyncChannel:
 
 
 EMPTY_ICS = (
-    b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
-    b"PRODID:-//Test//Test//EN\r\n"
-    b"END:VCALENDAR"
+    b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Test//Test//EN\r\nEND:VCALENDAR"
 )
 
 LATIN1_ICS = (
