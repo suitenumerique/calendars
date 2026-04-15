@@ -107,11 +107,11 @@ logs: ## display all services logs (follow mode)
 .PHONY: logs
 
 start: ## start all development services
-	@$(COMPOSE) up --force-recreate -d worker-dev frontend-dev backend-dev keycloak subscription-scheduler
+	@$(COMPOSE) up --force-recreate -d worker-dev frontend-dev backend-dev keycloak
 .PHONY: start
 
 start-back: ## start backend services only (for local frontend development)
-	@$(COMPOSE) up --force-recreate -d backend-dev worker-dev subscription-scheduler
+	@$(COMPOSE) up --force-recreate -d backend-dev worker-dev
 .PHONY: start-back
 
 status: ## an alias for "docker compose ps"
@@ -274,7 +274,7 @@ reset-db: build ## flush database and re-run migrations
 
 reset-db-full: ## drop and recreate database, run all migrations + CalDAV schema
 	@echo "$(BOLD)Stopping services using the database...$(RESET)"
-	@$(COMPOSE) stop backend-dev worker-dev caldav subscription-scheduler 2>/dev/null || true
+	@$(COMPOSE) stop backend-dev worker-dev caldav 2>/dev/null || true
 	@$(COMPOSE) up -d postgresql
 	@sleep 2
 	@echo "$(BOLD)Dropping and recreating database...$(RESET)"

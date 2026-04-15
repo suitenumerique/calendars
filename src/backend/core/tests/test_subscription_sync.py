@@ -1,14 +1,20 @@
-"""Tests for subscription sync service."""
+"""Tests for subscription sync service.
+
+The sync engine (ICS parsing, diffing, RRULE capping, encoding
+normalisation) is exercised directly. State-layer calls into the
+SabreDAV internal API are mocked.
+"""
 
 # pylint: disable=missing-class-docstring,missing-function-docstring,protected-access
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from core.factories import UserFactory
-from core.models import Channel
-from core.services.subscription_sync_service import SubscriptionSyncService
+from core.services.subscription_sync_service import (
+    SubscriptionSyncService,
+    _SystemUser,
+)
 from core.services.url_validation import URLValidationError
 
 VALID_ICS = (
@@ -27,6 +33,14 @@ VALID_ICS_TWO_EVENTS = (
     b"DTEND:20260102T110000Z\r\nSUMMARY:Test Event 2\r\n"
     b"END:VEVENT\r\nEND:VCALENDAR"
 )
+
+LATIN1_ICS = (
+    "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Test//Test//EN\r\n"
+    "BEGIN:VEVENT\r\nUID:latin1-event@test\r\n"
+    "DTSTART:20260101T100000Z\r\nDTEND:20260101T110000Z\r\n"
+    "SUMMARY:R\u00e9union d'\u00e9quipe\r\n"
+    "END:VEVENT\r\nEND:VCALENDAR"
+).encode("latin-1")
 
 
 class TestParseIcsEvents:
@@ -70,276 +84,145 @@ class TestEventsDiffer:
         assert service._events_differ(old, new)
 
 
-@pytest.mark.django_db
-class TestSyncChannel:
-    @patch("core.services.subscription_sync_service.fetch_ics")
-    @patch("core.services.subscription_sync_service.cache")
-    def test_304_skips_sync(self, mock_cache, mock_fetch):
-        """304 Not Modified should update last_sync_at without touching events."""
-        mock_cache.add.return_value = True  # Lock acquired
-        mock_fetch.return_value = (304, None, '"old-etag"', "old-date")
-
-        user = UserFactory()
-        channel = Channel.objects.create(
-            name="Test Sub",
-            type="ical-subscription",
-            user=user,
-            caldav_path="/calendars/users/test@test.com/uuid/",
-            settings={
-                "source_url": "https://example.com/cal.ics",
-                "sync_interval": 300,
-                "last_sync_status": "ok",
-                "error_count": 0,
-                "etag": '"old-etag"',
-                "last_modified": "old-date",
-            },
-        )
-
-        service = SubscriptionSyncService()
-        result = service.sync_channel(str(channel.pk))
-
-        assert result is True
-        channel.refresh_from_db()
-        assert channel.settings["last_sync_status"] == "ok"
-        assert channel.settings["last_sync_at"] is not None
-
-    @patch("core.services.subscription_sync_service.fetch_ics")
-    @patch("core.services.subscription_sync_service.cache")
-    def test_error_increments_count(self, mock_cache, mock_fetch):
-        """Fetch error should increment error_count."""
-        mock_cache.add.return_value = True
-        mock_fetch.side_effect = URLValidationError("timeout")
-
-        user = UserFactory()
-        channel = Channel.objects.create(
-            name="Test Sub",
-            type="ical-subscription",
-            user=user,
-            caldav_path="/calendars/users/test@test.com/uuid/",
-            settings={
-                "source_url": "https://example.com/cal.ics",
-                "sync_interval": 300,
-                "last_sync_status": "ok",
-                "error_count": 0,
-                "etag": "",
-                "last_modified": "",
-            },
-        )
-
-        service = SubscriptionSyncService()
-        result = service.sync_channel(str(channel.pk))
-
-        assert result is False
-        channel.refresh_from_db()
-        assert channel.settings["error_count"] == 1
-        assert channel.settings["last_sync_status"] == "error"
-        assert "timeout" in channel.settings["last_sync_error"]
-        assert channel.is_active is True  # not stopped yet
-
-    @patch("core.services.subscription_sync_service.fetch_ics")
-    @patch("core.services.subscription_sync_service.cache")
-    def test_three_strikes_auto_stop(self, mock_cache, mock_fetch):
-        """After 3 consecutive errors, channel should be deactivated."""
-        mock_cache.add.return_value = True
-        mock_fetch.side_effect = URLValidationError("server error")
-
-        user = UserFactory()
-        channel = Channel.objects.create(
-            name="Test Sub",
-            type="ical-subscription",
-            user=user,
-            caldav_path="/calendars/users/test@test.com/uuid/",
-            settings={
-                "source_url": "https://example.com/cal.ics",
-                "sync_interval": 300,
-                "last_sync_status": "error",
-                "error_count": 2,  # Already 2 errors
-                "etag": "",
-                "last_modified": "",
-            },
-        )
-
-        service = SubscriptionSyncService()
-        result = service.sync_channel(str(channel.pk))
-
-        assert result is False
-        channel.refresh_from_db()
-        assert channel.settings["error_count"] == 3
-        assert channel.is_active is False  # auto-stopped
-
-    @patch("core.services.subscription_sync_service.cache")
-    def test_lock_prevents_overlap(self, mock_cache):
-        """If lock is already held, sync should skip."""
-        mock_cache.add.return_value = False  # Lock NOT acquired
-
-        user = UserFactory()
-        channel = Channel.objects.create(
-            name="Test Sub",
-            type="ical-subscription",
-            user=user,
-            caldav_path="/calendars/users/test@test.com/uuid/",
-            settings={
-                "source_url": "https://example.com/cal.ics",
-                "sync_interval": 300,
-                "last_sync_status": "ok",
-                "error_count": 0,
-                "etag": "",
-                "last_modified": "",
-            },
-        )
-
-        service = SubscriptionSyncService()
-        result = service.sync_channel(str(channel.pk))
-
-        assert result is True  # Skipped, not an error
-
-    @patch("core.services.subscription_sync_service.cache")
-    def test_inactive_channel_skipped(self, mock_cache):
-        """Inactive channel should not be synced."""
-        mock_cache.add.return_value = True
-
-        user = UserFactory()
-        channel = Channel.objects.create(
-            name="Test Sub",
-            type="ical-subscription",
-            user=user,
-            is_active=False,
-            caldav_path="/calendars/users/test@test.com/uuid/",
-            settings={
-                "source_url": "https://example.com/cal.ics",
-                "sync_interval": 300,
-                "last_sync_status": "error",
-                "error_count": 3,
-                "etag": "",
-                "last_modified": "",
-            },
-        )
-
-        service = SubscriptionSyncService()
-        result = service.sync_channel(str(channel.pk))
-
-        assert result is False
-
-    @patch("core.services.subscription_sync_service.fetch_ics")
-    @patch("core.services.subscription_sync_service.cache")
-    def test_sync_survives_channel_deletion(self, mock_cache, mock_fetch):
-        """If channel is deleted during sync, save should not crash."""
-        mock_cache.add.return_value = True
-
-        user = UserFactory()
-        channel = Channel.objects.create(
-            name="Test Sub",
-            type="ical-subscription",
-            user=user,
-            caldav_path="/calendars/users/test@test.com/uuid/",
-            settings={
-                "source_url": "https://example.com/cal.ics",
-                "sync_interval": 300,
-                "last_sync_status": "ok",
-                "error_count": 0,
-                "etag": '"etag"',
-                "last_modified": "date",
-            },
-        )
-
-        service = SubscriptionSyncService()
-        channel_id = str(channel.pk)
-
-        # Delete the row *during* sync, after the channel has already
-        # been loaded into memory — this exercises the real race that
-        # _save_channel's existence check is meant to handle, unlike a
-        # pre-sync delete which only hits the "not found" branch.
-        def delete_during_fetch(*_args, **_kwargs):
-            Channel.objects.filter(pk=channel.pk).delete()
-            return (304, None, '"etag"', "date")
-
-        mock_fetch.side_effect = delete_during_fetch
-
-        result = service.sync_channel(channel_id)
-
-        # _save_channel's existence check must catch the deletion and
-        # propagate False up through sync_channel.
-        assert result is False
-
-
-EMPTY_ICS = (
-    b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Test//Test//EN\r\nEND:VCALENDAR"
-)
-
-LATIN1_ICS = (
-    "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Test//Test//EN\r\n"
-    "BEGIN:VEVENT\r\nUID:latin1-event@test\r\n"
-    "DTSTART:20260101T100000Z\r\nDTEND:20260101T110000Z\r\n"
-    "SUMMARY:R\u00e9union d'\u00e9quipe\r\n"
-    "LOCATION:Caf\u00e9 des Arts\r\n"
-    "END:VEVENT\r\nEND:VCALENDAR"
-).encode("latin-1")
-
-
-class TestEmptyIcsProtection:
-    """Tests for empty ICS protection (#7)."""
-
-    def test_empty_ics_refuses_to_delete_all(self):
-        """Sync with 0 new events but existing events should raise."""
-        service = SubscriptionSyncService()
-
-        # Mock existing events in SabreDAV
-        mock_event = MagicMock()
-        mock_event.icalendar_component.get.return_value = "existing-uid"
-        mock_event.url.path = "/calendars/users/test/uuid/existing.ics"
-        mock_event.data = "BEGIN:VCALENDAR\r\nEND:VCALENDAR"
-
-        mock_calendar = MagicMock()
-        mock_calendar.events.return_value = [mock_event]
-
-        mock_client = MagicMock()
-        mock_client.calendar.return_value = mock_calendar
-
-        with patch.object(service._http, "get_dav_client", return_value=mock_client):
-            with pytest.raises(ValueError, match="refusing to delete all events"):
-                service._sync_events(
-                    MagicMock(), "/calendars/users/test/uuid/", EMPTY_ICS
-                )
-
-    def test_empty_ics_on_empty_calendar_ok(self):
-        """Sync with 0 new events and 0 existing events should not raise."""
-        service = SubscriptionSyncService()
-
-        mock_calendar = MagicMock()
-        mock_calendar.events.return_value = []
-
-        mock_client = MagicMock()
-        mock_client.calendar.return_value = mock_calendar
-
-        with patch.object(service._http, "get_dav_client", return_value=mock_client):
-            result = service._sync_events(
-                MagicMock(), "/calendars/users/test/uuid/", EMPTY_ICS
-            )
-
-        assert result.created == 0
-        assert result.deleted == 0
-        assert result.unchanged == 0
-
-
 class TestIcsEncodingFallback:
-    """Tests for non-UTF-8 ICS encoding (#9)."""
-
     def test_normalize_utf8_unchanged(self):
-        """Valid UTF-8 data should pass through unchanged."""
         result = SubscriptionSyncService._normalize_ics_encoding(VALID_ICS)
         assert result == VALID_ICS
 
     def test_normalize_latin1_to_utf8(self):
-        """Latin-1 encoded ICS should be converted to UTF-8."""
         result = SubscriptionSyncService._normalize_ics_encoding(LATIN1_ICS)
-        # Should now be valid UTF-8
         decoded = result.decode("utf-8")
         assert "Réunion" in decoded
-        assert "Café" in decoded
 
     def test_parse_latin1_ics(self):
-        """Latin-1 ICS with accented characters should parse correctly."""
         service = SubscriptionSyncService()
         events = service._parse_ics_events(LATIN1_ICS)
         assert "latin1-event@test" in events
-        assert "union" in events["latin1-event@test"]  # Réunion
+
+
+@patch("core.services.subscription_sync_service.cache")
+class TestSyncSubscription:
+    """Tests for sync_subscription() with mocked internal API calls."""
+
+    @patch("core.services.subscription_sync_service.fetch_ics")
+    @patch.object(SubscriptionSyncService, "_fetch_subscription_info")
+    @patch.object(SubscriptionSyncService, "_fetch_existing_events")
+    @patch.object(SubscriptionSyncService, "_apply_events_batch")
+    @patch.object(SubscriptionSyncService, "_post_sync_result")
+    def test_304_skips_sync(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        mock_post,
+        mock_batch,
+        mock_fetch_existing,
+        mock_fetch_info,
+        mock_fetch,
+        mock_cache,
+    ):
+        mock_cache.add.return_value = True
+        mock_fetch_info.return_value = {
+            "source_url": "https://example.com/cal.ics",
+            "etag": '"old-etag"',
+            "last_modified": "old-date",
+            "error_count": 0,
+        }
+        mock_fetch.return_value = (304, None, '"old-etag"', "old-date")
+
+        service = SubscriptionSyncService()
+        assert service.sync_subscription("abc123") is True
+
+        mock_fetch_existing.assert_not_called()
+        mock_batch.assert_not_called()
+        mock_post.assert_called_once()
+        kwargs = mock_post.call_args.kwargs
+        assert kwargs["status"] == "ok"
+
+    @patch("core.services.subscription_sync_service.fetch_ics")
+    @patch.object(SubscriptionSyncService, "_fetch_subscription_info")
+    @patch.object(SubscriptionSyncService, "_post_sync_result")
+    def test_error_increments_count(
+        self, mock_post, mock_fetch_info, mock_fetch, mock_cache
+    ):
+        mock_cache.add.return_value = True
+        mock_fetch_info.return_value = {
+            "source_url": "https://example.com/cal.ics",
+            "etag": "",
+            "last_modified": "",
+            "error_count": 0,
+        }
+        mock_fetch.side_effect = URLValidationError("timeout")
+
+        service = SubscriptionSyncService()
+        assert service.sync_subscription("abc123") is False
+
+        kwargs = mock_post.call_args.kwargs
+        assert kwargs["status"] == "error"
+        assert kwargs["error_count"] == 1
+        assert "timeout" in kwargs["error_message"]
+
+    @patch("core.services.subscription_sync_service.fetch_ics")
+    @patch.object(SubscriptionSyncService, "_fetch_subscription_info")
+    @patch.object(SubscriptionSyncService, "_post_sync_result")
+    def test_three_strikes_auto_stops(
+        self, mock_post, mock_fetch_info, mock_fetch, mock_cache
+    ):
+        mock_cache.add.return_value = True
+        mock_fetch_info.return_value = {
+            "source_url": "https://example.com/cal.ics",
+            "etag": "",
+            "last_modified": "",
+            "error_count": 2,
+        }
+        mock_fetch.side_effect = URLValidationError("server error")
+
+        service = SubscriptionSyncService()
+        assert service.sync_subscription("abc123") is False
+
+        kwargs = mock_post.call_args.kwargs
+        assert kwargs["status"] == "stopped"
+        assert kwargs["error_count"] == 3
+
+    def test_lock_prevents_overlap(self, mock_cache):
+        mock_cache.add.return_value = False  # lock held elsewhere
+
+        service = SubscriptionSyncService()
+        assert service.sync_subscription("abc123") is True
+
+    @patch.object(SubscriptionSyncService, "_fetch_subscription_info")
+    def test_missing_subscription_returns_false(self, mock_fetch_info, mock_cache):
+        mock_cache.add.return_value = True
+        mock_fetch_info.return_value = None
+
+        service = SubscriptionSyncService()
+        assert service.sync_subscription("does-not-exist") is False
+
+
+class TestSyncEventsRefusesToDeleteAll:
+    @patch.object(SubscriptionSyncService, "_apply_events_batch")
+    @patch.object(SubscriptionSyncService, "_fetch_existing_events")
+    def test_refuses_when_source_empty_but_calendar_has_events(
+        self, mock_fetch_existing, mock_batch
+    ):
+        service = SubscriptionSyncService()
+        mock_fetch_existing.return_value = {
+            "u1@test": {"uri": "u1.ics", "data": ""},
+        }
+        empty_ics = (
+            b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//T//T//EN\r\nEND:VCALENDAR"
+        )
+        with pytest.raises(ValueError, match="refusing to delete all events"):
+            service._sync_events("abc123", empty_ics)
+        mock_batch.assert_not_called()
+
+
+def test_system_user_passes_header_contract():
+    user = _SystemUser()
+    assert user.email
+    assert user.organization_id
+    # organization may be None — build_base_headers handles that case.
+    assert user.organization is None
+
+
+def test_events_differ_handles_unparseable_data():
+    service = SubscriptionSyncService()
+    # Any exception during parsing → treat as differing (safe default).
+    assert service._events_differ("not ics", "also not ics") is True

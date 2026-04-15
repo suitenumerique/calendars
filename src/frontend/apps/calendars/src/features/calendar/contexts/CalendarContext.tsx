@@ -22,7 +22,6 @@ import {
   addToast,
   ToasterItem,
 } from "@/features/ui/components/toaster/Toaster";
-import { useSubscriptionChannels } from "../hooks/useCalendars";
 import { SYNC_POLL_INTERVAL } from "../config";
 
 const HIDDEN_CALENDARS_KEY = "calendar-hidden-urls";
@@ -121,44 +120,18 @@ export const CalendarContextProvider = ({
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  // Track subscription calendar URLs for read-only enforcement.
-  // Must mirror the backend's normalize_caldav_path in
-  // core/services/caldav_service.py: strip any prefix before
-  // "/calendars/" so paths returned by SabreDAV (e.g.
-  // "/api/v1.0/caldav/calendars/users/…") compare equal to channel
-  // caldav_path values stored as "/calendars/users/…".
-  const { data: subscriptionChannelsData } = useSubscriptionChannels();
+  // Subscription calendars surface in PROPFIND with the custom
+  // ``LS:calendar-owner-type`` property set to ``SUBSCRIPTION`` by the
+  // SabreDAV CustomCalendarHome plugin. Deriving the read-only set
+  // from that flag keeps frontend and backend in lock-step without
+  // a separate API round-trip.
   const subscriptionCalendarUrls = useMemo(() => {
-    if (!subscriptionChannelsData?.length || !davCalendars.length)
-      return new Set<string>();
-
-    const normalizeCaldavPath = (value: string): string => {
-      let pathname: string;
-      try {
-        pathname = value.startsWith("/") ? value : new URL(value).pathname;
-      } catch {
-        return "";
-      }
-      const calendarsIdx = pathname.indexOf("/calendars/");
-      const normalized =
-        calendarsIdx >= 0 ? pathname.slice(calendarsIdx) : pathname;
-      return normalized.replace(/\/$/, "");
-    };
-
-    const subscriptionPaths = new Set(
-      subscriptionChannelsData
-        .map((ch) => normalizeCaldavPath(ch.caldav_path))
-        .filter(Boolean),
-    );
     return new Set(
       davCalendars
-        .filter((cal) => {
-          const normalizedPath = normalizeCaldavPath(cal.url);
-          return !!normalizedPath && subscriptionPaths.has(normalizedPath);
-        })
+        .filter((cal) => cal.ownerType === "SUBSCRIPTION")
         .map((cal) => cal.url),
     );
-  }, [subscriptionChannelsData, davCalendars]);
+  }, [davCalendars]);
 
   const { ownedCalendars, sharedCalendars } = useMemo(() => {
     const homeUrl = caldavService.getAccount()?.homeUrl;

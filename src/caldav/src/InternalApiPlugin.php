@@ -132,6 +132,60 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
+        // Route: POST /internal-api/subscriptions/subscribe/
+        if ($method === 'POST' && preg_match('#^internal-api/subscriptions/subscribe/?$#', $path)) {
+            $this->handleSubscriptionSubscribe($request, $response);
+            return false;
+        }
+
+        // Route: POST /internal-api/subscriptions/unsubscribe/
+        if ($method === 'POST' && preg_match('#^internal-api/subscriptions/unsubscribe/?$#', $path)) {
+            $this->handleSubscriptionUnsubscribe($request, $response);
+            return false;
+        }
+
+        // Route: GET /internal-api/subscriptions/due/
+        if ($method === 'GET' && preg_match('#^internal-api/subscriptions/due/?$#', $path)) {
+            $this->handleSubscriptionDue($request, $response);
+            return false;
+        }
+
+        // Route: POST /internal-api/subscriptions/{sub_id}/sync-result/
+        if ($method === 'POST' && preg_match('#^internal-api/subscriptions/([a-f0-9]+)/sync-result/?$#', $path, $matches)) {
+            $this->handleSubscriptionSyncResult($request, $response, $matches[1]);
+            return false;
+        }
+
+        // Route: GET /internal-api/subscriptions/{sub_id}/
+        if ($method === 'GET' && preg_match('#^internal-api/subscriptions/([a-f0-9]+)/?$#', $path, $matches)) {
+            $this->handleSubscriptionGet($request, $response, $matches[1]);
+            return false;
+        }
+
+        // Route: GET /internal-api/subscriptions/for-user/{email}
+        if ($method === 'GET' && preg_match('#^internal-api/subscriptions/for-user/(.+)$#', $path, $matches)) {
+            $this->handleSubscriptionsForUser($request, $response, urldecode($matches[1]));
+            return false;
+        }
+
+        // Route: POST /internal-api/subscriptions/cleanup-orphans/
+        if ($method === 'POST' && preg_match('#^internal-api/subscriptions/cleanup-orphans/?$#', $path)) {
+            $this->handleSubscriptionCleanupOrphans($request, $response);
+            return false;
+        }
+
+        // Route: GET /internal-api/subscriptions/{sub_id}/events/
+        if ($method === 'GET' && preg_match('#^internal-api/subscriptions/([a-f0-9]+)/events/?$#', $path, $matches)) {
+            $this->handleSubscriptionListEvents($request, $response, $matches[1]);
+            return false;
+        }
+
+        // Route: POST /internal-api/subscriptions/{sub_id}/events-batch/
+        if ($method === 'POST' && preg_match('#^internal-api/subscriptions/([a-f0-9]+)/events-batch/?$#', $path, $matches)) {
+            $this->handleSubscriptionEventsBatch($request, $response, $matches[1]);
+            return false;
+        }
+
         // Route: POST /internal-api/import/{principalUser}/{calendarUri}
         if ($method === 'POST' && preg_match('#^internal-api/import/([^/]+)/([^/]+)$#', $path, $matches)) {
             $this->handleImport($request, $response, urldecode($matches[1]), $matches[2]);
@@ -538,6 +592,20 @@ class InternalApiPlugin extends ServerPlugin
         $principalUri = 'principals/users/' . $email;
         $isMailbox = ($calendarUserType === PrincipalBackend::TYPE_MAILBOX);
         $callerIsOwner = ($callerEmail === null || $callerEmail === $email);
+
+        // Subscription calendars are created via the dedicated subscribe
+        // endpoint (principals/subscriptions/<hash>, NULL org_id, shared
+        // read-only). Steer callers there to keep this endpoint focused
+        // on the user/mailbox flow.
+        if ($calendarUserType === PrincipalBackend::TYPE_SUBSCRIPTION) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'Use POST /internal-api/subscriptions/subscribe/ to'
+                    . ' create subscription calendars',
+            ]));
+            return false;
+        }
 
         $this->pdo->beginTransaction();
         try {
@@ -1363,6 +1431,881 @@ class InternalApiPlugin extends ServerPlugin
             return $name;
         }
         return null;
+    }
+
+    // ========================================================================
+    // Subscription endpoints — shared subscription calendars.
+    //
+    // Data model: one SUBSCRIPTION principal per unique source_url
+    // (principals/subscriptions/<sha256>, NULL org_id, NULL email). One
+    // owner calendar under that principal. N sharees — each subscribing
+    // user gets a sync-managed calendarinstances row with access=2
+    // (read-only) and per-user calendarcolor/displayname. Sync state
+    // (source URL, etag, last-sync-at, error count, etc.) lives as custom
+    // WebDAV properties in propertystorage, keyed by the calendar path.
+    // ========================================================================
+
+    private const SUBS_NS = 'http://lasuite.numerique.gouv.fr/ns/';
+
+    /** Properties kept under SUBS_NS for the owner calendar path. */
+    private const SUBS_PROP_SOURCE = '{http://lasuite.numerique.gouv.fr/ns/}subscription-source';
+    private const SUBS_PROP_SYNC_INTERVAL = '{http://lasuite.numerique.gouv.fr/ns/}subscription-sync-interval';
+    private const SUBS_PROP_LAST_SYNC_AT = '{http://lasuite.numerique.gouv.fr/ns/}subscription-last-sync-at';
+    private const SUBS_PROP_LAST_SYNC_STATUS = '{http://lasuite.numerique.gouv.fr/ns/}subscription-last-sync-status';
+    private const SUBS_PROP_LAST_SYNC_ERROR = '{http://lasuite.numerique.gouv.fr/ns/}subscription-last-sync-error';
+    private const SUBS_PROP_ERROR_COUNT = '{http://lasuite.numerique.gouv.fr/ns/}subscription-error-count';
+    private const SUBS_PROP_ETAG = '{http://lasuite.numerique.gouv.fr/ns/}subscription-etag';
+    private const SUBS_PROP_LAST_MODIFIED = '{http://lasuite.numerique.gouv.fr/ns/}subscription-last-modified';
+    private const SUBS_PROP_CREATED_AT = '{http://lasuite.numerique.gouv.fr/ns/}subscription-created-at';
+
+    /** Default sync interval in seconds. */
+    private const SUBS_DEFAULT_INTERVAL = 300;
+
+    /**
+     * Resolve the (principal_uri, calendar_uri) pair for a subscription
+     * identified by its hash. Returns null if no such principal exists.
+     */
+    private function resolveSubscription(string $subscriptionId): ?array
+    {
+        $principalUri = 'principals/subscriptions/' . $subscriptionId;
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT ci.uri FROM calendarinstances ci'
+                . ' JOIN principals p ON p.uri = ci.principaluri'
+                . ' WHERE p.uri = ? AND p.calendar_user_type = ?'
+                . '   AND ci.access = 1 LIMIT 1'
+            );
+            $stmt->execute([$principalUri, PrincipalBackend::TYPE_SUBSCRIPTION]);
+            $calendarUri = $stmt->fetchColumn();
+            if ($calendarUri === false) {
+                return null;
+            }
+            return [
+                'principal_uri' => $principalUri,
+                'calendar_uri' => (string) $calendarUri,
+                'caldav_path' => 'calendars/subscriptions/' . $subscriptionId
+                    . '/' . $calendarUri . '/',
+                'property_path' => 'calendars/subscriptions/' . $subscriptionId
+                    . '/' . $calendarUri,
+                'subscription_id' => $subscriptionId,
+            ];
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] resolveSubscription DB error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Write a map of custom WebDAV properties to propertystorage for a
+     * given path. Strings are stored as valuetype=3 (string) in BYTEA,
+     * matching SabreDAV's PropertyStorage\Backend\PDO convention.
+     */
+    private function writeProperties(string $path, array $props): void
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO propertystorage (path, name, valuetype, value)'
+            . ' VALUES (?, ?, 3, ?)'
+            . ' ON CONFLICT (path, name) DO UPDATE SET'
+            . '   valuetype = EXCLUDED.valuetype,'
+            . '   value = EXCLUDED.value'
+        );
+        foreach ($props as $name => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $stmt->execute([$path, $name, (string) $value]);
+        }
+    }
+
+    /**
+     * Read a map of custom WebDAV properties for a path. Properties
+     * missing from propertystorage come back as null in the returned
+     * map.
+     */
+    private function readProperties(string $path, array $names): array
+    {
+        if (empty($names)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($names), '?'));
+        $stmt = $this->pdo->prepare(
+            'SELECT name, value FROM propertystorage'
+            . ' WHERE path = ? AND name IN (' . $placeholders . ')'
+        );
+        $stmt->execute(array_merge([$path], $names));
+        $result = array_fill_keys($names, null);
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $value = $row['value'];
+            // BYTEA columns come back as PHP streams on some drivers.
+            if (is_resource($value)) {
+                $value = stream_get_contents($value);
+            }
+            $result[$row['name']] = $value === null ? null : (string) $value;
+        }
+        return $result;
+    }
+
+    /**
+     * POST /internal-api/subscriptions/subscribe/
+     *
+     * Body: {
+     *   "user_email": "alice@co",   (required) subscribing user
+     *   "source_url": "https://...",(required) normalised ICS URL
+     *   "display_name": "...",      (optional) human-readable name
+     *   "color": "#3788d8",         (optional) per-user color
+     *   "sync_interval": 300        (optional) seconds; only honored on
+     *                                   first subscribe for this URL
+     * }
+     *
+     * Find-or-create the SUBSCRIPTION principal keyed by sha256(source_url).
+     * Insert/update a sync-managed calendarinstances row for the user.
+     */
+    private function handleSubscriptionSubscribe($request, $response)
+    {
+        $body = json_decode($request->getBodyAsString(), true);
+        if (!$body) {
+            $this->jsonError($response, 400, 'Invalid JSON body');
+            return;
+        }
+        foreach (['user_email', 'source_url'] as $field) {
+            if (empty($body[$field])) {
+                $this->jsonError($response, 400, "Missing required field: $field");
+                return;
+            }
+        }
+
+        $userEmail = (string) $body['user_email'];
+        $sourceUrl = (string) $body['source_url'];
+        $displayName = (string) ($body['display_name'] ?? $sourceUrl);
+        $color = (string) ($body['color'] ?? '#3788d8');
+        $syncInterval = (int) ($body['sync_interval'] ?? self::SUBS_DEFAULT_INTERVAL);
+        if ($syncInterval < 1) {
+            $syncInterval = self::SUBS_DEFAULT_INTERVAL;
+        }
+
+        $subscriptionId = hash('sha256', $sourceUrl);
+        $principalUri = 'principals/subscriptions/' . $subscriptionId;
+        $userPrincipal = 'principals/users/' . $userEmail;
+
+        $this->pdo->beginTransaction();
+        try {
+            // Lock the principal row (if any) so concurrent subscribes
+            // for the same URL can't race past the find-or-create.
+            $stmt = $this->pdo->prepare(
+                'SELECT id FROM principals WHERE uri = ? FOR UPDATE'
+            );
+            $stmt->execute([$principalUri]);
+            $existed = (bool) $stmt->fetchColumn();
+
+            if (!$existed) {
+                // Create the subscription principal. NULL email, NULL
+                // org_id (system-wide).
+                $stmt = $this->pdo->prepare(
+                    'INSERT INTO principals'
+                    . ' (uri, email, displayname, calendar_user_type, org_id)'
+                    . ' VALUES (?, NULL, ?, ?, NULL)'
+                );
+                $stmt->execute([
+                    $principalUri,
+                    $displayName,
+                    PrincipalBackend::TYPE_SUBSCRIPTION,
+                ]);
+
+                // Create the owner calendar under the subscription
+                // principal. URI is always 'default' (one calendar per
+                // subscription principal).
+                $this->caldavBackend->createCalendar(
+                    $principalUri,
+                    'default',
+                    [
+                        '{DAV:}displayname' => $displayName,
+                        '{http://apple.com/ns/ical/}calendar-color' => '#3788d8',
+                        '{urn:ietf:params:xml:ns:caldav}supported-calendar-component-set'
+                            => new \Sabre\CalDAV\Xml\Property\SupportedCalendarComponentSet(['VEVENT']),
+                    ]
+                );
+
+                // Write the initial sync-state properties.
+                $propertyPath = 'calendars/subscriptions/' . $subscriptionId . '/default';
+                $this->writeProperties($propertyPath, [
+                    self::SUBS_PROP_SOURCE => $sourceUrl,
+                    self::SUBS_PROP_SYNC_INTERVAL => (string) $syncInterval,
+                    self::SUBS_PROP_LAST_SYNC_STATUS => 'pending',
+                    self::SUBS_PROP_LAST_SYNC_ERROR => '',
+                    self::SUBS_PROP_ERROR_COUNT => '0',
+                    self::SUBS_PROP_ETAG => '',
+                    self::SUBS_PROP_LAST_MODIFIED => '',
+                    self::SUBS_PROP_CREATED_AT => gmdate('Y-m-d\TH:i:s\Z'),
+                ]);
+            }
+
+            // Resolve calendar id for the share row. Owner instance must
+            // exist by now — either pre-existing or freshly inserted.
+            $stmt = $this->pdo->prepare(
+                'SELECT calendarid, uri FROM calendarinstances'
+                . ' WHERE principaluri = ? AND access = 1 LIMIT 1'
+            );
+            $stmt->execute([$principalUri]);
+            $ownerRow = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$ownerRow) {
+                throw new \RuntimeException(
+                    'Owner calendar missing for subscription ' . $subscriptionId
+                );
+            }
+            $calendarId = (int) $ownerRow['calendarid'];
+            $ownerUri = (string) $ownerRow['uri'];
+
+            // Insert-or-update the user's sharee row. Color and display
+            // name are set on first subscribe only; subsequent subscribes
+            // (idempotent) leave them alone.
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO calendarinstances'
+                . ' (calendarid, principaluri, access, uri, displayname,'
+                . '  calendarcolor, share_href, share_displayname,'
+                . '  share_invitestatus, transparent, is_sync_managed)'
+                . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 0, TRUE)'
+                . ' ON CONFLICT (principaluri, calendarid) DO NOTHING'
+            );
+            $stmt->execute([
+                $calendarId,
+                $userPrincipal,
+                PrincipalBackend::ACCESS_READ,
+                UUIDUtil::getUUID(),
+                $displayName,
+                $color,
+                'mailto:' . $userEmail,
+                $userEmail,
+            ]);
+
+            // Fetch the user's sharee URI for the response.
+            $stmt = $this->pdo->prepare(
+                'SELECT uri FROM calendarinstances'
+                . ' WHERE principaluri = ? AND calendarid = ? LIMIT 1'
+            );
+            $stmt->execute([$userPrincipal, $calendarId]);
+            $shareeUri = (string) $stmt->fetchColumn();
+
+            $this->pdo->commit();
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            error_log('[InternalApiPlugin] subscribe failed: ' . $e->getMessage());
+            $this->jsonError($response, 500, 'Failed to subscribe');
+            return;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'subscription_id' => $subscriptionId,
+            'principal_uri' => $principalUri,
+            'owner_calendar_uri' => $ownerUri,
+            'user_calendar_uri' => $shareeUri,
+            'caldav_path' => 'calendars/subscriptions/' . $subscriptionId
+                . '/' . $ownerUri . '/',
+            'user_caldav_path' => 'calendars/users/' . $userEmail
+                . '/' . $shareeUri . '/',
+            'created' => !$existed,
+        ]));
+    }
+
+    /**
+     * POST /internal-api/subscriptions/unsubscribe/
+     *
+     * Body: {"user_email": "alice@co", "subscription_id": "<sha256>"}
+     *
+     * Removes the user's sharee row. Does NOT touch the owner calendar
+     * or principal — cleanup-orphans handles that when the last sharee
+     * leaves.
+     */
+    private function handleSubscriptionUnsubscribe($request, $response)
+    {
+        $body = json_decode($request->getBodyAsString(), true);
+        if (!$body) {
+            $this->jsonError($response, 400, 'Invalid JSON body');
+            return;
+        }
+        foreach (['user_email', 'subscription_id'] as $field) {
+            if (empty($body[$field])) {
+                $this->jsonError($response, 400, "Missing required field: $field");
+                return;
+            }
+        }
+
+        $userEmail = (string) $body['user_email'];
+        $subscriptionId = (string) $body['subscription_id'];
+        $principalUri = 'principals/subscriptions/' . $subscriptionId;
+        $userPrincipal = 'principals/users/' . $userEmail;
+
+        try {
+            $stmt = $this->pdo->prepare(
+                'DELETE FROM calendarinstances'
+                . ' WHERE principaluri = ?'
+                . '   AND calendarid IN ('
+                . '     SELECT calendarid FROM calendarinstances'
+                . '     WHERE principaluri = ? AND access = 1'
+                . '   )'
+            );
+            $stmt->execute([$userPrincipal, $principalUri]);
+            $deleted = $stmt->rowCount();
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] unsubscribe failed: ' . $e->getMessage());
+            $this->jsonError($response, 500, 'Failed to unsubscribe');
+            return;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'deleted' => (bool) $deleted,
+        ]));
+    }
+
+    /**
+     * GET /internal-api/subscriptions/due/?limit=500
+     *
+     * Returns subscriptions whose last_sync_at + sync_interval is in the
+     * past, sorted oldest-first. The scheduler fans out one Dramatiq task
+     * per result.
+     */
+    private function handleSubscriptionDue($request, $response)
+    {
+        $limit = (int) ($request->getQueryParameters()['limit'] ?? 500);
+        if ($limit < 1 || $limit > 5000) {
+            $limit = 500;
+        }
+
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT p.uri AS principal_uri, ci.uri AS calendar_uri,'
+                . ' SUBSTR(p.uri, LENGTH(\'principals/subscriptions/\') + 1) AS subscription_id'
+                . ' FROM principals p'
+                . ' JOIN calendarinstances ci'
+                . '   ON ci.principaluri = p.uri AND ci.access = 1'
+                . ' WHERE p.calendar_user_type = ?'
+                . ' ORDER BY p.id ASC'
+                . ' LIMIT ' . $limit
+            );
+            $stmt->execute([PrincipalBackend::TYPE_SUBSCRIPTION]);
+            $candidates = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] due query failed: ' . $e->getMessage());
+            $this->jsonError($response, 500, 'Failed to query due subscriptions');
+            return;
+        }
+
+        $now = time();
+        $due = [];
+        foreach ($candidates as $row) {
+            $path = 'calendars/subscriptions/' . $row['subscription_id']
+                . '/' . $row['calendar_uri'];
+            $props = $this->readProperties($path, [
+                self::SUBS_PROP_SOURCE,
+                self::SUBS_PROP_SYNC_INTERVAL,
+                self::SUBS_PROP_LAST_SYNC_AT,
+                self::SUBS_PROP_ETAG,
+                self::SUBS_PROP_LAST_MODIFIED,
+            ]);
+
+            // Drop rows with no source — something went wrong on subscribe.
+            if (empty($props[self::SUBS_PROP_SOURCE])) {
+                continue;
+            }
+
+            $interval = (int) ($props[self::SUBS_PROP_SYNC_INTERVAL]
+                ?? self::SUBS_DEFAULT_INTERVAL);
+            if ($interval < 1) {
+                $interval = self::SUBS_DEFAULT_INTERVAL;
+            }
+
+            $lastSyncAt = $props[self::SUBS_PROP_LAST_SYNC_AT] ?? null;
+            if ($lastSyncAt) {
+                $lastTs = strtotime($lastSyncAt);
+                if ($lastTs !== false && $lastTs + $interval > $now) {
+                    continue;
+                }
+            }
+
+            $due[] = [
+                'subscription_id' => $row['subscription_id'],
+                'principal_uri' => $row['principal_uri'],
+                'calendar_uri' => $row['calendar_uri'],
+                'caldav_path' => 'calendars/subscriptions/' . $row['subscription_id']
+                    . '/' . $row['calendar_uri'] . '/',
+                'source_url' => $props[self::SUBS_PROP_SOURCE],
+                'sync_interval' => $interval,
+                'etag' => $props[self::SUBS_PROP_ETAG] ?? '',
+                'last_modified' => $props[self::SUBS_PROP_LAST_MODIFIED] ?? '',
+            ];
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode(['subscriptions' => $due]));
+    }
+
+    /**
+     * POST /internal-api/subscriptions/{sub_id}/sync-result/
+     *
+     * Body: {
+     *   "status": "ok"|"error"|"stopped",
+     *   "etag": "...",            (optional, only on ok/304)
+     *   "last_modified": "...",   (optional)
+     *   "error_message": "...",   (optional, max 512 chars)
+     *   "error_count": N          (optional, when status=error)
+     * }
+     */
+    private function handleSubscriptionSyncResult($request, $response, string $subscriptionId)
+    {
+        $body = json_decode($request->getBodyAsString(), true);
+        if (!$body || empty($body['status'])) {
+            $this->jsonError($response, 400, 'Missing status field');
+            return;
+        }
+
+        $sub = $this->resolveSubscription($subscriptionId);
+        if ($sub === null) {
+            $this->jsonError($response, 404, 'Subscription not found');
+            return;
+        }
+
+        $status = (string) $body['status'];
+        if (!in_array($status, ['ok', 'error', 'stopped', 'pending'], true)) {
+            $this->jsonError($response, 400, 'Invalid status value');
+            return;
+        }
+
+        $props = [
+            self::SUBS_PROP_LAST_SYNC_AT => gmdate('Y-m-d\TH:i:s\Z'),
+            self::SUBS_PROP_LAST_SYNC_STATUS => $status,
+        ];
+        if (isset($body['etag'])) {
+            $props[self::SUBS_PROP_ETAG] = (string) $body['etag'];
+        }
+        if (isset($body['last_modified'])) {
+            $props[self::SUBS_PROP_LAST_MODIFIED] = (string) $body['last_modified'];
+        }
+        if (isset($body['error_message'])) {
+            $props[self::SUBS_PROP_LAST_SYNC_ERROR] = substr(
+                (string) $body['error_message'],
+                0,
+                512
+            );
+        }
+        if (isset($body['error_count'])) {
+            $props[self::SUBS_PROP_ERROR_COUNT] = (string) (int) $body['error_count'];
+        }
+
+        try {
+            $this->writeProperties($sub['property_path'], $props);
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] sync-result write failed: ' . $e->getMessage());
+            $this->jsonError($response, 500, 'Failed to update sync state');
+            return;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode(['updated' => true]));
+    }
+
+    /**
+     * GET /internal-api/subscriptions/for-user/{email}
+     *
+     * Lists the user's subscription shares with their sync state. Powers
+     * the Django subscription list endpoint.
+     */
+    private function handleSubscriptionsForUser($request, $response, string $email)
+    {
+        $userPrincipal = 'principals/users/' . $email;
+
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT owner_p.uri AS principal_uri,'
+                . '       owner_ci.uri AS owner_calendar_uri,'
+                . '       user_ci.uri AS user_calendar_uri,'
+                . '       user_ci.calendarcolor AS color,'
+                . '       user_ci.displayname AS display_name,'
+                . '       SUBSTR(owner_p.uri, LENGTH(\'principals/subscriptions/\') + 1) AS subscription_id'
+                . ' FROM calendarinstances user_ci'
+                . ' JOIN calendarinstances owner_ci'
+                . '   ON owner_ci.calendarid = user_ci.calendarid AND owner_ci.access = 1'
+                . ' JOIN principals owner_p ON owner_p.uri = owner_ci.principaluri'
+                . ' WHERE user_ci.principaluri = ?'
+                . '   AND owner_p.calendar_user_type = ?'
+                . ' ORDER BY user_ci.id ASC'
+            );
+            $stmt->execute([$userPrincipal, PrincipalBackend::TYPE_SUBSCRIPTION]);
+            $shares = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] for-user query failed: ' . $e->getMessage());
+            $this->jsonError($response, 500, 'Failed to list subscriptions');
+            return;
+        }
+
+        $propNames = [
+            self::SUBS_PROP_SOURCE,
+            self::SUBS_PROP_SYNC_INTERVAL,
+            self::SUBS_PROP_LAST_SYNC_AT,
+            self::SUBS_PROP_LAST_SYNC_STATUS,
+            self::SUBS_PROP_LAST_SYNC_ERROR,
+            self::SUBS_PROP_ERROR_COUNT,
+            self::SUBS_PROP_CREATED_AT,
+        ];
+
+        $result = [];
+        foreach ($shares as $row) {
+            $path = 'calendars/subscriptions/' . $row['subscription_id']
+                . '/' . $row['owner_calendar_uri'];
+            $props = $this->readProperties($path, $propNames);
+            $result[] = [
+                'subscription_id' => $row['subscription_id'],
+                'caldav_path' => 'calendars/users/' . $email
+                    . '/' . $row['user_calendar_uri'] . '/',
+                'display_name' => $row['display_name'],
+                'color' => $row['color'],
+                'source_url' => $props[self::SUBS_PROP_SOURCE] ?? '',
+                'sync_interval' => (int) ($props[self::SUBS_PROP_SYNC_INTERVAL]
+                    ?? self::SUBS_DEFAULT_INTERVAL),
+                'last_sync_at' => $props[self::SUBS_PROP_LAST_SYNC_AT],
+                'last_sync_status' => $props[self::SUBS_PROP_LAST_SYNC_STATUS] ?? 'pending',
+                'last_sync_error' => $props[self::SUBS_PROP_LAST_SYNC_ERROR] ?? '',
+                'error_count' => (int) ($props[self::SUBS_PROP_ERROR_COUNT] ?? 0),
+                'created_at' => $props[self::SUBS_PROP_CREATED_AT],
+            ];
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode(['subscriptions' => $result]));
+    }
+
+    /**
+     * POST /internal-api/subscriptions/cleanup-orphans/
+     *
+     * Body (optional): {"min_age_seconds": 300}
+     *
+     * Deletes subscription principals with zero sharees that have been
+     * orphaned for at least ``min_age_seconds`` (default 300s). The
+     * grace period prevents racing with in-flight subscribe flows that
+     * create the principal before adding the first sharee row.
+     */
+    private function handleSubscriptionCleanupOrphans($request, $response)
+    {
+        $body = json_decode($request->getBodyAsString(), true) ?: [];
+        $minAgeSeconds = (int) ($body['min_age_seconds'] ?? 300);
+        if ($minAgeSeconds < 0) {
+            $minAgeSeconds = 0;
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            // Find subscription principals with zero sharees.
+            $stmt = $this->pdo->prepare(
+                'SELECT p.uri AS principal_uri, ci.calendarid, ci.uri AS calendar_uri,'
+                . '       SUBSTR(p.uri, LENGTH(\'principals/subscriptions/\') + 1) AS subscription_id'
+                . ' FROM principals p'
+                . ' JOIN calendarinstances ci'
+                . '   ON ci.principaluri = p.uri AND ci.access = 1'
+                . ' WHERE p.calendar_user_type = ?'
+                . '   AND NOT EXISTS ('
+                . '     SELECT 1 FROM calendarinstances s'
+                . '     WHERE s.calendarid = ci.calendarid AND s.access > 1'
+                . '   )'
+                . ' FOR UPDATE OF p'
+            );
+            $stmt->execute([PrincipalBackend::TYPE_SUBSCRIPTION]);
+            $candidates = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            $deleted = 0;
+            $now = time();
+            foreach ($candidates as $row) {
+                $path = 'calendars/subscriptions/' . $row['subscription_id']
+                    . '/' . $row['calendar_uri'];
+                if ($minAgeSeconds > 0) {
+                    $props = $this->readProperties($path, [self::SUBS_PROP_CREATED_AT]);
+                    $createdAt = $props[self::SUBS_PROP_CREATED_AT] ?? null;
+                    if ($createdAt) {
+                        $ts = strtotime($createdAt);
+                        if ($ts !== false && $now - $ts < $minAgeSeconds) {
+                            continue;
+                        }
+                    }
+                }
+
+                $calendarId = (int) $row['calendarid'];
+
+                // Delete calendar objects and the calendar itself via
+                // the CalDAV backend so sync tokens are updated cleanly.
+                $del = $this->pdo->prepare(
+                    'DELETE FROM calendarobjects WHERE calendarid = ?'
+                );
+                $del->execute([$calendarId]);
+
+                $del = $this->pdo->prepare(
+                    'DELETE FROM calendarinstances WHERE calendarid = ?'
+                );
+                $del->execute([$calendarId]);
+
+                $del = $this->pdo->prepare('DELETE FROM calendars WHERE id = ?');
+                $del->execute([$calendarId]);
+
+                $del = $this->pdo->prepare('DELETE FROM principals WHERE uri = ?');
+                $del->execute([$row['principal_uri']]);
+
+                $del = $this->pdo->prepare(
+                    'DELETE FROM propertystorage WHERE path LIKE ?'
+                );
+                $del->execute([$path . '%']);
+
+                $deleted++;
+            }
+
+            $this->pdo->commit();
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            error_log('[InternalApiPlugin] cleanup-orphans failed: ' . $e->getMessage());
+            $this->jsonError($response, 500, 'Failed to clean up orphans');
+            return;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'deleted_count' => $deleted,
+            'candidate_count' => count($candidates),
+        ]));
+    }
+
+    /**
+     * GET /internal-api/subscriptions/{sub_id}/
+     *
+     * Returns the full sync state for a single subscription. Used by
+     * the sync worker to look up source_url/etag/last-modified when
+     * re-entering via Dramatiq with only a subscription_id.
+     */
+    private function handleSubscriptionGet($request, $response, string $subscriptionId)
+    {
+        $sub = $this->resolveSubscription($subscriptionId);
+        if ($sub === null) {
+            $this->jsonError($response, 404, 'Subscription not found');
+            return;
+        }
+        $props = $this->readProperties($sub['property_path'], [
+            self::SUBS_PROP_SOURCE,
+            self::SUBS_PROP_SYNC_INTERVAL,
+            self::SUBS_PROP_LAST_SYNC_AT,
+            self::SUBS_PROP_LAST_SYNC_STATUS,
+            self::SUBS_PROP_LAST_SYNC_ERROR,
+            self::SUBS_PROP_ERROR_COUNT,
+            self::SUBS_PROP_ETAG,
+            self::SUBS_PROP_LAST_MODIFIED,
+            self::SUBS_PROP_CREATED_AT,
+        ]);
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'subscription_id' => $subscriptionId,
+            'principal_uri' => $sub['principal_uri'],
+            'caldav_path' => $sub['caldav_path'],
+            'source_url' => $props[self::SUBS_PROP_SOURCE] ?? '',
+            'sync_interval' => (int) ($props[self::SUBS_PROP_SYNC_INTERVAL]
+                ?? self::SUBS_DEFAULT_INTERVAL),
+            'last_sync_at' => $props[self::SUBS_PROP_LAST_SYNC_AT],
+            'last_sync_status' => $props[self::SUBS_PROP_LAST_SYNC_STATUS] ?? 'pending',
+            'last_sync_error' => $props[self::SUBS_PROP_LAST_SYNC_ERROR] ?? '',
+            'error_count' => (int) ($props[self::SUBS_PROP_ERROR_COUNT] ?? 0),
+            'etag' => $props[self::SUBS_PROP_ETAG] ?? '',
+            'last_modified' => $props[self::SUBS_PROP_LAST_MODIFIED] ?? '',
+            'created_at' => $props[self::SUBS_PROP_CREATED_AT],
+        ]));
+    }
+
+    /**
+     * Resolve the calendarid for a subscription owner calendar. Returns
+     * null if the subscription does not exist.
+     */
+    private function resolveSubscriptionCalendarId(string $subscriptionId): ?int
+    {
+        $principalUri = 'principals/subscriptions/' . $subscriptionId;
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT ci.calendarid FROM calendarinstances ci'
+                . ' JOIN principals p ON p.uri = ci.principaluri'
+                . ' WHERE p.uri = ? AND p.calendar_user_type = ?'
+                . '   AND ci.access = 1 LIMIT 1'
+            );
+            $stmt->execute([$principalUri, PrincipalBackend::TYPE_SUBSCRIPTION]);
+            $value = $stmt->fetchColumn();
+            return $value === false ? null : (int) $value;
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] resolveSubscriptionCalendarId DB error: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * GET /internal-api/subscriptions/{sub_id}/events/
+     *
+     * Lists the current events in the subscription's owner calendar,
+     * keyed by UID. Used by the sync worker to compute the diff against
+     * freshly-fetched ICS data.
+     */
+    private function handleSubscriptionListEvents($request, $response, string $subscriptionId)
+    {
+        $calendarId = $this->resolveSubscriptionCalendarId($subscriptionId);
+        if ($calendarId === null) {
+            $this->jsonError($response, 404, 'Subscription not found');
+            return;
+        }
+
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT uid, uri, calendardata FROM calendarobjects'
+                . ' WHERE calendarid = ?'
+            );
+            $stmt->execute([$calendarId]);
+            $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] list events failed: ' . $e->getMessage());
+            $this->jsonError($response, 500, 'Failed to list events');
+            return;
+        }
+
+        $events = [];
+        foreach ($rows as $row) {
+            $data = $row['calendardata'];
+            if (is_resource($data)) {
+                $data = stream_get_contents($data);
+            }
+            $events[] = [
+                'uid' => (string) $row['uid'],
+                'uri' => (string) $row['uri'],
+                'ics' => $data === null ? '' : (string) $data,
+            ];
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'subscription_id' => $subscriptionId,
+            'events' => $events,
+        ]));
+    }
+
+    /**
+     * POST /internal-api/subscriptions/{sub_id}/events-batch/
+     *
+     * Body: {
+     *   "upsert": [{"uid": "...", "uri": "abc.ics", "ics": "BEGIN:VCAL..."}],
+     *   "delete": ["uri1.ics", "uri2.ics"]
+     * }
+     *
+     * Applies a batch of event create/update/delete ops through the
+     * CalDAV backend so sync tokens stay consistent. Called by the
+     * subscription sync worker after diffing the upstream ICS.
+     */
+    private function handleSubscriptionEventsBatch($request, $response, string $subscriptionId)
+    {
+        $body = json_decode($request->getBodyAsString(), true);
+        if (!is_array($body)) {
+            $this->jsonError($response, 400, 'Invalid JSON body');
+            return;
+        }
+
+        $calendarId = $this->resolveSubscriptionCalendarId($subscriptionId);
+        if ($calendarId === null) {
+            $this->jsonError($response, 404, 'Subscription not found');
+            return;
+        }
+
+        // Find the owner calendarinstance id — needed for deleteCalendarObject.
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT id FROM calendarinstances'
+                . ' WHERE calendarid = ? AND access = 1 LIMIT 1'
+            );
+            $stmt->execute([$calendarId]);
+            $instanceId = (int) $stmt->fetchColumn();
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] events-batch instance lookup failed: ' . $e->getMessage());
+            $this->jsonError($response, 500, 'Failed to resolve calendar');
+            return;
+        }
+
+        $created = 0;
+        $updated = 0;
+        $deleted = 0;
+        $errors = [];
+
+        $upserts = is_array($body['upsert'] ?? null) ? $body['upsert'] : [];
+        $deletes = is_array($body['delete'] ?? null) ? $body['delete'] : [];
+
+        foreach ($upserts as $i => $item) {
+            if (!is_array($item) || empty($item['uri']) || empty($item['ics'])) {
+                $errors[] = "upsert[$i] missing uri or ics";
+                continue;
+            }
+            $uri = (string) $item['uri'];
+            $ics = (string) $item['ics'];
+            try {
+                // Does the object already exist?
+                $existed = $this->caldavBackend->getCalendarObject(
+                    [$calendarId, $instanceId],
+                    $uri
+                );
+                if ($existed) {
+                    $this->caldavBackend->updateCalendarObject(
+                        [$calendarId, $instanceId],
+                        $uri,
+                        $ics
+                    );
+                    $updated++;
+                } else {
+                    $this->caldavBackend->createCalendarObject(
+                        [$calendarId, $instanceId],
+                        $uri,
+                        $ics
+                    );
+                    $created++;
+                }
+            } catch (\Exception $e) {
+                $errors[] = "upsert[$i] ($uri): " . $e->getMessage();
+            }
+        }
+
+        foreach ($deletes as $i => $uri) {
+            $uri = (string) $uri;
+            if ($uri === '') {
+                continue;
+            }
+            try {
+                $this->caldavBackend->deleteCalendarObject(
+                    [$calendarId, $instanceId],
+                    $uri
+                );
+                $deleted++;
+            } catch (\Exception $e) {
+                $errors[] = "delete[$i] ($uri): " . $e->getMessage();
+            }
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'created' => $created,
+            'updated' => $updated,
+            'deleted' => $deleted,
+            'errors' => $errors,
+        ]));
+    }
+
+    /** Small helper to emit a JSON error response. */
+    private function jsonError($response, int $status, string $message): void
+    {
+        $response->setStatus($status);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode(['error' => $message]));
     }
 
     public function getPluginInfo()

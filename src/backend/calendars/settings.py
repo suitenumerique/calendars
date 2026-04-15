@@ -110,6 +110,16 @@ class Base(Configuration):
         20, environ_name="MAX_SUBSCRIPTIONS_PER_USER", environ_prefix=None
     )
 
+    # Grace period before an orphaned subscription principal (no sharees)
+    # is reaped by the cleanup job. Prevents racing with in-flight
+    # subscribe flows that create the principal before adding the first
+    # sharee row.
+    SUBSCRIPTION_ORPHAN_MAX_AGE_SECONDS = values.IntegerValue(
+        300,
+        environ_name="SUBSCRIPTION_ORPHAN_MAX_AGE_SECONDS",
+        environ_prefix=None,
+    )
+
     # Default calendar sharing level for new organizations.
     # Controls what colleagues in the same org can see by default.
     # Values: "none", "freebusy", "read", "write"
@@ -922,6 +932,8 @@ class Base(Configuration):
             raise ValueError("SUBSCRIPTION_SYNC_INTERVAL must be >= 1")
         if cls.MAX_SUBSCRIPTIONS_PER_USER < 1:
             raise ValueError("MAX_SUBSCRIPTIONS_PER_USER must be >= 1")
+        if cls.SUBSCRIPTION_ORPHAN_MAX_AGE_SECONDS < 0:
+            raise ValueError("SUBSCRIPTION_ORPHAN_MAX_AGE_SECONDS must be >= 0")
 
         # The SENTRY_DSN setting should be available to activate sentry for an environment
         if cls.SENTRY_DSN is not None:

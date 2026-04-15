@@ -2,7 +2,8 @@
 
 ## Prérequis
 
-- `make start` (tous les services up, y compris `subscription-scheduler`)
+- `make start` (tous les services up)
+- `sync_all_subscriptions` et `cleanup_orphan_subscriptions` sont déclenchés par cron externe (voir docs de déploiement)
 - Être connecté sur http://localhost:8930
 - Avoir au moins un calendrier personnel existant
 - Avoir une URL ICS publique valide pour tester (ex: jours fériés français : `https://calendrier.api.gouv.fr/jours-feries/metropole.ics`, ou un calendrier Google public)

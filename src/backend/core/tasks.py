@@ -14,67 +14,106 @@ logger = logging.getLogger(__name__)
 
 
 @register_task(queue="sync")
-def sync_one_subscription(channel_id):
-    """Sync a single external calendar subscription."""
+def sync_one_subscription(subscription_id):
+    """Sync a single external calendar subscription by ID."""
     from core.services.subscription_sync_service import (  # noqa: PLC0415
         SubscriptionSyncService,
     )
 
     service = SubscriptionSyncService()
-    return service.sync_channel(channel_id)
+    return service.sync_subscription(subscription_id)
 
 
 @register_task(queue="sync")
 def sync_all_subscriptions():
-    """Fan out sync tasks for all active subscriptions due for sync."""
-    from django.utils import timezone as tz  # noqa: PLC0415
+    """Fan out sync tasks for all subscriptions due for sync.
 
-    from core.models import Channel  # noqa: PLC0415
+    Scheduled externally (cron). Queries SabreDAV's internal API for
+    the due list — the ``/internal-api/subscriptions/due/`` endpoint
+    reads sync state directly from ``propertystorage`` so there is no
+    Django model involved.
+    """
+    from core.services.caldav_service import CalDAVHTTPClient  # noqa: PLC0415
+    from core.services.subscription_sync_service import (  # noqa: PLC0415
+        _SystemUser,
+    )
 
-    now = tz.now()
-    channels = Channel.objects.filter(
-        type="ical-subscription",
-        is_active=True,
-    ).iterator(chunk_size=500)
-
-    dispatched = 0
-    for channel in channels:
-        raw_sync_interval = channel.settings.get(
-            "sync_interval", settings.SUBSCRIPTION_SYNC_INTERVAL
+    http = CalDAVHTTPClient()
+    try:
+        resp = http.internal_request(
+            "GET",
+            _SystemUser(),
+            "internal-api/subscriptions/due/?limit=500",
         )
-        try:
-            sync_interval = max(int(raw_sync_interval), 1)
-        except (TypeError, ValueError):
-            logger.warning(
-                "Invalid sync_interval for channel %s: %r",
-                channel.pk,
-                raw_sync_interval,
-            )
-            sync_interval = settings.SUBSCRIPTION_SYNC_INTERVAL
-        last_sync_at = channel.settings.get("last_sync_at")
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("Failed to query due subscriptions")
+        return 0
 
-        # Check if channel is due for sync
-        if last_sync_at:
-            from django.utils.dateparse import (  # noqa: PLC0415
-                parse_datetime,
-            )
+    if resp.status_code != 200:
+        logger.error("due endpoint returned %s: %s", resp.status_code, resp.text[:500])
+        return 0
 
-            last_sync = parse_datetime(last_sync_at)
-            if last_sync and (now - last_sync).total_seconds() < sync_interval:
-                continue
-
-        # Stagger delay based on channel ID (deterministic across restarts)
-        import uuid  # noqa: PLC0415
-
-        delay_ms = (int(uuid.UUID(str(channel.pk))) % sync_interval) * 1000
+    due = resp.json().get("subscriptions", [])
+    dispatched = 0
+    for sub in due:
+        subscription_id = sub.get("subscription_id")
+        if not subscription_id:
+            continue
+        sync_interval = max(
+            int(sub.get("sync_interval", settings.SUBSCRIPTION_SYNC_INTERVAL)),
+            1,
+        )
+        # Stagger delay based on subscription ID (deterministic across restarts).
+        delay_ms = (int(subscription_id[:8], 16) % sync_interval) * 1000
         sync_one_subscription.send_with_options(
-            args=(str(channel.pk),),
+            args=(subscription_id,),
             delay=delay_ms,
         )
         dispatched += 1
 
     logger.info("Dispatched %d subscription sync tasks", dispatched)
     return dispatched
+
+
+@register_task(queue="sync")
+def cleanup_orphan_subscriptions():
+    """Delete subscription principals with zero sharees.
+
+    Scheduled externally (cron). Calls the internal API cleanup endpoint;
+    the PHP side handles the actual SQL deletes of calendars, events,
+    instances, principals, and propertystorage rows in one transaction.
+    """
+    from core.services.caldav_service import CalDAVHTTPClient  # noqa: PLC0415
+    from core.services.subscription_sync_service import (  # noqa: PLC0415
+        _SystemUser,
+    )
+
+    min_age = getattr(settings, "SUBSCRIPTION_ORPHAN_MAX_AGE_SECONDS", 300)
+    http = CalDAVHTTPClient()
+    try:
+        resp = http.internal_request(
+            "POST",
+            _SystemUser(),
+            "internal-api/subscriptions/cleanup-orphans/",
+            json={"min_age_seconds": min_age},
+        )
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("Orphan cleanup failed")
+        return 0
+
+    if resp.status_code != 200:
+        logger.error(
+            "cleanup endpoint returned %s: %s", resp.status_code, resp.text[:500]
+        )
+        return 0
+    body = resp.json()
+    deleted = body.get("deleted_count", 0)
+    logger.info(
+        "cleanup_orphan_subscriptions: deleted %d orphans (candidates=%d)",
+        deleted,
+        body.get("candidate_count", 0),
+    )
+    return deleted
 
 
 @register_task(queue="import")

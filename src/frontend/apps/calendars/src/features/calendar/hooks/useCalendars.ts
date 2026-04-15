@@ -14,12 +14,11 @@ import {
   startImportTask,
   pollImportTask,
   ImportEventsResult,
-  SubscriptionChannel,
-  getSubscriptionChannels,
-  createSubscriptionChannel,
-  updateSubscriptionChannel,
-  deleteSubscriptionChannel,
-  reactivateSubscriptionChannel,
+  Subscription,
+  getSubscriptions,
+  createSubscription,
+  deleteSubscription,
+  reactivateSubscription,
 } from "../api";
 import { SYNC_POLL_INTERVAL } from "../config";
 
@@ -115,86 +114,50 @@ export const useImportEvents = () => {
 };
 
 // ============================================================================
-// Subscription Channel Hooks
+// Subscription Hooks — shared SabreDAV-backed ICS subscriptions.
 // ============================================================================
 
-/**
- * Hook to get all subscription channels.
- */
-export const useSubscriptionChannels = () => {
-  return useQuery<SubscriptionChannel[]>({
-    queryKey: ["subscription-channels"],
-    queryFn: getSubscriptionChannels,
+/** Hook to list the current user's subscription shares. */
+export const useSubscriptions = () => {
+  return useQuery<Subscription[]>({
+    queryKey: ["subscriptions"],
+    queryFn: getSubscriptions,
     refetchInterval: SYNC_POLL_INTERVAL,
   });
 };
 
-/**
- * Hook to create a subscription channel.
- */
-export const useCreateSubscriptionChannel = () => {
+/** Hook to create a subscription. */
+export const useCreateSubscription = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: createSubscriptionChannel,
+    mutationFn: createSubscription,
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["subscription-channels"],
-      });
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
     },
   });
 };
 
-/**
- * Hook to update a subscription channel.
- */
-export const useUpdateSubscriptionChannel = () => {
+/** Hook to delete a subscription share. */
+export const useDeleteSubscription = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      channelId,
-      params,
-    }: {
-      channelId: string;
-      params: { name?: string; sourceUrl?: string; color?: string };
-    }) => updateSubscriptionChannel(channelId, params),
+    mutationFn: deleteSubscription,
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["subscription-channels"],
-      });
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
     },
   });
 };
 
-/**
- * Hook to delete a subscription channel.
- */
-export const useDeleteSubscriptionChannel = () => {
+/** Hook to reactivate a stopped subscription. */
+export const useReactivateSubscription = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deleteSubscriptionChannel,
+    mutationFn: reactivateSubscription,
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["subscription-channels"],
-      });
-    },
-  });
-};
-
-/**
- * Hook to reactivate a stopped subscription channel.
- */
-export const useReactivateSubscriptionChannel = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: reactivateSubscriptionChannel,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["subscription-channels"],
-      });
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
     },
   });
 };

@@ -116,30 +116,6 @@ services:
       - ./src/frontend/apps/calendars/src/features/i18n/translations.json:/data/translations.json:ro
       - /app/.venv
 
-  subscription-scheduler:
-    user: ${DOCKER_USER:-1000}
-    image: calendars:backend-development
-    restart: unless-stopped
-    networks:
-      - default
-      - lasuite
-    command: [ "python", "manage.py", "run_subscription_scheduler" ]
-    environment:
-      - DJANGO_CONFIGURATION=Development
-    env_file:
-      - env.d/development/backend.defaults
-      - env.d/development/backend.local
-    volumes:
-      - ./src/backend:/app
-      - ./data/static:/data/static
-      - ./src/frontend/apps/calendars/src/features/i18n/translations.json:/data/translations.json:ro
-      - /app/.venv
-    depends_on:
-      postgresql:
-        condition: service_healthy
-      redis:
-        condition: service_started
-
   frontend-dev:
     user: "${DOCKER_USER:-1000}"
     build:

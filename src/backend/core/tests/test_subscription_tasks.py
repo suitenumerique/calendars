@@ -1,109 +1,72 @@
-"""Tests for subscription sync Dramatiq tasks."""
+"""Tests for subscription background tasks.
 
-# pylint: disable=missing-class-docstring,unused-argument
+``sync_all_subscriptions`` queries SabreDAV's internal API for the due
+list; ``cleanup_orphan_subscriptions`` wraps the cleanup endpoint.
+Both are exercised with the HTTP client mocked — no SabreDAV needed.
+"""
 
-from unittest.mock import patch
+# pylint: disable=missing-class-docstring,missing-function-docstring
 
-from django.utils import timezone
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from core.factories import UserFactory
-from core.models import Channel
-from core.tasks import sync_all_subscriptions
+from core.tasks import cleanup_orphan_subscriptions, sync_all_subscriptions
 
 
-@pytest.mark.django_db
+def _mock_response(status_code: int, json_payload: dict) -> MagicMock:
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = json_payload
+    resp.text = str(json_payload)
+    return resp
+
+
 class TestSyncAllSubscriptions:
     @patch("core.tasks.sync_one_subscription")
-    def test_dispatches_for_active_channels(self, mock_sync_one):
-        """Should dispatch one task per active subscription channel."""
-        user = UserFactory()
-        Channel.objects.create(
-            name="Sub 1",
-            type="ical-subscription",
-            user=user,
-            is_active=True,
-            caldav_path="/calendars/users/test@test.com/uuid1/",
-            settings={
-                "source_url": "https://example.com/1.ics",
-                "sync_interval": 300,
-                "last_sync_status": "ok",
-                "error_count": 0,
-            },
-        )
-        Channel.objects.create(
-            name="Sub 2",
-            type="ical-subscription",
-            user=user,
-            is_active=True,
-            caldav_path="/calendars/users/test@test.com/uuid2/",
-            settings={
-                "source_url": "https://example.com/2.ics",
-                "sync_interval": 300,
-                "last_sync_status": "ok",
-                "error_count": 0,
+    @patch("core.services.caldav_service.CalDAVHTTPClient.internal_request")
+    def test_dispatches_one_task_per_due_subscription(
+        self, mock_request, mock_sync_one
+    ):
+        mock_request.return_value = _mock_response(
+            200,
+            {
+                "subscriptions": [
+                    {"subscription_id": "aabbccdd11223344", "sync_interval": 300},
+                    {"subscription_id": "00ff00ff00ff00ff", "sync_interval": 60},
+                ]
             },
         )
 
-        result = sync_all_subscriptions()
-        assert result == 2
+        dispatched = sync_all_subscriptions()
+        assert dispatched == 2
         assert mock_sync_one.send_with_options.call_count == 2
 
     @patch("core.tasks.sync_one_subscription")
-    def test_skips_inactive_channels(self, mock_sync_one):
-        """Should not dispatch for inactive channels."""
-        user = UserFactory()
-        Channel.objects.create(
-            name="Inactive Sub",
-            type="ical-subscription",
-            user=user,
-            is_active=False,
-            caldav_path="/calendars/users/test@test.com/uuid/",
-            settings={
-                "source_url": "https://example.com/cal.ics",
-                "sync_interval": 300,
-                "error_count": 3,
-            },
+    @patch("core.services.caldav_service.CalDAVHTTPClient.internal_request")
+    def test_skips_entries_without_id(self, mock_request, mock_sync_one):
+        mock_request.return_value = _mock_response(
+            200,
+            {"subscriptions": [{"sync_interval": 300}]},
         )
-
-        result = sync_all_subscriptions()
-        assert result == 0
-        assert mock_sync_one.send_with_options.call_count == 0
+        assert sync_all_subscriptions() == 0
+        mock_sync_one.send_with_options.assert_not_called()
 
     @patch("core.tasks.sync_one_subscription")
-    def test_skips_non_subscription_channels(self, mock_sync_one):
-        """Should not dispatch for ical-feed or caldav channels."""
-        user = UserFactory()
-        Channel.objects.create(
-            name="Feed",
-            type="ical-feed",
-            user=user,
-            is_active=True,
-            caldav_path="/calendars/users/test@test.com/uuid/",
-            settings={"role": "reader"},
+    @patch("core.services.caldav_service.CalDAVHTTPClient.internal_request")
+    def test_returns_zero_on_api_error(self, mock_request, mock_sync_one):
+        mock_request.return_value = _mock_response(500, {"error": "boom"})
+        assert sync_all_subscriptions() == 0
+        mock_sync_one.send_with_options.assert_not_called()
+
+
+class TestCleanupOrphanSubscriptions:
+    @patch("core.services.caldav_service.CalDAVHTTPClient.internal_request")
+    def test_returns_deleted_count(self, mock_request):
+        mock_request.return_value = _mock_response(
+            200, {"deleted_count": 4, "candidate_count": 5}
         )
+        assert cleanup_orphan_subscriptions() == 4
 
-        result = sync_all_subscriptions()
-        assert result == 0
-
-    @patch("core.tasks.sync_one_subscription")
-    def test_skips_recently_synced(self, mock_sync_one):
-        """Should skip channels that were synced recently."""
-        user = UserFactory()
-        Channel.objects.create(
-            name="Recent Sub",
-            type="ical-subscription",
-            user=user,
-            is_active=True,
-            caldav_path="/calendars/users/test@test.com/uuid/",
-            settings={
-                "source_url": "https://example.com/cal.ics",
-                "sync_interval": 300,
-                "last_sync_at": timezone.now().isoformat(),
-                "error_count": 0,
-            },
-        )
-
-        result = sync_all_subscriptions()
-        assert result == 0
+    @patch("core.services.caldav_service.CalDAVHTTPClient.internal_request")
+    def test_returns_zero_on_error(self, mock_request):
+        mock_request.return_value = _mock_response(500, {"error": "boom"})
+        assert cleanup_orphan_subscriptions() == 0

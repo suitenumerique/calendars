@@ -64,24 +64,3 @@ class ICalFeedChannelFactory(ChannelFactory):
     settings = factory.LazyAttribute(
         lambda obj: {"role": "reader", "calendar_name": fake.sentence(nb_words=3)}
     )
-
-
-class ICalSubscriptionChannelFactory(ChannelFactory):
-    """A factory to create ical-subscription channels."""
-
-    type = "ical-subscription"
-    caldav_path = factory.LazyAttribute(
-        lambda obj: f"/calendars/users/{obj.user.email}/{fake.uuid4()}/"
-    )
-    settings = factory.LazyAttribute(
-        lambda obj: {
-            "source_url": f"https://example.com/{fake.uuid4()}.ics",
-            "sync_interval": 300,
-            "last_sync_status": "ok",
-            "last_sync_error": "",
-            "error_count": 0,
-            "etag": "",
-            "last_modified": "",
-        }
-    )
-    encrypted_settings = factory.LazyFunction(dict)

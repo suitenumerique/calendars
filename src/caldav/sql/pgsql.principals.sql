@@ -22,7 +22,7 @@ CREATE INDEX idx_principals_email
 
 CREATE INDEX idx_principals_cutype
     ON principals (calendar_user_type)
-    WHERE calendar_user_type IN ('ROOM', 'RESOURCE');
+    WHERE calendar_user_type IN ('ROOM', 'RESOURCE', 'SUBSCRIPTION');
 
 CREATE TABLE groupmembers (
     id SERIAL NOT NULL,

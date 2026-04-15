@@ -7,21 +7,21 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 
-import type { SubscriptionChannel } from "../../api";
+import type { Subscription } from "../../api";
 
 interface SubscriptionStatusBadgeProps {
-  channel: SubscriptionChannel;
+  subscription: Subscription;
   onReactivate: () => void;
 }
 
 export const SubscriptionStatusBadge = ({
-  channel,
+  subscription,
   onReactivate,
 }: SubscriptionStatusBadgeProps) => {
   const { t } = useTranslation();
   const [showError, setShowError] = useState(false);
 
-  if (!channel.is_active) {
+  if (subscription.last_sync_status === "stopped") {
     return (
       <div className="subscription-status subscription-status--stopped">
         <span
@@ -32,7 +32,10 @@ export const SubscriptionStatusBadge = ({
         </span>
         {showError && (
           <div className="subscription-status__error">
-            <p>{channel.last_sync_error || t("calendar.subscription.status.stoppedDescription")}</p>
+            <p>
+              {subscription.last_sync_error ||
+                t("calendar.subscription.status.stoppedDescription")}
+            </p>
             <Button size="small" onClick={onReactivate}>
               {t("calendar.subscription.status.reactivate")}
             </Button>
@@ -51,32 +54,40 @@ export const SubscriptionStatusBadge = ({
     );
   }
 
-  if (channel.last_sync_status === "ok") {
+  if (subscription.last_sync_status === "ok") {
     return null;
   }
 
-  if (channel.last_sync_status === "error") {
+  if (subscription.last_sync_status === "error") {
     return (
       <div className="subscription-status subscription-status--error">
         <button
           className="subscription-status__icon material-icons"
-          title={channel.last_sync_error || t("calendar.subscription.status.error")}
+          title={
+            subscription.last_sync_error ||
+            t("calendar.subscription.status.error")
+          }
           onClick={() => setShowError(!showError)}
-          style={{ cursor: "pointer", background: "none", border: "none", padding: 0 }}
+          style={{
+            cursor: "pointer",
+            background: "none",
+            border: "none",
+            padding: 0,
+          }}
           aria-label={t("calendar.subscription.status.viewError")}
         >
           warning
         </button>
         {showError && (
           <div className="subscription-status__error">
-            <p>{channel.last_sync_error}</p>
+            <p>{subscription.last_sync_error}</p>
           </div>
         )}
       </div>
     );
   }
 
-  if (channel.last_sync_status === "pending") {
+  if (subscription.last_sync_status === "pending") {
     return (
       <div className="subscription-status subscription-status--pending">
         <span

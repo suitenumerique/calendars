@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { Button, Modal, ModalSize, Input } from "@gouvfr-lasuite/cunningham-react";
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
 
-import { useCreateSubscriptionChannel } from "../../hooks/useCalendars";
+import { useCreateSubscription } from "../../hooks/useCalendars";
 import { ColorPicker } from "./ColorPicker";
 import { DEFAULT_COLORS } from "./constants";
 
@@ -27,7 +27,7 @@ export const AddSubscriptionModal = ({
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLORS[0]);
-  const createMutation = useCreateSubscriptionChannel();
+  const createMutation = useCreateSubscription();
 
   const handleSubmit = async () => {
     if (!url.trim()) return;

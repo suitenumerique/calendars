@@ -119,108 +119,71 @@ export const deleteChannel = async (channelId: string): Promise<void> => {
 };
 
 // ============================================================================
-// Subscription Channel API
+// Subscription API — shared ICS subscriptions backed by SabreDAV.
+//
+// Each unique source URL maps to one SUBSCRIPTION principal on the
+// CalDAV side; users subscribe by getting a read-only share row. There
+// is no Django subscription model — the API wraps SabreDAV's internal
+// API directly.
 // ============================================================================
 
 /**
- * Subscription channel response from the API.
+ * Subscription share as returned to the current user.
  */
-export interface SubscriptionChannel {
-  id: string;
-  name: string;
-  type: "ical-subscription";
+export interface Subscription {
+  subscription_id: string;
   caldav_path: string;
-  is_active: boolean;
+  display_name: string;
+  color: string;
   source_url: string;
+  sync_interval: number;
   last_sync_at: string | null;
   last_sync_status: "pending" | "ok" | "error" | "stopped";
   last_sync_error: string;
   error_count: number;
-  sync_interval: number;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
 }
 
-/**
- * Get all subscription channels for the current user.
- */
-export const getSubscriptionChannels = async (): Promise<
-  SubscriptionChannel[]
-> => {
-  const response = await fetchAPI(`channels/?type=ical-subscription`, {
-    method: "GET",
-  });
+/** List the current user's subscription shares. */
+export const getSubscriptions = async (): Promise<Subscription[]> => {
+  const response = await fetchAPI(`subscriptions/`, { method: "GET" });
   return response.json();
 };
 
-/**
- * Create a subscription channel.
- */
-export const createSubscriptionChannel = async (params: {
+/** Create a new subscription for the current user. */
+export const createSubscription = async (params: {
   name: string;
   sourceUrl: string;
   color?: string;
-}): Promise<SubscriptionChannel> => {
+}): Promise<Subscription> => {
   const body: Record<string, string> = {
     name: params.name,
-    type: "ical-subscription",
     source_url: params.sourceUrl,
   };
   if (params.color) {
     body.color = params.color;
   }
-  const response = await fetchAPI("channels/", {
+  const response = await fetchAPI("subscriptions/", {
     method: "POST",
     body: JSON.stringify(body),
   });
   return response.json();
 };
 
-/**
- * Update a subscription channel (name and/or source URL).
- */
-export const updateSubscriptionChannel = async (
-  channelId: string,
-  params: { name?: string; sourceUrl?: string; color?: string },
-): Promise<SubscriptionChannel> => {
-  const body: Record<string, string> = {};
-  if (params.name !== undefined) {
-    body.name = params.name;
-  }
-  if (params.sourceUrl !== undefined) {
-    body.source_url = params.sourceUrl;
-  }
-  if (params.color !== undefined) {
-    body.color = params.color;
-  }
-  const response = await fetchAPI(`channels/${channelId}/`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-  return response.json();
-};
-
-/**
- * Delete a subscription channel by ID.
- */
-export const deleteSubscriptionChannel = async (
-  channelId: string,
+/** Unsubscribe the current user from a subscription. */
+export const deleteSubscription = async (
+  subscriptionId: string,
 ): Promise<void> => {
-  await fetchAPI(`channels/${channelId}/`, {
-    method: "DELETE",
-  });
+  await fetchAPI(`subscriptions/${subscriptionId}/`, { method: "DELETE" });
 };
 
-/**
- * Reactivate a stopped subscription channel.
- */
-export const reactivateSubscriptionChannel = async (
-  channelId: string,
-): Promise<SubscriptionChannel> => {
-  const response = await fetchAPI(`channels/${channelId}/reactivate/`, {
+/** Reset a stopped subscription's error counters and kick off a sync. */
+export const reactivateSubscription = async (
+  subscriptionId: string,
+): Promise<void> => {
+  await fetchAPI(`subscriptions/${subscriptionId}/reactivate/`, {
     method: "POST",
   });
-  return response.json();
 };
 
 // ============================================================================
