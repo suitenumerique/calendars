@@ -220,3 +220,23 @@
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+
+// CalendarSelect
+.calendar-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  &__color {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  &__option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+}

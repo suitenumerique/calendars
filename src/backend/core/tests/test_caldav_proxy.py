@@ -743,23 +743,14 @@ class TestInternalApiErrors:
             f"Missing email should return 400, got {resp.status_code}"
         )
 
-    def test_create_calendar_refuses_type_change(self):
-        """POST /internal-api/calendars/ must not silently flip an existing
-        principal's calendar_user_type. A second call with a different type
-        must return 409 and leave the original principal untouched.
-
-        Regression guard for the upsert-downgrade issue: previously the
-        ON CONFLICT clause used ``calendar_user_type = EXCLUDED.calendar_user_type``,
-        which let a colliding INDIVIDUAL upsert silently demote a MAILBOX
-        principal — collapsing the auth/ACL invariants other plugins rely on.
+    def test_mailbox_creates_under_mailboxes_namespace(self):
+        """POST /internal-api/calendars/ with MAILBOX type must create
+        the principal under principals/mailboxes/, not principals/users/.
         """
-        org = factories.OrganizationFactory(external_id="intapi-typechange")
-        user = factories.UserFactory(
-            email="user@intapi-typechange.com", organization=org
-        )
-        target = "shared@intapi-typechange.com"
+        org = factories.OrganizationFactory(external_id="intapi-ns")
+        user = factories.UserFactory(email="user@intapi-ns.com", organization=org)
+        target = "shared@intapi-ns.com"
 
-        # First call creates the principal as MAILBOX.
         resp = _intapi_http.request(
             "POST",
             user,
@@ -777,87 +768,22 @@ class TestInternalApiErrors:
             extra_headers=_INTAPI_HEADERS,
         )
         assert resp.status_code in (200, 201), (
-            f"Initial mailbox create failed: {resp.status_code} {resp.text}"
-        )
-
-        # Second call asks for INDIVIDUAL on the same URI → must be refused.
-        resp = _intapi_http.request(
-            "POST",
-            user,
-            "internal-api/calendars/",
-            data=json.dumps(
-                {
-                    "email": target,
-                    "name": "Shared",
-                    "calendar_user_type": "INDIVIDUAL",
-                    "org_id": str(user.organization_id),
-                }
-            ).encode("utf-8"),
-            content_type="application/json",
-            extra_headers=_INTAPI_HEADERS,
-        )
-        assert resp.status_code == 409, (
-            f"Type-change should be refused with 409, got {resp.status_code} {resp.text}"
+            f"Mailbox create failed: {resp.status_code} {resp.text}"
         )
         body = resp.json()
-        assert body.get("existing_type") == "MAILBOX"
-        assert body.get("requested_type") == "INDIVIDUAL"
+        assert body["principal_uri"] == f"principals/mailboxes/{target}", (
+            f"Expected principals/mailboxes/ namespace, got {body['principal_uri']}"
+        )
 
-    def test_create_calendar_allows_individual_to_mailbox_upgrade(self):
-        """POST /internal-api/calendars/ must allow promoting an
-        auto-provisioned INDIVIDUAL principal (no calendars) to MAILBOX.
-
-        When a user's email is also a Messages mailbox, PROPFIND
-        auto-provisioning creates the principal as INDIVIDUAL before
-        setup runs. The setup flow must be able to promote it.
+    def test_individual_and_mailbox_coexist_for_same_email(self):
+        """INDIVIDUAL and MAILBOX calendars for the same email must
+        coexist — they live in separate principal namespaces.
         """
-        org = factories.OrganizationFactory(external_id="intapi-upgrade")
-        user = factories.UserFactory(email="user@intapi-upgrade.com", organization=org)
-        target = "shared@intapi-upgrade.com"
+        org = factories.OrganizationFactory(external_id="intapi-coexist")
+        user = factories.UserFactory(email="user@intapi-coexist.com", organization=org)
+        target = "shared@intapi-coexist.com"
 
-        # PROPFIND auto-provisions the principal as INDIVIDUAL (no calendar).
-        resp = _intapi_http.request(
-            "PROPFIND",
-            user,
-            f"principals/users/{target}/",
-        )
-        assert resp.status_code in (200, 207), (
-            f"PROPFIND should auto-provision principal: {resp.status_code} {resp.text}"
-        )
-
-        # Setup call promotes to MAILBOX → must succeed.
-        resp = _intapi_http.request(
-            "POST",
-            user,
-            "internal-api/calendars/",
-            data=json.dumps(
-                {
-                    "email": target,
-                    "name": "Shared",
-                    "calendar_user_type": "MAILBOX",
-                    "org_id": str(user.organization_id),
-                    "caller_email": user.email,
-                }
-            ).encode("utf-8"),
-            content_type="application/json",
-            extra_headers=_INTAPI_HEADERS,
-        )
-        assert resp.status_code in (200, 201), (
-            f"INDIVIDUAL���MAILBOX upgrade should succeed, "
-            f"got {resp.status_code} {resp.text}"
-        )
-
-    def test_create_calendar_allows_upgrade_with_existing_calendars(self):
-        """POST /internal-api/calendars/ allows INDIVIDUAL→MAILBOX
-        even when the principal already owns calendars.
-        """
-        org = factories.OrganizationFactory(external_id="intapi-upgrade-exist")
-        user = factories.UserFactory(
-            email="user@intapi-upgrade-exist.com", organization=org
-        )
-        target = "shared@intapi-upgrade-exist.com"
-
-        # First call creates the principal as INDIVIDUAL + a calendar.
+        # Create INDIVIDUAL calendar
         resp = _intapi_http.request(
             "POST",
             user,
@@ -874,10 +800,11 @@ class TestInternalApiErrors:
             extra_headers=_INTAPI_HEADERS,
         )
         assert resp.status_code in (200, 201), (
-            f"Initial individual create failed: {resp.status_code} {resp.text}"
+            f"Individual create failed: {resp.status_code} {resp.text}"
         )
+        assert resp.json()["principal_uri"] == f"principals/users/{target}"
 
-        # Second call promotes to MAILBOX → must succeed.
+        # Create MAILBOX calendar for same email — separate namespace
         resp = _intapi_http.request(
             "POST",
             user,
@@ -885,7 +812,7 @@ class TestInternalApiErrors:
             data=json.dumps(
                 {
                     "email": target,
-                    "name": "Shared",
+                    "name": "Mailbox",
                     "calendar_user_type": "MAILBOX",
                     "org_id": str(user.organization_id),
                     "caller_email": user.email,
@@ -895,9 +822,10 @@ class TestInternalApiErrors:
             extra_headers=_INTAPI_HEADERS,
         )
         assert resp.status_code in (200, 201), (
-            f"INDIVIDUAL→MAILBOX upgrade should succeed, "
+            f"Mailbox create for same email should succeed, "
             f"got {resp.status_code} {resp.text}"
         )
+        assert resp.json()["principal_uri"] == f"principals/mailboxes/{target}"
 
     def test_sync_acls_malformed_json(self):
         """POST /internal-api/sync-mailbox-acls/ with bad JSON returns 400."""

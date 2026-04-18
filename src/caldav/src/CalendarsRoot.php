@@ -33,6 +33,7 @@ class CalendarsRoot extends DAV\Collection
     ) {
         $this->children = [
             new NamedCalendarRoot('users', $principalBackend, $caldavBackend, 'principals/users', $pdo),
+            new NamedCalendarRoot('mailboxes', $principalBackend, $caldavBackend, 'principals/mailboxes', $pdo),
             new NamedCalendarRoot('resources', $principalBackend, $caldavBackend, 'principals/resources', $pdo),
         ];
     }

@@ -4,7 +4,8 @@ Simulates the provisioning and submit endpoints so we can test
 mailbox integration without a real Messages instance.
 
 Test users (from Keycloak realm):
-  user1@example.local / user1  → admin on contact@, sender on support@
+  user1@example.local / user1  → admin on contact@, sender on support@,
+                                  admin on own email (personal mailbox)
   user2@example.local / user2  → sender on contact@, viewer on support@
   user3@example.local / user3  → viewer on contact@
 
@@ -40,6 +41,15 @@ MAILBOXES = {
         "users": [
             {"email": "user1@example.local", "role": "sender"},
             {"email": "user2@example.local", "role": "viewer"},
+        ],
+    },
+    "user1@example.local": {
+        "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "email": "user1@example.local",
+        "name": "User One Personal",
+        "maildomain_custom_attributes": {"siret": "example.local"},
+        "users": [
+            {"email": "user1@example.local", "role": "admin"},
         ],
     },
 }
@@ -129,7 +139,8 @@ if __name__ == "__main__":
     print(f"Users: {list(USER_MAILBOXES.keys())}")
     print()
     print("Test accounts (Keycloak):")
-    print("  user1@example.local / user1  → admin on contact@, sender on support@")
+    print("  user1@example.local / user1  → admin on contact@, sender on support@,")
+    print("                                  admin on own email (personal mailbox)")
     print("  user2@example.local / user2  → sender on contact@, viewer on support@")
     print("  user3@example.local / user3  → viewer on contact@")
     server.serve_forever()

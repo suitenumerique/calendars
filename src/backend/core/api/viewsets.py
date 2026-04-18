@@ -177,6 +177,7 @@ class ConfigView(views.APIView):
             "LANGUAGES",
             "LANGUAGE_CODE",
             "SENTRY_DSN",
+            "CALENDAR_INVITATION_FROM_EMAIL",
         ]
         dict_settings = {}
         for setting in array_settings:

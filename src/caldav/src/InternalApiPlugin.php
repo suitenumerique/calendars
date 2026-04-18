@@ -11,6 +11,7 @@
  *   POST   /internal-api/import/{user}/{calendar} Bulk import ICS events
  *   POST   /internal-api/calendars/               Create a calendar (and principal if needed)
  *   POST   /internal-api/sync-mailbox-acls/     Sync Messages ACL shares for one user
+ *   POST   /internal-api/rsvp/                  Update attendee PARTSTAT by event UID
  *
  * Access control (defense in depth):
  *   1. Django proxy blocklist rejects /internal-api/ paths
@@ -147,6 +148,12 @@ class InternalApiPlugin extends ServerPlugin
         // Route: GET /internal-api/channel-events/{channel_id}/count
         if ($method === 'GET' && preg_match('#^internal-api/channel-events/([0-9a-f-]+)/count$#i', $path, $matches)) {
             $this->handleCountChannelEvents($response, $matches[1]);
+            return false;
+        }
+
+        // Route: POST /internal-api/rsvp/
+        if ($method === 'POST' && preg_match('#^internal-api/rsvp/?$#', $path)) {
+            $this->handleRsvp($request, $response);
             return false;
         }
 
@@ -469,6 +476,134 @@ class InternalApiPlugin extends ServerPlugin
     }
 
     /**
+     * POST /internal-api/rsvp/
+     * Find an event by UID across all calendars owned by a given email
+     * (both principals/users/ and principals/mailboxes/) and update an
+     * attendee's PARTSTAT.
+     *
+     * Body: {
+     *   "organizer_email": "contact@company.com",
+     *   "uid": "abc-123",
+     *   "attendee_email": "bob@company.com",
+     *   "partstat": "ACCEPTED"
+     * }
+     */
+    private function handleRsvp($request, $response)
+    {
+        $body = json_decode($request->getBodyAsString(), true);
+        if (!$body) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Invalid JSON body']));
+            return false;
+        }
+
+        foreach (['organizer_email', 'uid', 'attendee_email', 'partstat'] as $field) {
+            if (empty($body[$field])) {
+                $response->setStatus(400);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode(['error' => "$field is required"]));
+                return false;
+            }
+        }
+
+        $email = strtolower($body['organizer_email']);
+        $uid = $body['uid'];
+        $attendeeEmail = strtolower($body['attendee_email']);
+        $partstat = strtoupper($body['partstat']);
+
+        if (!in_array($partstat, ['ACCEPTED', 'TENTATIVE', 'DECLINED'], true)) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Invalid partstat value']));
+            return false;
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT co.calendarid, ci.id AS instanceid, co.calendardata,'
+                . ' co.uri AS event_uri'
+                . ' FROM calendarobjects co'
+                . ' JOIN calendarinstances ci ON ci.calendarid = co.calendarid AND ci.access = 1'
+                . ' JOIN principals p ON p.uri = ci.principaluri'
+                . ' WHERE co.uid = ? AND lower(p.email) = ?'
+                . ' FOR UPDATE'
+                . ' LIMIT 1'
+            );
+            $stmt->execute([$uid, $email]);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            if (!$row) {
+                $this->pdo->rollBack();
+                $response->setStatus(404);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode(['error' => 'Event not found']));
+                return false;
+            }
+
+            $ical = $row['calendardata'];
+            if (is_resource($ical)) {
+                $ical = stream_get_contents($ical);
+            }
+
+            $vcalendar = \Sabre\VObject\Reader::read($ical);
+            $vevent = $vcalendar->VEVENT;
+            if (!$vevent) {
+                $this->pdo->rollBack();
+                $response->setStatus(404);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode(['error' => 'No VEVENT in calendar data']));
+                return false;
+            }
+
+            $found = false;
+            foreach ($vevent->ATTENDEE as $attendee) {
+                $mailto = strtolower(str_replace('mailto:', '', (string) $attendee->getValue()));
+                if ($mailto === $attendeeEmail) {
+                    $attendee['PARTSTAT'] = $partstat;
+                    $found = true;
+                    break;
+                }
+            }
+
+            if (!$found) {
+                $this->pdo->rollBack();
+                $response->setStatus(404);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode(['error' => 'Attendee not found in event']));
+                return false;
+            }
+
+            $updated = $vcalendar->serialize();
+            $summary = isset($vevent->SUMMARY) ? (string) $vevent->SUMMARY : '';
+
+            $this->caldavBackend->updateCalendarObject(
+                [(int) $row['calendarid'], (int) $row['instanceid']],
+                $row['event_uri'],
+                $updated
+            );
+
+            $this->pdo->commit();
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            error_log('[InternalApiPlugin] RSVP failed: ' . $e->getMessage());
+            $response->setStatus(500);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Failed to process RSVP']));
+            return false;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode([
+            'updated' => true,
+            'summary' => $summary,
+        ]));
+        return false;
+    }
+
+    /**
      * POST /internal-api/calendars/
      * Create a calendar under a principal (creating the principal if needed).
      *
@@ -535,49 +670,19 @@ class InternalApiPlugin extends ServerPlugin
         $name = $body['name'] ?? $email;
         $color = $body['color'] ?? '#3788d8';
         $callerEmail = $body['caller_email'] ?? null;
-        $principalUri = 'principals/users/' . $email;
         $isMailbox = ($calendarUserType === PrincipalBackend::TYPE_MAILBOX);
-        $callerIsOwner = ($callerEmail === null || $callerEmail === $email);
+        $principalUri = ($isMailbox ? 'principals/mailboxes/' : 'principals/users/') . $email;
+        $callerIsOwner = !$isMailbox
+            && ($callerEmail === null || $callerEmail === $email);
 
         $this->pdo->beginTransaction();
         try {
-            // Refuse to downgrade an existing MAILBOX principal back to
-            // INDIVIDUAL. Auto-provisioning (ensurePrincipal) creates
-            // principals as INDIVIDUAL before setup runs, so promoting
-            // INDIVIDUAL → MAILBOX is allowed. The reverse is blocked
-            // because MAILBOX controls auth/ACL rules (sync-managed
-            // shares, freebusy scoping, login is forbidden, …).
-            $existing = $this->pdo->prepare(
-                'SELECT calendar_user_type FROM principals WHERE uri = ? FOR UPDATE'
-            );
-            $existing->execute([$principalUri]);
-            $existingType = $existing->fetchColumn();
-            $isUpgrade = ($existingType === PrincipalBackend::TYPE_INDIVIDUAL
-                          && $calendarUserType === PrincipalBackend::TYPE_MAILBOX);
-            if ($existingType !== false && $existingType !== $calendarUserType
-                && !$isUpgrade) {
-                $this->pdo->rollBack();
-                error_log(
-                    "[InternalApiPlugin] Refusing to change calendar_user_type for "
-                    . "{$principalUri}: existing={$existingType} requested={$calendarUserType}"
-                );
-                $response->setStatus(409);
-                $response->setHeader('Content-Type', 'application/json');
-                $response->setBody(json_encode([
-                    'error' => 'Principal already exists with a different calendar_user_type',
-                    'existing_type' => $existingType,
-                    'requested_type' => $calendarUserType,
-                ]));
-                return false;
-            }
-
             $stmt = $this->pdo->prepare(
                 'INSERT INTO principals (uri, email, displayname, calendar_user_type, org_id)'
                 . ' VALUES (?, ?, ?, ?, ?)'
                 . ' ON CONFLICT (uri) DO UPDATE SET'
                 . ' org_id = EXCLUDED.org_id,'
-                . ' displayname = EXCLUDED.displayname,'
-                . ' calendar_user_type = EXCLUDED.calendar_user_type'
+                . ' displayname = EXCLUDED.displayname'
             );
             $stmt->execute([$principalUri, $email, $name, $calendarUserType, $orgId]);
 
@@ -784,7 +889,7 @@ class InternalApiPlugin extends ServerPlugin
             $ownerCalendarsByMailbox = []; // mailbox_email → [row, ...]
             if ($mailboxEmails) {
                 $ownerPrincipals = array_map(
-                    fn($e) => 'principals/users/' . $e,
+                    fn($e) => 'principals/mailboxes/' . $e,
                     $mailboxEmails
                 );
                 $ph = implode(',', array_fill(0, count($ownerPrincipals), '?'));
@@ -808,7 +913,7 @@ class InternalApiPlugin extends ServerPlugin
                 );
                 $stmt->execute($ownerPrincipals);
                 foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
-                    $email = str_replace('principals/users/', '', $row['principaluri']);
+                    $email = str_replace('principals/mailboxes/', '', $row['principaluri']);
                     $ownerCalendarsByMailbox[$email][] = $row;
                 }
             }
@@ -870,12 +975,6 @@ class InternalApiPlugin extends ServerPlugin
                         'displayname' => $ownerCal['displayname'],
                         'share_href' => 'mailto:' . $userEmail,
                         'share_displayname' => $userEmail,
-                        // Color is strictly personal: each sharee starts
-                        // with the default and is free to PROPPATCH their
-                        // own. Do NOT inherit from the owner — for mailbox
-                        // calendars the owner-side color is meaningless,
-                        // and for individual calendars sharing the owner's
-                        // color into a sharee's view would be confusing.
                         'color' => '#3788d8',
                     ];
                     $active[] = [
@@ -1186,7 +1285,9 @@ class InternalApiPlugin extends ServerPlugin
             $stmt = $this->pdo->prepare(
                 'SELECT co.uid, co.uri, co.calendarid, co.created_by, co.created_at, '
                 . "ci.principaluri, '/' || 'calendars/' || "
-                . "CASE WHEN ci.principaluri LIKE 'principals/users/%' THEN 'users' ELSE 'resources' END "
+                . "CASE WHEN ci.principaluri LIKE 'principals/users/%' THEN 'users' "
+                . "WHEN ci.principaluri LIKE 'principals/mailboxes/%' THEN 'mailboxes' "
+                . "ELSE 'resources' END "
                 . "|| '/' || SPLIT_PART(ci.principaluri, '/', 3) || '/' || ci.uri || '/' AS calendar_path "
                 . 'FROM calendarobjects co '
                 . 'JOIN calendarinstances ci ON ci.calendarid = co.calendarid AND ci.access = 1 '

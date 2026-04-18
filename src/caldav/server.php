@@ -109,7 +109,7 @@ $server->addPlugin(new CardDAV\Plugin());
 // default principalCollectionSet ['principals'] would skip it during principal
 // search. Point directly to the child IPrincipalCollection nodes instead.
 $aclPlugin = new DAVACL\Plugin();
-$aclPlugin->principalCollectionSet = ['principals/users', 'principals/resources'];
+$aclPlugin->principalCollectionSet = ['principals/users', 'principals/resources', 'principals/mailboxes'];
 $server->addPlugin($aclPlugin);
 // Browser plugin disabled — it's a debug tool that exposes properties in HTML.
 // $server->addPlugin(new DAV\Browser\Plugin());

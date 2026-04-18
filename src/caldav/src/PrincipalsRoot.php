@@ -27,6 +27,7 @@ class PrincipalsRoot extends DAV\Collection
     {
         $this->children = [
             new NamedPrincipalCollection('users', $principalBackend, 'principals/users'),
+            new NamedPrincipalCollection('mailboxes', $principalBackend, 'principals/mailboxes'),
             new ResourcePrincipalCollection('resources', $principalBackend, 'principals/resources'),
         ];
     }

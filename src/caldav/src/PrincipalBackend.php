@@ -99,7 +99,8 @@ class PrincipalBackend extends BasePDO
      *
      * Without those guards, ``DAVACL\Plugin::getPrincipalByUri`` —
      * which iterates ``principalCollectionSet = ['principals/users',
-     * 'principals/resources']`` and returns the first match — would
+     * 'principals/resources', 'principals/mailboxes']`` and returns
+     * the first match — would
      * see our override mint a fresh user row for a resource email and
      * stop iterating before ever asking the ``principals/resources``
      * collection. iTIP delivery to resources would then never reach
@@ -127,7 +128,7 @@ class PrincipalBackend extends BasePDO
         // continue iterating until it asks the matching collection's
         // own ``findByUri`` round, where the parent implementation
         // will resolve it via the prefix-aware query.
-        if ($this->principalExistsForEmail($email)) {
+        if ($this->userOrResourceExistsForEmail($email)) {
             return null;
         }
 
@@ -147,17 +148,19 @@ class PrincipalBackend extends BasePDO
      * user when a resource (or another collection) already owns the
      * address.
      */
-    private function principalExistsForEmail(string $email): bool
+    private function userOrResourceExistsForEmail(string $email): bool
     {
         try {
             $stmt = $this->pdo->prepare(
                 'SELECT 1 FROM ' . $this->tableName
-                . ' WHERE lower(email) = lower(?) LIMIT 1'
+                . ' WHERE lower(email) = lower(?)'
+                . ' AND uri NOT LIKE \'principals/mailboxes/%\''
+                . ' LIMIT 1'
             );
             $stmt->execute([$email]);
             return (bool) $stmt->fetchColumn();
         } catch (\Exception $e) {
-            error_log("[PrincipalBackend] principalExistsForEmail failed: " . $e->getMessage());
+            error_log("[PrincipalBackend] userOrResourceExistsForEmail failed: " . $e->getMessage());
             // Fail-closed: when in doubt, don't auto-create — better to
             // leak a "no such recipient" than to overwrite a resource.
             return true;

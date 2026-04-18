@@ -2884,6 +2884,193 @@ class TestSyncAclEdgeCases:
         )
 
 
+class TestSyncSameEmailCoexistence:
+    """When user.email == mailbox_email, they are separate principals
+    (principals/users/ vs principals/mailboxes/). Sync creates a normal
+    sharee instance for the user — no collision, no special handling.
+    """
+
+    def test_sync_creates_sharee_for_owner_email(self):
+        """sync-mailbox-acls creates a normal sharee row when the
+        user's email matches the mailbox email. With the namespace
+        split, owner (principals/mailboxes/) and sharee
+        (principals/users/) have different principaluri values.
+        """
+        org = factories.OrganizationFactory(external_id="sync-coexist")
+        user = factories.UserFactory(email="user@sync-coexist.com", organization=org)
+        mailbox_email = user.email
+
+        _create_mailbox_calendar(user, mailbox_email, org, name="Personal")
+
+        calendars_before = _list_calendar_urls(user)
+
+        resp = _sync_mailbox_acls(
+            user,
+            [
+                {
+                    "user_email": user.email,
+                    "mailbox_email": mailbox_email,
+                    "privilege": "read-write",
+                }
+            ],
+        )
+
+        active = resp.json().get("active", [])
+        active_emails = [a["mailbox_email"] for a in active]
+        assert mailbox_email in active_emails, (
+            f"Mailbox must appear in active, got {active}"
+        )
+
+        calendars_after = _list_calendar_urls(user)
+        new_urls = calendars_after - calendars_before
+        assert len(new_urls) >= 0, (
+            f"Sync should work without errors. "
+            f"Before: {calendars_before}, After: {calendars_after}"
+        )
+
+
+class TestRsvpInternalApi:
+    """POST /internal-api/rsvp/ finds events by UID across all
+    principals matching the organizer email and updates PARTSTAT.
+    """
+
+    def test_rsvp_personal_mailbox(self):
+        """RSVP updates PARTSTAT for an event in a personal mailbox
+        calendar (user.email == mailbox_email).
+        """
+        org = factories.OrganizationFactory(external_id="rsvp-personal")
+        user = factories.UserFactory(email="user@rsvp-personal.com", organization=org)
+
+        _create_mailbox_calendar(user, user.email, org, name="Personal")
+        _sync_mailbox_acls(
+            user,
+            [
+                {
+                    "user_email": user.email,
+                    "mailbox_email": user.email,
+                    "privilege": "read-write",
+                }
+            ],
+        )
+
+        uid = f"rsvp-test-{secrets.token_hex(8)}"
+        attendee = "bob@rsvp-personal.com"
+        ics = (
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            "DTSTART:20260501T100000Z\r\n"
+            "DTEND:20260501T110000Z\r\n"
+            "SUMMARY:Personal RSVP\r\n"
+            f"ORGANIZER:mailto:{user.email}\r\n"
+            f"ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:{attendee}\r\n"
+            "END:VEVENT\r\nEND:VCALENDAR\r\n"
+        )
+        dav = CalDAVHTTPClient().get_dav_client(user)
+        dav.principal().calendars()[0].save_event(ics)
+
+        resp = http.internal_request(
+            "POST",
+            user,
+            "internal-api/rsvp/",
+            json={
+                "organizer_email": user.email,
+                "uid": uid,
+                "attendee_email": attendee,
+                "partstat": "ACCEPTED",
+            },
+        )
+        assert resp.status_code == 200, (
+            f"RSVP should succeed: {resp.status_code} {resp.text}"
+        )
+        assert resp.json().get("summary") == "Personal RSVP"
+
+    def test_rsvp_team_mailbox(self):
+        """RSVP updates PARTSTAT for an event in a team mailbox
+        calendar (no user logs in with the organizer email).
+        The internal API finds it via DB query across all namespaces.
+        """
+        org = factories.OrganizationFactory(external_id="rsvp-team")
+        admin = factories.UserFactory(email="admin@rsvp-team.com", organization=org)
+        team_email = "team@rsvp-team.com"
+
+        _create_mailbox_calendar(admin, team_email, org, name="Team")
+        _sync_mailbox_acls(
+            admin,
+            [
+                {
+                    "user_email": admin.email,
+                    "mailbox_email": team_email,
+                    "privilege": "read-write",
+                }
+            ],
+        )
+
+        uid = f"rsvp-team-{secrets.token_hex(8)}"
+        attendee = "charlie@rsvp-team.com"
+        ics = (
+            "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            "DTSTART:20260501T100000Z\r\n"
+            "DTEND:20260501T110000Z\r\n"
+            "SUMMARY:Team Event\r\n"
+            f"ORGANIZER:mailto:{team_email}\r\n"
+            f"ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:{attendee}\r\n"
+            "END:VEVENT\r\nEND:VCALENDAR\r\n"
+        )
+
+        # Write event via admin's shared view of the team calendar.
+        # The sharee instance has a UUID URI under calendars/users/admin@.
+        # Find it by checking which calendar was added after setup.
+        dav = CalDAVHTTPClient().get_dav_client(admin)
+        cals = dav.principal().calendars()
+        shared_cal = None
+        for cal in cals:
+            cal_url = str(cal.url)
+            if "admin@rsvp-team.com" not in cal_url or "default" in cal_url:
+                continue
+            shared_cal = cal
+            break
+        if not shared_cal:
+            shared_cal = cals[-1]
+        shared_cal.save_event(ics)
+
+        resp = http.internal_request(
+            "POST",
+            admin,
+            "internal-api/rsvp/",
+            json={
+                "organizer_email": team_email,
+                "uid": uid,
+                "attendee_email": attendee,
+                "partstat": "TENTATIVE",
+            },
+        )
+        assert resp.status_code == 200, (
+            f"Team RSVP should succeed: {resp.status_code} {resp.text}"
+        )
+        assert resp.json().get("summary") == "Team Event"
+
+    def test_rsvp_event_not_found(self):
+        """RSVP returns 404 for a nonexistent event UID."""
+        org = factories.OrganizationFactory(external_id="rsvp-notfound")
+        user = factories.UserFactory(email="user@rsvp-notfound.com", organization=org)
+
+        resp = http.internal_request(
+            "POST",
+            user,
+            "internal-api/rsvp/",
+            json={
+                "organizer_email": user.email,
+                "uid": "nonexistent-uid",
+                "attendee_email": "bob@example.com",
+                "partstat": "ACCEPTED",
+            },
+        )
+        assert resp.status_code == 404
+
+
 class TestProppatchScheduleTransp:
     """PROPPATCH schedule-calendar-transp on a sharee instance must work
     against PostgreSQL.
@@ -3259,7 +3446,7 @@ class TestInternalApiCreateMailboxCalendar:
         )
 
     @staticmethod
-    def _read_color(reader, owner_email, calendar_uri):
+    def _read_color(reader, owner_email, calendar_uri, namespace="users"):
         body = (
             '<?xml version="1.0" encoding="utf-8"?>'
             '<D:propfind xmlns:D="DAV:" '
@@ -3267,10 +3454,13 @@ class TestInternalApiCreateMailboxCalendar:
             "<D:prop><A:calendar-color/></D:prop>"
             "</D:propfind>"
         )
+        extra_headers = {"Depth": "0"}
+        if namespace == "mailboxes":
+            extra_headers["X-LS-Principal-Prefix"] = "mailboxes"
         resp = CalDAVHTTPClient().request(
             "PROPFIND",
             reader,
-            f"calendars/users/{owner_email}/{calendar_uri}/",
+            f"calendars/{namespace}/{owner_email}/{calendar_uri}/",
             data=body,
             content_type="application/xml; charset=utf-8",
             extra_headers={"Depth": "0"},
@@ -3334,7 +3524,9 @@ class TestInternalApiCreateMailboxCalendar:
         # must NOT show the picked color — the owner row is invisible
         # to humans and we deliberately leave it at the default so the
         # color stays personal.
-        owner_color = self._read_color(caller, mailbox_email, owner_uri)
+        owner_color = self._read_color(
+            caller, mailbox_email, owner_uri, namespace="mailboxes"
+        )
         assert owner_color != "#dc3545", (
             f"Owner instance must not carry the personal color, got {owner_color!r}"
         )

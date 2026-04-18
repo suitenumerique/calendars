@@ -129,9 +129,9 @@ class CustomCalendarHome extends CalendarHome
             && $access !== \Sabre\DAV\Sharing\Plugin::ACCESS_NOTSHARED;
 
         if ($isShared && $this->pdo && $this->isMailboxOwned($calendar)) {
-            // Inject owner type into calendarInfo so propFind handlers can
-            // read it without an extra DB query. The frontend uses this to
-            // detect mailbox calendars.
+            // Inject owner type into calendarInfo so propFind handlers
+            // can read it without an extra DB query. The frontend uses
+            // this to detect mailbox calendars.
             $calendar['{http://lasuite.numerique.gouv.fr/ns/}calendar-owner-type'] = 'MAILBOX';
             return new MailboxSharedCalendar($this->caldavBackend, $calendar);
         }

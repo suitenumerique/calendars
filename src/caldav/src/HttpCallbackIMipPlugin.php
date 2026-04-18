@@ -181,10 +181,10 @@ class HttpCallbackIMipPlugin extends IMipPlugin
 
         try {
             $stmt = $this->pdo->prepare(
-                'SELECT calendar_user_type FROM principals WHERE uri = ?'
+                'SELECT 1 FROM principals WHERE uri = ?'
             );
-            $stmt->execute(['principals/users/' . $email]);
-            $result = $stmt->fetchColumn() === PrincipalBackend::TYPE_MAILBOX;
+            $stmt->execute(['principals/mailboxes/' . $email]);
+            $result = (bool) $stmt->fetchColumn();
             $this->mailboxCache[$email] = $result;
             return $result;
         } catch (\Exception $e) {

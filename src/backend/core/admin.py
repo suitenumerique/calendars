@@ -90,6 +90,16 @@ class UserAdmin(auth_admin.UserAdmin):
     search_fields = ("id", "sub", "admin_email", "email", "full_name")
 
 
+@admin.register(models.Organization)
+class OrganizationAdmin(admin.ModelAdmin):
+    """Admin class for Organization model."""
+
+    list_display = ("name", "external_id", "default_sharing_level", "created_at")
+    list_filter = ("default_sharing_level",)
+    search_fields = ("name", "external_id")
+    readonly_fields = ("id", "created_at", "updated_at")
+
+
 @admin.register(models.Channel)
 class ChannelAdmin(admin.ModelAdmin):
     """Admin class for Channel model."""

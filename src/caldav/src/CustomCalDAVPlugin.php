@@ -43,7 +43,7 @@ class CustomCalDAVPlugin extends CalDAV\Plugin
 
         // 3-part: principals/users/{email} → calendars/users/{email}
         //         principals/resources/{id} → calendars/resources/{id}
-        if (count($parts) === 3 && in_array($parts[1], ['users', 'resources'], true)) {
+        if (count($parts) === 3 && in_array($parts[1], ['users', 'resources', 'mailboxes'], true)) {
             return self::CALENDAR_ROOT . '/' . $parts[1] . '/' . $parts[2];
         }
 

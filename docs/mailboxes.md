@@ -8,17 +8,25 @@ This is gated behind the `FEATURE_MESSAGES_INTEGRATION` feature flag.
 
 ## Key Concepts
 
-**Two types of principals** live in the same `principals/users/` namespace:
+**Three principal namespaces** exist, each with different behavior:
 
-| Type | Example | `calendar_user_type` | Created when |
-|------|---------|---------------------|--------------|
+| Type | Namespace | `calendar_user_type` | Created when |
+|------|-----------|---------------------|--------------|
 | User principal | `principals/users/alice@company.com` | `INDIVIDUAL` | User creates their first calendar via setup |
-| Mailbox principal | `principals/users/contact@company.com` | `MAILBOX` | User creates a mailbox calendar via setup |
+| Mailbox principal | `principals/mailboxes/contact@company.com` | `MAILBOX` | User creates a mailbox calendar via setup |
+| Resource principal | `principals/resources/{id}` | `ROOM`/`RESOURCE` | Admin creates a resource |
 
-**Principals** are auto-created by `PrincipalBackend` — but without a
-calendar. This happens on first CalDAV access (`getPrincipalByPath`) and
-when resolving a `mailto:` URI during sharing (`findByUri`). This ensures
-that sharing works even if the target user hasn't opened the app yet.
+A user and a mailbox can share the same email (e.g. `alice@company.com`)
+because they live in separate namespaces. This allows a user to have
+both standalone calendars (under `principals/users/`) and mailbox
+calendars (under `principals/mailboxes/`) independently.
+
+**User principals** are auto-created by `PrincipalBackend` — but without
+a calendar. This happens on first CalDAV access (`getPrincipalByPath`)
+and when resolving a `mailto:` URI during sharing (`findByUri`). This
+ensures that sharing works even if the target user hasn't opened the app
+yet. Mailbox principals are never auto-created — they are provisioned
+exclusively via `POST /internal-api/calendars/`.
 
 **Calendars** are never auto-created. The user must go through
 `POST /api/v1.0/setup/` to create their first calendar. The frontend
@@ -135,14 +143,32 @@ same endpoint: `POST /api/v1.0/setup/`.
      + default calendar under `calendars/users/alice@company.com/default`.
    - **`{"name": "Contact Team", "mailbox_email": "contact@company.com"}`**
      → Django verifies Alice has sender/admin access, then creates a MAILBOX
-     principal + calendar under `calendars/users/contact@company.com/default`.
-     Shares are created lazily: other users pick up the new calendar on
-     their next `GET /setup/mailboxes/` call.
+     principal under `principals/mailboxes/contact@company.com` with a
+     calendar at `calendars/mailboxes/contact@company.com/default`.
+     Alice gets a sharee instance in her own calendar home. Other users
+     pick up the new calendar on their next `GET /setup/mailboxes/` call.
 
-Note: a user who selects a personal mailbox (`alice@company.com`) gets
-the same principal URI as a standalone calendar — the only difference is
-`calendar_user_type=MAILBOX`, which makes invitations go through Messages
-API instead of SMTP.
+### Personal mailboxes (user.email == mailbox_email)
+
+A user whose OIDC email is also a Messages mailbox (common in
+government: the user logs in as `alice@company.com` and there is a
+mailbox for `alice@company.com`) gets two separate principals:
+
+- `principals/users/alice@company.com` (INDIVIDUAL) — standalone calendars
+- `principals/mailboxes/alice@company.com` (MAILBOX) — mailbox calendars
+
+The user accesses the mailbox calendar through a sharee instance in
+their own `calendars/users/` calendar home. Both principals coexist
+independently — each has its own calendars, its own sharing rules, and
+its own lifecycle. This is the key design property: a user can have
+both a personal calendar (freely shareable with write access) and a
+mailbox calendar (sharing restricted by Messages roles) for the same
+email.
+
+The RSVP handler accounts for this: it searches the user principal's
+calendar home first (which includes shared mailbox calendars), then
+falls back to the mailbox principal for team mailboxes where no user
+principal has the event.
 
 ## Calendar Sharing
 
@@ -245,11 +271,18 @@ Standard flow. SabreDAV's Schedule plugin fires the iMIP callback.
 
 ### RSVP
 
-When an attendee clicks the RSVP link, the handler needs to find and
-update the event in CalDAV. The organizer email from the signed RSVP
-token is used as `X-LS-User` to authenticate the CalDAV request.
-This works for both regular users and mailbox principals — the token's
-`organizer` field always matches the principal URI that owns the event.
+When an attendee clicks the RSVP link, the handler authenticates as
+the organizer via `X-LS-User` and searches for the event by UID across
+all calendars in the organizer's calendar home.
+
+For personal mailboxes (`user.email == mailbox_email`), the user
+principal's calendar home includes the shared mailbox calendar, so the
+event is found on the first pass regardless of which calendar it's in.
+
+For team mailboxes (`contact@company.com` with no corresponding user),
+the RSVP handler delegates to `POST /internal-api/rsvp/`, which finds
+the event by UID across all principals matching the organizer email in
+a single DB query — no namespace selection or retry needed.
 
 ## Internal API Endpoints (CalDAV side)
 
@@ -260,6 +293,7 @@ Not accessible from the outside (blocked by Django proxy).
 |--------|------|---------|
 | `POST` | `/internal-api/calendars/` | Create a calendar (and principal if needed) |
 | `POST` | `/internal-api/sync-mailbox-acls/` | Sync Messages ACL shares for one user |
+| `POST` | `/internal-api/rsvp/` | Update attendee PARTSTAT by event UID |
 | `POST` | `/internal-api/resources/` | Create a resource principal |
 | `DELETE` | `/internal-api/resources/{id}` | Delete a resource principal |
 
@@ -273,12 +307,14 @@ Two ways to create calendars exist for different use cases:
 | Creates principal | No (must exist) | Yes (upsert) |
 | Sets `calendar_user_type` | No | Yes |
 | Calendar owner | The authenticated user | Any email (including mailbox) |
-| Calendar URI | User chooses | Always `default` |
+| Calendar URI | User chooses | `default` (first) or UUID (subsequent) |
 | Use case | Adding a 2nd/3rd calendar | Setup (first calendar, or mailbox calendar) |
 
 MKCALENDAR can't create mailbox calendars because the user is authenticated
-as their OIDC email but needs to create a calendar under a different
-principal. The internal API bypasses this restriction.
+as their OIDC email but needs to create a calendar under the mailbox
+principal (`principals/mailboxes/`). The internal API handles this routing:
+`calendar_user_type=INDIVIDUAL` creates under `principals/users/`,
+`calendar_user_type=MAILBOX` creates under `principals/mailboxes/`.
 
 `POST /internal-api/calendars/` accepts:
 ```json

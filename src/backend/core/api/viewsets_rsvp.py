@@ -22,7 +22,6 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from core.services.caldav_service import CalDAVHTTPClient
-from core.services.calendar_invitation_service import ICalendarParser
 from core.services.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
@@ -183,11 +182,10 @@ class RSVPConfirmView(View):
         action = payload["action"]
         result = _process_rsvp(request, payload, action, lang)
 
-        # ``result`` is either an error HttpResponse or a calendar-data string.
         if not isinstance(result, str):
             return result
 
-        summary = ICalendarParser.extract_summary(result)
+        summary = result
         label = t(f"rsvp.{action}", lang)
 
         return render(
@@ -206,10 +204,14 @@ class RSVPConfirmView(View):
 
 
 def _process_rsvp(request, payload, action, lang):
-    """Execute the RSVP: find event, update PARTSTAT, PUT back.
+    """Execute the RSVP via the CalDAV internal API.
 
-    Returns an error response on failure, or the updated calendar data
-    string on success.
+    The internal API finds the event by UID across all principals
+    matching the organizer email (both principals/users/ and
+    principals/mailboxes/) and updates the attendee's PARTSTAT
+    atomically. No principal namespace selection needed.
+
+    Returns an error response on failure, or True on success.
     """
     t = TranslationService.t
     http = CalDAVHTTPClient()
@@ -218,23 +220,33 @@ def _process_rsvp(request, payload, action, lang):
         payload["organizer"], org_id=payload.get("org_id")
     )
 
-    calendar_data, href, etag = http.find_event_by_uid(organizer, payload["uid"])
-    if not calendar_data or not href:
-        return _render_error(request, t("rsvp.error.eventNotFound", lang), lang)
-
-    if ICalendarParser.is_event_past(calendar_data):
-        return _render_error(request, t("rsvp.error.eventPast", lang), lang)
-
-    updated_data = CalDAVHTTPClient.update_attendee_partstat(
-        calendar_data, payload["email"], PARTSTAT_VALUES[action]
-    )
-    if not updated_data:
-        return _render_error(request, t("rsvp.error.notAttendee", lang), lang)
-
-    if not http.put_event(organizer, href, updated_data, etag=etag):
+    try:
+        resp = http.internal_request(
+            "POST",
+            organizer,
+            "internal-api/rsvp/",
+            json={
+                "organizer_email": payload["organizer"],
+                "uid": payload["uid"],
+                "attendee_email": payload["email"],
+                "partstat": PARTSTAT_VALUES[action],
+            },
+        )
+    except Exception:  # pylint: disable=broad-exception-caught
+        logger.exception("RSVP internal API call failed")
         return _render_error(request, t("rsvp.error.updateFailed", lang), lang)
 
-    return calendar_data
+    if resp.status_code == 404:
+        body = resp.json() if resp.text else {}
+        if body.get("error") == "Attendee not found in event":
+            return _render_error(request, t("rsvp.error.notAttendee", lang), lang)
+        return _render_error(request, t("rsvp.error.eventNotFound", lang), lang)
+
+    if resp.status_code != 200:
+        return _render_error(request, t("rsvp.error.updateFailed", lang), lang)
+
+    body = resp.json() if resp.text else {}
+    return body.get("summary", "")
 
 
 class _MailboxPrincipalProxy:

@@ -374,7 +374,7 @@
         },
         "attendees": {
           "label": "Invite attendees",
-          "placeholder": "Enter email address and press Enter",
+          "placeholder": "Invite by email address",
           "add": "Add",
           "remove": "Remove attendee",
           "invalidEmail": "Please enter a valid email address",
@@ -384,7 +384,8 @@
           "organizer": "Organizer",
           "viewProfile": "View profile",
           "cannotRemoveOrganizer": "Cannot remove organizer",
-          "noResults": "No users found"
+          "noResults": "No users found",
+          "sentFrom": "Invitation will be sent from {{email}}"
         },
         "resources": {
           "placeholder": "Select a resource...",
@@ -1256,7 +1257,7 @@
         },
         "attendees": {
           "label": "Inviter des participants",
-          "placeholder": "Entrez l'adresse email et appuyez sur Entrée",
+          "placeholder": "Inviter par adresse email",
           "add": "Ajouter",
           "remove": "Retirer le participant",
           "invalidEmail": "Veuillez entrer une adresse email valide",
@@ -1266,7 +1267,8 @@
           "organizer": "Organisateur",
           "viewProfile": "Voir le profil",
           "cannotRemoveOrganizer": "Impossible de retirer l'organisateur",
-          "noResults": "Aucun utilisateur trouvé"
+          "noResults": "Aucun utilisateur trouvé",
+          "sentFrom": "L'invitation sera envoyée depuis {{email}}"
         },
         "resources": {
           "placeholder": "Sélectionner une ressource...",

@@ -69,6 +69,21 @@ SAMPLE_CALDAV_RESPONSE = """\
 </d:multistatus>"""
 
 
+def _mock_resp(status_code, json_body):
+    """Create a mock response for CalDAVHTTPClient.internal_request."""
+    import json  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+
+    class _Resp:
+        def __init__(self, sc, body):
+            self.status_code = sc
+            self.text = json.dumps(body)
+
+        def json(self):
+            return json.loads(self.text)
+
+    return _Resp(status_code, json_body)
+
+
 def _make_token(
     uid="test-uid-123",
     email="bob@example.com",
@@ -351,54 +366,42 @@ class TestRSVPConfirmViewPost(TestCase):
         response = self.view(request)
         assert response.status_code == 400
 
-    @patch.object(CalDAVHTTPClient, "put_event")
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_accept_flow(self, mock_find, mock_put):
-        """Full accept flow: find event, update partstat, put back."""
-        mock_find.return_value = (
-            SAMPLE_ICS,
-            "/caldav/calendars/users/alice%40example.com/cal/event.ics",
-            '"etag-123"',
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_accept_flow(self, mock_internal):
+        """Full accept flow via internal API."""
+        mock_internal.return_value = _mock_resp(
+            200, {"updated": True, "summary": "Team Meeting"}
         )
-        mock_put.return_value = True
 
         token = _make_token(action="accepted")
         response = self._post(token)
 
         assert response.status_code == 200
         assert "accepted the invitation" in response.content.decode()
+        mock_internal.assert_called_once()
+        call_kwargs = mock_internal.call_args
+        body = call_kwargs[1]["json"]
+        assert body["organizer_email"] == "alice@example.com"
+        assert body["uid"] == "test-uid-123"
+        assert body["partstat"] == "ACCEPTED"
 
-        # Verify CalDAV calls
-        mock_find.assert_called_once()
-        find_args = mock_find.call_args[0]
-        assert find_args[0].email == "alice@example.com"
-        assert find_args[1] == "test-uid-123"
-        mock_put.assert_called_once()
-        # Check the updated data contains ACCEPTED
-        put_args = mock_put.call_args
-        assert "PARTSTAT=ACCEPTED" in put_args[0][2]
-        # Check ETag is passed
-        assert put_args[1]["etag"] == '"etag-123"'
-
-    @patch.object(CalDAVHTTPClient, "put_event")
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_decline_flow(self, mock_find, mock_put):
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
-        mock_put.return_value = True
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_decline_flow(self, mock_internal):
+        mock_internal.return_value = _mock_resp(
+            200, {"updated": True, "summary": "Team Meeting"}
+        )
 
         token = _make_token(action="declined")
         response = self._post(token)
 
         assert response.status_code == 200
         assert "declined the invitation" in response.content.decode()
-        put_args = mock_put.call_args
-        assert "PARTSTAT=DECLINED" in put_args[0][2]
 
-    @patch.object(CalDAVHTTPClient, "put_event")
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_tentative_flow(self, mock_find, mock_put):
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
-        mock_put.return_value = True
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_tentative_flow(self, mock_internal):
+        mock_internal.return_value = _mock_resp(
+            200, {"updated": True, "summary": "Team Meeting"}
+        )
 
         token = _make_token(action="tentative")
         response = self._post(token)
@@ -406,12 +409,10 @@ class TestRSVPConfirmViewPost(TestCase):
         assert response.status_code == 200
         content = response.content.decode()
         assert "maybe" in content.lower()
-        put_args = mock_put.call_args
-        assert "PARTSTAT=TENTATIVE" in put_args[0][2]
 
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_event_not_found_returns_400(self, mock_find):
-        mock_find.return_value = (None, None, None)
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_event_not_found_returns_400(self, mock_internal):
+        mock_internal.return_value = _mock_resp(404, {"error": "Event not found"})
 
         token = _make_token(action="accepted")
         response = self._post(token)
@@ -419,11 +420,11 @@ class TestRSVPConfirmViewPost(TestCase):
         assert response.status_code == 400
         assert "not found" in response.content.decode().lower()
 
-    @patch.object(CalDAVHTTPClient, "put_event")
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_put_failure_returns_400(self, mock_find, mock_put):
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
-        mock_put.return_value = False
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_put_failure_returns_400(self, mock_internal):
+        mock_internal.return_value = _mock_resp(
+            500, {"error": "Failed to process RSVP"}
+        )
 
         token = _make_token(action="accepted")
         response = self._post(token)
@@ -431,10 +432,12 @@ class TestRSVPConfirmViewPost(TestCase):
         assert response.status_code == 400
         assert "error occurred" in response.content.decode().lower()
 
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_attendee_not_in_event_returns_400(self, mock_find):
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_attendee_not_in_event_returns_400(self, mock_internal):
         """If the attendee email is not in the event, return error."""
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
+        mock_internal.return_value = _mock_resp(
+            404, {"error": "Attendee not found in event"}
+        )
 
         token = _make_token(email="stranger@example.com", action="accepted")
         response = self._post(token)
@@ -442,16 +445,20 @@ class TestRSVPConfirmViewPost(TestCase):
         assert response.status_code == 400
         assert "not listed" in response.content.decode().lower()
 
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_past_event_returns_400(self, mock_find):
-        """Cannot RSVP to an event that has already ended."""
-        mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics", None)
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_past_event_returns_400(self, mock_internal):
+        """Cannot RSVP to an event that has already ended.
+
+        Note: with the internal API approach, past-event detection
+        happens server-side. This test verifies the Django handler
+        forwards the 404 correctly.
+        """
+        mock_internal.return_value = _mock_resp(404, {"error": "Event not found"})
 
         token = _make_token(uid="test-uid-past", action="accepted")
         response = self._post(token)
 
         assert response.status_code == 400
-        assert "already passed" in response.content.decode().lower()
 
 
 def _make_ics_with_method(method="REQUEST"):
@@ -588,28 +595,17 @@ class TestRSVPEndToEndFlow(TestCase):
         assert 'method="post"' in response.content.decode()
 
         # POST to process the RSVP
-        with (
-            patch.object(CalDAVHTTPClient, "find_event_by_uid") as mock_find,
-            patch.object(CalDAVHTTPClient, "put_event") as mock_put,
-        ):
-            mock_find.return_value = (
-                SAMPLE_ICS,
-                "/caldav/calendars/users/alice%40example.com/cal/event.ics",
-                '"etag-abc"',
+        with patch.object(CalDAVHTTPClient, "internal_request") as mock_internal:
+            mock_internal.return_value = _mock_resp(
+                200, {"updated": True, "summary": "Team Meeting"}
             )
-            mock_put.return_value = True
 
             request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
             response = self.process_view(request)
 
         assert response.status_code == 200
         assert "accepted the invitation" in response.content.decode()
-
-        mock_find.assert_called_once()
-        assert mock_find.call_args[0][0].email == "alice@example.com"
-        assert mock_find.call_args[0][1] == "test-uid-123"
-        mock_put.assert_called_once()
-        assert "PARTSTAT=ACCEPTED" in mock_put.call_args[0][2]
+        mock_internal.assert_called_once()
 
     def test_email_to_rsvp_decline_flow(self):
         """Same flow but for declining an invitation."""
@@ -623,19 +619,16 @@ class TestRSVPEndToEndFlow(TestCase):
         decline_url = self._extract_rsvp_link(html_body, "#dc2626")
         token = self._extract_token_from_url(decline_url)
 
-        with (
-            patch.object(CalDAVHTTPClient, "find_event_by_uid") as mock_find,
-            patch.object(CalDAVHTTPClient, "put_event") as mock_put,
-        ):
-            mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
-            mock_put.return_value = True
+        with patch.object(CalDAVHTTPClient, "internal_request") as mock_internal:
+            mock_internal.return_value = _mock_resp(
+                200, {"updated": True, "summary": "Team Meeting"}
+            )
 
             request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
             response = self.process_view(request)
 
         assert response.status_code == 200
         assert "declined the invitation" in response.content.decode()
-        assert "PARTSTAT=DECLINED" in mock_put.call_args[0][2]
 
     def test_email_contains_all_three_rsvp_links(self):
         """Verify the email contains accept, tentative, and decline links."""
@@ -669,8 +662,8 @@ class TestRSVPEndToEndFlow(TestCase):
         # Cancel emails should have no RSVP links (no /rsvp/ URLs)
         assert "/rsvp/" not in html_body
 
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_rsvp_link_for_past_event_fails(self, mock_find):
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_rsvp_link_for_past_event_fails(self, mock_internal):
         """RSVP link for a past event should return an error."""
         self._send_invitation()
 
@@ -680,13 +673,12 @@ class TestRSVPEndToEndFlow(TestCase):
         accept_url = self._extract_rsvp_link(html_body, "#16a34a")
         token = self._extract_token_from_url(accept_url)
 
-        mock_find.return_value = (SAMPLE_ICS_PAST, "/path/to/event.ics", None)
+        mock_internal.return_value = _mock_resp(404, {"error": "Event not found"})
 
         request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
         response = self.process_view(request)
 
         assert response.status_code == 400
-        assert "already passed" in response.content.decode().lower()
 
 
 def _make_recurring_ics(
@@ -737,29 +729,22 @@ class TestRSVPRecurringTokenExpiry(TestCase):
         request = self.factory.post("/api/v1.0/rsvp/", {"token": token})
         return self.view(request)
 
-    @patch.object(CalDAVHTTPClient, "put_event")
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_recurring_event_with_fresh_token_succeeds(self, mock_find, mock_put):
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_recurring_event_with_fresh_token_succeeds(self, mock_internal):
         """A fresh token for a recurring event should be accepted."""
-        ics = _make_recurring_ics()
-        mock_find.return_value = (ics, "/path/to/event.ics", None)
-        mock_put.return_value = True
+        mock_internal.return_value = _mock_resp(
+            200, {"updated": True, "summary": "Recurring"}
+        )
 
         token = _make_token(uid="recurring-uid-1", action="accepted")
         response = self._post(token)
 
         assert response.status_code == 200
 
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_recurring_event_with_expired_token_rejected(self, mock_find):
+    def test_recurring_event_with_expired_token_rejected(self):
         """An expired token for a recurring event should be rejected."""
-        ics = _make_recurring_ics()
-        mock_find.return_value = (ics, "/path/to/event.ics", None)
-
         token = _make_token(uid="recurring-uid-1")
 
-        # Simulate time passing beyond max_age by patching unsign_object
-        # to raise SignatureExpired on the second call (with max_age)
         original_unsign = TimestampSigner.unsign_object
 
         def side_effect(value, **kwargs):
@@ -774,19 +759,14 @@ class TestRSVPRecurringTokenExpiry(TestCase):
         content = response.content.decode().lower()
         assert "expired" in content or "new invitation" in content
 
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_recurring_event_token_expired_via_freeze_time(self, mock_find):
+    def test_recurring_event_token_expired_via_freeze_time(self):
         """Token created now should be rejected after max_age seconds."""
         from freezegun import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
             freeze_time,
         )
 
-        ics = _make_recurring_ics()
-        mock_find.return_value = (ics, "/path/to/event.ics", None)
-
         token = _make_token(uid="recurring-uid-1", action="accepted")
 
-        # Advance time beyond RSVP_TOKEN_MAX_AGE_RECURRING (90 days = 7776000s)
         with freeze_time(timezone.now() + timedelta(days=91)):
             response = self._post(token)
 
@@ -794,12 +774,12 @@ class TestRSVPRecurringTokenExpiry(TestCase):
         content = response.content.decode().lower()
         assert "expired" in content or "new invitation" in content
 
-    @patch.object(CalDAVHTTPClient, "put_event")
-    @patch.object(CalDAVHTTPClient, "find_event_by_uid")
-    def test_non_recurring_event_ignores_token_age(self, mock_find, mock_put):
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_non_recurring_event_ignores_token_age(self, mock_internal):
         """Non-recurring events should not enforce token max_age."""
-        mock_find.return_value = (SAMPLE_ICS, "/path/to/event.ics", None)
-        mock_put.return_value = True
+        mock_internal.return_value = _mock_resp(
+            200, {"updated": True, "summary": "Team Meeting"}
+        )
 
         token = _make_token(action="accepted")
         response = self._post(token)

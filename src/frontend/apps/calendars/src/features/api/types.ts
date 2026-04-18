@@ -17,6 +17,7 @@ export interface ApiConfig {
   FEATURE_ADMIN_RESOURCES?: boolean;
   FEATURE_EVENT_SCHEDULING?: boolean;
   FEATURE_MESSAGES_INTEGRATION?: boolean;
+  CALENDAR_INVITATION_FROM_EMAIL?: string;
   theme_customization?: ThemeCustomization;
 }
 

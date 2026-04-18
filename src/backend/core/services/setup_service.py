@@ -207,7 +207,7 @@ class SetupService:
         return {
             "calendar_path": (f"calendars/users/{user.email}/{caller_calendar_uri}"),
             "mailbox_email": mailbox_email,
-            "principal_uri": f"principals/users/{mailbox_email}",
+            "principal_uri": f"principals/mailboxes/{mailbox_email}",
         }
 
     # ------------------------------------------------------------------
@@ -302,7 +302,7 @@ class SetupService:
         for mb_user in users:
             mb_user_email = mb_user.get("email", "")
             mb_user_role = mb_user.get("role", "viewer")
-            if not mb_user_email or mb_user_email == mailbox_email:
+            if not mb_user_email:
                 continue
             # One share entry per user: the CalDAV side fans it out to
             # every calendar under the mailbox principal.

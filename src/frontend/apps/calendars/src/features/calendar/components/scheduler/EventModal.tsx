@@ -6,8 +6,8 @@ import {
   Input,
   Modal,
   ModalSize,
-  Select,
 } from "@gouvfr-lasuite/cunningham-react";
+import { CalendarSelect } from "./CalendarSelect";
 
 import { useAuth } from "@/features/auth/Auth";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
@@ -340,20 +340,10 @@ export const EventModal = ({
             label={t("calendar.event.calendar")}
             alwaysOpen={true}
           >
-            <Select
-              label={t("calendar.event.calendar")}
-              hideLabel
+            <CalendarSelect
+              calendars={calendars}
               value={form.selectedCalendarUrl}
-              onChange={(e) =>
-                form.setSelectedCalendarUrl(String(e.target.value))
-              }
-              options={calendars.map((cal) => ({
-                value: cal.url,
-                label: cal.displayName || cal.url,
-              }))}
-              clearable={false}
-              variant="classic"
-              fullWidth
+              onChange={form.setSelectedCalendarUrl}
             />
           </SectionRow>
           <DateTimeSection
@@ -396,13 +386,34 @@ export const EventModal = ({
           )}
 
           {form.isSectionExpanded("attendees") && (
-            <AttendeesSection
-              attendees={form.attendees}
-              onChange={form.setAttendees}
-              organizerEmail={organizer?.email ?? user?.email}
-              organizer={organizer}
-              alwaysOpen
-            />
+            <>
+              <AttendeesSection
+                attendees={form.attendees}
+                onChange={form.setAttendees}
+                organizerEmail={organizer?.email ?? user?.email}
+                organizer={organizer}
+                alwaysOpen
+              />
+              {form.attendees.length > 0 && (
+                <p
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "#9ca3af",
+                    margin: "-8px 0 8px 36px",
+                    padding: 0,
+                  }}
+                >
+                  {t("calendar.attendees.sentFrom", {
+                    email:
+                      calendars.find(
+                        (c) => c.url === form.selectedCalendarUrl,
+                      )?.mailboxEmail ||
+                      config?.CALENDAR_INVITATION_FROM_EMAIL ||
+                      "",
+                  })}
+                </p>
+              )}
+            </>
           )}
           {isSchedulingEnabled && form.isSectionExpanded("scheduling") && (
             <FreeBusySection
