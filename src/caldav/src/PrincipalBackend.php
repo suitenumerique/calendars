@@ -17,6 +17,7 @@ class PrincipalBackend extends BasePDO
 {
     const TYPE_INDIVIDUAL = 'INDIVIDUAL';
     const TYPE_MAILBOX = 'MAILBOX';
+    const TYPE_SUBSCRIPTION = 'SUBSCRIPTION';
     const ACCESS_OWNER = 1;
     const ACCESS_READ = 2;
     const ACCESS_READ_WRITE = 3;

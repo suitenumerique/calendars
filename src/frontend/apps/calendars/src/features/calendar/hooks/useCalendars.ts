@@ -14,7 +14,13 @@ import {
   startImportTask,
   pollImportTask,
   ImportEventsResult,
+  Subscription,
+  getSubscriptions,
+  createSubscription,
+  deleteSubscription,
+  reactivateSubscription,
 } from "../api";
+import { SYNC_POLL_INTERVAL } from "../config";
 
 /**
  * Result type for useICalFeedChannel hook.
@@ -103,6 +109,55 @@ export const useImportEvents = () => {
     mutationFn: async ({ caldavPath, file }) => {
       const taskId = await startImportTask(caldavPath, file);
       return pollImportTask(taskId);
+    },
+  });
+};
+
+// ============================================================================
+// Subscription Hooks — shared SabreDAV-backed ICS subscriptions.
+// ============================================================================
+
+/** Hook to list the current user's subscription shares. */
+export const useSubscriptions = () => {
+  return useQuery<Subscription[]>({
+    queryKey: ["subscriptions"],
+    queryFn: getSubscriptions,
+    refetchInterval: SYNC_POLL_INTERVAL,
+  });
+};
+
+/** Hook to create a subscription. */
+export const useCreateSubscription = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createSubscription,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+    },
+  });
+};
+
+/** Hook to delete a subscription share. */
+export const useDeleteSubscription = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: deleteSubscription,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+    },
+  });
+};
+
+/** Hook to reactivate a stopped subscription. */
+export const useReactivateSubscription = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: reactivateSubscription,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
     },
   });
 };

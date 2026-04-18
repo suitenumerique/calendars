@@ -15,6 +15,7 @@ from core.api.viewsets_setup import (
     MailboxListView,
     SetupView,
 )
+from core.api.viewsets_subscriptions import SubscriptionViewSet
 from core.api.viewsets_task import TaskDetailView
 from core.external_api import viewsets as external_api_viewsets
 
@@ -24,6 +25,7 @@ router.register("users", viewsets.UserViewSet, basename="users")
 router.register("calendars", viewsets.CalendarViewSet, basename="calendars")
 router.register("resources", viewsets.ResourceViewSet, basename="resources")
 router.register("channels", ChannelViewSet, basename="channels")
+router.register("subscriptions", SubscriptionViewSet, basename="subscriptions")
 router.register(
     "organization-settings",
     viewsets.OrganizationSettingsViewSet,

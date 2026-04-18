@@ -2,6 +2,7 @@
  * API functions for calendar operations.
  */
 
+import { APIError } from "@/features/api/APIError";
 import { fetchAPI } from "@/features/api/fetchApi";
 
 /**
@@ -58,8 +59,8 @@ export const getICalFeedChannel = async (
     const match = channels.find((c) => c.caldav_path === caldavPath) ?? null;
     return { success: true, channel: match };
   } catch (error) {
-    if (error && typeof error === "object" && "status" in error) {
-      const status = error.status as number;
+    if (error instanceof APIError) {
+      const status = error.code;
       if (status === 403) {
         return {
           success: false,
@@ -116,6 +117,78 @@ export const deleteChannel = async (channelId: string): Promise<void> => {
     method: "DELETE",
   });
 };
+
+// ============================================================================
+// Subscription API — shared ICS subscriptions backed by SabreDAV.
+//
+// Each unique source URL maps to one SUBSCRIPTION principal on the
+// CalDAV side; users subscribe by getting a read-only share row. There
+// is no Django subscription model — the API wraps SabreDAV's internal
+// API directly.
+// ============================================================================
+
+/**
+ * Subscription share as returned to the current user.
+ */
+export interface Subscription {
+  subscription_id: string;
+  caldav_path: string;
+  display_name: string;
+  color: string;
+  source_url: string;
+  sync_interval: number;
+  last_sync_at: string | null;
+  last_sync_status: "pending" | "ok" | "error" | "stopped";
+  last_sync_error: string;
+  error_count: number;
+  created_at: string | null;
+}
+
+/** List the current user's subscription shares. */
+export const getSubscriptions = async (): Promise<Subscription[]> => {
+  const response = await fetchAPI(`subscriptions/`, { method: "GET" });
+  return response.json();
+};
+
+/** Create a new subscription for the current user. */
+export const createSubscription = async (params: {
+  name: string;
+  sourceUrl: string;
+  color?: string;
+}): Promise<Subscription> => {
+  const body: Record<string, string> = {
+    name: params.name,
+    source_url: params.sourceUrl,
+  };
+  if (params.color) {
+    body.color = params.color;
+  }
+  const response = await fetchAPI("subscriptions/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return response.json();
+};
+
+/** Unsubscribe the current user from a subscription. */
+export const deleteSubscription = async (
+  subscriptionId: string,
+): Promise<void> => {
+  await fetchAPI(`subscriptions/${subscriptionId}/`, { method: "DELETE" });
+};
+
+/** Reset a stopped subscription's error counters and kick off a sync. */
+export const reactivateSubscription = async (
+  subscriptionId: string,
+): Promise<void> => {
+  await fetchAPI(`subscriptions/${subscriptionId}/reactivate/`, {
+    method: "POST",
+  });
+};
+
+// ============================================================================
+// ICS Import API
+// ============================================================================
 
 /**
  * Result of an ICS import operation.

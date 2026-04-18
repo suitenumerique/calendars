@@ -62,7 +62,13 @@ export type CalDavCalendar = Pick<DAVCalendar, 'url' | 'ctag' | 'syncToken' | 'c
   color?: string
   /** Whether this calendar's events count toward freebusy (default: true) */
   includeInAvailability: boolean
-  /** Owner principal type: "MAILBOX" for mailbox calendars, undefined otherwise */
+  /**
+   * Owner principal type. Populated from the SabreDAV custom property
+   * ``LS:calendar-owner-type``. Known values: "MAILBOX" (shared
+   * mailbox-backed calendar), "SUBSCRIPTION" (external ICS feed shared
+   * read-only with the current user). Undefined for standard
+   * user-owned calendars.
+   */
   ownerType?: string
   /**
    * Email of the owning mailbox principal, parsed from the

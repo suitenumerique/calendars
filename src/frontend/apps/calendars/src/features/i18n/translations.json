@@ -147,6 +147,7 @@
         "event": {
           "createTitle": "Create event",
           "editTitle": "Edit event",
+          "viewTitle": "Event details",
           "calendar": "Calendar",
           "title": "Title",
           "titlePlaceholder": "Event title",
@@ -225,6 +226,7 @@
           "defaultCalendarName": "My calendar",
           "myCalendars": "My calendars",
           "sharedCalendars": "Shared calendars",
+          "subscriptions": "Subscriptions",
           "shared": "(shared)",
           "mailboxCalendar": "Mailbox calendar: {{email}}",
           "unnamed": "Unnamed calendar",
@@ -265,7 +267,30 @@
           "error": "Failed to generate subscription URL. Please try again.",
           "errorPermission": "You don't have permission to access this calendar.",
           "errorNetwork": "Network error. Please check your connection and try again.",
-          "errorServer": "Server error. Please try again later."
+          "errorServer": "Server error. Please try again later.",
+          "add": {
+            "title": "Add subscription",
+            "description": "Paste the URL of an external calendar (ICS) to subscribe to it. Events will sync automatically.",
+            "urlLabel": "Calendar URL",
+            "nameLabel": "Display name",
+            "namePlaceholder": "e.g. Public Holidays",
+            "submit": "Subscribe",
+            "error": "Failed to subscribe. Please verify the URL and try again.",
+            "limitReached": "Maximum number of subscriptions reached"
+          },
+          "edit": {
+            "title": "Edit subscription",
+            "save": "Save",
+            "error": "Failed to update. Please verify the URL and try again."
+          },
+          "status": {
+            "pending": "Syncing...",
+            "error": "Sync error",
+            "stopped": "Sync stopped",
+            "stoppedDescription": "Synchronization stopped after multiple failures. Please verify the URL is still valid.",
+            "reactivate": "Reactivate",
+            "viewError": "View error"
+          }
         },
         "leftPanel": {
           "newEvent": "New event"
@@ -1029,6 +1054,7 @@
         "event": {
           "createTitle": "Créer un événement",
           "editTitle": "Modifier l'événement",
+          "viewTitle": "Détails de l'événement",
           "calendar": "Calendrier",
           "title": "Titre",
           "titlePlaceholder": "Titre de l'événement",
@@ -1107,6 +1133,7 @@
           "defaultCalendarName": "Mon calendrier",
           "myCalendars": "Mes calendriers",
           "sharedCalendars": "Calendriers partagés",
+          "subscriptions": "Abonnements",
           "shared": "(partagé)",
           "unnamed": "Calendrier sans nom",
           "mailboxCalendar": "Boîte partagée : {{email}}",
@@ -1147,7 +1174,30 @@
           "error": "Échec de la génération de l'URL d'abonnement. Veuillez réessayer.",
           "errorPermission": "Vous n'avez pas la permission d'accéder à ce calendrier.",
           "errorNetwork": "Erreur réseau. Veuillez vérifier votre connexion et réessayer.",
-          "errorServer": "Erreur serveur. Veuillez réessayer plus tard."
+          "errorServer": "Erreur serveur. Veuillez réessayer plus tard.",
+          "add": {
+            "title": "Ajouter un abonnement",
+            "description": "Collez l'URL d'un calendrier externe (ICS) pour vous y abonner. Les événements se synchroniseront automatiquement.",
+            "urlLabel": "URL du calendrier",
+            "nameLabel": "Nom d'affichage",
+            "namePlaceholder": "ex. Jours fériés",
+            "submit": "S'abonner",
+            "error": "Échec de l'abonnement. Veuillez vérifier l'URL et réessayer.",
+            "limitReached": "Nombre maximum d'abonnements atteint"
+          },
+          "edit": {
+            "title": "Modifier l'abonnement",
+            "save": "Enregistrer",
+            "error": "Échec de la mise à jour. Veuillez vérifier l'URL et réessayer."
+          },
+          "status": {
+            "pending": "Synchronisation...",
+            "error": "Erreur de synchronisation",
+            "stopped": "Synchronisation arrêtée",
+            "stoppedDescription": "La synchronisation s'est arrêtée après plusieurs échecs. Veuillez vérifier que l'URL est toujours valide.",
+            "reactivate": "Réactiver",
+            "viewError": "Voir l'erreur"
+          }
         },
         "leftPanel": {
           "newEvent": "Nouvel événement"
@@ -1653,6 +1703,7 @@
         "event": {
           "createTitle": "Evenement aanmaken",
           "editTitle": "Evenement bewerken",
+          "viewTitle": "Evenementdetails",
           "calendar": "Kalender",
           "title": "Titel",
           "titlePlaceholder": "Evenement titel",
@@ -1731,6 +1782,7 @@
           "defaultCalendarName": "Mijn kalender",
           "myCalendars": "Mijn kalenders",
           "sharedCalendars": "Gedeelde kalenders",
+          "subscriptions": "Abonnementen",
           "shared": "(gedeeld)",
           "unnamed": "Naamloze kalender",
           "mailboxCalendar": "Gedeelde mailbox: {{email}}",
@@ -1771,7 +1823,30 @@
           "error": "Genereren van abonnements-URL mislukt. Probeer het opnieuw.",
           "errorPermission": "U heeft geen toegang tot deze kalender.",
           "errorNetwork": "Netwerkfout. Controleer uw verbinding en probeer het opnieuw.",
-          "errorServer": "Serverfout. Probeer het later opnieuw."
+          "errorServer": "Serverfout. Probeer het later opnieuw.",
+          "add": {
+            "title": "Abonnement toevoegen",
+            "description": "Plak de URL van een externe kalender (ICS) om u erop te abonneren. Evenementen worden automatisch gesynchroniseerd.",
+            "urlLabel": "Kalender-URL",
+            "nameLabel": "Weergavenaam",
+            "namePlaceholder": "bijv. Feestdagen",
+            "submit": "Abonneren",
+            "error": "Abonneren mislukt. Controleer de URL en probeer het opnieuw.",
+            "limitReached": "Maximaal aantal abonnementen bereikt"
+          },
+          "edit": {
+            "title": "Abonnement bewerken",
+            "save": "Opslaan",
+            "error": "Bijwerken mislukt. Controleer de URL en probeer het opnieuw."
+          },
+          "status": {
+            "pending": "Synchroniseren...",
+            "error": "Synchronisatiefout",
+            "stopped": "Synchronisatie gestopt",
+            "stoppedDescription": "Synchronisatie is gestopt na meerdere fouten. Controleer of de URL nog geldig is.",
+            "reactivate": "Opnieuw activeren",
+            "viewError": "Fout bekijken"
+          }
         },
         "leftPanel": {
           "newEvent": "Nieuw evenement"

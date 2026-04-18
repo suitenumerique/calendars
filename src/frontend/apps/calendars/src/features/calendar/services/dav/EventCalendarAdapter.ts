@@ -327,6 +327,8 @@ export class EventCalendarAdapter {
       Object.assign(extendedProps, opts.extendedPropsExtractor(icsEvent))
     }
 
+    const isReadOnly = !!(opts.readOnlyCalendarUrls?.has(calendarUrl))
+
     return {
       id,
       start: allDay ? this.dateToDateOnlyString(start) : this.dateToLocalISOString(start),
@@ -337,7 +339,9 @@ export class EventCalendarAdapter {
       title: icsEvent.summary ?? '',
       backgroundColor,
       textColor,
-      editable: true,
+      editable: !isReadOnly,
+      startEditable: isReadOnly ? false : undefined,
+      durationEditable: isReadOnly ? false : undefined,
       extendedProps,
     }
   }

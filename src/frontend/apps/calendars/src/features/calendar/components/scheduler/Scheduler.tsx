@@ -28,6 +28,7 @@ import type { EventCalendarEvent } from "../../services/dav/types/event-calendar
 import { useIsMobile } from "@/hooks/useIsMobile";
 
 import { EventModal } from "./EventModal";
+import { ReadOnlyEventModal } from "./ReadOnlyEventModal";
 import { RecurringEditModal } from "./RecurringEditModal";
 import { SchedulerToolbar } from "./SchedulerToolbar";
 import type { SchedulerProps, EventModalState, MobileListEvent } from "./types";
@@ -76,6 +77,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     adapter,
     davCalendars,
     visibleCalendarUrls,
+    subscriptionCalendarUrls,
     isConnected,
     calendarRef: contextCalendarRef,
     currentDate,
@@ -87,6 +89,8 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const calendarRef = contextCalendarRef;
+  const readOnlyCalendarUrlsRef = useRef(subscriptionCalendarUrls);
+  readOnlyCalendarUrlsRef.current = subscriptionCalendarUrls;
   const [calendarUrl, setCalendarUrl] = useState(defaultCalendarUrl || "");
 
   // Toolbar state
@@ -140,6 +144,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     calendarUrl,
     modalState,
     setModalState,
+    readOnlyCalendarUrls: subscriptionCalendarUrls,
   });
 
   // Callback to update toolbar state when calendar dates/view changes
@@ -189,6 +194,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     adapter,
     visibleCalendarUrlsRef,
     davCalendarsRef,
+    readOnlyCalendarUrlsRef,
     initialView: isMobile ? "timeGridDay" : "timeGridWeek",
     setCurrentDate: handleDatesSet,
     handleEventClick: handleEventClick as (info: unknown) => void,
@@ -210,12 +216,16 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     }
   }, [isConnected]);
 
-  // Update eventFilter when visible calendars change
+  // Update eventFilter when visible calendars change.
+  // Also refetch when subscriptionCalendarUrls changes so already-rendered
+  // events get their `editable` flag recomputed once the subscription
+  // list arrives — otherwise drag/resize stays enabled for subscription
+  // events until an unrelated refetch happens.
   useEffect(() => {
     if (calendarRef.current) {
       calendarRef.current.refetchEvents();
     }
-  }, [visibleCalendarUrls, davCalendars]);
+  }, [visibleCalendarUrls, davCalendars, subscriptionCalendarUrls]);
 
   const handleViewChange = useCallback(
     (view: string) => {
@@ -319,16 +329,20 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
         defaultTimezone: extProps?.timezone || BROWSER_TIMEZONE,
       });
 
+      const isReadOnly = subscriptionCalendarUrls.has(
+        extProps?.calendarUrl || "",
+      );
+
       setModalState({
         isOpen: true,
-        mode: "edit",
+        mode: isReadOnly ? "view" : "edit",
         event: icsEvent,
         calendarUrl: extProps?.calendarUrl || calendarUrl,
         eventUrl: extProps?.eventUrl,
         etag: extProps?.etag,
       });
     },
-    [adapter, calendarUrl, calendarRef],
+    [adapter, calendarUrl, calendarRef, subscriptionCalendarUrls],
   );
 
   return (
@@ -380,18 +394,45 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
 
       {isMobile && <FloatingActionButton onClick={handleFabClick} />}
 
-      <EventModal
-        isOpen={modalState.isOpen}
-        mode={modalState.mode}
-        event={modalState.event}
-        calendarUrl={modalState.calendarUrl}
-        calendars={davCalendars}
-        adapter={adapter}
-        onSave={handleModalSave}
-        onDelete={modalState.mode === "edit" ? handleModalDelete : undefined}
-        onRespondToInvitation={handleRespondToInvitation}
-        onClose={handleModalClose}
-      />
+      {modalState.mode === "view" ? (
+        <ReadOnlyEventModal
+          isOpen={modalState.isOpen}
+          event={modalState.event}
+          calendarUrl={modalState.calendarUrl}
+          calendars={davCalendars}
+          onClose={handleModalClose}
+        />
+      ) : (
+        (() => {
+          const writableCalendars = davCalendars.filter(
+            (cal) => !subscriptionCalendarUrls.has(cal.url),
+          );
+          // If the modal was opened while a subscription calendar was
+          // selected, fall back to the first writable calendar so the
+          // form never shows a selection that's absent from the options.
+          const sanitizedCalendarUrl = subscriptionCalendarUrls.has(
+            modalState.calendarUrl,
+          )
+            ? (writableCalendars[0]?.url ?? "")
+            : modalState.calendarUrl;
+          return (
+            <EventModal
+              isOpen={modalState.isOpen}
+              mode={modalState.mode}
+              event={modalState.event}
+              calendarUrl={sanitizedCalendarUrl}
+              calendars={writableCalendars}
+              adapter={adapter}
+              onSave={handleModalSave}
+              onDelete={
+                modalState.mode === "edit" ? handleModalDelete : undefined
+              }
+              onRespondToInvitation={handleRespondToInvitation}
+              onClose={handleModalClose}
+            />
+          );
+        })()
+      )}
 
       <RecurringEditModal
         isOpen={!!pendingRecurringAction}

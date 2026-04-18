@@ -22,8 +22,8 @@ class CustomCalendarHome extends CalendarHome
     /** @var \PDO */
     private $pdo;
 
-    /** @var array<int,bool> Per-instance cache: calendarId → isMailboxOwned */
-    private $mailboxOwnedCache = [];
+    /** @var array<int,string|null> Per-instance cache: calendarId → owner calendar_user_type */
+    private $ownerTypeCache = [];
 
     public function setPdo(\PDO $pdo)
     {
@@ -71,9 +71,9 @@ class CustomCalendarHome extends CalendarHome
     {
         $objs = [];
 
-        // Calendars — batch-prefetch mailbox-owned status to avoid N+1 queries
+        // Calendars — batch-prefetch owner type to avoid N+1 queries
         $calendars = $this->caldavBackend->getCalendarsForUser($this->principalInfo['uri']);
-        $this->prefetchMailboxOwned($calendars);
+        $this->prefetchOwnerTypes($calendars);
         foreach ($calendars as $calendar) {
             $objs[] = $this->wrapCalendar($calendar);
         }
@@ -128,35 +128,42 @@ class CustomCalendarHome extends CalendarHome
         $isShared = $access !== \Sabre\DAV\Sharing\Plugin::ACCESS_SHAREDOWNER
             && $access !== \Sabre\DAV\Sharing\Plugin::ACCESS_NOTSHARED;
 
-        if ($isShared && $this->pdo && $this->isMailboxOwned($calendar)) {
-            // Inject owner type into calendarInfo so propFind handlers can
-            // read it without an extra DB query. The frontend uses this to
-            // detect mailbox calendars.
-            $calendar['{http://lasuite.numerique.gouv.fr/ns/}calendar-owner-type'] = 'MAILBOX';
-            return new MailboxSharedCalendar($this->caldavBackend, $calendar);
+        if ($isShared && $this->pdo) {
+            $ownerType = $this->getOwnerType($calendar);
+            if ($ownerType === PrincipalBackend::TYPE_MAILBOX) {
+                // Inject owner type into calendarInfo so propFind handlers can
+                // read it without an extra DB query. The frontend uses this to
+                // detect mailbox calendars.
+                $calendar['{http://lasuite.numerique.gouv.fr/ns/}calendar-owner-type'] = 'MAILBOX';
+                return new MailboxSharedCalendar($this->caldavBackend, $calendar);
+            }
+            if ($ownerType === PrincipalBackend::TYPE_SUBSCRIPTION) {
+                // Subscription shares are read-only by construction; mark
+                // them so the frontend can render the subscription UI
+                // without having to query the subscription state.
+                $calendar['{http://lasuite.numerique.gouv.fr/ns/}calendar-owner-type'] = 'SUBSCRIPTION';
+                return new SharedCalendar($this->caldavBackend, $calendar);
+            }
         }
 
         return new SharedCalendar($this->caldavBackend, $calendar);
     }
 
     /**
-     * Check if the calendar's owner principal is a MAILBOX type.
-     *
-     * Uses calendarid to find the owner instance, then checks the
-     * principal's calendar_user_type.
+     * Return the owner principal's calendar_user_type for a calendar, or
+     * null on error.
      */
-    private function isMailboxOwned(array $calendarInfo): bool
+    private function getOwnerType(array $calendarInfo): ?string
     {
         $calendarId = is_array($calendarInfo['id'])
             ? $calendarInfo['id'][0]
             : $calendarInfo['id'];
 
-        if (array_key_exists($calendarId, $this->mailboxOwnedCache)) {
-            return $this->mailboxOwnedCache[$calendarId];
+        if (array_key_exists($calendarId, $this->ownerTypeCache)) {
+            return $this->ownerTypeCache[$calendarId];
         }
 
         try {
-            // Find the owner principal for this calendar
             $stmt = $this->pdo->prepare(
                 'SELECT p.calendar_user_type FROM calendarinstances ci '
                 . 'JOIN principals p ON p.uri = ci.principaluri '
@@ -166,22 +173,22 @@ class CustomCalendarHome extends CalendarHome
             $stmt->execute([$calendarId]);
             $type = $stmt->fetchColumn();
 
-            $result = $type === PrincipalBackend::TYPE_MAILBOX;
-            $this->mailboxOwnedCache[$calendarId] = $result;
+            $result = $type === false ? null : (string) $type;
+            $this->ownerTypeCache[$calendarId] = $result;
             return $result;
         } catch (\Exception $e) {
             error_log("[CustomCalendarHome] DB error: " . $e->getMessage());
-            return false;
+            return null;
         }
     }
 
     /**
-     * Batch-prefetch mailbox-owned status for a set of calendars in one query.
+     * Batch-prefetch owner types for a set of calendars in one query.
      * Called from getChildren to avoid N+1 queries.
      *
      * @param array $calendars List of calendar info arrays from getCalendarsForUser
      */
-    private function prefetchMailboxOwned(array $calendars): void
+    private function prefetchOwnerTypes(array $calendars): void
     {
         if (!$this->pdo || empty($calendars)) {
             return;
@@ -190,7 +197,7 @@ class CustomCalendarHome extends CalendarHome
         $ids = [];
         foreach ($calendars as $cal) {
             $cid = is_array($cal['id']) ? $cal['id'][0] : $cal['id'];
-            if (!array_key_exists($cid, $this->mailboxOwnedCache)) {
+            if (!array_key_exists($cid, $this->ownerTypeCache)) {
                 $ids[] = $cid;
             }
         }
@@ -211,8 +218,7 @@ class CustomCalendarHome extends CalendarHome
                 $found[$row['calendarid']] = $row['calendar_user_type'];
             }
             foreach ($ids as $cid) {
-                $this->mailboxOwnedCache[$cid] =
-                    ($found[$cid] ?? null) === PrincipalBackend::TYPE_MAILBOX;
+                $this->ownerTypeCache[$cid] = $found[$cid] ?? null;
             }
         } catch (\Exception $e) {
             error_log("[CustomCalendarHome] prefetch DB error: " . $e->getMessage());

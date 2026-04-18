@@ -22,6 +22,7 @@ import {
   addToast,
   ToasterItem,
 } from "@/features/ui/components/toaster/Toaster";
+import { SYNC_POLL_INTERVAL } from "../config";
 
 const HIDDEN_CALENDARS_KEY = "calendar-hidden-urls";
 
@@ -55,6 +56,7 @@ export interface CalendarContextType {
   davCalendars: CalDavCalendar[];
   ownedCalendars: CalDavCalendar[];
   sharedCalendars: CalDavCalendar[];
+  subscriptionCalendarUrls: Set<string>;
   visibleCalendarUrls: Set<string>;
   isLoading: boolean;
   isConnected: boolean;
@@ -117,6 +119,19 @@ export const CalendarContextProvider = ({
   const [isConnected, setIsConnected] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Subscription calendars surface in PROPFIND with the custom
+  // ``LS:calendar-owner-type`` property set to ``SUBSCRIPTION`` by the
+  // SabreDAV CustomCalendarHome plugin. Deriving the read-only set
+  // from that flag keeps frontend and backend in lock-step without
+  // a separate API round-trip.
+  const subscriptionCalendarUrls = useMemo(() => {
+    return new Set(
+      davCalendars
+        .filter((cal) => cal.ownerType === "SUBSCRIPTION")
+        .map((cal) => cal.url),
+    );
+  }, [davCalendars]);
 
   const { ownedCalendars, sharedCalendars } = useMemo(() => {
     const homeUrl = caldavService.getAccount()?.homeUrl;
@@ -309,7 +324,17 @@ export const CalendarContextProvider = ({
     }
   }, []);
 
-  // Note: refetchEvents is called in Scheduler component after updating the ref
+  // Periodic refresh: poll calendars every 5 minutes to pick up
+  // subscription sync changes. Scheduler.tsx already refetches events
+  // when davCalendars changes, so we don't call refetchEvents() here
+  // — doing both would double CalDAV traffic on every tick.
+  useEffect(() => {
+    if (!isConnected) return;
+    const interval = setInterval(() => {
+      refreshCalendars();
+    }, SYNC_POLL_INTERVAL);
+    return () => clearInterval(interval);
+  }, [isConnected, refreshCalendars]);
 
   // Connect to CalDAV server on mount
   useEffect(() => {
@@ -377,6 +402,7 @@ export const CalendarContextProvider = ({
     davCalendars,
     ownedCalendars,
     sharedCalendars,
+    subscriptionCalendarUrls,
     visibleCalendarUrls,
     isLoading,
     isConnected,

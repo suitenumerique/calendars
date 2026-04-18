@@ -1,4 +1,13 @@
-"""Channel API for managing integration tokens."""
+"""Channel API for managing integration tokens.
+
+Handles ``type="caldav"`` (bearer tokens for external integrations like
+Messages) and ``type="ical-feed"`` (public iCal export channels).
+Subscription channels (external ICS imports) live in
+``viewsets_subscriptions.py`` — they use SabreDAV-native sharing and do
+not have Channel rows.
+"""
+
+# pylint: disable=broad-exception-caught,import-outside-toplevel
 
 import logging
 import secrets

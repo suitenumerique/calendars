@@ -16,7 +16,10 @@ import requests
 
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
 from core.models import Channel
-from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy_path
+from core.services.caldav_service import (
+    CalDAVHTTPClient,
+    validate_caldav_proxy_path,
+)
 from core.services.calendar_invitation_service import calendar_invitation_service
 
 logger = logging.getLogger(__name__)
@@ -170,6 +173,9 @@ class CalDAVProxyView(View):
         if request.method in ("MKCALENDAR", "MKCOL"):
             if denied := self._check_entitlements_for_creation(effective_user):
                 return denied
+
+        # Subscription calendars are enforced read-only by SabreDAV's
+        # SubscriptionPlugin — no Django-side check needed.
 
         # Build the CalDAV server URL
         path = kwargs.get("path", "")
