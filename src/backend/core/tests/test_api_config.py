@@ -80,6 +80,7 @@ def test_api_config(is_authenticated):
         "FEATURE_MESSAGES_INTEGRATION": False,
         "MEDIA_BASE_URL": "http://testserver/",
         "SENTRY_DSN": "https://sentry.test/123",
+        "CALENDAR_INVITATION_FROM_EMAIL": None,
         "theme_customization": {},
     }
 

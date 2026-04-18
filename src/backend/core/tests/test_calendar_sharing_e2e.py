@@ -2923,8 +2923,8 @@ class TestSyncSameEmailCoexistence:
 
         calendars_after = _list_calendar_urls(user)
         new_urls = calendars_after - calendars_before
-        assert len(new_urls) >= 0, (
-            f"Sync should work without errors. "
+        assert len(new_urls) > 0, (
+            f"Sync should create at least one user-visible sharee calendar. "
             f"Before: {calendars_before}, After: {calendars_after}"
         )
 

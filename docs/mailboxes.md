@@ -165,10 +165,9 @@ both a personal calendar (freely shareable with write access) and a
 mailbox calendar (sharing restricted by Messages roles) for the same
 email.
 
-The RSVP handler accounts for this: it searches the user principal's
-calendar home first (which includes shared mailbox calendars), then
-falls back to the mailbox principal for team mailboxes where no user
-principal has the event.
+The RSVP handler always delegates to `POST /internal-api/rsvp/`, which
+finds the event by UID across all principals matching the organizer
+email in a single DB query — no namespace selection or fallback needed.
 
 ## Calendar Sharing
 
@@ -271,18 +270,11 @@ Standard flow. SabreDAV's Schedule plugin fires the iMIP callback.
 
 ### RSVP
 
-When an attendee clicks the RSVP link, the handler authenticates as
-the organizer via `X-LS-User` and searches for the event by UID across
-all calendars in the organizer's calendar home.
-
-For personal mailboxes (`user.email == mailbox_email`), the user
-principal's calendar home includes the shared mailbox calendar, so the
-event is found on the first pass regardless of which calendar it's in.
-
-For team mailboxes (`contact@company.com` with no corresponding user),
-the RSVP handler delegates to `POST /internal-api/rsvp/`, which finds
-the event by UID across all principals matching the organizer email in
-a single DB query — no namespace selection or retry needed.
+When an attendee clicks the RSVP link, the backend always delegates to
+`POST /internal-api/rsvp/`. The internal API finds the event by UID
+across all principals matching the organizer email (both
+`principals/users/` and `principals/mailboxes/`) and updates the
+attendee's PARTSTAT atomically — no namespace selection or retry needed.
 
 ## Internal API Endpoints (CalDAV side)
 

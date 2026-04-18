@@ -1892,7 +1892,8 @@
           "organizer": "Organisator",
           "viewProfile": "Profiel bekijken",
           "cannotRemoveOrganizer": "Kan organisator niet verwijderen",
-          "noResults": "Geen gebruikers gevonden"
+          "noResults": "Geen gebruikers gevonden",
+          "sentFrom": "Uitnodiging wordt verzonden vanaf {{email}}"
         },
         "resources": {
           "placeholder": "Selecteer een middel...",

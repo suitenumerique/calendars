@@ -559,7 +559,7 @@ class InternalApiPlugin extends ServerPlugin
 
             $found = false;
             foreach ($vevent->ATTENDEE as $attendee) {
-                $mailto = strtolower(str_replace('mailto:', '', (string) $attendee->getValue()));
+                $mailto = strtolower(preg_replace('/^mailto:/i', '', trim((string) $attendee->getValue())));
                 if ($mailto === $attendeeEmail) {
                     $attendee['PARTSTAT'] = $partstat;
                     $found = true;
@@ -670,6 +670,9 @@ class InternalApiPlugin extends ServerPlugin
         $name = $body['name'] ?? $email;
         $color = $body['color'] ?? '#3788d8';
         $callerEmail = $body['caller_email'] ?? null;
+        if ($callerEmail === '') {
+            $callerEmail = null;
+        }
         $isMailbox = ($calendarUserType === PrincipalBackend::TYPE_MAILBOX);
         $principalUri = ($isMailbox ? 'principals/mailboxes/' : 'principals/users/') . $email;
         $callerIsOwner = !$isMailbox
@@ -730,7 +733,7 @@ class InternalApiPlugin extends ServerPlugin
             // callers (Python setup service, tests) don't have to do
             // a follow-up PROPFIND just to discover it.
             $callerCalendarUri = $newUri;
-            if ($isMailbox && !$callerIsOwner) {
+            if ($isMailbox && !$callerIsOwner && $callerEmail !== null) {
                 $cidStmt = $this->pdo->prepare(
                     'SELECT calendarid FROM calendarinstances'
                     . ' WHERE principaluri = ? AND uri = ?'
