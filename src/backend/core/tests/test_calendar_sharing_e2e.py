@@ -3454,9 +3454,6 @@ class TestInternalApiCreateMailboxCalendar:
             "<D:prop><A:calendar-color/></D:prop>"
             "</D:propfind>"
         )
-        extra_headers = {"Depth": "0"}
-        if namespace == "mailboxes":
-            extra_headers["X-LS-Principal-Prefix"] = "mailboxes"
         resp = CalDAVHTTPClient().request(
             "PROPFIND",
             reader,
