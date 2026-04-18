@@ -2,6 +2,7 @@
  * API functions for calendar operations.
  */
 
+import { APIError } from "@/features/api/APIError";
 import { fetchAPI } from "@/features/api/fetchApi";
 
 /**
@@ -58,8 +59,8 @@ export const getICalFeedChannel = async (
     const match = channels.find((c) => c.caldav_path === caldavPath) ?? null;
     return { success: true, channel: match };
   } catch (error) {
-    if (error && typeof error === "object" && "status" in error) {
-      const status = error.status as number;
+    if (error instanceof APIError) {
+      const status = error.code;
       if (status === 403) {
         return {
           success: false,
@@ -116,6 +117,115 @@ export const deleteChannel = async (channelId: string): Promise<void> => {
     method: "DELETE",
   });
 };
+
+// ============================================================================
+// Subscription Channel API
+// ============================================================================
+
+/**
+ * Subscription channel response from the API.
+ */
+export interface SubscriptionChannel {
+  id: string;
+  name: string;
+  type: "ical-subscription";
+  caldav_path: string;
+  is_active: boolean;
+  source_url: string;
+  last_sync_at: string | null;
+  last_sync_status: "pending" | "ok" | "error" | "stopped";
+  last_sync_error: string;
+  error_count: number;
+  sync_interval: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Get all subscription channels for the current user.
+ */
+export const getSubscriptionChannels = async (): Promise<
+  SubscriptionChannel[]
+> => {
+  const response = await fetchAPI(`channels/?type=ical-subscription`, {
+    method: "GET",
+  });
+  return response.json();
+};
+
+/**
+ * Create a subscription channel.
+ */
+export const createSubscriptionChannel = async (params: {
+  name: string;
+  sourceUrl: string;
+  color?: string;
+}): Promise<SubscriptionChannel> => {
+  const body: Record<string, string> = {
+    name: params.name,
+    type: "ical-subscription",
+    source_url: params.sourceUrl,
+  };
+  if (params.color) {
+    body.color = params.color;
+  }
+  const response = await fetchAPI("channels/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return response.json();
+};
+
+/**
+ * Update a subscription channel (name and/or source URL).
+ */
+export const updateSubscriptionChannel = async (
+  channelId: string,
+  params: { name?: string; sourceUrl?: string; color?: string },
+): Promise<SubscriptionChannel> => {
+  const body: Record<string, string> = {};
+  if (params.name !== undefined) {
+    body.name = params.name;
+  }
+  if (params.sourceUrl !== undefined) {
+    body.source_url = params.sourceUrl;
+  }
+  if (params.color !== undefined) {
+    body.color = params.color;
+  }
+  const response = await fetchAPI(`channels/${channelId}/`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  return response.json();
+};
+
+/**
+ * Delete a subscription channel by ID.
+ */
+export const deleteSubscriptionChannel = async (
+  channelId: string,
+): Promise<void> => {
+  await fetchAPI(`channels/${channelId}/`, {
+    method: "DELETE",
+  });
+};
+
+/**
+ * Reactivate a stopped subscription channel.
+ */
+export const reactivateSubscriptionChannel = async (
+  channelId: string,
+): Promise<SubscriptionChannel> => {
+  const response = await fetchAPI(`channels/${channelId}/reactivate/`, {
+    method: "POST",
+  });
+  return response.json();
+};
+
+// ============================================================================
+// ICS Import API
+// ============================================================================
 
 /**
  * Result of an ICS import operation.

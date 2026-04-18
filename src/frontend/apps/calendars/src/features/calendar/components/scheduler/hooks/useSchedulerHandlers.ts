@@ -79,6 +79,7 @@ interface UseSchedulerHandlersProps {
   calendarUrl: string;
   modalState: EventModalState;
   setModalState: React.Dispatch<React.SetStateAction<EventModalState>>;
+  readOnlyCalendarUrls: Set<string>;
 }
 
 /**
@@ -97,6 +98,7 @@ export const useSchedulerHandlers = ({
   calendarUrl,
   modalState,
   setModalState,
+  readOnlyCalendarUrls,
 }: UseSchedulerHandlersProps) => {
   const { user } = useAuth();
   const [pendingRecurringAction, setPendingRecurringAction] =
@@ -108,6 +110,22 @@ export const useSchedulerHandlers = ({
    */
   const handleEventDrop = useCallback(
     async (info: EventCalendarEventDropInfo) => {
+      const targetResourceId =
+        typeof info.newResource?.id === "string"
+          ? info.newResource.id
+          : undefined;
+
+      // Block writes on read-only (subscription) events, and also reject
+      // drops whose destination resource is a subscription calendar — a
+      // writable event must not land in a read-only feed.
+      if (
+        info.event.editable === false ||
+        (targetResourceId && readOnlyCalendarUrls.has(targetResourceId))
+      ) {
+        info.revert();
+        return;
+      }
+
       const extProps = info.event.extendedProps as CalDavExtendedProps;
 
       if (!extProps?.eventUrl) {
@@ -151,7 +169,7 @@ export const useSchedulerHandlers = ({
         info.revert();
       }
     },
-    [adapter, caldavService, calendarRef]
+    [adapter, caldavService, calendarRef, readOnlyCalendarUrls]
   );
 
   /**
@@ -160,6 +178,12 @@ export const useSchedulerHandlers = ({
    */
   const handleEventResize = useCallback(
     async (info: EventCalendarEventResizeInfo) => {
+      // Block writes on read-only (subscription) events
+      if (info.event.editable === false) {
+        info.revert();
+        return;
+      }
+
       const extProps = info.event.extendedProps as CalDavExtendedProps;
 
       if (!extProps?.eventUrl) {
@@ -216,10 +240,23 @@ export const useSchedulerHandlers = ({
     (info: EventCalendarEventClickInfo) => {
       const extProps = info.event.extendedProps as CalDavExtendedProps;
 
-      // Convert EventCalendar event back to IcsEvent for editing
+      // Convert EventCalendar event back to IcsEvent
       const icsEvent = adapter.toIcsEvent(info.event as EventCalendarEvent, {
         defaultTimezone: extProps?.timezone || BROWSER_TIMEZONE,
       });
+
+      // Read-only (subscription) events: open in view mode
+      if (info.event.editable === false) {
+        setModalState({
+          isOpen: true,
+          mode: "view",
+          event: icsEvent,
+          calendarUrl: extProps?.calendarUrl || calendarUrl,
+          eventUrl: extProps?.eventUrl,
+          etag: extProps?.etag,
+        });
+        return;
+      }
 
       setModalState({
         isOpen: true,

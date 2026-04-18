@@ -13,6 +13,70 @@ from core.task_utils import register_task, set_task_progress
 logger = logging.getLogger(__name__)
 
 
+@register_task(queue="sync")
+def sync_one_subscription(channel_id):
+    """Sync a single external calendar subscription."""
+    from core.services.subscription_sync_service import (  # noqa: PLC0415
+        SubscriptionSyncService,
+    )
+
+    service = SubscriptionSyncService()
+    return service.sync_channel(channel_id)
+
+
+@register_task(queue="sync")
+def sync_all_subscriptions():
+    """Fan out sync tasks for all active subscriptions due for sync."""
+    from django.utils import timezone as tz  # noqa: PLC0415
+
+    from core.models import Channel  # noqa: PLC0415
+
+    now = tz.now()
+    channels = Channel.objects.filter(
+        type="ical-subscription",
+        is_active=True,
+    ).iterator(chunk_size=500)
+
+    dispatched = 0
+    for channel in channels:
+        raw_sync_interval = channel.settings.get(
+            "sync_interval", settings.SUBSCRIPTION_SYNC_INTERVAL
+        )
+        try:
+            sync_interval = max(int(raw_sync_interval), 1)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid sync_interval for channel %s: %r",
+                channel.pk,
+                raw_sync_interval,
+            )
+            sync_interval = settings.SUBSCRIPTION_SYNC_INTERVAL
+        last_sync_at = channel.settings.get("last_sync_at")
+
+        # Check if channel is due for sync
+        if last_sync_at:
+            from django.utils.dateparse import (  # noqa: PLC0415
+                parse_datetime,
+            )
+
+            last_sync = parse_datetime(last_sync_at)
+            if last_sync and (now - last_sync).total_seconds() < sync_interval:
+                continue
+
+        # Stagger delay based on channel ID (deterministic across restarts)
+        import uuid  # noqa: PLC0415
+
+        delay_ms = (int(uuid.UUID(str(channel.pk))) % sync_interval) * 1000
+        sync_one_subscription.send_with_options(
+            args=(str(channel.pk),),
+            delay=delay_ms,
+        )
+        dispatched += 1
+
+    logger.info("Dispatched %d subscription sync tasks", dispatched)
+    return dispatched
+
+
 @register_task(queue="import")
 def import_events_task(user_id, caldav_path, ics_data_hex):
     """Import events from ICS data in the background.

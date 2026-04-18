@@ -100,6 +100,16 @@ class Base(Configuration):
         None, environ_name="MESSAGES_CHANNEL_ID", environ_prefix=None
     )
 
+    # Default sync interval for subscription calendars (seconds)
+    SUBSCRIPTION_SYNC_INTERVAL = values.IntegerValue(
+        300, environ_name="SUBSCRIPTION_SYNC_INTERVAL", environ_prefix=None
+    )
+
+    # Maximum number of subscription channels per user
+    MAX_SUBSCRIPTIONS_PER_USER = values.IntegerValue(
+        20, environ_name="MAX_SUBSCRIPTIONS_PER_USER", environ_prefix=None
+    )
+
     # Default calendar sharing level for new organizations.
     # Controls what colleagues in the same org can see by default.
     # Values: "none", "freebusy", "read", "write"
@@ -907,6 +917,11 @@ class Base(Configuration):
         settings to be loaded.
         """
         super().post_setup()
+
+        if cls.SUBSCRIPTION_SYNC_INTERVAL < 1:
+            raise ValueError("SUBSCRIPTION_SYNC_INTERVAL must be >= 1")
+        if cls.MAX_SUBSCRIPTIONS_PER_USER < 1:
+            raise ValueError("MAX_SUBSCRIPTIONS_PER_USER must be >= 1")
 
         # The SENTRY_DSN setting should be available to activate sentry for an environment
         if cls.SENTRY_DSN is not None:

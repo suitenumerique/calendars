@@ -1,10 +1,13 @@
 """Tests for iCal feed channel creation via the channels API."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from rest_framework.status import (
     HTTP_200_OK,
     HTTP_201_CREATED,
     HTTP_204_NO_CONTENT,
+    HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
     HTTP_403_FORBIDDEN,
 )
@@ -398,3 +401,133 @@ class TestPathInjectionProtection:
         )
 
         assert response.status_code == HTTP_201_CREATED
+
+
+VALID_ICS = (
+    b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Test//Test//EN\r\n"
+    b"BEGIN:VEVENT\r\nUID:test-1\r\nSUMMARY:Test\r\n"
+    b"DTSTART:20260101T100000Z\r\nDTEND:20260101T110000Z\r\n"
+    b"END:VEVENT\r\nEND:VCALENDAR"
+)
+
+
+@pytest.mark.django_db
+class TestSubscriptionChannelLimit:
+    """Tests for per-user subscription limit enforcement (#3)."""
+
+    @patch("core.api.viewsets_channels.CalDAVClient")
+    @patch("core.api.viewsets_channels.fetch_ics")
+    def test_create_subscription_limit_reached(self, mock_fetch, mock_caldav):  # pylint: disable=unused-argument
+        """Cannot create a 21st subscription when limit is 20."""
+        user = factories.UserFactory()
+        client = APIClient()
+        client.force_login(user)
+
+        # Create 20 subscription channels
+        for _ in range(20):
+            factories.ICalSubscriptionChannelFactory(user=user)
+
+        assert Channel.objects.filter(user=user, type="ical-subscription").count() == 20
+
+        response = client.post(
+            CHANNELS_URL,
+            {
+                "type": "ical-subscription",
+                "name": "One too many",
+                "source_url": "https://example.com/overflow.ics",
+            },
+            format="json",
+        )
+
+        assert response.status_code == HTTP_400_BAD_REQUEST
+        assert "Maximum" in response.data["detail"]
+        # fetch_ics should not even be called
+        mock_fetch.assert_not_called()
+
+    @patch("core.api.viewsets_channels.CalDAVClient")
+    @patch("core.api.viewsets_channels.fetch_ics")
+    def test_create_subscription_under_limit(self, mock_fetch, mock_caldav):
+        """Can create the 20th subscription (limit not exceeded)."""
+        user = factories.UserFactory()
+        client = APIClient()
+        client.force_login(user)
+
+        # Create 19 subscription channels
+        for _ in range(19):
+            factories.ICalSubscriptionChannelFactory(user=user)
+
+        mock_fetch.return_value = (200, VALID_ICS, '"etag"', "Mon, 01 Jan 2026")
+        mock_caldav_instance = MagicMock()
+        mock_caldav_instance.create_calendar.return_value = (
+            f"/calendars/users/{user.email}/new-uuid/"
+        )
+        mock_caldav.return_value = mock_caldav_instance
+
+        response = client.post(
+            CHANNELS_URL,
+            {
+                "type": "ical-subscription",
+                "name": "Last allowed",
+                "source_url": "https://example.com/last.ics",
+            },
+            format="json",
+        )
+
+        assert response.status_code == HTTP_201_CREATED
+        assert Channel.objects.filter(user=user, type="ical-subscription").count() == 20
+
+
+@pytest.mark.django_db
+class TestSubscriptionUrlChangePurge:
+    """Tests for event purge when source URL changes (#5)."""
+
+    def test_update_source_url_purges_events(self):
+        """Changing source_url triggers purge_events before sync."""
+        channel = factories.ICalSubscriptionChannelFactory()
+        client = APIClient()
+        client.force_login(channel.user)
+
+        with (
+            patch("core.api.viewsets_channels.fetch_ics") as mock_fetch,
+            patch(
+                "core.services.subscription_sync_service.SubscriptionSyncService"
+            ) as mock_svc_cls,
+            patch("core.api.viewsets_channels.CalDAVClient"),
+            patch("core.tasks.sync_one_subscription"),
+        ):
+            mock_fetch.return_value = (200, VALID_ICS, '"new"', "Tue, 02 Jan")
+            mock_svc = MagicMock()
+            mock_svc_cls.return_value = mock_svc
+
+            response = client.patch(
+                f"{CHANNELS_URL}{channel.pk}/",
+                {"source_url": "https://new-source.com/cal.ics"},
+                format="json",
+            )
+
+        assert response.status_code == HTTP_200_OK
+        mock_svc.purge_events.assert_called_once_with(channel.user, channel.caldav_path)
+
+    def test_update_name_only_no_purge(self):
+        """Changing only the name should not trigger purge."""
+        channel = factories.ICalSubscriptionChannelFactory()
+        client = APIClient()
+        client.force_login(channel.user)
+
+        with (
+            patch("core.api.viewsets_channels.CalDAVClient"),
+            patch(
+                "core.services.subscription_sync_service.SubscriptionSyncService"
+            ) as mock_svc_cls,
+        ):
+            mock_svc = MagicMock()
+            mock_svc_cls.return_value = mock_svc
+
+            response = client.patch(
+                f"{CHANNELS_URL}{channel.pk}/",
+                {"name": "Renamed"},
+                format="json",
+            )
+
+        assert response.status_code == HTTP_200_OK
+        mock_svc.purge_events.assert_not_called()

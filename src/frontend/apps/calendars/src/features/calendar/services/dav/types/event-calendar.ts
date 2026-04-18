@@ -420,6 +420,8 @@ export type CalDavToEventCalendarOptions = {
   extendedPropsExtractor?: (event: unknown) => Record<string, unknown>
   /** Map calendar URLs to colors */
   calendarColors?: Map<string, string>
+  /** Set of calendar URLs that are read-only (subscription calendars) */
+  readOnlyCalendarUrls?: Set<string>
 }
 
 export type EventCalendarToCalDavOptions = {

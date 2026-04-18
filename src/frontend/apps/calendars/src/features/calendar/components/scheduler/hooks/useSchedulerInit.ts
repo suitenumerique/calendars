@@ -33,6 +33,7 @@ interface UseSchedulerInitProps {
   adapter: EventCalendarAdapter;
   visibleCalendarUrlsRef: MutableRefObject<Set<string>>;
   davCalendarsRef: MutableRefObject<CalDavCalendar[]>;
+  readOnlyCalendarUrlsRef?: MutableRefObject<Set<string>>;
   initialView?: string;
   setCurrentDate: (info: { start: Date; end: Date }) => void;
   handleEventClick: (info: unknown) => void;
@@ -58,6 +59,7 @@ export const useSchedulerInit = ({
   adapter,
   visibleCalendarUrlsRef,
   davCalendarsRef,
+  readOnlyCalendarUrlsRef,
   initialView = "timeGridWeek",
   setCurrentDate,
   handleEventClick,
@@ -246,7 +248,10 @@ export const useSchedulerInit = ({
 
                   return adapter.toEventCalendarEvents(
                     enrichedData as typeof result.data,
-                    { calendarColors }
+                    {
+                      calendarColors,
+                      readOnlyCalendarUrls: readOnlyCalendarUrlsRef?.current,
+                    }
                   );
                 });
 

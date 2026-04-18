@@ -107,11 +107,11 @@ logs: ## display all services logs (follow mode)
 .PHONY: logs
 
 start: ## start all development services
-	@$(COMPOSE) up --force-recreate -d worker-dev frontend-dev backend-dev keycloak
+	@$(COMPOSE) up --force-recreate -d worker-dev frontend-dev backend-dev keycloak subscription-scheduler
 .PHONY: start
 
 start-back: ## start backend services only (for local frontend development)
-	@$(COMPOSE) up --force-recreate -d worker-dev
+	@$(COMPOSE) up --force-recreate -d backend-dev worker-dev subscription-scheduler
 .PHONY: start-back
 
 status: ## an alias for "docker compose ps"
@@ -271,6 +271,21 @@ reset-db: build ## flush database and re-run migrations
 	@$(MAKE) migrate
 	@$(MAKE) migrate-caldav
 .PHONY: reset-db
+
+reset-db-full: ## drop and recreate database, run all migrations + CalDAV schema
+	@echo "$(BOLD)Stopping services using the database...$(RESET)"
+	@$(COMPOSE) stop backend-dev worker-dev caldav subscription-scheduler 2>/dev/null || true
+	@$(COMPOSE) up -d postgresql
+	@sleep 2
+	@echo "$(BOLD)Dropping and recreating database...$(RESET)"
+	@$(COMPOSE) exec postgresql psql -U pgroot -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'calendars' AND pid <> pg_backend_pid();" > /dev/null 2>&1 || true
+	@$(COMPOSE) exec postgresql dropdb -U pgroot --if-exists calendars
+	@$(COMPOSE) exec postgresql createdb -U pgroot calendars
+	@echo "$(GREEN)Database recreated$(RESET)"
+	@$(MAKE) migrate
+	@$(MAKE) migrate-caldav
+	@echo "$(GREEN)All migrations applied. Run 'make start' to restart services.$(RESET)"
+.PHONY: reset-db-full
 
 demo: ## flush db then create a demo
 	@$(MAKE) reset-db

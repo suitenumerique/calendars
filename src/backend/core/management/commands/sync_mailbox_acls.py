@@ -24,6 +24,8 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
+    """Sync Messages mailbox ACLs onto their corresponding CalDAV calendars."""
+
     help = "Sync Messages mailbox ACLs to CalDAV shares."
 
     def add_arguments(self, parser):
