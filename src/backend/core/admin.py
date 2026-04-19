@@ -1,7 +1,10 @@
 """Admin classes and registrations for core app."""
 
+import secrets
+
 from django.contrib import admin
 from django.contrib.auth import admin as auth_admin
+from django.template.response import TemplateResponse
 
 from . import models
 
@@ -30,6 +33,7 @@ class UserAdmin(auth_admin.UserAdmin):
                     "full_name",
                     "language",
                     "timezone",
+                    "organization",
                 )
             },
         ),
@@ -88,6 +92,7 @@ class UserAdmin(auth_admin.UserAdmin):
         "updated_at",
     )
     search_fields = ("id", "sub", "admin_email", "email", "full_name")
+    raw_id_fields = ("organization",)
 
 
 @admin.register(models.Organization)
@@ -116,5 +121,42 @@ class ChannelAdmin(admin.ModelAdmin):
     )
     list_filter = ("type", "is_active")
     search_fields = ("name", "user__email", "caldav_path")
+    exclude = ("encrypted_settings",)
     readonly_fields = ("id", "created_at", "updated_at", "last_used_at")
     raw_id_fields = ("user", "organization")
+    actions = ("regenerate_tokens",)
+
+    @admin.action(description="Regenerate token for selected channels")
+    def regenerate_tokens(self, request, queryset):
+        """Regenerate the token for each selected channel.
+
+        New tokens are rendered directly on a success page (not via the
+        messages framework, which would persist them in the session cookie).
+        They cannot be retrieved afterwards since ``encrypted_settings`` is
+        not exposed in the admin.
+
+        For CalDAV channels the full HTTP Basic Auth password
+        (``base64url(channel_id):token``) is shown alongside the raw token.
+        """
+        results = []
+        for channel in queryset:
+            token = secrets.token_urlsafe(16)
+            channel.encrypted_settings = {
+                **channel.encrypted_settings,
+                "token": token,
+            }
+            channel.save(update_fields=["encrypted_settings", "updated_at"])
+            password = None
+            if channel.type == "caldav":
+                short_id = models.uuid_to_urlsafe(channel.pk)
+                password = f"{short_id}:{token}"
+            results.append((channel, token, password))
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Regenerated channel tokens",
+            "results": results,
+        }
+        return TemplateResponse(
+            request, "admin/core/channel/regenerated_tokens.html", context
+        )

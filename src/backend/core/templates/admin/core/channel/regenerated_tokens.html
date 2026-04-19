@@ -1,0 +1,46 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label='core' %}">Core</a>
+  &rsaquo; <a href="{% url 'admin:core_channel_changelist' %}">Channels</a>
+  &rsaquo; Regenerated tokens
+</div>
+{% endblock %}
+
+{% block content %}
+<p>
+  The new tokens below are shown <strong>only once</strong>. Copy them now —
+  they cannot be retrieved afterwards.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Channel</th>
+      <th>Type</th>
+      <th>New token</th>
+      <th>CalDAV password</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for channel, token, password in results %}
+    <tr>
+      <td>
+        <a href="{% url 'admin:core_channel_change' channel.pk %}">{{ channel.name }}</a>
+      </td>
+      <td>{{ channel.type }}</td>
+      <td><code>{{ token }}</code></td>
+      <td>
+        {% if password %}<code>{{ password }}</code>{% else %}&mdash;{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<p>
+  <a href="{% url 'admin:core_channel_changelist' %}" class="button">Back to channels</a>
+</p>
+{% endblock %}
