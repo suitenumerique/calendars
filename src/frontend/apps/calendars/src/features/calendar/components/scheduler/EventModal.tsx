@@ -102,20 +102,21 @@ export const EventModal = ({
     return undefined;
   }, [event?.organizer, form.selectedCalendarUrl, calendars, user]);
 
-  // Defensive: if the form's selected calendar URL is empty or doesn't
-  // match any entry in the dropdown's options (stale state, race
-  // condition between calendar creation and modal open, URL trailing-
-  // slash mismatch…), auto-snap to the first available calendar so the
-  // user always sees something selected and Save is enabled.
+  // Defensive fallback to keep a valid selection when the caller did
+  // not pass one (e.g. "new event" from a context with no default
+  // calendar). When `calendarUrl` is non-empty we trust it, even if
+  // it isn't in `calendars` yet — the list may still be loading and
+  // auto-snapping to calendars[0] here would stomp the correct choice.
   useEffect(() => {
     if (!isOpen || calendars.length === 0) return;
-    const isValid = calendars.some(
+    if (calendarUrl) return;
+    const currentIsValid = calendars.some(
       (cal) => cal.url === form.selectedCalendarUrl,
     );
-    if (!isValid) {
+    if (!currentIsValid) {
       form.setSelectedCalendarUrl(calendars[0].url);
     }
-  }, [isOpen, calendars, form]);
+  }, [isOpen, calendars, calendarUrl, form]);
 
   // Check if current user is invited
   const currentUserAttendee = event?.attendees?.find(

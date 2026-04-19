@@ -11,6 +11,7 @@ from django.conf import settings
 from django.contrib.auth import models as auth_models
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.core import mail, validators
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from encrypted_fields.fields import EncryptedJSONField
@@ -285,7 +286,7 @@ class Channel(BaseModel):
 
     Follows the same pattern as the Messages Channel model. Allows external
     services (e.g. Messages) to access CalDAV on behalf of a user via
-    HTTP Basic Auth (channel_id:token).
+    HTTP Basic Auth (channel_id followed by token, no separator).
 
     Configuration is split between ``settings`` (public, non-sensitive) and
     ``encrypted_settings`` (sensitive data like tokens). Scopes for
@@ -391,8 +392,6 @@ class Channel(BaseModel):
 
     def clean(self):
         """Validate scope_level invariants and scopes."""
-        from django.core.exceptions import ValidationError  # noqa: PLC0415, I001  # pylint: disable=C0415
-
         sl = self.scope_level
         if sl == ChannelScopeLevel.USER and not self.user_id:
             raise ValidationError("User is required for scope_level='user'.")

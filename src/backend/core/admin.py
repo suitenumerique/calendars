@@ -136,7 +136,8 @@ class ChannelAdmin(admin.ModelAdmin):
         not exposed in the admin.
 
         For CalDAV channels the full HTTP Basic Auth password
-        (``base64url(channel_id):token``) is shown alongside the raw token.
+        (``base64url(channel_id)`` concatenated with ``token``) is shown
+        alongside the raw token.
         """
         results = []
         for channel in queryset:
@@ -149,7 +150,7 @@ class ChannelAdmin(admin.ModelAdmin):
             password = None
             if channel.type == "caldav":
                 short_id = models.uuid_to_urlsafe(channel.pk)
-                password = f"{short_id}:{token}"
+                password = f"{short_id}{token}"
             results.append((channel, token, password))
 
         context = {

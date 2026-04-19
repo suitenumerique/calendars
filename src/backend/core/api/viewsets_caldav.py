@@ -47,18 +47,24 @@ class CalDAVProxyView(View):
 
     External services authenticate via HTTP Basic Auth where the
     username is the user's email (enabling standard CalDAV principal
-    discovery) and the password looks like ``channel_id:channel_token``.
-    This is standard CalDAV auth that works with any CalDAV client library.
+    discovery) and the password is ``channel_id`` immediately followed
+    by ``channel_token`` (no separator; the channel_id is a fixed-length
+    22-char base64url UUID). This is standard CalDAV auth that works
+    with any CalDAV client library.
     """
+
+    # Length of a base64url-encoded UUID (16 bytes) without padding.
+    _CHANNEL_ID_LEN = 22
 
     @staticmethod
     def _authenticate_basic_auth(request):
         """Authenticate via HTTP Basic Auth.
 
-        Format: ``user_email:channel_id:token``
+        Basic-auth payload: ``user_email:<channel_id><token>``
 
         The username is the user's email (enabling standard CalDAV
-        principal discovery). The password looks like ``channel_id:token``.
+        principal discovery). The password is the 22-char base64url
+        channel id concatenated with the raw token.
 
         Returns (channel, email) on success, (None, None) on failure.
         """
@@ -69,9 +75,11 @@ class CalDAVProxyView(View):
         try:
             decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
             email, credentials = decoded.split(":", 1)
-            channel_id, token = credentials.split(":", 1)
         except (ValueError, UnicodeDecodeError, binascii.Error):
             return None, None
+
+        channel_id = credentials[: CalDAVProxyView._CHANNEL_ID_LEN]
+        token = credentials[CalDAVProxyView._CHANNEL_ID_LEN :]
 
         if not email or not channel_id or not token:
             return None, None
@@ -79,7 +87,7 @@ class CalDAVProxyView(View):
         try:
             channel_pk = urlsafe_to_uuid(channel_id)
         except (ValueError, binascii.Error):
-            channel_pk = channel_id
+            return None, None
 
         try:
             channel = Channel.objects.select_related("user", "user__organization").get(

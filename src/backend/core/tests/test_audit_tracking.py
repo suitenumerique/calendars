@@ -27,9 +27,10 @@ CHANNELS_URL = "/api/v1.0/channels/"
 
 def _basic_auth(email, channel_id, token):
     """Build Basic Auth header matching the public CalDAV password format
-    (``base64(email:urlsafe_channel_id:token)``)."""
+    (``base64(email:<urlsafe_channel_id><token>)``, no separator between
+    channel id and token)."""
     short_id = uuid_to_urlsafe(channel_id)
-    creds = base64.b64encode(f"{email}:{short_id}:{token}".encode()).decode()
+    creds = base64.b64encode(f"{email}:{short_id}{token}".encode()).decode()
     return f"Basic {creds}"
 
 

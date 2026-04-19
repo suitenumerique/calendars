@@ -227,9 +227,13 @@ class ChannelWithTokenSerializer(ChannelSerializer):
         fields = [*ChannelSerializer.Meta.fields, "token", "password"]
 
     def get_password(self, obj) -> str:
-        """Build the CalDAV password: base64url(channel_id):token."""
+        """Build the CalDAV password: base64url(channel_id) followed by token.
+
+        The short_id is a fixed-length (22-char) base64url-encoded UUID so
+        the concatenation can be parsed by slicing.
+        """
         short_id = uuid_to_urlsafe(obj.pk)
-        return f"{short_id}:{obj.token}"
+        return f"{short_id}{obj.token}"
 
 
 class ChannelUpdateSerializer(serializers.Serializer):  # pylint: disable=abstract-method

@@ -25,9 +25,13 @@ CHANNELS_URL = "/api/v1.0/channels/"
 def _basic_auth(email, channel_id, token):
     """Build HTTP_AUTHORIZATION header for Basic Auth.
 
-    Format: base64(email:channel_id:token)
+    Format: base64(email:<channel_id><token>). The channel_id is the
+    fixed-length base64url-encoded UUID; a UUID instance is converted
+    automatically for convenience.
     """
-    creds = base64.b64encode(f"{email}:{channel_id}:{token}".encode()).decode()
+    if isinstance(channel_id, uuid.UUID):
+        channel_id = uuid_to_urlsafe(channel_id)
+    creds = base64.b64encode(f"{email}:{channel_id}{token}".encode()).decode()
     return f"Basic {creds}"
 
 
@@ -160,7 +164,8 @@ class TestChannelAPI:
         assert len(data["token"]) >= 20
         assert "password" in data
         short_id = uuid_to_urlsafe(uuid.UUID(data["id"]))
-        assert data["password"] == f"{short_id}:{data['token']}"
+        assert data["password"] == f"{short_id}{data['token']}"
+        assert len(short_id) == 22
         assert data["scopes"] == ["calendars:read", "events:read"]
         assert data["scope_level"] == "user"
         assert data["user"] == str(user.pk)
@@ -1341,18 +1346,18 @@ class TestCalDAVLibraryCompat:
             settings={"scopes": ["calendars:read", "events:read"]},
         )
         token = channel.encrypted_settings["token"]
+        short_id = uuid_to_urlsafe(channel.pk)
 
-        auth = HTTPBasicAuth(user.email, f"{channel.pk}:{token}")
+        auth = HTTPBasicAuth(user.email, f"{short_id}{token}")
         prepared = req_lib.Request("PROPFIND", "http://testserver/caldav/").prepare()
         auth(prepared)
         header = prepared.headers["Authorization"]
 
         decoded = base64.b64decode(header.split(" ")[1]).decode()
-        parts = decoded.split(":", 1)
-        assert parts[0] == user.email
-        cred_parts = parts[1].split(":", 1)
-        assert cred_parts[0] == str(channel.pk)
-        assert cred_parts[1] == token
+        email, credentials = decoded.split(":", 1)
+        assert email == user.email
+        assert credentials[:22] == short_id
+        assert credentials[22:] == token
 
     @patch("core.api.viewsets_caldav.CalDAVHTTPClient")
     def test_caldav_library_auth_accepted_by_proxy(self, mock_http_cls):
@@ -1364,8 +1369,9 @@ class TestCalDAVLibraryCompat:
             settings={"scopes": ["calendars:read", "events:read"]},
         )
         token = channel.encrypted_settings["token"]
+        short_id = uuid_to_urlsafe(channel.pk)
 
-        auth = HTTPBasicAuth(user.email, f"{channel.pk}:{token}")
+        auth = HTTPBasicAuth(user.email, f"{short_id}{token}")
         prepared = req_lib.Request("PROPFIND", "http://testserver/").prepare()
         auth(prepared)
         header = prepared.headers["Authorization"]

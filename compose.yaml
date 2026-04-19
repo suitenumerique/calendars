@@ -196,13 +196,12 @@ services:
       postgresql:
         condition: service_healthy
     healthcheck:
-      # Apache serves SabreDAV at /caldav/*; hitting /server.php yields a
-      # routing error (5xx), but what we care about is that Apache is up
-      # and accepting connections. Use curl without -f and check it gets
-      # a response at all — any HTTP reply means the server is ready.
+      # Probe the actual SabreDAV base URI. Unauthenticated, it returns
+      # 401 — a clean "server is up and routing" signal that doesn't
+      # spam the Apache error log. Any HTTP reply counts as healthy.
       test:
         - "CMD-SHELL"
-        - "curl -s -o /dev/null http://localhost/server.php || exit 1"
+        - "curl -s -o /dev/null http://localhost/caldav/ || exit 1"
       interval: 2s
       timeout: 3s
       retries: 30

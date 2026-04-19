@@ -17,11 +17,13 @@ CalDAV authentication mechanism. This means any CalDAV client library
 box:
 
 ```http
-Authorization: Basic base64(<user_email>:<channel_id>:<channel_token>)
+Authorization: Basic base64(<user_email>:<channel_id><channel_token>)
 ```
 
 - **username** = user email (enables standard CalDAV principal discovery)
-- **password** = `channel_id:channel_token`
+- **password** = `<channel_id><channel_token>` — the base64url-encoded
+  channel id (fixed 22 chars) immediately followed by the token, with
+  **no separator**.
 
 Using the user's email as the Basic Auth username means CalDAV principal
 discovery works naturally: the server returns the correct
@@ -73,7 +75,7 @@ import caldav
 client = caldav.DAVClient(
     url="https://calendar.example.com/caldav/",
     username=user_email,
-    password=f"{CHANNEL_ID}:{CHANNEL_TOKEN}",
+    password=f"{CHANNEL_ID}{CHANNEL_TOKEN}",
 )
 # Standard CalDAV principal discovery works
 principal = client.principal()
