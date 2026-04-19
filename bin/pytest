@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 
-# Point CalDAV scheduling callbacks to the test callback server (port 8001)
-# instead of the Django dev server. compose.yaml interpolates this into
-# the caldav service's environment.
-export CALDAV_CALLBACK_BASE_URL="http://backend-test:8001"
-
 source "$(dirname "${BASH_SOURCE[0]}")/_config.sh"
 
-# Ensure the caldav container uses the test callback URL
-_docker_compose up -d caldav
+# Bring up the dedicated test SabreDAV instance. It uses a separate
+# Postgres database (caldav_test) so tests never touch the developer's
+# local CalDAV data. The service has an HTTP healthcheck; backend-test
+# depends on it via `condition: service_healthy` so pytest only starts
+# once Apache is accepting connections.
+_docker_compose up -d caldav-test
 
 # Use the dedicated backend-test compose service so tests don't inherit
 # env.d/development/backend.local. The Test settings class is selected

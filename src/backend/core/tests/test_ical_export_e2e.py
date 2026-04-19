@@ -115,6 +115,8 @@ class TestICalExportRoundTripE2E:
             {
                 "name": "Public Feed",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
                 "calendar_name": "Public Feed",
             },
@@ -165,6 +167,8 @@ class TestICalExportRoundTripE2E:
             {
                 "name": "Fresh Feed",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",
@@ -205,6 +209,8 @@ class TestICalExportRoundTripE2E:
             {
                 "name": "Del Feed",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",
@@ -246,6 +252,8 @@ class TestICalExportRoundTripE2E:
             {
                 "name": "Inactive Feed",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",
@@ -279,6 +287,8 @@ class TestICalExportRoundTripE2E:
             {
                 "name": "Reusable",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",
@@ -291,6 +301,8 @@ class TestICalExportRoundTripE2E:
             {
                 "name": "Reusable",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",

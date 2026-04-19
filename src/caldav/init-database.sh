@@ -38,6 +38,17 @@ until pg_isready -q -h "$PGHOST" -p "$PGPORT" -U "$PGUSER"; do
   sleep 1
 done
 
+# Ensure the target database exists. Connect to the 'postgres' maintenance
+# DB and create PGDATABASE if missing. Safe to run repeatedly.
+# shellcheck disable=SC2097,SC2098
+TARGET_DB="$PGDATABASE"
+if ! PGDATABASE=postgres psql -tAc \
+    "SELECT 1 FROM pg_database WHERE datname = '${TARGET_DB//\'/\'\'}'" \
+    | grep -q 1; then
+  echo "Creating database ${TARGET_DB}..."
+  PGDATABASE=postgres psql -c "CREATE DATABASE \"${TARGET_DB//\"/\"\"}\""
+fi
+
 echo "PostgreSQL is ready. Initializing sabre/dav database schema..."
 
 # SQL files directory (configurable for Scalingo, defaults to Docker path)

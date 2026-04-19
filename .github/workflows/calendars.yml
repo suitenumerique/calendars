@@ -81,11 +81,13 @@ jobs:
         working-directory: .
         run: |
           docker build -t caldav-test src/caldav
+          # Point SabreDAV at the dedicated caldav_test database. The
+          # init script creates the DB if it doesn't exist yet.
           docker run -d --name caldav-test \
             --network host \
             -e PGHOST=localhost \
             -e PGPORT=5432 \
-            -e PGDATABASE=calendars \
+            -e PGDATABASE=caldav_test \
             -e PGUSER=pgroot \
             -e PGPASSWORD=pass \
             -e CALDAV_BASE_URI=/caldav/ \
@@ -98,7 +100,13 @@ jobs:
 
       - name: Wait for CalDAV to be ready
         run: |
-          timeout 30 bash -c 'until curl -s -o /dev/null http://localhost:80/; do sleep 1; done'
+          if ! timeout 30 bash -c 'until curl -s -o /dev/null http://localhost:80/; do sleep 1; done'; then
+            echo "=== caldav-test container status ==="
+            docker ps -a --filter name=caldav-test
+            echo "=== caldav-test container logs ==="
+            docker logs caldav-test || true
+            exit 1
+          fi
           echo "CalDAV server is ready"
 
       - name: "Set up Python"

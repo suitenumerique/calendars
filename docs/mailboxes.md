@@ -300,7 +300,7 @@ Two ways to create calendars exist for different use cases:
 | Sets `calendar_user_type` | No | Yes |
 | Calendar owner | The authenticated user | Any email (including mailbox) |
 | Calendar URI | User chooses | `default` (first) or UUID (subsequent) |
-| Use case | Adding a 2nd/3rd calendar | Setup (first calendar, or mailbox calendar) |
+| Use case | Adding a 2nd/3rd calendar | Setup and provisioning (any calendar, including mailbox) |
 
 MKCALENDAR can't create mailbox calendars because the user is authenticated
 as their OIDC email but needs to create a calendar under the mailbox
@@ -317,8 +317,8 @@ principal (`principals/mailboxes/`). The internal API handles this routing:
   "calendar_user_type": "INDIVIDUAL|MAILBOX"
 }
 ```
-Safe to call repeatedly — upserts the principal, creates the calendar
-only if none exists.
+Non-idempotent — upserts the principal and creates a new calendar on
+each call (first uses `default` URI, subsequent calls use a UUID).
 
 `POST /internal-api/sync-mailbox-acls/` accepts:
 ```json

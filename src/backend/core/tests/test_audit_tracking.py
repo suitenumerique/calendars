@@ -6,6 +6,7 @@ and verify audit columns via the channel-events internal API endpoints.
 
 # pylint: disable=redefined-outer-name,missing-function-docstring,too-many-lines,no-member
 
+import base64
 import uuid
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
@@ -14,6 +15,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from core import factories
+from core.models import uuid_to_urlsafe
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
 from core.services.channel_event_service import ChannelEventService
 from core.services.import_service import ICSImportService
@@ -21,6 +23,15 @@ from core.services.import_service import ICSImportService
 pytestmark = pytest.mark.django_db
 
 CHANNELS_URL = "/api/v1.0/channels/"
+
+
+def _basic_auth(email, channel_id, token):
+    """Build Basic Auth header matching the public CalDAV password format
+    (``base64(email:urlsafe_channel_id:token)``)."""
+    short_id = uuid_to_urlsafe(channel_id)
+    creds = base64.b64encode(f"{email}:{short_id}:{token}".encode()).decode()
+    return f"Basic {creds}"
+
 
 ICS_SINGLE_EVENT = b"""BEGIN:VCALENDAR
 VERSION:2.0
@@ -77,7 +88,7 @@ class TestCalDAVProxyChannelIdHeader:
         user = factories.UserFactory()
         channel = factories.ChannelFactory(
             user=user,
-            settings={"role": "editor"},
+            settings={"scopes": ["calendars:read", "events:read", "events:write"]},
         )
         token = channel.encrypted_settings["token"]
 
@@ -97,8 +108,7 @@ class TestCalDAVProxyChannelIdHeader:
             f"/caldav/calendars/users/{user.email}/cal/event.ics",
             data=b"BEGIN:VCALENDAR",
             content_type="text/calendar",
-            HTTP_X_CHANNEL_ID=str(channel.pk),
-            HTTP_X_CHANNEL_TOKEN=token,
+            HTTP_AUTHORIZATION=_basic_auth(user.email, channel.pk, token),
         )
 
         mock_request.assert_called_once()
@@ -114,7 +124,7 @@ class TestCalDAVProxyChannelIdHeader:
         user = factories.UserFactory()
         channel = factories.ChannelFactory(
             user=user,
-            settings={"role": "reader"},
+            settings={"scopes": ["calendars:read"]},
         )
         token = channel.encrypted_settings["token"]
 
@@ -133,8 +143,7 @@ class TestCalDAVProxyChannelIdHeader:
         client.generic(
             "PROPFIND",
             f"/caldav/calendars/users/{user.email}/",
-            HTTP_X_CHANNEL_ID=str(channel.pk),
-            HTTP_X_CHANNEL_TOKEN=token,
+            HTTP_AUTHORIZATION=_basic_auth(user.email, channel.pk, token),
             HTTP_DEPTH="1",
         )
 
@@ -456,7 +465,8 @@ class TestAuditTrackingE2E:
         # back via channel-events.
         channel = factories.ChannelFactory(
             user=user,
-            settings={"role": "editor"},
+            scope_level="calendar",
+            settings={"scopes": ["calendars:read", "events:read", "events:write"]},
             caldav_path=f"/calendars/users/{user.email}/{cal_uri}/",
         )
 
@@ -480,8 +490,9 @@ class TestAuditTrackingE2E:
             f"/caldav/calendars/users/{user.email}/{cal_uri}/{event_uid}.ics",
             data=ical,
             content_type="text/calendar",
-            HTTP_X_CHANNEL_ID=str(channel.pk),
-            HTTP_X_CHANNEL_TOKEN=channel.encrypted_settings["token"],
+            HTTP_AUTHORIZATION=_basic_auth(
+                user.email, channel.pk, channel.encrypted_settings["token"]
+            ),
         )
         assert put_resp.status_code in (200, 201, 204), (
             f"PUT failed: {put_resp.status_code} {put_resp.content[:300]}"
@@ -515,12 +526,14 @@ class TestAuditTrackingE2E:
         # Create two channels on the same calendar
         channel_a = factories.ChannelFactory(
             user=user,
-            settings={"role": "editor"},
+            scope_level="calendar",
+            settings={"scopes": ["calendars:read", "events:read", "events:write"]},
             caldav_path=caldav_path,
         )
         channel_b = factories.ChannelFactory(
             user=user,
-            settings={"role": "editor"},
+            scope_level="calendar",
+            settings={"scopes": ["calendars:read", "events:read", "events:write"]},
             caldav_path=caldav_path,
         )
 
@@ -542,8 +555,9 @@ class TestAuditTrackingE2E:
                 "END:VCALENDAR\r\n"
             ),
             content_type="text/calendar",
-            HTTP_X_CHANNEL_ID=str(channel_a.pk),
-            HTTP_X_CHANNEL_TOKEN=channel_a.encrypted_settings["token"],
+            HTTP_AUTHORIZATION=_basic_auth(
+                user.email, channel_a.pk, channel_a.encrypted_settings["token"]
+            ),
         )
         assert resp.status_code in (200, 201), resp.content
 
@@ -565,8 +579,9 @@ class TestAuditTrackingE2E:
                 "END:VCALENDAR\r\n"
             ),
             content_type="text/calendar",
-            HTTP_X_CHANNEL_ID=str(channel_b.pk),
-            HTTP_X_CHANNEL_TOKEN=channel_b.encrypted_settings["token"],
+            HTTP_AUTHORIZATION=_basic_auth(
+                user.email, channel_b.pk, channel_b.encrypted_settings["token"]
+            ),
         )
         assert resp.status_code in (200, 201), resp.content
 
@@ -599,7 +614,8 @@ class TestAuditTrackingE2E:
         # Create channel and PUT event
         channel = factories.ChannelFactory(
             user=user,
-            settings={"role": "editor"},
+            scope_level="calendar",
+            settings={"scopes": ["calendars:read", "events:read", "events:write"]},
             caldav_path=caldav_path,
         )
         token = channel.encrypted_settings["token"]
@@ -622,8 +638,7 @@ class TestAuditTrackingE2E:
                 "END:VCALENDAR\r\n"
             ),
             content_type="text/calendar",
-            HTTP_X_CHANNEL_ID=str(channel.pk),
-            HTTP_X_CHANNEL_TOKEN=token,
+            HTTP_AUTHORIZATION=_basic_auth(user.email, channel.pk, token),
         )
         assert resp.status_code in (200, 201)
 
@@ -649,7 +664,8 @@ class TestAuditTrackingE2E:
 
         channel = factories.ChannelFactory(
             user=user,
-            settings={"role": "editor"},
+            scope_level="calendar",
+            settings={"scopes": ["calendars:read", "events:read", "events:write"]},
             caldav_path=caldav_path,
         )
 
@@ -689,12 +705,14 @@ class TestAuditTrackingE2E:
 
         channel_a = factories.ChannelFactory(
             user=user,
-            settings={"role": "editor"},
+            scope_level="calendar",
+            settings={"scopes": ["calendars:read", "events:read", "events:write"]},
             caldav_path=caldav_path,
         )
         channel_b = factories.ChannelFactory(
             user=user,
-            settings={"role": "editor"},
+            scope_level="calendar",
+            settings={"scopes": ["calendars:read", "events:read", "events:write"]},
             caldav_path=caldav_path,
         )
 

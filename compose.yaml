@@ -77,6 +77,9 @@ services:
     environment:
       - PYLINTHOME=/app/.pylint.d
       - DJANGO_CONFIGURATION=Test
+      # Point at the dedicated test SabreDAV instance (separate DB), so tests
+      # never touch the developer's local CalDAV database.
+      - CALDAV_URL=http://caldav-test:80
     env_file:
       - env.d/development/backend.defaults
     volumes:
@@ -95,8 +98,8 @@ services:
         restart: true
       redis:
         condition: service_started
-      caldav:
-        condition: service_started
+      caldav-test:
+        condition: service_healthy
 
   worker-dev:
     user: ${DOCKER_USER:-1000}
@@ -152,7 +155,7 @@ services:
       - env.d/development/caldav.defaults
       - env.d/development/caldav.local
     environment:
-      # Allow shell override for tests (bin/pytest sets this to backend-test:8001)
+      # Allow shell override for dev (tests use the dedicated caldav-test service)
       CALDAV_CALLBACK_BASE_URL: ${CALDAV_CALLBACK_BASE_URL:-http://backend-dev:8000}
     volumes:
       - ./src/caldav/server.php:/var/www/sabredav/server.php
@@ -165,6 +168,44 @@ services:
     depends_on:
       postgresql:
         condition: service_healthy
+    command: >
+      sh -c "
+        /usr/local/bin/init-database.sh || true &&
+        apache2-foreground
+      "
+
+  # Dedicated CalDAV server for tests. Points at a separate Postgres database
+  # (caldav_test) so tests never read/write the developer's local CalDAV data.
+  # Schema is self-provisioned by init-database.sh on first boot.
+  caldav-test:
+    build:
+      context: src/caldav
+    ports:
+      - "8933:80"
+    env_file:
+      - env.d/development/caldav-test.defaults
+    volumes:
+      - ./src/caldav/server.php:/var/www/sabredav/server.php
+      - ./src/caldav/src:/var/www/sabredav/src
+      - ./src/caldav/sql:/var/www/sabredav/sql
+      - ./src/caldav/init-database.sh:/usr/local/bin/init-database.sh
+    networks:
+      - default
+      - lasuite
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    healthcheck:
+      # Apache serves SabreDAV at /caldav/*; hitting /server.php yields a
+      # routing error (5xx), but what we care about is that Apache is up
+      # and accepting connections. Use curl without -f and check it gets
+      # a response at all — any HTTP reply means the server is ready.
+      test:
+        - "CMD-SHELL"
+        - "curl -s -o /dev/null http://localhost/server.php || exit 1"
+      interval: 2s
+      timeout: 3s
+      retries: 30
     command: >
       sh -c "
         /usr/local/bin/init-database.sh || true &&

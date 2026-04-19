@@ -8,6 +8,7 @@ from timezone_field.rest_framework import TimeZoneSerializerField
 
 from core import models
 from core.entitlements import EntitlementsUnavailableError, get_user_entitlements
+from core.enums import ChannelScope, ChannelScopeLevel
 from core.models import uuid_to_urlsafe
 
 
@@ -116,7 +117,7 @@ class UserMeSerializer(UserSerializer):
 class ChannelSerializer(serializers.ModelSerializer):
     """Read serializer for Channel model."""
 
-    role = serializers.SerializerMethodField()
+    scopes = serializers.SerializerMethodField()
     url = serializers.SerializerMethodField()
 
     class Meta:
@@ -125,10 +126,11 @@ class ChannelSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "type",
+            "scope_level",
             "organization",
             "user",
             "caldav_path",
-            "role",
+            "scopes",
             "is_active",
             "settings",
             "url",
@@ -138,9 +140,9 @@ class ChannelSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_role(self, obj):
-        """Get role from settings."""
-        return obj.role
+    def get_scopes(self, obj):
+        """Get scopes from settings."""
+        return obj.scopes
 
     def get_url(self, obj) -> str | None:
         """Build iCal subscription URL for ical-feed channels, None otherwise."""
@@ -173,12 +175,18 @@ class ChannelCreateSerializer(serializers.Serializer):  # pylint: disable=abstra
     """Write serializer for creating a Channel."""
 
     name = serializers.CharField(max_length=255)
-    type = serializers.CharField(max_length=255, default="caldav")
+    type = serializers.ChoiceField(
+        choices=[("caldav", "caldav"), ("ical-feed", "ical-feed")]
+    )
+    scope_level = serializers.ChoiceField(
+        choices=[(s, s) for s in ChannelScopeLevel],
+    )
     caldav_path = serializers.CharField(max_length=512, required=False, default="")
     calendar_name = serializers.CharField(max_length=255, required=False, default="")
-    role = serializers.ChoiceField(
-        choices=[(r, r) for r in models.Channel.VALID_ROLES],
-        default=models.Channel.ROLE_READER,
+    scopes = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=[(s, s) for s in ChannelScope],
+        ),
     )
 
     def validate_caldav_path(self, value):
@@ -190,17 +198,48 @@ class ChannelCreateSerializer(serializers.Serializer):  # pylint: disable=abstra
                 value = "/" + value
         return value
 
-    def validate_type(self, value):
-        """Validate channel type."""
-        if value == "ical-feed":
-            return value
-        return "caldav"
+    def validate(self, attrs):
+        """Cross-validate required fields.
+
+        ``scope_level=calendar`` requires a ``caldav_path``. ``ical-feed``
+        channels are read-only single-calendar subscriptions and can only
+        be created with ``scope_level=calendar``.
+        """
+        sl = attrs["scope_level"]
+        if attrs.get("type") == "ical-feed" and sl != ChannelScopeLevel.CALENDAR:
+            raise serializers.ValidationError(
+                {"scope_level": "ical-feed channels require scope_level='calendar'."}
+            )
+        if sl == ChannelScopeLevel.CALENDAR and not attrs.get("caldav_path"):
+            raise serializers.ValidationError(
+                {"caldav_path": "Required for scope_level='calendar'."}
+            )
+        return attrs
 
 
 class ChannelWithTokenSerializer(ChannelSerializer):
     """Serializer that includes the plaintext token (used only on creation)."""
 
     token = serializers.CharField(read_only=True)
+    password = serializers.SerializerMethodField()
 
     class Meta(ChannelSerializer.Meta):
-        fields = [*ChannelSerializer.Meta.fields, "token"]
+        fields = [*ChannelSerializer.Meta.fields, "token", "password"]
+
+    def get_password(self, obj) -> str:
+        """Build the CalDAV password: base64url(channel_id):token."""
+        short_id = uuid_to_urlsafe(obj.pk)
+        return f"{short_id}:{obj.token}"
+
+
+class ChannelUpdateSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """Serializer for updating mutable channel fields."""
+
+    name = serializers.CharField(max_length=255, required=False)
+    is_active = serializers.BooleanField(required=False)
+    scopes = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=[(s, s) for s in ChannelScope],
+        ),
+        required=False,
+    )

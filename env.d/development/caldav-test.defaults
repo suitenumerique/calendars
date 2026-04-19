@@ -1,0 +1,18 @@
+PGHOST=postgresql
+PGPORT=5432
+PGDATABASE=caldav_test
+PGUSER=pgroot
+PGPASSWORD=pass
+CALDAV_BASE_URI=/caldav/
+CALDAV_INBOUND_API_KEY=changeme-inbound-in-production
+CALDAV_OUTBOUND_API_KEY=changeme-outbound-in-production
+CALDAV_INTERNAL_API_KEY=changeme-internal-in-production
+# Base URL for the Django backend (used by SabreDAV for scheduling callbacks)
+CALDAV_CALLBACK_BASE_URL=http://backend-test:8001
+# Calendar sanitizer: strip inline binary attachments (base64 images from Outlook/Exchange)
+# Applies to all CalDAV writes (client PUTs + import)
+SANITIZER_STRIP_BINARY_ATTACHMENTS=true
+# Calendar sanitizer: max DESCRIPTION size in bytes (0 = no limit)
+SANITIZER_MAX_DESCRIPTION_BYTES=102400
+# Calendar sanitizer: max total resource size in bytes per calendar object (0 = no limit)
+SANITIZER_MAX_RESOURCE_SIZE=1048576

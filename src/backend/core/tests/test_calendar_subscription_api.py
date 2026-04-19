@@ -32,6 +32,8 @@ class TestICalFeedChannels:
             {
                 "name": "My Test Calendar",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
                 "calendar_name": "My Test Calendar",
             },
@@ -60,7 +62,13 @@ class TestICalFeedChannels:
 
         response = client.post(
             CHANNELS_URL,
-            {"name": "Cal", "type": "ical-feed", "caldav_path": caldav_path},
+            {
+                "name": "Cal",
+                "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
+                "caldav_path": caldav_path,
+            },
             format="json",
         )
 
@@ -80,6 +88,8 @@ class TestICalFeedChannels:
             {
                 "name": "Updated Name",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": channel.caldav_path,
                 "calendar_name": "Updated Name",
             },
@@ -103,13 +113,20 @@ class TestICalFeedChannels:
             {
                 "name": "Feed",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": f"/calendars/users/{user.email}/cal1/",
             },
             format="json",
         )
         client.post(
             CHANNELS_URL,
-            {"name": "CalDAV Channel"},
+            {
+                "name": "CalDAV Channel",
+                "type": "caldav",
+                "scope_level": "user",
+                "scopes": ["calendars:read", "events:read"],
+            },
             format="json",
         )
 
@@ -147,6 +164,8 @@ class TestICalFeedChannels:
             {
                 "name": "Stolen",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",
@@ -176,6 +195,8 @@ class TestICalFeedChannels:
             {
                 "name": "Feed",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",
@@ -200,6 +221,8 @@ class TestICalFeedChannels:
             {
                 "name": "Feed",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": channel.caldav_path,
             },
             format="json",
@@ -219,6 +242,8 @@ class TestICalFeedChannels:
             {
                 "name": "Duplicate",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": channel.caldav_path,
             },
             format="json",
@@ -239,6 +264,8 @@ class TestICalFeedChannels:
             {
                 "name": "My Awesome Calendar",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
                 "calendar_name": "My Awesome Calendar",
             },
@@ -293,6 +320,8 @@ class TestPathInjectionProtection:
             {
                 "name": "Bad",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",
@@ -324,6 +353,8 @@ class TestPathInjectionProtection:
             {
                 "name": "Bad",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": malicious_path,
             },
             format="json",
@@ -351,6 +382,8 @@ class TestPathInjectionProtection:
                 {
                     "name": "Bad",
                     "type": "ical-feed",
+                    "scope_level": "calendar",
+                    "scopes": ["calendars:read", "events:read"],
                     "caldav_path": path,
                 },
                 format="json",
@@ -373,6 +406,8 @@ class TestPathInjectionProtection:
             {
                 "name": "Good",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",
@@ -392,6 +427,8 @@ class TestPathInjectionProtection:
             {
                 "name": "Good",
                 "type": "ical-feed",
+                "scope_level": "calendar",
+                "scopes": ["calendars:read", "events:read"],
                 "caldav_path": caldav_path,
             },
             format="json",

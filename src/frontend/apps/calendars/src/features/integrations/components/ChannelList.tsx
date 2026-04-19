@@ -3,53 +3,22 @@ import { useTranslation } from "react-i18next";
 import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useRouter } from "next/router";
 
-import {
-  addToast,
-  ToasterItem,
-} from "@/features/ui/components/toaster/Toaster";
-import { useChannels, useRegenerateToken } from "../api/useChannels";
+import type { Channel } from "../types";
+import { useChannels } from "../api/useChannels";
 import { ChannelCard } from "./ChannelCard";
-import { CreateChannelModal } from "./CreateChannelModal";
+import { ChannelModal } from "./ChannelModal";
 import { DeleteChannelModal } from "./DeleteChannelModal";
-import { TokenRevealBox } from "./TokenRevealBox";
 
 export const ChannelList = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const { data: channels, isLoading } = useChannels();
-  const regenerateToken = useRegenerateToken();
   const createModal = useModal();
 
-  const [deleteTarget, setDeleteTarget] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-
-  const [regeneratedToken, setRegeneratedToken] = useState<
-    string | null
-  >(null);
-
-  const handleRegenerate = async (id: string) => {
-    try {
-      const result = await regenerateToken.mutateAsync(id);
-      setRegeneratedToken(result.token);
-      addToast(
-        <ToasterItem type="info">
-          <span>
-            {t("integrations.regenerate.success")}
-          </span>
-        </ToasterItem>,
-      );
-    } catch {
-      addToast(
-        <ToasterItem type="error">
-          <span>
-            {t("integrations.regenerate.error")}
-          </span>
-        </ToasterItem>,
-      );
-    }
-  };
+  const [editTarget, setEditTarget] =
+    useState<Channel | null>(null);
+  const [deleteTarget, setDeleteTarget] =
+    useState<Channel | null>(null);
 
   return (
     <div className="channel-list">
@@ -83,20 +52,6 @@ export const ChannelList = () => {
         {t("integrations.description")}
       </p>
 
-      {regeneratedToken && (
-        <div className="channel-list__token-banner">
-          <p>{t("integrations.regenerate.tokenWarning")}</p>
-          <TokenRevealBox token={regeneratedToken} />
-          <Button
-            color="neutral"
-            size="small"
-            onClick={() => setRegeneratedToken(null)}
-          >
-            {t("common.close")}
-          </Button>
-        </div>
-      )}
-
       {isLoading ? (
         <div className="channel-list__loading">
           <span className="material-icons channel-list__spinner">
@@ -117,29 +72,25 @@ export const ChannelList = () => {
             <ChannelCard
               key={channel.id}
               channel={channel}
-              onDelete={(id) => {
-                const ch = channels.find(
-                  (c) => c.id === id,
-                );
-                if (ch) {
-                  setDeleteTarget({
-                    id,
-                    name: ch.name,
-                  });
-                }
-              }}
-              onRegenerate={(id) =>
-                void handleRegenerate(id)
-              }
+              onEdit={setEditTarget}
+              onDelete={setDeleteTarget}
             />
           ))}
         </div>
       )}
 
       {createModal.isOpen && (
-        <CreateChannelModal
+        <ChannelModal
           isOpen={createModal.isOpen}
           onClose={createModal.close}
+        />
+      )}
+
+      {editTarget && (
+        <ChannelModal
+          isOpen={!!editTarget}
+          channel={editTarget}
+          onClose={() => setEditTarget(null)}
         />
       )}
 

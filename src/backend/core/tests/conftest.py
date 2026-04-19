@@ -1,6 +1,7 @@
 """Fixtures for tests in the calendars core application"""
 
 import base64
+import os
 
 from django.conf import settings
 from django.core.cache import cache
@@ -36,10 +37,15 @@ def truncate_caldav_tables(request, django_db_setup, django_db_blocker):  # pyli
     import psycopg  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
 
     db_settings = settings.DATABASES["default"]
+    # Dedicated SabreDAV test database, served by the caldav-test service
+    # (env.d/development/caldav-test.defaults sets PGDATABASE=caldav_test).
+    # Read from the environment so this stays in sync with the compose
+    # config and can be overridden in CI without editing code.
+    caldav_test_db = os.environ.get("CALDAV_TEST_DB", "caldav_test")
     conn = psycopg.connect(
         host=db_settings["HOST"],
         port=db_settings["PORT"],
-        dbname="calendars",  # SabreDAV always uses this DB
+        dbname=caldav_test_db,
         user=db_settings["USER"],
         password=db_settings["PASSWORD"],
     )

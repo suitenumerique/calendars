@@ -47,8 +47,11 @@ class ChannelFactory(factory.django.DjangoModelFactory):
         model = models.Channel
 
     name = factory.Faker("sentence", nb_words=3)
+    scope_level = "user"
     user = factory.SubFactory(UserFactory)
-    settings = factory.LazyFunction(lambda: {"role": "reader"})
+    settings = factory.LazyFunction(
+        lambda: {"scopes": ["calendars:read", "events:read"]}
+    )
     encrypted_settings = factory.LazyFunction(
         lambda: {"token": secrets.token_urlsafe(16)}
     )
@@ -58,9 +61,13 @@ class ICalFeedChannelFactory(ChannelFactory):
     """A factory to create ical-feed channels."""
 
     type = "ical-feed"
+    scope_level = "calendar"
     caldav_path = factory.LazyAttribute(
         lambda obj: f"/calendars/users/{obj.user.email}/{fake.uuid4()}/"
     )
     settings = factory.LazyAttribute(
-        lambda obj: {"role": "reader", "calendar_name": fake.sentence(nb_words=3)}
+        lambda obj: {
+            "scopes": ["calendars:read", "events:read"],
+            "calendar_name": fake.sentence(nb_words=3),
+        }
     )

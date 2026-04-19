@@ -15,8 +15,11 @@
         "button": "Logout"
       },
       "common": {
+        "back": "Back",
         "cancel": "Cancel",
-        "close": "Close"
+        "close": "Close",
+        "comingSoon": "Coming soon",
+        "save": "Save"
       },
       "clipboard": {
         "success": "Copied to clipboard",
@@ -533,22 +536,39 @@
         "description": "Manage integration channels for external services to access your calendars.",
         "loading": "Loading integrations...",
         "empty": "No integrations have been created yet.",
-        "roles": {
-          "reader": "Reader",
-          "editor": "Editor",
-          "admin": "Admin"
+        "scopes": {
+          "calendars_read": "Read calendars",
+          "calendars_write": "Write calendars",
+          "events_read": "Read events",
+          "events_write": "Write events",
+          "edit": "Edit scopes",
+          "updateSuccess": "Scopes updated successfully.",
+          "updateError": "Failed to update scopes."
         },
         "lastUsed": "Last used: {{date}}",
         "create": {
           "button": "Add integration",
           "title": "Create integration",
+          "chooseType": "Choose the type of integration you want to create.",
           "nameLabel": "Name",
-          "roleLabel": "Role",
           "submit": "Create",
           "success": "Integration created successfully.",
           "error": "Failed to create integration.",
           "tokenTitle": "Integration token",
           "tokenWarning": "Copy this token now. It will not be shown again."
+        },
+        "types": {
+          "caldav": {
+            "title": "CalDAV credentials",
+            "description": "Generate a username and password to connect external calendar clients (Thunderbird, Apple Calendar, etc.) over CalDAV."
+          },
+          "ical-feed": {
+            "title": "iCal subscription"
+          },
+          "webhook": {
+            "title": "Webhook",
+            "description": "Send event changes to an external endpoint over HTTP."
+          }
         },
         "delete": {
           "button": "Delete",
@@ -559,10 +579,27 @@
           "error": "Failed to delete integration."
         },
         "regenerate": {
-          "button": "Regenerate token",
+          "title": "Regenerate token",
+          "description": "Issue a new token. The previous one will stop working immediately.",
+          "button": "Regenerate",
           "success": "Token regenerated successfully.",
           "error": "Failed to regenerate token.",
+          "tokenTitle": "New integration token",
           "tokenWarning": "Copy this new token now. It will not be shown again."
+        },
+        "edit": {
+          "button": "Edit",
+          "title": "Edit integration",
+          "activeLabel": "Active",
+          "inactiveBadge": "Disabled",
+          "success": "Integration updated successfully.",
+          "error": "Failed to update integration."
+        },
+        "columns": {
+          "name": "Name",
+          "type": "Type",
+          "scopes": "Scopes",
+          "lastUsed": "Last used"
         },
         "token": {
           "copy": "Copy token",
@@ -634,8 +671,11 @@
         }
       },
       "common": {
+        "back": "Retour",
         "cancel": "Annuler",
-        "close": "Fermer"
+        "close": "Fermer",
+        "comingSoon": "Bientôt disponible",
+        "save": "Enregistrer"
       },
       "clipboard": {
         "success": "Copié dans le presse-papiers",
@@ -1416,22 +1456,39 @@
         "description": "Gérer les canaux d'intégration pour que les services externes puissent accéder à vos agendas.",
         "loading": "Chargement des intégrations...",
         "empty": "Aucune intégration n'a encore été créée.",
-        "roles": {
-          "reader": "Lecteur",
-          "editor": "Éditeur",
-          "admin": "Admin"
+        "scopes": {
+          "calendars_read": "Lire les agendas",
+          "calendars_write": "Modifier les agendas",
+          "events_read": "Lire les événements",
+          "events_write": "Modifier les événements",
+          "edit": "Modifier les droits",
+          "updateSuccess": "Droits mis à jour avec succès.",
+          "updateError": "Échec de la mise à jour des droits."
         },
         "lastUsed": "Dernière utilisation : {{date}}",
         "create": {
           "button": "Ajouter une intégration",
           "title": "Créer une intégration",
+          "chooseType": "Choisissez le type d'intégration à créer.",
           "nameLabel": "Nom",
-          "roleLabel": "Rôle",
           "submit": "Créer",
           "success": "Intégration créée avec succès.",
           "error": "Échec de la création de l'intégration.",
           "tokenTitle": "Jeton d'intégration",
           "tokenWarning": "Copiez ce jeton maintenant. Il ne sera plus affiché."
+        },
+        "types": {
+          "caldav": {
+            "title": "Identifiants CalDAV",
+            "description": "Générez un nom d'utilisateur et un mot de passe pour connecter des clients externes (Thunderbird, Apple Calendar, etc.) via CalDAV."
+          },
+          "ical-feed": {
+            "title": "Abonnement iCal"
+          },
+          "webhook": {
+            "title": "Webhook",
+            "description": "Envoyez les modifications d'événements à un endpoint externe via HTTP."
+          }
         },
         "delete": {
           "button": "Supprimer",
@@ -1442,10 +1499,27 @@
           "error": "Échec de la suppression de l'intégration."
         },
         "regenerate": {
-          "button": "Regénérer le jeton",
-          "success": "Jeton regénéré avec succès.",
-          "error": "Échec de la regénération du jeton.",
+          "title": "Régénérer le jeton",
+          "description": "Émet un nouveau jeton. L'ancien cessera immédiatement de fonctionner.",
+          "button": "Régénérer",
+          "success": "Jeton régénéré avec succès.",
+          "error": "Échec de la régénération du jeton.",
+          "tokenTitle": "Nouveau jeton d'intégration",
           "tokenWarning": "Copiez ce nouveau jeton maintenant. Il ne sera plus affiché."
+        },
+        "edit": {
+          "button": "Modifier",
+          "title": "Modifier l'intégration",
+          "activeLabel": "Active",
+          "inactiveBadge": "Désactivée",
+          "success": "Intégration mise à jour avec succès.",
+          "error": "Échec de la mise à jour de l'intégration."
+        },
+        "columns": {
+          "name": "Nom",
+          "type": "Type",
+          "scopes": "Droits",
+          "lastUsed": "Dernière utilisation"
         },
         "token": {
           "copy": "Copier le jeton",
@@ -1512,8 +1586,11 @@
         }
       },
       "common": {
+        "back": "Terug",
         "cancel": "Annuleren",
-        "close": "Sluiten"
+        "close": "Sluiten",
+        "comingSoon": "Binnenkort beschikbaar",
+        "save": "Opslaan"
       },
       "clipboard": {
         "success": "Gekopieërd naar klembord",
@@ -2041,22 +2118,39 @@
         "description": "Beheer integratiekanalen zodat externe diensten toegang hebben tot uw agenda's.",
         "loading": "Integraties laden...",
         "empty": "Er zijn nog geen integraties aangemaakt.",
-        "roles": {
-          "reader": "Lezer",
-          "editor": "Bewerker",
-          "admin": "Admin"
+        "scopes": {
+          "calendars_read": "Agenda's lezen",
+          "calendars_write": "Agenda's bewerken",
+          "events_read": "Evenementen lezen",
+          "events_write": "Evenementen bewerken",
+          "edit": "Rechten bewerken",
+          "updateSuccess": "Rechten succesvol bijgewerkt.",
+          "updateError": "Rechten bijwerken mislukt."
         },
         "lastUsed": "Laatst gebruikt: {{date}}",
         "create": {
           "button": "Integratie toevoegen",
           "title": "Integratie aanmaken",
+          "chooseType": "Kies het type integratie dat u wilt aanmaken.",
           "nameLabel": "Naam",
-          "roleLabel": "Rol",
           "submit": "Aanmaken",
           "success": "Integratie succesvol aangemaakt.",
           "error": "Integratie aanmaken mislukt.",
           "tokenTitle": "Integratietoken",
           "tokenWarning": "Kopieer dit token nu. Het wordt niet meer getoond."
+        },
+        "types": {
+          "caldav": {
+            "title": "CalDAV-inloggegevens",
+            "description": "Genereer een gebruikersnaam en wachtwoord om externe agendaclients (Thunderbird, Apple Calendar, enz.) via CalDAV te verbinden."
+          },
+          "ical-feed": {
+            "title": "iCal-abonnement"
+          },
+          "webhook": {
+            "title": "Webhook",
+            "description": "Stuur evenementwijzigingen via HTTP naar een extern endpoint."
+          }
         },
         "delete": {
           "button": "Verwijderen",
@@ -2067,10 +2161,27 @@
           "error": "Integratie verwijderen mislukt."
         },
         "regenerate": {
-          "button": "Token opnieuw genereren",
+          "title": "Token opnieuw genereren",
+          "description": "Geeft een nieuw token uit. Het oude stopt onmiddellijk met werken.",
+          "button": "Opnieuw genereren",
           "success": "Token succesvol opnieuw gegenereerd.",
           "error": "Token opnieuw genereren mislukt.",
+          "tokenTitle": "Nieuw integratietoken",
           "tokenWarning": "Kopieer dit nieuwe token nu. Het wordt niet meer getoond."
+        },
+        "edit": {
+          "button": "Bewerken",
+          "title": "Integratie bewerken",
+          "activeLabel": "Actief",
+          "inactiveBadge": "Uitgeschakeld",
+          "success": "Integratie succesvol bijgewerkt.",
+          "error": "Integratie bijwerken mislukt."
+        },
+        "columns": {
+          "name": "Naam",
+          "type": "Type",
+          "scopes": "Rechten",
+          "lastUsed": "Laatst gebruikt"
         },
         "token": {
           "copy": "Token kopiëren",

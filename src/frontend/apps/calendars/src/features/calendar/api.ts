@@ -4,28 +4,14 @@
 
 import { fetchAPI } from "@/features/api/fetchApi";
 
-/**
- * Channel response from the API.
- */
-export interface Channel {
-  id: string;
-  name: string;
-  type: string;
-  role: string;
-  caldav_path: string;
-  url: string | null;
-  is_active: boolean;
-  last_used_at: string | null;
-  created_at: string;
-  settings: Record<string, unknown>;
-}
-
-/**
- * Channel with token (returned on creation).
- */
-export interface ChannelWithToken extends Channel {
-  token: string;
-}
+export type {
+  Channel,
+  ChannelWithToken,
+} from "@/features/integrations/types";
+import type {
+  Channel,
+  ChannelWithToken,
+} from "@/features/integrations/types";
 
 /**
  * Error types for channel operations.
@@ -101,6 +87,8 @@ export const createICalFeedChannel = async (params: {
     body: JSON.stringify({
       name: params.calendarName || params.caldavPath,
       type: "ical-feed",
+      scope_level: "calendar",
+      scopes: ["calendars:read", "events:read"],
       caldav_path: params.caldavPath,
       calendar_name: params.calendarName || "",
     }),

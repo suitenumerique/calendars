@@ -7,6 +7,7 @@ import { fetchAPI } from "@/features/api/fetchApi";
 import type {
   Channel,
   ChannelCreateRequest,
+  ChannelScopeValue,
   ChannelWithToken,
 } from "../types";
 
@@ -35,11 +36,28 @@ async function deleteChannel(id: string): Promise<void> {
 
 async function regenerateToken(
   id: string,
-): Promise<{ token: string }> {
+): Promise<ChannelWithToken> {
   const response = await fetchAPI(
     `channels/${id}/regenerate-token/`,
     { method: "POST" },
   );
+  return response.json();
+}
+
+type ChannelUpdate = {
+  name?: string;
+  is_active?: boolean;
+  scopes?: ChannelScopeValue[];
+};
+
+async function updateChannel(
+  id: string,
+  patch: ChannelUpdate,
+): Promise<Channel> {
+  const response = await fetchAPI(`channels/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
   return response.json();
 }
 
@@ -79,5 +97,22 @@ export const useDeleteChannel = () => {
 export const useRegenerateToken = () => {
   return useMutation({
     mutationFn: regenerateToken,
+  });
+};
+
+export const useUpdateChannel = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...patch
+    }: { id: string } & ChannelUpdate) =>
+      updateChannel(id, patch),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: CHANNELS_QUERY_KEY,
+      });
+    },
   });
 };

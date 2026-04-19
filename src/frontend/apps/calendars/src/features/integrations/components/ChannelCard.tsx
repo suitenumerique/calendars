@@ -5,33 +5,54 @@ import type { Channel } from "../types";
 
 type ChannelCardProps = {
   channel: Channel;
-  onDelete: (id: string) => void;
-  onRegenerate: (id: string) => void;
+  onEdit: (channel: Channel) => void;
+  onDelete: (channel: Channel) => void;
+};
+
+const TYPE_ICONS: Record<string, string> = {
+  caldav: "key",
+  "ical-feed": "rss_feed",
+  webhook: "webhook",
 };
 
 export const ChannelCard = ({
   channel,
+  onEdit,
   onDelete,
-  onRegenerate,
 }: ChannelCardProps) => {
   const { t } = useTranslation();
 
+  const typeLabel = t(
+    `integrations.types.${channel.type}.title`,
+    channel.type,
+  );
+
   return (
-    <div className="channel-card">
+    <div
+      className={`channel-card${
+        channel.is_active
+          ? ""
+          : " channel-card--inactive"
+      }`}
+    >
       <div className="channel-card__icon">
-        <span className="material-icons">key</span>
+        <span className="material-icons">
+          {TYPE_ICONS[channel.type] ?? "extension"}
+        </span>
       </div>
       <div className="channel-card__info">
-        <div className="channel-card__name">{channel.name}</div>
-        <div className="channel-card__meta">
-          <span className="channel-card__role">
-            {t(`integrations.roles.${channel.role}`)}
-          </span>
-          {channel.caldav_path && (
-            <span className="channel-card__scope">
-              {channel.caldav_path}
+        <div className="channel-card__name">
+          {channel.name}
+          {!channel.is_active && (
+            <span className="channel-card__badge">
+              {t("integrations.edit.inactiveBadge")}
             </span>
           )}
+        </div>
+        <div className="channel-card__meta">
+          <span className="channel-card__type">
+            {typeLabel}
+          </span>
           {channel.last_used_at && (
             <span className="channel-card__last-used">
               {t("integrations.lastUsed", {
@@ -48,10 +69,10 @@ export const ChannelCard = ({
           color="neutral"
           size="small"
           icon={
-            <span className="material-icons">refresh</span>
+            <span className="material-icons">edit</span>
           }
-          onClick={() => onRegenerate(channel.id)}
-          aria-label={t("integrations.regenerate.button")}
+          onClick={() => onEdit(channel)}
+          aria-label={t("integrations.edit.button")}
         />
         <Button
           color="error"
@@ -59,7 +80,7 @@ export const ChannelCard = ({
           icon={
             <span className="material-icons">delete</span>
           }
-          onClick={() => onDelete(channel.id)}
+          onClick={() => onDelete(channel)}
           aria-label={t("integrations.delete.button")}
         />
       </div>

@@ -198,7 +198,10 @@ END:VCALENDAR"""
     def test_export_uses_calendar_name_in_filename(self):
         """Test that the export filename uses the calendar_name from settings."""
         channel = factories.ICalFeedChannelFactory(
-            settings={"role": "reader", "calendar_name": "My Test Calendar"}
+            settings={
+                "scopes": ["calendars:read", "events:read"],
+                "calendar_name": "My Test Calendar",
+            }
         )
         client = APIClient()
 

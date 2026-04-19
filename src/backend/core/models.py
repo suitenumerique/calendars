@@ -16,6 +16,13 @@ from django.db import models
 from encrypted_fields.fields import EncryptedJSONField
 from timezone_field import TimeZoneField
 
+from core.enums import (
+    CHANNEL_SCOPE_COLLECTION_METHODS,
+    CHANNEL_SCOPE_OBJECT_METHODS,
+    ChannelScope,
+    ChannelScopeLevel,
+)
+
 logger = getLogger(__name__)
 
 
@@ -277,22 +284,17 @@ class Channel(BaseModel):
     """Integration channel for external service access to calendars.
 
     Follows the same pattern as the Messages Channel model. Allows external
-    services (e.g. Messages) to access CalDAV on behalf of a user via a
-    bearer token.
+    services (e.g. Messages) to access CalDAV on behalf of a user via
+    HTTP Basic Auth (channel_id:token).
 
     Configuration is split between ``settings`` (public, non-sensitive) and
-    ``encrypted_settings`` (sensitive data like tokens). The ``role`` for
-    CalDAV access control lives in ``settings``.
+    ``encrypted_settings`` (sensitive data like tokens). Scopes for
+    CalDAV access control live in ``settings["scopes"]``.
 
     For iCal feeds, the URL contains the base64url-encoded channel ID (for
     lookup) and a base64url token (for authentication):
     ``/ical/<short_id>/<token>/<slug>.ics``.
     """
-
-    ROLE_READER = "reader"
-    ROLE_EDITOR = "editor"
-    ROLE_ADMIN = "admin"
-    VALID_ROLES = {ROLE_READER, ROLE_EDITOR, ROLE_ADMIN}
 
     name = models.CharField(
         max_length=255,
@@ -305,13 +307,20 @@ class Channel(BaseModel):
         default="caldav",
     )
 
+    scope_level = models.CharField(
+        max_length=20,
+        default=ChannelScopeLevel.USER,
+        db_index=True,
+        help_text="Access scope: global (instance-wide), user, or calendar.",
+    )
+
     user = models.ForeignKey(
         "User",
         on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="channels",
-        help_text="User who created this channel (used for permissions and auditing).",
+        help_text="Target user (scope_level=user/calendar) or audit creator (global).",
     )
 
     organization = models.ForeignKey(
@@ -335,7 +344,7 @@ class Channel(BaseModel):
         "settings",
         default=dict,
         blank=True,
-        help_text="Channel-specific configuration settings (e.g. role).",
+        help_text="Channel-specific configuration settings (e.g. scopes).",
     )
 
     encrypted_settings = EncryptedJSONField(
@@ -352,28 +361,81 @@ class Channel(BaseModel):
         verbose_name = "channel"
         verbose_name_plural = "channels"
         ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                name="channel_scope_level_targets",
+                condition=(
+                    models.Q(scope_level="global")
+                    | models.Q(scope_level="user", user__isnull=False)
+                    | (
+                        models.Q(scope_level="calendar", user__isnull=False)
+                        & models.Q(caldav_path__isnull=False)
+                        & ~models.Q(caldav_path="")
+                    )
+                ),
+            ),
+        ]
 
     def __str__(self):
         return self.name
 
     @property
-    def role(self):
-        """Get the role from settings, defaulting to reader."""
-        return self.settings.get("role", self.ROLE_READER)
+    def scopes(self):
+        """Get the scopes list from settings."""
+        return self.settings.get("scopes", [])
 
-    @role.setter
-    def role(self, value):
-        """Set the role in settings."""
-        self.settings["role"] = value
+    @scopes.setter
+    def scopes(self, value):
+        """Set the scopes in settings."""
+        self.settings["scopes"] = value
 
     def clean(self):
-        """Validate that at least one scope is set."""
+        """Validate scope_level invariants and scopes."""
         from django.core.exceptions import ValidationError  # noqa: PLC0415, I001  # pylint: disable=C0415
 
-        if not self.organization and not self.user and not self.caldav_path:
+        sl = self.scope_level
+        if sl == ChannelScopeLevel.USER and not self.user_id:
+            raise ValidationError("User is required for scope_level='user'.")
+        if sl == ChannelScopeLevel.CALENDAR:
+            if not self.user_id:
+                raise ValidationError("User is required for scope_level='calendar'.")
+            if not self.caldav_path:
+                raise ValidationError(
+                    "caldav_path is required for scope_level='calendar'."
+                )
+        if sl == ChannelScopeLevel.GLOBAL and not self.user_id:
+            if not self.organization_id:
+                pass  # global channels don't require any FK
+
+        valid = {s.value for s in ChannelScope}
+        for scope in self.scopes:
+            if scope not in valid:
+                raise ValidationError(f"Invalid scope: {scope}")
+
+        if (
+            ChannelScope.CALENDARS_WRITE.value in self.scopes
+            and self.scope_level != ChannelScopeLevel.GLOBAL
+        ):
             raise ValidationError(
-                "At least one scope must be set: organization, user, or caldav_path."
+                "calendars:write scope is only allowed on global channels."
             )
+
+    def allowed_methods(self, *, collection):
+        """Return the set of HTTP methods allowed by this channel's scopes.
+
+        Args:
+            collection: True for collection paths (calendars),
+                False for object paths (events).
+        """
+        table = (
+            CHANNEL_SCOPE_COLLECTION_METHODS
+            if collection
+            else CHANNEL_SCOPE_OBJECT_METHODS
+        )
+        methods = set()
+        for scope in self.scopes:
+            methods |= table.get(scope, frozenset())
+        return frozenset(methods)
 
     def verify_token(self, token):
         """Check that *token* matches the stored encrypted token."""
