@@ -34,6 +34,7 @@ class UserAdmin(auth_admin.UserAdmin):
                     "language",
                     "timezone",
                     "organization",
+                    "claims",
                 )
             },
         ),
@@ -88,6 +89,7 @@ class UserAdmin(auth_admin.UserAdmin):
         "sub",
         "email",
         "full_name",
+        "claims",
         "created_at",
         "updated_at",
     )
