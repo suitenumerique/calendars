@@ -74,14 +74,23 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
     """
 
     def get_extra_claims(self, user_info):
-        """Return extra claims from user_info."""
+        """Return extra claims from user_info.
+
+        The org claim (``OIDC_USERINFO_ORGANIZATION_CLAIM``) is surfaced at
+        the top level so ``_resolve_org_external_id`` can read it directly,
+        independently of whether it's also listed in ``OIDC_STORE_CLAIMS``.
+        """
         claims_to_store = {
             claim: user_info.get(claim) for claim in settings.OIDC_STORE_CLAIMS
         }
-        return {
+        extra = {
             "full_name": self.compute_full_name(user_info),
             "claims": claims_to_store,
         }
+        org_claim = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
+        if org_claim:
+            extra[org_claim] = user_info.get(org_claim)
+        return extra
 
     def get_existing_user(self, sub, email):
         """Fetch existing user by sub or email."""
@@ -94,18 +103,21 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
         """Create a new user, resolving their organization first.
 
         Organization is NOT NULL, so we must resolve it before the initial save.
+        The org claim is surfaced at the top level of ``claims`` by
+        ``get_extra_claims`` so we can read it here. It must be popped before
+        delegating to ``super().create_user``, which forwards unknown top-level
+        keys as ``User(**claims)`` kwargs and would otherwise error.
         """
-        logger.warning(
-            "OIDC create_user claims (keys=%s): %s",
-            sorted(claims.keys()) if isinstance(claims, dict) else type(claims),
-            claims,
-        )
         external_id = _resolve_org_external_id(claims)
         if not external_id:
             raise SuspiciousOperation(
                 "Cannot create user without an organization "
                 "(no org claim and no email domain)"
             )
+
+        org_claim = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
+        if org_claim:
+            claims.pop(org_claim, None)
 
         org, _ = Organization.objects.get_or_create(
             external_id=external_id,

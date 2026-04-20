@@ -567,3 +567,41 @@ def test_authentication_store_claims_existing_user(monkeypatch):
     assert user.email == email
     assert user.claims == {"iss": "https://example.com"}
     assert models.User.objects.count() == 1
+
+
+@override_settings(
+    OIDC_USERINFO_ORGANIZATION_CLAIM="siret",
+    OIDC_STORE_CLAIMS=["siret"],
+)
+def test_authentication_new_user_org_claim_also_in_store_claims(monkeypatch):
+    """Regression: when the organization claim is also listed in
+    OIDC_STORE_CLAIMS, it was being nested under ``claims.claims.<key>``
+    and the top-level ``claims.<key>`` lookup in ``_resolve_org_external_id``
+    returned None, raising SuspiciousOperation on user creation.
+
+    The org claim must be surfaced at the top level of the extra claims
+    so create_user can resolve the organization.
+    """
+    klass = OIDCAuthenticationBackend()
+
+    def get_userinfo_mocked(*args):
+        return {
+            "sub": "456",
+            "email": "alice@ministry.gouv.fr",
+            "given_name": "Alice",
+            "usual_name": "Martin",
+            "siret": "13002526500013",
+        }
+
+    monkeypatch.setattr(OIDCAuthenticationBackend, "get_userinfo", get_userinfo_mocked)
+
+    user = klass.get_or_create_user(
+        access_token="test-token", id_token=None, payload=None
+    )
+
+    assert user is not None
+    assert user.sub == "456"
+    assert user.email == "alice@ministry.gouv.fr"
+    assert user.organization is not None
+    assert user.organization.external_id == "13002526500013"
+    assert user.claims == {"siret": "13002526500013"}
