@@ -29,6 +29,14 @@ export PGDATABASE
 export PGUSER
 export PGPASSWORD
 
+# Optional Postgres schema that will host all sabre/dav tables. When empty
+# or "public", tables land in the default public schema (legacy behavior).
+CALDAV_DB_SCHEMA="${CALDAV_DB_SCHEMA:-public}"
+if ! [[ "$CALDAV_DB_SCHEMA" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+  echo "CALDAV_DB_SCHEMA must be a valid identifier, got: $CALDAV_DB_SCHEMA"
+  exit 1
+fi
+
 # Wait for PostgreSQL to be ready
 retries=30
 until pg_isready -q -h "$PGHOST" -p "$PGPORT" -U "$PGUSER"; do
@@ -54,8 +62,16 @@ echo "PostgreSQL is ready. Initializing sabre/dav database schema..."
 # SQL files directory (configurable for Scalingo, defaults to Docker path)
 SQL_DIR="${SQL_DIR:-/var/www/sabredav/sql}"
 
+# Ensure the target schema exists, then route every subsequent psql call
+# through it via libpq's PGOPTIONS. Unqualified CREATE TABLE / SELECT in
+# the .sql files will resolve to this schema.
+if [ "$CALDAV_DB_SCHEMA" != "public" ]; then
+  psql -c "CREATE SCHEMA IF NOT EXISTS \"$CALDAV_DB_SCHEMA\""
+fi
+export PGOPTIONS="-c search_path=\"$CALDAV_DB_SCHEMA\",public"
+
 # Check if tables already exist
-TABLES_EXIST=$(psql -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('users', 'principals', 'calendars')" 2>/dev/null || echo "0")
+TABLES_EXIST=$(psql -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$CALDAV_DB_SCHEMA' AND table_name IN ('users', 'principals', 'calendars')" 2>/dev/null || echo "0")
 
 if [ "$TABLES_EXIST" -gt "0" ]; then
   echo "sabre/dav tables already exist, skipping table creation"

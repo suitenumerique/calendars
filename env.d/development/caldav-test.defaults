@@ -3,6 +3,7 @@ PGPORT=5432
 PGDATABASE=caldav_test
 PGUSER=pgroot
 PGPASSWORD=pass
+CALDAV_DB_SCHEMA=sabre
 CALDAV_BASE_URI=/caldav/
 CALDAV_INBOUND_API_KEY=changeme-inbound-in-production
 CALDAV_OUTBOUND_API_KEY=changeme-outbound-in-production

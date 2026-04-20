@@ -55,6 +55,15 @@ $pdo = new PDO(
     ]
 );
 
+// Route all unqualified table references to the configured schema.
+// Defaults to "public" so existing deployments are unaffected.
+$dbSchema = getenv('CALDAV_DB_SCHEMA') ?: 'public';
+if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $dbSchema)) {
+    error_log("[sabre/dav] CALDAV_DB_SCHEMA must be a valid identifier, got: {$dbSchema}");
+    exit(1);
+}
+$pdo->exec("SET search_path TO \"{$dbSchema}\", public");
+
 // Create custom authentication backend
 // Requires API key authentication and X-LS-User header
 $apiKey = getenv('CALDAV_OUTBOUND_API_KEY');

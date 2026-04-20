@@ -3,6 +3,8 @@ PGPORT=5432
 PGDATABASE=calendars
 PGUSER=pgroot
 PGPASSWORD=pass
+# Postgres schema that hosts all sabre/dav tables. Defaults to "public".
+CALDAV_DB_SCHEMA=sabre
 CALDAV_BASE_URI=/caldav/
 CALDAV_INBOUND_API_KEY=changeme-inbound-in-production
 CALDAV_OUTBOUND_API_KEY=changeme-outbound-in-production
