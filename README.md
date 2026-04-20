@@ -45,7 +45,7 @@ Calendars empowers teams to manage events and schedules while maintaining full c
 - 🏢 Create workspaces to organize team collaboration
 
 ### Self-host
-*   🚀 Easy to install, scalable and secure calendar solution
+*  🚀 Easy to install, scalable and secure calendar solution
 
 ## Getting started 🔧
 
