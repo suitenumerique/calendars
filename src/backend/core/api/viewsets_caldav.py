@@ -86,14 +86,10 @@ class CalDAVProxyView(View):
 
         try:
             channel_pk = urlsafe_to_uuid(channel_id)
-        except (ValueError, binascii.Error):
-            return None, None
-
-        try:
             channel = Channel.objects.select_related("user", "user__organization").get(
                 pk=channel_pk, is_active=True, type="caldav"
             )
-        except (ValueError, ValidationError, Channel.DoesNotExist):
+        except (ValueError, ValidationError, binascii.Error, Channel.DoesNotExist):
             return None, None
 
         if not channel.verify_token(token):

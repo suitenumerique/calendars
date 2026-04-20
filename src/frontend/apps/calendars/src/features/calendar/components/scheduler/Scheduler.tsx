@@ -381,7 +381,11 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
       {isMobile && <FloatingActionButton onClick={handleFabClick} />}
 
       <EventModal
-        key={modalState.event?.uid ?? "none"}
+        key={`${modalState.mode}-${modalState.event?.uid ?? "none"}-${
+          modalState.event?.recurrenceId?.value?.date instanceof Date
+            ? modalState.event.recurrenceId.value.date.getTime()
+            : ""
+        }`}
         isOpen={modalState.isOpen}
         mode={modalState.mode}
         event={modalState.event}
