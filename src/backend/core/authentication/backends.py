@@ -95,6 +95,11 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
 
         Organization is NOT NULL, so we must resolve it before the initial save.
         """
+        logger.warning(
+            "OIDC create_user claims (keys=%s): %s",
+            sorted(claims.keys()) if isinstance(claims, dict) else type(claims),
+            claims,
+        )
         external_id = _resolve_org_external_id(claims)
         if not external_id:
             raise SuspiciousOperation(
