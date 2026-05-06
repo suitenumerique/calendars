@@ -804,15 +804,23 @@ def validate_caldav_proxy_path(path):
     if not path:
         return True  # Empty path is fine (root request)
 
-    # Decode percent-encoded characters before validation
-    path = unquote(path)
-
-    # Block directory traversal
-    if ".." in path:
+    # Decode percent-encoded characters before validation. Loop until the
+    # decoding is stable so a double-encoded payload (e.g. ``%252e%252e``,
+    # which decodes to ``%2e%2e`` and then to ``..``) cannot smuggle a
+    # traversal past the literal ``..`` check below. Bound the loop to a
+    # small constant to defeat any pathological repeated-encoding input.
+    for _ in range(5):
+        decoded = unquote(path)
+        if decoded == path:
+            break
+        path = decoded
+    else:
+        # Decoding never stabilized — too many layers of encoding,
+        # something hostile.
         return False
 
-    # Block null bytes
-    if "\x00" in path:
+    # Block directory traversal and null bytes
+    if ".." in path or "\x00" in path:
         return False
 
     clean = path.lstrip("/")

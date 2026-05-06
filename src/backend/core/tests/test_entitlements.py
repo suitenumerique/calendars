@@ -461,6 +461,64 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         assert len(responses.calls) == 1
 
     @responses.activate
+    def test_collection_delete_blocked_when_not_entitled(self):
+        """DELETE on a calendar collection (path ending /) requires the
+        same entitlement as MKCALENDAR — calendar lifecycle is symmetric.
+        """
+        user = factories.UserFactory(email="test@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        with mock.patch(
+            "core.api.viewsets_caldav.get_user_entitlements",
+            return_value={"can_access": False},
+        ):
+            response = client.generic(
+                "DELETE",
+                "/caldav/calendars/users/test@example.com/cal-id/",
+            )
+
+        assert response.status_code == HTTP_403_FORBIDDEN
+
+    @responses.activate
+    def test_object_delete_does_not_check_entitlement(self):
+        """DELETE on an event (path ending .ics) is NOT gated by
+        entitlements — only the calendar lifecycle is. Removing one's
+        own events must always work, regardless of subscription state.
+        """
+        user = factories.UserFactory(email="test@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        caldav_url = settings.CALDAV_URL
+        responses.add(
+            responses.Response(
+                method="DELETE",
+                url=(
+                    f"{caldav_url}/caldav/calendars/users/test@example.com/"
+                    "cal-id/event-uid.ics"
+                ),
+                status=204,
+                body="",
+            )
+        )
+
+        # No entitlement mock — and the request must succeed even if the
+        # service is unreachable. Patching to raise would prove the
+        # check is bypassed for object DELETE.
+        with mock.patch(
+            "core.api.viewsets_caldav.get_user_entitlements",
+            side_effect=EntitlementsUnavailableError("unavailable"),
+        ):
+            response = client.generic(
+                "DELETE",
+                ("/caldav/calendars/users/test@example.com/cal-id/event-uid.ics"),
+            )
+
+        assert response.status_code == 204
+        assert len(responses.calls) == 1
+
+    @responses.activate
     def test_propfind_allowed_when_not_entitled(self):
         """PROPFIND should work for non-entitled users (shared calendars)."""
         user = factories.UserFactory(email="test@example.com")

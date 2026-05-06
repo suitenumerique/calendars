@@ -476,6 +476,7 @@ class Base(Configuration):
         "REPORT",
         "MKCOL",
         "MKCALENDAR",
+        "MOVE",
     ]
     # Allow CalDAV headers (case-sensitive for CORS preflight)
     CORS_ALLOW_HEADERS = [
@@ -492,6 +493,8 @@ class Base(Configuration):
         "if-match",
         "if-none-match",
         "prefer",
+        "destination",  # WebDAV MOVE target URL
+        "overwrite",  # WebDAV MOVE overwrite flag
     ]
 
     # Sentry

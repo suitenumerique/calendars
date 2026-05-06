@@ -18,6 +18,7 @@ import type {
 } from "../../../services/dav/types/event-calendar";
 import type { EventCalendarAdapter, CalDavExtendedProps } from "../../../services/dav/EventCalendarAdapter";
 import type { CalDavService } from "../../../services/dav/CalDavService";
+import { getCalendarUrlFromEventUrl } from "../../../services/dav/caldav-helpers";
 import type {
   EventModalState,
   RecurringDeleteOption,
@@ -460,10 +461,34 @@ export const useSchedulerHandlers = ({
           etag = fetchResult.data.etag;
         }
 
+        const sourceCalendarUrl = getCalendarUrlFromEventUrl(modalState.eventUrl);
+
+        // Calendar change: WebDAV MOVE relocates the resource without firing
+        // iTIP (Sabre's Schedule plugin skips it on MOVE), so attendees don't
+        // get spurious REQUEST/CANCEL emails. Then a normal PUT at the new
+        // URL applies any content edits — iTIP dispatches only on a
+        // significant change, as it would for any in-place edit.
+        let updateUrl = modalState.eventUrl;
+        let updateEtag = etag;
+        if (sourceCalendarUrl !== targetCalendarUrl) {
+          const moveResult = await caldavService.moveEvent({
+            sourceEventUrl: modalState.eventUrl,
+            targetCalendarUrl,
+            sourceEtag: etag,
+          });
+
+          if (!moveResult.success || !moveResult.data) {
+            throw new Error(moveResult.error || "Failed to move event");
+          }
+
+          updateUrl = moveResult.data.url;
+          updateEtag = moveResult.data.etag;
+        }
+
         const result = await caldavService.updateEvent({
-          eventUrl: modalState.eventUrl,
+          eventUrl: updateUrl,
           event: eventToUpdate,
-          etag,
+          etag: updateEtag,
         });
 
         if (!result.success) {

@@ -36,6 +36,7 @@ import type {
   CalDavEvent,
   CalDavEventCreate,
   CalDavEventUpdate,
+  CalDavEventMove,
   EventFilter,
   CalDavShareInvite,
   CalDavShareResponse,
@@ -1074,6 +1075,71 @@ export class CalDavService {
       this._events.set(updatedEvent.url, updatedEvent)
       return updatedEvent
     }, 'Failed to update event')
+  }
+
+  /**
+   * Relocate an event resource to a different calendar via WebDAV MOVE.
+   *
+   * SabreDAV's Schedule\Plugin skips iTIP dispatch on MOVE (CalDAV/Schedule/
+   * Plugin.php#beforeUnbind), which is the desired behavior when an organizer
+   * moves an event between their own calendars: attendees should not receive
+   * spurious REQUEST/CANCEL emails. Content edits (which may warrant iTIP)
+   * should be applied via a follow-up updateEvent at the returned URL — the
+   * `significantChange` filter then decides whether to notify attendees.
+   *
+   * Returns the new resource URL and ETag. Source ETag, if provided, is sent
+   * as If-Match for an optimistic-concurrency precondition.
+   */
+  async moveEvent(
+    params: CalDavEventMove,
+  ): Promise<CalDavResponse<{ url: string; etag?: string }>> {
+    const targetCalendar = this._calendars.get(params.targetCalendarUrl)
+    if (!targetCalendar) {
+      return { success: false, error: 'Target calendar not found' }
+    }
+
+    const cachedSource = this._events.get(params.sourceEventUrl)
+    const sourceCalendarUrl =
+      cachedSource?.calendarUrl ?? getCalendarUrlFromEventUrl(params.sourceEventUrl)
+    const sourceCalendar = this._calendars.get(sourceCalendarUrl)
+
+    return withErrorHandling(async () => {
+      const filename = params.sourceEventUrl.split('/').pop()
+      if (!filename) {
+        throw new Error('Could not derive filename from source event URL')
+      }
+      const newEventUrl = `${params.targetCalendarUrl}${filename}`
+      const sourceEtag = params.sourceEtag ?? cachedSource?.etag
+
+      const response = await fetch(params.sourceEventUrl, {
+        ...sourceCalendar?.fetchOptions,
+        method: 'MOVE',
+        headers: {
+          ...sourceCalendar?.headers,
+          Destination: newEventUrl,
+          Overwrite: 'F',
+          ...(sourceEtag ? { 'If-Match': sourceEtag } : {}),
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to move event: ${response.status}`)
+      }
+
+      const newEtag = response.headers.get('etag') ?? undefined
+
+      if (cachedSource) {
+        this._events.delete(params.sourceEventUrl)
+        this._events.set(newEventUrl, {
+          ...cachedSource,
+          url: newEventUrl,
+          calendarUrl: params.targetCalendarUrl,
+          etag: newEtag,
+        })
+      }
+
+      return { url: newEventUrl, etag: newEtag }
+    }, 'Failed to move event')
   }
 
   async deleteEvent(eventUrl: string, etag?: string): Promise<CalDavResponse> {

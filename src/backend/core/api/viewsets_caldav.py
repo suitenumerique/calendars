@@ -5,6 +5,7 @@ import binascii
 import logging
 import re
 import secrets
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -24,6 +25,30 @@ from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy
 from core.services.calendar_invitation_service import calendar_invitation_service
 
 logger = logging.getLogger(__name__)
+
+
+# Methods the proxy will forward to SabreDAV. Anything outside this set
+# returns 405 before authentication is even consulted. Defense in depth:
+# SabreDAV's own ACL is the source of truth, but limiting the verb
+# surface here means a future Sabre plugin (LOCK, ACL writes, etc.)
+# cannot be reached without an explicit proxy update. This set must
+# also be advertised in the OPTIONS preflight response so browser
+# clients can discover what they're allowed to send.
+ALLOWED_PROXY_METHODS = frozenset(
+    {
+        "GET",
+        "OPTIONS",
+        "PROPFIND",
+        "PROPPATCH",
+        "REPORT",
+        "MKCOL",
+        "MKCALENDAR",
+        "PUT",
+        "DELETE",
+        "POST",
+        "MOVE",
+    }
+)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -180,8 +205,9 @@ class CalDAVProxyView(View):
         return True
 
     @staticmethod
-    def _check_entitlements_for_creation(user):
-        """Check if user is entitled to create calendars.
+    def _check_entitlements_for_calendar_management(user):
+        """Check if user is entitled to manage their calendars
+        (create or delete).
 
         Returns None if allowed, or an HttpResponse(403) if denied.
         Fail-closed: denies if the entitlements service is unavailable.
@@ -191,12 +217,12 @@ class CalDAVProxyView(View):
             if not entitlements.get("can_access", False):
                 return HttpResponse(
                     status=403,
-                    content="Calendar creation not allowed",
+                    content="Calendar management not allowed",
                 )
         except EntitlementsUnavailableError:
             return HttpResponse(
                 status=403,
-                content="Calendar creation not allowed",
+                content="Calendar management not allowed",
             )
         return None
 
@@ -204,13 +230,20 @@ class CalDAVProxyView(View):
         """Forward all HTTP methods to CalDAV server."""
         if request.method == "OPTIONS":
             response = HttpResponse(status=200)
-            response["Access-Control-Allow-Methods"] = (
-                "GET, OPTIONS, PROPFIND, PROPPATCH, REPORT,"
-                " MKCOL, MKCALENDAR, PUT, DELETE, POST"
+            response["Access-Control-Allow-Methods"] = ", ".join(
+                sorted(ALLOWED_PROXY_METHODS)
             )
             response["Access-Control-Allow-Headers"] = (
-                "Content-Type, depth, authorization, if-match, if-none-match, prefer"
+                "Content-Type, depth, authorization, if-match, if-none-match,"
+                " prefer, destination, overwrite"
             )
+            return response
+
+        if request.method not in ALLOWED_PROXY_METHODS:
+            response = HttpResponse(
+                status=405, content="Method not allowed by CalDAV proxy"
+            )
+            response["Allow"] = ", ".join(sorted(ALLOWED_PROXY_METHODS))
             return response
 
         channel = None
@@ -238,8 +271,16 @@ class CalDAVProxyView(View):
                     content="Method not allowed for channel scopes",
                 )
 
-        if request.method in ("MKCALENDAR", "MKCOL"):
-            if denied := self._check_entitlements_for_creation(effective_user):
+        # Calendar lifecycle (create/delete) is gated by the same entitlement.
+        # Object-level DELETE (events, ending in .ics) is unrestricted; only
+        # DELETE on a calendar collection (path ending /) needs the gate.
+        is_collection_delete = request.method == "DELETE" and self._is_collection_path(
+            path
+        )
+        if request.method in ("MKCALENDAR", "MKCOL") or is_collection_delete:
+            if denied := self._check_entitlements_for_calendar_management(
+                effective_user
+            ):
                 return denied
 
         if not validate_caldav_proxy_path(path):
@@ -274,6 +315,25 @@ class CalDAVProxyView(View):
             headers["If-None-Match"] = request.META["HTTP_IF_NONE_MATCH"]
         if "HTTP_PREFER" in request.META:
             headers["Prefer"] = request.META["HTTP_PREFER"]
+        if request.method == "MOVE" and "HTTP_OVERWRITE" in request.META:
+            headers["Overwrite"] = request.META["HTTP_OVERWRITE"]
+        if request.method == "MOVE" and "HTTP_DESTINATION" in request.META:
+            # Translate the public Destination URL to the upstream CalDAV URL.
+            # The client sends an absolute URL pointing at this proxy
+            # (e.g. http://host/caldav/calendars/.../x.ics); SabreDAV expects
+            # a URL on its own server. We extract the path and rebuild it
+            # against the upstream base. Validate the path to avoid
+            # smuggling traversal/internal-api targets via the header.
+            dest_path = urlparse(request.META["HTTP_DESTINATION"]).path
+            if dest_path.startswith("/caldav/"):
+                dest_clean_path = dest_path[len("/caldav/") :]
+            elif dest_path.startswith("/caldav"):
+                dest_clean_path = dest_path[len("/caldav") :].lstrip("/")
+            else:
+                dest_clean_path = dest_path.lstrip("/")
+            if not validate_caldav_proxy_path(dest_clean_path):
+                return HttpResponse(status=400, content="Invalid destination")
+            headers["Destination"] = http.build_url(dest_clean_path)
 
         body = request.body if request.body else None
 

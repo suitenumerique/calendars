@@ -120,6 +120,12 @@ export type CalDavEventUpdate = {
   etag?: string
 }
 
+export type CalDavEventMove = {
+  sourceEventUrl: string
+  targetCalendarUrl: string
+  sourceEtag?: string
+}
+
 // ============================================================================
 // Time Range & Filters
 // ============================================================================
