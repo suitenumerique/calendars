@@ -2122,7 +2122,12 @@ class TestFreebusyEnforcement:
             f"/caldav/{src_path}",
             HTTP_DESTINATION=dest_path,
         )
-        assert response.status_code in (403, 409), (
+        # Accepted blocking statuses:
+        #   - 403/409: SabreDAV ACL or scheduling plugin rejected the COPY.
+        #   - 405: the Django proxy's method allowlist refuses COPY at the
+        #     edge (defense in depth — strictly stronger than ACL-level
+        #     blocking, since the request never reaches SabreDAV).
+        assert response.status_code in (403, 405, 409), (
             f"SECURITY: COPY from freebusy calendar should be blocked, "
             f"got {response.status_code}"
         )
