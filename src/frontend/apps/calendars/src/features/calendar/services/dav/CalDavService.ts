@@ -1104,9 +1104,16 @@ export class CalDavService {
     const sourceCalendar = this._calendars.get(sourceCalendarUrl)
 
     return withErrorHandling(async () => {
-      const filename = params.sourceEventUrl.split('/').pop()
-      if (!filename) {
-        throw new Error('Could not derive filename from source event URL')
+      // Strip trailing slashes before splitting so a stray collection-shaped
+      // URL (ends with `/`) doesn't yield an empty filename that we'd then
+      // concatenate onto the target — producing the target collection URL
+      // as the destination. Also require the `.ics` suffix so only event
+      // resources are moveable through this path; the proxy and SabreDAV
+      // would reject a collection-targeted MOVE anyway, but failing here
+      // is louder and avoids a misleading server error.
+      const filename = params.sourceEventUrl.replace(/\/+$/, '').split('/').pop()
+      if (!filename || !filename.endsWith('.ics')) {
+        throw new Error('Could not derive event filename from source URL')
       }
       const newEventUrl = `${params.targetCalendarUrl}${filename}`
       const sourceEtag = params.sourceEtag ?? cachedSource?.etag

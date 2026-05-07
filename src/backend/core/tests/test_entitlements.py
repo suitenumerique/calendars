@@ -481,6 +481,72 @@ class TestCalDAVProxyEntitlements:  # pylint: disable=no-member
         assert response.status_code == HTTP_403_FORBIDDEN
 
     @responses.activate
+    def test_collection_move_blocked_when_not_entitled(self):
+        """MOVE on a calendar collection (path ending /) is the rename
+        path — gated by the same entitlement as MKCALENDAR / collection
+        DELETE. Calendar lifecycle stays symmetric whether the user
+        creates, renames, or deletes a collection.
+        """
+        user = factories.UserFactory(email="test@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        with mock.patch(
+            "core.api.viewsets_caldav.get_user_entitlements",
+            return_value={"can_access": False},
+        ):
+            response = client.generic(
+                "MOVE",
+                "/caldav/calendars/users/test@example.com/cal-id/",
+                HTTP_DESTINATION=(
+                    "http://example/caldav/calendars/users/test@example.com/"
+                    "renamed-cal/"
+                ),
+            )
+
+        assert response.status_code == HTTP_403_FORBIDDEN
+
+    @responses.activate
+    def test_object_move_does_not_check_entitlement(self):
+        """MOVE on an event (path ending .ics) is NOT gated by
+        entitlements — only the calendar lifecycle is. Reorganizing
+        one's own events between calendars must always work,
+        regardless of subscription state.
+        """
+        user = factories.UserFactory(email="test@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        caldav_url = settings.CALDAV_URL
+        responses.add(
+            responses.Response(
+                method="MOVE",
+                url=(
+                    f"{caldav_url}/caldav/calendars/users/test@example.com/"
+                    "cal-a/event-uid.ics"
+                ),
+                status=201,
+                body="",
+            )
+        )
+
+        with mock.patch(
+            "core.api.viewsets_caldav.get_user_entitlements",
+            side_effect=EntitlementsUnavailableError("unavailable"),
+        ):
+            response = client.generic(
+                "MOVE",
+                "/caldav/calendars/users/test@example.com/cal-a/event-uid.ics",
+                HTTP_DESTINATION=(
+                    "http://example/caldav/calendars/users/test@example.com/"
+                    "cal-b/event-uid.ics"
+                ),
+            )
+
+        assert response.status_code == 201
+        assert len(responses.calls) == 1
+
+    @responses.activate
     def test_object_delete_does_not_check_entitlement(self):
         """DELETE on an event (path ending .ics) is NOT gated by
         entitlements — only the calendar lifecycle is. Removing one's

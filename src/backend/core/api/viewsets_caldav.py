@@ -262,8 +262,9 @@ class CalDAVProxyView(View):
         else:
             effective_user = request.user
 
+        is_collection = self._is_collection_path(path)
+
         if channel:
-            is_collection = self._is_collection_path(path)
             allowed = channel.allowed_methods(collection=is_collection)
             if request.method not in allowed:
                 return HttpResponse(
@@ -271,13 +272,19 @@ class CalDAVProxyView(View):
                     content="Method not allowed for channel scopes",
                 )
 
-        # Calendar lifecycle (create/delete) is gated by the same entitlement.
-        # Object-level DELETE (events, ending in .ics) is unrestricted; only
-        # DELETE on a calendar collection (path ending /) needs the gate.
-        is_collection_delete = request.method == "DELETE" and self._is_collection_path(
-            path
-        )
-        if request.method in ("MKCALENDAR", "MKCOL") or is_collection_delete:
+        # Calendar lifecycle (create/rename/delete) is gated by the same
+        # entitlement. Object-level DELETE/MOVE (events, ending in .ics)
+        # is unrestricted; only operations on a calendar collection (path
+        # ending /) need the gate. MOVE on a collection is the rename
+        # path — symmetric with MKCALENDAR + DELETE so we don't trust
+        # SabreDAV alone to gate it.
+        is_collection_delete = request.method == "DELETE" and is_collection
+        is_collection_move = request.method == "MOVE" and is_collection
+        if (
+            request.method in ("MKCALENDAR", "MKCOL")
+            or is_collection_delete
+            or is_collection_move
+        ):
             if denied := self._check_entitlements_for_calendar_management(
                 effective_user
             ):
@@ -315,6 +322,12 @@ class CalDAVProxyView(View):
             headers["If-None-Match"] = request.META["HTTP_IF_NONE_MATCH"]
         if "HTTP_PREFER" in request.META:
             headers["Prefer"] = request.META["HTTP_PREFER"]
+        # NOTE: Destination/Overwrite forwarding below is gated on MOVE
+        # specifically. If COPY is ever added to ALLOWED_PROXY_METHODS,
+        # this gate must be widened to ("MOVE", "COPY") — otherwise COPY
+        # would forward without the public→upstream URL rewrite and
+        # SabreDAV would either fail or interpret a public-host URL as
+        # remote, depending on deploy.
         if request.method == "MOVE" and "HTTP_OVERWRITE" in request.META:
             headers["Overwrite"] = request.META["HTTP_OVERWRITE"]
         if request.method == "MOVE" and "HTTP_DESTINATION" in request.META:

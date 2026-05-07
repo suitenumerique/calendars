@@ -1551,6 +1551,49 @@ class TestNoAccessSharing:
             f"got {response.status_code}"
         )
 
+    def test_non_shared_user_cannot_move_events(self):
+        """A non-shared user cannot MOVE events out of another user's calendar.
+
+        The proxy delegates cross-user write enforcement on MOVE to
+        SabreDAV ACL (no proxy-side scope check for OIDC users on
+        either source or destination, mirroring how PUT/DELETE work).
+        This test pins down that delegation: a stranger trying to
+        MOVE an event from the owner's calendar into their own
+        calendar must be rejected, and the event must remain in the
+        owner's calendar afterwards. If a future SabreDAV plugin
+        change opens this up, this test catches it.
+        """
+        org = factories.OrganizationFactory(external_id="no-access-move")
+        owner, owner_client, owner_cal_path = _create_user_with_calendar(
+            org, "owner-nam"
+        )
+        stranger, stranger_client, stranger_cal_path = _create_user_with_calendar(
+            org, "stranger-nam"
+        )
+        owner_cal_id = _get_cal_id(owner_cal_path)
+        stranger_cal_id = _get_cal_id(stranger_cal_path)
+
+        _put_event(owner_client, owner.email, owner_cal_id, "stay-put", "Untouchable")
+
+        src_path = f"/caldav/calendars/users/{owner.email}/{owner_cal_id}/stay-put.ics"
+        dest_path = (
+            f"http://example/caldav/calendars/users/{stranger.email}/"
+            f"{stranger_cal_id}/stay-put.ics"
+        )
+        response = stranger_client.generic("MOVE", src_path, HTTP_DESTINATION=dest_path)
+        assert response.status_code in (403, 404, 409), (
+            f"SECURITY: cross-user MOVE should be blocked by SabreDAV ACL, "
+            f"got {response.status_code}"
+        )
+
+        # The event must still be readable by the owner — i.e. the MOVE
+        # must not have unbound the source even partially.
+        get_resp = _get_event(owner_client, owner.email, owner_cal_id, "stay-put")
+        assert get_resp.status_code == 200, (
+            f"Event must remain in owner's calendar after blocked MOVE, "
+            f"got GET status {get_resp.status_code}"
+        )
+
     def test_non_shared_user_cannot_report_events(self):
         """A non-shared user cannot REPORT on another user's calendar."""
         org = factories.OrganizationFactory(external_id="no-access-report")
