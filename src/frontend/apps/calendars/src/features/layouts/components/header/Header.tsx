@@ -7,7 +7,7 @@ import {
 } from "@gouvfr-lasuite/ui-kit";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useAuth } from "@/features/auth/Auth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/router";
 import { fetchAPI } from "@/features/api/fetchApi";
@@ -132,6 +132,19 @@ export const LanguagePickerUserMenu = () => {
   const { i18n } = useTranslation();
   const { user, refreshUser } = useAuth();
   const [selectedLanguage, setSelectedLanguage] = useState(user?.language);
+
+  // Sync the user's backend language into the picker state and into i18next on
+  // load and whenever the user object updates. The backend value is the source
+  // of truth — it's also used server-side for email invitations.
+  useEffect(() => {
+    if (!user?.language) return;
+    setSelectedLanguage(user.language);
+    if (i18n.language !== user.language) {
+      i18n.changeLanguage(user.language).catch((err) => {
+        console.error("Error changing language", err);
+      });
+    }
+  }, [user?.language, i18n]);
 
   // We must set the language to lowercase because django does not use "en-US", but "en-us".
 
