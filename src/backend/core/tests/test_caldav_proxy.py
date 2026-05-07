@@ -1,8 +1,10 @@
 """Tests for CalDAV proxy view."""
 
-# pylint: disable=no-member
+# pylint: disable=no-member,too-many-lines
 
+import base64
 import json
+from unittest import mock
 from xml.etree import ElementTree as ET
 
 from django.conf import settings
@@ -17,7 +19,11 @@ from rest_framework.status import (
 )
 from rest_framework.test import APIClient
 
+from core import enums as core_enums
 from core import factories
+from core import models as core_models
+from core.enums import ChannelScope
+from core.models import uuid_to_urlsafe
 from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy_path
 
 
@@ -427,6 +433,84 @@ class TestCalDAVProxy:
             HTTP_DESTINATION=("http://example/caldav/calendars/%252e%252e/etc/passwd"),
         )
         assert response.status_code == HTTP_400_BAD_REQUEST
+
+    def test_proxy_rejects_move_with_empty_destination(self):
+        """A MOVE whose Destination resolves to the calendar root (no
+        path beyond ``/caldav/``) must be rejected with 400 — the
+        current prefix allowlist treats an empty path as valid (it's
+        used for the root PROPFIND), so without an explicit empty-path
+        check a caller could smuggle a relocation to the upstream root.
+        """
+        user = factories.UserFactory(email="test@example.com")
+        client = APIClient()
+        client.force_login(user)
+
+        source_path = "/caldav/calendars/users/test@example.com/cal-a/event-uid.ics"
+
+        # Destination URL with the proxy prefix but nothing beyond.
+        response = client.generic(
+            "MOVE", source_path, HTTP_DESTINATION="http://example/caldav/"
+        )
+        assert response.status_code == HTTP_400_BAD_REQUEST
+
+        # Destination URL that resolves to the absolute server root.
+        response = client.generic(
+            "MOVE", source_path, HTTP_DESTINATION="http://example/"
+        )
+        assert response.status_code == HTTP_400_BAD_REQUEST
+
+    def test_proxy_rejects_move_destination_outside_channel_scope(self):
+        """When MOVE is allowed for a channel scope, the destination
+        path must be subject to the same scope check as the source.
+        Without this, a CALENDAR-scoped channel could MOVE an event
+        out of its scoped calendar into another calendar of the same
+        user — bypassing the scope.
+
+        MOVE isn't in any production channel scope today, so this test
+        patches it in to exercise the destination-scope code path
+        directly. If a future PR adds MOVE to a real scope, this test
+        keeps the destination check honest.
+        """
+        user = factories.UserFactory(email="test@example.com")
+        channel = factories.ChannelFactory(
+            user=user,
+            type="caldav",
+            scope_level="calendar",
+            caldav_path=f"/calendars/users/{user.email}/cal-a/",
+            settings={"scopes": ["events:read", "events:write"]},
+            is_active=True,
+        )
+        token = channel.encrypted_settings["token"]
+        chan_id = uuid_to_urlsafe(channel.pk)
+        creds = base64.b64encode(f"{user.email}:{chan_id}{token}".encode()).decode()
+
+        client = APIClient()
+        source_path = f"/caldav/calendars/users/{user.email}/cal-a/event.ics"
+        out_of_scope_dest = (
+            f"http://example/caldav/calendars/users/{user.email}/cal-b/event.ics"
+        )
+
+        # Patch MOVE into the EVENTS_WRITE object scope so we reach the
+        # destination check (otherwise we'd 403 at the method gate).
+        # The patch target is `core.models` because that module captured
+        # its own binding to the dict at import time.
+        patched_methods = dict(core_enums.CHANNEL_SCOPE_OBJECT_METHODS)
+        patched_methods[ChannelScope.EVENTS_WRITE] = frozenset(
+            patched_methods[ChannelScope.EVENTS_WRITE] | {"MOVE"}
+        )
+
+        with mock.patch.object(
+            core_models, "CHANNEL_SCOPE_OBJECT_METHODS", patched_methods
+        ):
+            response = client.generic(
+                "MOVE",
+                source_path,
+                HTTP_DESTINATION=out_of_scope_dest,
+                HTTP_AUTHORIZATION=f"Basic {creds}",
+            )
+
+        assert response.status_code == 403
+        assert b"Forbidden destination" in response.content
 
     def test_proxy_rejects_path_traversal(self):
         """Test that proxy rejects paths with directory traversal."""

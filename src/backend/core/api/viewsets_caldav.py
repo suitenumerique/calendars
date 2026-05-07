@@ -331,8 +331,23 @@ class CalDAVProxyView(View):
                 dest_clean_path = dest_path[len("/caldav") :].lstrip("/")
             else:
                 dest_clean_path = dest_path.lstrip("/")
+            # An empty/root destination is meaningless for MOVE on an
+            # event resource and would let callers smuggle a relocation
+            # to the upstream calendar root past the prefix allowlist.
+            if not dest_clean_path:
+                return HttpResponse(status=400, content="Invalid destination")
             if not validate_caldav_proxy_path(dest_clean_path):
                 return HttpResponse(status=400, content="Invalid destination")
+            # Channel scope must contain the destination just like the
+            # source. Without this, a CALENDAR-scoped channel could MOVE
+            # an event out of its scoped calendar into another calendar
+            # of the same user. MOVE isn't in any channel scope today
+            # (it 403s earlier at the method-allowlist gate), but the
+            # check is required the moment that changes.
+            if channel and not self._check_channel_path_access(
+                channel, dest_clean_path
+            ):
+                return HttpResponse(status=403, content="Forbidden destination")
             headers["Destination"] = http.build_url(dest_clean_path)
 
         body = request.body if request.body else None

@@ -1111,11 +1111,24 @@ export class CalDavService {
       const newEventUrl = `${params.targetCalendarUrl}${filename}`
       const sourceEtag = params.sourceEtag ?? cachedSource?.etag
 
-      const response = await fetch(params.sourceEventUrl, {
+      // The source calendar may not be in the cache (stale state, refresh
+      // race, or a source URL whose calendar key doesn't normalize to a
+      // cached entry). Fall back to the target calendar's auth/fetch
+      // settings so credentials are always sent — both calendars belong
+      // to the same CalDAV account, so the headers are interchangeable.
+      const fetchOptions = {
+        ...targetCalendar.fetchOptions,
         ...sourceCalendar?.fetchOptions,
+      }
+      const authHeaders = {
+        ...targetCalendar.headers,
+        ...sourceCalendar?.headers,
+      }
+      const response = await fetch(params.sourceEventUrl, {
+        ...fetchOptions,
         method: 'MOVE',
         headers: {
-          ...sourceCalendar?.headers,
+          ...authHeaders,
           Destination: newEventUrl,
           Overwrite: 'F',
           ...(sourceEtag ? { 'If-Match': sourceEtag } : {}),

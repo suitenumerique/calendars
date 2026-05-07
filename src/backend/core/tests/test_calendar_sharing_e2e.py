@@ -2132,6 +2132,34 @@ class TestFreebusyEnforcement:
             f"got {response.status_code}"
         )
 
+        # Sanity check: if the freebusy block above resolved as 405, that
+        # was the proxy's global COPY-not-allowed gate, not the
+        # freebusy-specific ACL. Prove that by issuing the same COPY as a
+        # non-freebusy READ-WRITE sharee — they should get 405 too,
+        # because the proxy blocks COPY for everyone. This documents that
+        # the freebusy assertion above is currently dominated by
+        # proxy-level blocking; if COPY is ever added to the proxy
+        # allowlist, both branches will need to reflect Sabre-side
+        # enforcement instead.
+        rw_sharee, _, _ = _create_user_with_calendar(org, "rw-sharee-fbcp")
+        rw_sharee_client = APIClient()
+        rw_sharee_client.force_login(rw_sharee)
+        _share_calendar_via_caldav(
+            owner_client, owner, cal_id, rw_sharee.email, "read-write"
+        )
+        rw_response = rw_sharee_client.generic(
+            "COPY",
+            f"/caldav/{src_path}",
+            HTTP_DESTINATION=dest_path,
+        )
+        assert rw_response.status_code == 405, (
+            "Expected proxy-level 405 on COPY for a non-freebusy "
+            "read-write sharee (the proxy blocks COPY for everyone). "
+            f"Got {rw_response.status_code}; if Sabre rejected this "
+            "instead, COPY may have been added to the proxy allowlist "
+            "and the freebusy assertion above must be re-tightened."
+        )
+
 
 # ===================================================================
 # MailboxShareRestrictionPlugin (moved from test_plugins_e2e)
