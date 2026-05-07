@@ -796,6 +796,7 @@ def validate_caldav_proxy_path(path):
     Prevents path traversal attacks by rejecting paths with:
     - Directory traversal sequences (../)
     - Null bytes
+    - ASCII control characters (CR, LF, tab, etc.)
     - Paths that don't start with expected prefixes
 
     URL-decodes the path first so that encoded payloads like
@@ -819,8 +820,14 @@ def validate_caldav_proxy_path(path):
         # something hostile.
         return False
 
-    # Block directory traversal and null bytes
-    if ".." in path or "\x00" in path:
+    # Block directory traversal, null bytes, and ASCII control bytes
+    # (CR/LF/tab/etc.). Header forwarding downstream catches CRLF on its
+    # own (urllib3 raises InvalidHeader), but this function is the
+    # documented gate — relying on a downstream library to refuse what we
+    # claim to validate ourselves is the wrong shape. Cheap rejection
+    # here also keeps log lines from carrying injected newlines if a
+    # malformed path ever reaches the debug logger before forwarding.
+    if ".." in path or any(0 <= ord(c) < 0x20 or ord(c) == 0x7F for c in path):
         return False
 
     clean = path.lstrip("/")

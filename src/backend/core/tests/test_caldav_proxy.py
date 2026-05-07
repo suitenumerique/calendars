@@ -875,6 +875,31 @@ class TestValidateCaldavProxyPath:
             validate_caldav_proxy_path("calendars/%25252e%25252e/etc/passwd") is False
         )
 
+    @pytest.mark.parametrize(
+        "raw,description",
+        [
+            ("calendars/users/me/cal/\rfoo.ics", "CR"),
+            ("calendars/users/me/cal/\nfoo.ics", "LF"),
+            ("calendars/users/me/cal/\r\nX-Header: pwn", "CRLF header injection"),
+            ("calendars/users/me/cal/\tfoo.ics", "tab"),
+            ("calendars/users/me/cal/foo\x7f.ics", "DEL (0x7F)"),
+            ("calendars/users/me/cal/foo\x01.ics", "SOH (0x01)"),
+            ("calendars/users/me/cal/foo%0A.ics", "URL-encoded LF"),
+            ("calendars/users/me/cal/foo%0d.ics", "URL-encoded CR (lowercase)"),
+        ],
+    )
+    def test_control_characters_are_rejected(self, raw, description):
+        """ASCII control bytes (CR/LF/tab/DEL/etc., raw or %-encoded) are
+        rejected by the validator itself rather than relying on
+        downstream libraries (urllib3 raises on CRLF in headers, but the
+        validator is the documented gate). Also defends the debug logger
+        against newline-injected log lines if a malformed path ever
+        reached it before forwarding.
+        """
+        assert validate_caldav_proxy_path(raw) is False, (
+            f"Expected control char ({description}) to be rejected"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Internal API test helpers

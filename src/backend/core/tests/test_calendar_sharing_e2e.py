@@ -1554,14 +1554,19 @@ class TestNoAccessSharing:
     def test_non_shared_user_cannot_move_events(self):
         """A non-shared user cannot MOVE events out of another user's calendar.
 
-        The proxy delegates cross-user write enforcement on MOVE to
-        SabreDAV ACL (no proxy-side scope check for OIDC users on
-        either source or destination, mirroring how PUT/DELETE work).
-        This test pins down that delegation: a stranger trying to
-        MOVE an event from the owner's calendar into their own
-        calendar must be rejected, and the event must remain in the
-        owner's calendar afterwards. If a future SabreDAV plugin
-        change opens this up, this test catches it.
+        The proxy is a dumb forwarder for OIDC users: no proxy-side
+        principal/path scope enforcement (mirroring PUT/DELETE).
+        SabreDAV's stock ACL is what blocks this — a stranger has no
+        ``unbind`` privilege on another user's calendar by default —
+        and this test pins that contract.
+
+        MOVE is two-resource, so the test asserts three independent
+        things: the request was rejected, the source event survives in
+        the owner's calendar, and the destination resource was not
+        created in the stranger's calendar. The third assertion guards
+        against partial-success regressions (a future plugin that
+        binds before checking unbind, or that mirrors instead of
+        moves) — those would pass a status-code-only test.
         """
         org = factories.OrganizationFactory(external_id="no-access-move")
         owner, owner_client, owner_cal_path = _create_user_with_calendar(
@@ -1581,17 +1586,28 @@ class TestNoAccessSharing:
             f"{stranger_cal_id}/stay-put.ics"
         )
         response = stranger_client.generic("MOVE", src_path, HTTP_DESTINATION=dest_path)
-        assert response.status_code in (403, 404, 409), (
+        assert response.status_code in (403, 404), (
             f"SECURITY: cross-user MOVE should be blocked by SabreDAV ACL, "
             f"got {response.status_code}"
         )
 
-        # The event must still be readable by the owner — i.e. the MOVE
-        # must not have unbound the source even partially.
-        get_resp = _get_event(owner_client, owner.email, owner_cal_id, "stay-put")
-        assert get_resp.status_code == 200, (
+        # Source: still in the owner's calendar (not unbound).
+        get_src = _get_event(owner_client, owner.email, owner_cal_id, "stay-put")
+        assert get_src.status_code == 200, (
             f"Event must remain in owner's calendar after blocked MOVE, "
-            f"got GET status {get_resp.status_code}"
+            f"got GET status {get_src.status_code}"
+        )
+
+        # Destination: not created in the stranger's calendar (no
+        # partial bind). Use the stranger's own client so a 404 here is
+        # genuine absence, not an ACL refusal.
+        get_dst = _get_event(
+            stranger_client, stranger.email, stranger_cal_id, "stay-put"
+        )
+        assert get_dst.status_code == 404, (
+            f"SECURITY: blocked MOVE must not have created the destination "
+            f"resource in the stranger's calendar, got GET status "
+            f"{get_dst.status_code}"
         )
 
     def test_non_shared_user_cannot_report_events(self):

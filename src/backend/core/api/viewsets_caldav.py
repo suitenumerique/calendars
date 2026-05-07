@@ -272,12 +272,18 @@ class CalDAVProxyView(View):
                     content="Method not allowed for channel scopes",
                 )
 
-        # Calendar lifecycle (create/rename/delete) is gated by the same
-        # entitlement. Object-level DELETE/MOVE (events, ending in .ics)
-        # is unrestricted; only operations on a calendar collection (path
-        # ending /) need the gate. MOVE on a collection is the rename
-        # path — symmetric with MKCALENDAR + DELETE so we don't trust
-        # SabreDAV alone to gate it.
+        # Calendar lifecycle is gated by the entitlement. Object-level
+        # DELETE/MOVE (events, ending in .ics) is unrestricted — losing
+        # an entitlement must never strand a user with events they can't
+        # remove or reorganize. Collection DELETE is the canonical
+        # destructive lifecycle op and gets the gate.
+        #
+        # Collection MOVE is included defensively even though SabreDAV
+        # doesn't currently support it (calendar rename is done via
+        # PROPPATCH on displayname, not MOVE). If a future plugin or
+        # SabreDAV release ever made collection MOVE work, it would be a
+        # destructive lifecycle op too — gating it here means we don't
+        # have to remember to add the gate at that point.
         is_collection_delete = request.method == "DELETE" and is_collection
         is_collection_move = request.method == "MOVE" and is_collection
         if (
