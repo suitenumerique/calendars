@@ -2138,7 +2138,7 @@ class TestFreebusyEnforcement:
             except Exception:  # noqa: BLE001
                 continue
 
-    def test_freebusy_sharee_cannot_copy_event(self):
+    def test_freebusy_sharee_cannot_copy_event(self):  # pylint: disable=too-many-locals
         """Freebusy sharee MUST NOT be able to COPY events to their own calendar."""
         org = factories.OrganizationFactory(external_id="fb-copy-block")
         owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-fbcp")
@@ -2200,16 +2200,28 @@ class TestFreebusyEnforcement:
         # proxy-level blocking; if COPY is ever added to the proxy
         # allowlist, both branches will need to reflect Sabre-side
         # enforcement instead.
-        rw_sharee, _, _ = _create_user_with_calendar(org, "rw-sharee-fbcp")
+        rw_sharee, _, rw_sharee_cal_path = _create_user_with_calendar(
+            org, "rw-sharee-fbcp"
+        )
+        rw_sharee_cal_id = _get_cal_id(rw_sharee_cal_path)
         rw_sharee_client = APIClient()
         rw_sharee_client.force_login(rw_sharee)
         _share_calendar_via_caldav(
             owner_client, owner, cal_id, rw_sharee.email, "read-write"
         )
+        # Destination must be the rw_sharee's own calendar — using the
+        # freebusy sharee's path would mix in unrelated cross-user ACL
+        # effects and muddle the signal the moment COPY is added to the
+        # proxy allowlist (which is precisely what this sanity check
+        # exists to catch).
+        dest_path_rw = (
+            f"/caldav/calendars/users/{rw_sharee.email}/"
+            f"{rw_sharee_cal_id}/copied-event.ics"
+        )
         rw_response = rw_sharee_client.generic(
             "COPY",
             f"/caldav/{src_path}",
-            HTTP_DESTINATION=dest_path,
+            HTTP_DESTINATION=dest_path_rw,
         )
         assert rw_response.status_code == 405, (
             "Expected proxy-level 405 on COPY for a non-freebusy "
