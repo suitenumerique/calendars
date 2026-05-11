@@ -1414,6 +1414,20 @@ class TestCalDAVLibraryCompat:
         assert response.status_code == 401
         assert response["WWW-Authenticate"] == 'Basic realm="CalDAV"'  # pylint: disable=unsubscriptable-object
 
+    def test_401_omits_www_authenticate_for_web_client(self):
+        """When the web frontend sends X-LS-Client: web, the 401 must
+        NOT carry the Basic challenge — otherwise the browser shows its
+        native popup on session expiry. The frontend handles 401 itself
+        by redirecting to login."""
+        client = APIClient()
+        response = client.generic(
+            "PROPFIND",
+            "/caldav/calendars/",
+            HTTP_X_LS_CLIENT="web",
+        )
+        assert response.status_code == 401
+        assert "WWW-Authenticate" not in response
+
 
 class TestChannelCrossOrgResourceAccess:
     """Channel tokens for cross-org resource calendars should not work."""

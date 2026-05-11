@@ -40,6 +40,11 @@ export type CalDavCredentials = {
   password?: string
   headers?: Record<string, string>
   fetchOptions?: RequestInit
+  // When provided, principal/home URLs are derived from the SabreDAV URL
+  // pattern (principals/users/<email>, calendars/users/<email>) instead of
+  // running tsdav's discovery roundtrip. Saves three HTTP requests on
+  // every page load.
+  userEmail?: string
 }
 
 export type CalDavAccount = {

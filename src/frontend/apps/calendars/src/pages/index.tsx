@@ -65,7 +65,6 @@ function AuthenticatedView() {
               name="viewport"
               content="width=device-width, initial-scale=1"
             />
-            <link rel="icon" href="/favicon.png" />
           </Head>
           <div className="calendar-page">
             <div className="calendar-page__main">
@@ -99,7 +98,6 @@ function AnonymousView() {
             name="viewport"
             content="width=device-width, initial-scale=1"
           />
-          <link rel="icon" href="/favicon.png" />
         </Head>
         <HomePage />
         <Toaster />

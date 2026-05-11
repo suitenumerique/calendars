@@ -88,6 +88,25 @@ export class CalDavService {
 
   async connect(credentials: CalDavCredentials): Promise<CalDavResponse<CalDavAccount>> {
     return withErrorHandling(async () => {
+      // Fast path: skip tsdav discovery (.well-known redirect + two PROPFINDs)
+      // when we know the user's email. SabreDAV exposes principals and
+      // calendar homes at fixed paths (see src/caldav/server.php).
+      if (credentials.userEmail) {
+        const serverUrl = credentials.serverUrl.endsWith('/')
+          ? credentials.serverUrl
+          : `${credentials.serverUrl}/`
+        const encodedEmail = encodeURIComponent(credentials.userEmail)
+        this._account = {
+          serverUrl,
+          rootUrl: serverUrl,
+          principalUrl: `${serverUrl}principals/users/${encodedEmail}/`,
+          homeUrl: `${serverUrl}calendars/users/${encodedEmail}/`,
+          headers: credentials.headers,
+          fetchOptions: credentials.fetchOptions,
+        }
+        return this._account
+      }
+
       const account = await createAccount({
         account: {
           serverUrl: credentials.serverUrl,

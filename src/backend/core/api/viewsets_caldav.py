@@ -235,7 +235,7 @@ class CalDAVProxyView(View):
             )
             response["Access-Control-Allow-Headers"] = (
                 "Content-Type, depth, authorization, if-match, if-none-match,"
-                " prefer, destination, overwrite"
+                " prefer, destination, overwrite, x-ls-client"
             )
             return response
 
@@ -254,7 +254,14 @@ class CalDAVProxyView(View):
             channel, email = self._authenticate_basic_auth(request)
             if not channel:
                 resp = HttpResponse(status=401)
-                resp["WWW-Authenticate"] = 'Basic realm="CalDAV"'
+                # Browser requests carry X-LS-Client: web. Omit the Basic
+                # challenge for them so the native browser popup doesn't
+                # appear when a session expires — the frontend detects the
+                # 401 and redirects to login. CalDAV clients (Thunderbird,
+                # Apple Calendar, DAVx⁵…) don't send this header, so they
+                # still get the standard challenge and complete auth.
+                if request.headers.get("X-LS-Client") != "web":
+                    resp["WWW-Authenticate"] = 'Basic realm="CalDAV"'
                 return resp
             effective_user, err = self._resolve_channel_user(channel, email)
             if err:

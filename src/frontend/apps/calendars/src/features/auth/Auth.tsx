@@ -36,7 +36,11 @@ export const Auth = ({
 
   const init = async () => {
     try {
-      const response = await fetchAPI(`users/me/`);
+      // skipAuthRedirect: this boot probe runs on public pages too, where a
+      // 401 is the expected anonymous case — we don't want fetchAPI's
+      // default redirect there. The explicit branches below pick the right
+      // behavior based on `redirect`.
+      const response = await fetchAPI(`users/me/`, { skipAuthRedirect: true });
       const data = (await response.json()) as User;
       setUser(data);
       return data;

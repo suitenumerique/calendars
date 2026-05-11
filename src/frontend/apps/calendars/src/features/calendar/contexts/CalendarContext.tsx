@@ -22,6 +22,7 @@ import {
   addToast,
   ToasterItem,
 } from "@/features/ui/components/toaster/Toaster";
+import { useAuth } from "@/features/auth/Auth";
 
 const HIDDEN_CALENDARS_KEY = "calendar-hidden-urls";
 
@@ -104,6 +105,8 @@ export const CalendarContextProvider = ({
   children,
 }: CalendarContextProviderProps) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const userEmail = user?.email;
   const calendarRef = useRef<CalendarApi | null>(null);
   const caldavService = useMemo(() => new CalDavService(), []);
   const adapter = useMemo(() => new EventCalendarAdapter(), []);
@@ -313,6 +316,7 @@ export const CalendarContextProvider = ({
 
   // Connect to CalDAV server on mount
   useEffect(() => {
+    if (!userEmail) return;
     let isMounted = true;
 
     const connect = async () => {
@@ -321,6 +325,7 @@ export const CalendarContextProvider = ({
           serverUrl: caldavServerUrl,
           headers,
           fetchOptions,
+          userEmail,
         });
         if (isMounted && result.success) {
           setIsConnected(true);
@@ -368,7 +373,7 @@ export const CalendarContextProvider = ({
     };
     // Note: refreshCalendars is excluded to avoid dependency cycle
     // The initial fetch is done inline in this effect
-  }, [caldavService]);
+  }, [caldavService, userEmail]);
 
   const value: CalendarContextType = {
     calendarRef,

@@ -495,6 +495,7 @@ class Base(Configuration):
         "prefer",
         "destination",  # WebDAV MOVE target URL
         "overwrite",  # WebDAV MOVE overwrite flag
+        "x-ls-client",  # Marks browser-issued requests (suppresses Basic challenge on 401)
     ]
 
     # Sentry

@@ -33,7 +33,13 @@ export type fetchAPIOptions = Record<string, never>;
 
 export const fetchAPI = async (
   input: string,
-  init?: RequestInit & { params?: Record<string, string | number> },
+  init?: RequestInit & {
+    params?: Record<string, string | number>;
+    // Opt out of the default 401 → login redirect. Used by Auth.tsx's boot
+    // probe so anonymous pages (homepage, error pages) don't redirect when
+    // the user has no session.
+    skipAuthRedirect?: boolean;
+  },
 ) => {
   const apiUrl = new URL(`${baseApiUrl("1.0")}${input}`);
   if (init?.params) {
@@ -56,6 +62,10 @@ export const fetchAPI = async (
 
   if (response.ok) {
     return response;
+  }
+
+  if (response.status === 401 && !init?.skipAuthRedirect) {
+    redirectToLogin();
   }
 
   const data = await response.text();
