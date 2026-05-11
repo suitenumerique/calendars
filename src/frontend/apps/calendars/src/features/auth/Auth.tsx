@@ -1,4 +1,9 @@
-import React, { PropsWithChildren, useEffect, useState } from "react";
+import React, {
+  PropsWithChildren,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import { fetchAPI } from "@/features/api/fetchApi";
 import { User } from "@/features/auth/types";
@@ -34,7 +39,7 @@ export const Auth = ({
 }: PropsWithChildren & { redirect?: boolean }) => {
   const [user, setUser] = useState<User | null>();
 
-  const init = async () => {
+  const init = useCallback(async () => {
     try {
       // skipAuthRedirect: this boot probe runs on public pages too, where a
       // 401 is the expected anonymous case — we don't want fetchAPI's
@@ -52,7 +57,7 @@ export const Auth = ({
       }
       return null;
     }
-  };
+  }, [redirect]);
 
   const refreshUser = async () => {
     void init();
@@ -62,7 +67,7 @@ export const Auth = ({
 
   useEffect(() => {
     void init();
-  }, []);
+  }, [init]);
 
   useEffect(() => {
     if (shouldRedirectNoAccess) {
