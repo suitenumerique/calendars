@@ -59,6 +59,12 @@ export type CalendarProps = {
   displayName?: string
   description?: string
   color?: string
+  /**
+   * `{http://apple.com/ns/ical/}calendar-order`. Integer used to manually
+   * sort calendars in the sidebar; stored as a dead property by Sabre's
+   * PropertyStorage.
+   */
+  order?: number
   components?: string[]
   /** schedule-calendar-transp: 'opaque' (counts as busy) or 'transparent' */
   scheduleTransp?: 'opaque' | 'transparent'
@@ -76,6 +82,9 @@ export function buildCalendarPropsXml(props: CalendarProps): string[] {
   }
   if (props.color !== undefined && props.color !== null && typeof props.color === 'string') {
     elements.push(xmlProp('A', 'calendar-color', props.color))
+  }
+  if (props.order !== undefined && props.order !== null && typeof props.order === 'number') {
+    elements.push(xmlProp('A', 'calendar-order', String(props.order)))
   }
   if (props.components && props.components.length > 0) {
     const comps = props.components.map((c) => `<C:comp name="${escapeXml(c)}"/>`).join('')
@@ -394,6 +403,7 @@ export const CALENDAR_PROPS = {
   [`${DAVNamespaceShort.CALDAV}:calendar-timezone`]: {},
   [`${DAVNamespaceShort.DAV}:displayname`]: {},
   [`${DAVNamespaceShort.CALDAV_APPLE}:calendar-color`]: {},
+  [`${DAVNamespaceShort.CALDAV_APPLE}:calendar-order`]: {},
   [`${DAVNamespaceShort.CALENDAR_SERVER}:getctag`]: {},
   [`${DAVNamespaceShort.DAV}:resourcetype`]: {},
   [`${DAVNamespaceShort.CALDAV}:supported-calendar-component-set`]: {},

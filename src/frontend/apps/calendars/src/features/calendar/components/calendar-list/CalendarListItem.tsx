@@ -24,6 +24,9 @@ export const CalendarListItem = ({
   onShare,
   onImport,
   onSubscription,
+  onMove,
+  canMoveUp,
+  canMoveDown,
   onCloseMenu,
 }: CalendarListItemProps) => {
   const { t } = useTranslation();
@@ -81,6 +84,10 @@ export const CalendarListItem = ({
           onSubscription={
             onSubscription ? () => onSubscription(calendar) : undefined
           }
+          onMoveUp={onMove ? () => onMove(calendar, "up") : undefined}
+          onMoveDown={onMove ? () => onMove(calendar, "down") : undefined}
+          canMoveUp={canMoveUp}
+          canMoveDown={canMoveDown}
         />
       </div>
     </div>

@@ -99,6 +99,28 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
     .c__feedback__button {
       display: none;
     }
+
+    // Pull the hamburger (and the empty right slot, whose children are
+    // hidden on mobile elsewhere) out of flex flow so the logo sits at
+    // the geometric centre of the viewport. The ui-kit's default header
+    // uses justify-content: space-between, which on mobile centres the
+    // logo between the hamburger and the right slot — visibly offset to
+    // the right because the right slot has no content.
+    position: relative;
+    justify-content: center;
+
+    .c__header__toggle-menu,
+    .c__header__right {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    .c__header__toggle-menu {
+      left: 16px;
+    }
+    .c__header__right {
+      right: 16px;
+    }
   }
 }
 

@@ -37,6 +37,11 @@ export const SchedulerToolbar = ({
         callback: () => handleViewChange("timeGridDay"),
       },
       {
+        value: "timeGridWorkWeek",
+        label: t("calendar.views.workWeek"),
+        callback: () => handleViewChange("timeGridWorkWeek"),
+      },
+      {
         value: "timeGridWeek",
         label: t("calendar.views.week"),
         callback: () => handleViewChange("timeGridWeek"),

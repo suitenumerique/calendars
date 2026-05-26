@@ -129,6 +129,7 @@
         },
         "views": {
           "day": "Day",
+          "workWeek": "Work week",
           "week": "Week",
           "month": "Month",
           "listDay": "Day list",
@@ -138,7 +139,8 @@
           "today": "Today",
           "mobile": {
             "oneDay": "One day",
-            "twoDays": "Two days",
+            "workWeek": "Work week",
+            "week": "Week",
             "list": "List",
             "noEvents": "No events"
           }
@@ -237,6 +239,8 @@
           "share": "Share",
           "import": "Import events",
           "subscription": "Subscription URL",
+          "moveUp": "Move up",
+          "moveDown": "Move down",
           "options": "Options"
         },
         "importEvents": {
@@ -1049,6 +1053,7 @@
         },
         "views": {
           "day": "Jour",
+          "workWeek": "Semaine ouvrée",
           "week": "Semaine",
           "month": "Mois",
           "listDay": "Liste jour",
@@ -1058,7 +1063,8 @@
           "today": "Aujourd'hui",
           "mobile": {
             "oneDay": "Un jour",
-            "twoDays": "2 jours",
+            "workWeek": "Semaine ouvrée",
+            "week": "Semaine",
             "list": "Liste",
             "noEvents": "Aucun événement"
           }
@@ -1157,6 +1163,8 @@
           "share": "Partager",
           "import": "Importer des événements",
           "subscription": "URL d'abonnement",
+          "moveUp": "Déplacer vers le haut",
+          "moveDown": "Déplacer vers le bas",
           "options": "Options"
         },
         "importEvents": {
@@ -1711,6 +1719,7 @@
         },
         "views": {
           "day": "Dag",
+          "workWeek": "Werkweek",
           "week": "Week",
           "month": "Maand",
           "listDay": "Dag lijst",
@@ -1720,7 +1729,8 @@
           "today": "Vandaag",
           "mobile": {
             "oneDay": "Een dag",
-            "twoDays": "Twee dagen",
+            "workWeek": "Werkweek",
+            "week": "Week",
             "list": "Lijst",
             "noEvents": "Geen evenementen"
           }
@@ -1819,6 +1829,8 @@
           "share": "Delen",
           "import": "Evenementen importeren",
           "subscription": "Abonnements-URL",
+          "moveUp": "Omhoog verplaatsen",
+          "moveDown": "Omlaag verplaatsen",
           "options": "Opties"
         },
         "importEvents": {

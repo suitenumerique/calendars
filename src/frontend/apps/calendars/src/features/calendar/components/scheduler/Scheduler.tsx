@@ -331,8 +331,17 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     [adapter, calendarUrl, calendarRef],
   );
 
+  // Mobile multi-day views use the library's native per-column headers
+  // (aligned with each day column, like desktop). The WeekDayBar — which
+  // shows a 7-day strip with the visible window highlighted — is kept for
+  // the single-day grid (where it doubles as a day picker) and for the
+  // list view (where it anchors the current day).
+  const showWeekDayBar =
+    isMobile &&
+    (currentView === "timeGridDay" || currentView === "listWeek");
+
   return (
-    <div className="scheduler">
+    <div className="scheduler" data-view={currentView}>
       {isMobile ? (
         <>
           <MobileToolbar
@@ -344,13 +353,15 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
             onWeekNext={handleWeekNext}
             onTodayClick={handleTodayClick}
           />
-          <WeekDayBar
-            currentDate={currentDate}
-            currentView={currentView}
-            intlLocale={intlLocale}
-            weekDays={weekDays}
-            onDayClick={handleDayClick}
-          />
+          {showWeekDayBar && (
+            <WeekDayBar
+              currentDate={currentDate}
+              currentView={currentView}
+              intlLocale={intlLocale}
+              weekDays={weekDays}
+              onDayClick={handleDayClick}
+            />
+          )}
         </>
       ) : (
         <SchedulerToolbar

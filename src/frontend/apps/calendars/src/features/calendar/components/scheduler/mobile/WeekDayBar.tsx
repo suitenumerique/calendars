@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { WeekDayBarProps } from "../types";
-import { isSameDay, isWeekend, addDays } from "@/utils/date";
+import { isSameDay, isWeekend } from "@/utils/date";
 
 export const WeekDayBar = ({
   currentDate,
@@ -16,13 +16,10 @@ export const WeekDayBar = ({
     [intlLocale],
   );
 
-  const isTwoDays = currentView === "timeGridTwoDays";
-
+  // The WeekDayBar is only rendered for `timeGridDay` (where it doubles
+  // as a day picker) and `listWeek` (where it anchors today). Other
+  // mobile views use the library's native column headers instead.
   const isSelected = (date: Date): boolean => {
-    if (isTwoDays) {
-      const nextDay = addDays(currentDate, 1);
-      return isSameDay(date, currentDate) || isSameDay(date, nextDay);
-    }
     if (currentView === "timeGridDay") {
       return isSameDay(date, currentDate);
     }

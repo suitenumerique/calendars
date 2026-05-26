@@ -30,6 +30,7 @@ export const CalendarList = () => {
     createCalendar,
     updateCalendar,
     deleteCalendar,
+    moveCalendar,
     refreshCalendars,
     calendarRef,
     isLoading: isCalendarLoading,
@@ -129,6 +130,13 @@ export const CalendarList = () => {
     }
   }, [calendarRef]);
 
+  const handleMove = useCallback(
+    (calendar: CalDavCalendar, direction: "up" | "down") => {
+      void moveCalendar(calendar.url, direction);
+    },
+    [moveCalendar],
+  );
+
   return (
     <>
       <div className="calendar-list">
@@ -162,7 +170,7 @@ export const CalendarList = () => {
           </div>
           {isMyCalendarsExpanded && (
             <div className="calendar-list__items">
-              {ownedCalendars.map((calendar) => (
+              {ownedCalendars.map((calendar, idx) => (
                 <CalendarListItem
                   key={calendar.url}
                   calendar={calendar}
@@ -176,6 +184,9 @@ export const CalendarList = () => {
                   onShare={handleOpenShareModal}
                   onImport={handleOpenImportModal}
                   onSubscription={handleOpenSubscriptionModal}
+                  onMove={handleMove}
+                  canMoveUp={idx > 0}
+                  canMoveDown={idx < ownedCalendars.length - 1}
                   onCloseMenu={handleCloseMenu}
                 />
               ))}
@@ -207,7 +218,7 @@ export const CalendarList = () => {
             </div>
             {isSharedCalendarsExpanded && (
               <div className="calendar-list__items">
-                {sharedCalendars.map((calendar) => (
+                {sharedCalendars.map((calendar, idx) => (
                   <CalendarListItem
                     key={calendar.url}
                     calendar={calendar}
@@ -220,6 +231,9 @@ export const CalendarList = () => {
                     onDelete={handleOpenDeleteModal}
                     onImport={handleOpenImportModal}
                     onSubscription={handleOpenSubscriptionModal}
+                    onMove={handleMove}
+                    canMoveUp={idx > 0}
+                    canMoveDown={idx < sharedCalendars.length - 1}
                     onCloseMenu={handleCloseMenu}
                   />
                 ))}

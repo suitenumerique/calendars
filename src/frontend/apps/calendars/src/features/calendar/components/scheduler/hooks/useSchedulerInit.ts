@@ -112,9 +112,15 @@ export const useSchedulerInit = ({
 
         // Custom views
         views: {
-          timeGridTwoDays: {
-            type: "timeGridDay",
-            duration: { days: 2 },
+          // Mon-Fri view: a normal week-grid with Sat/Sun hidden.
+          // Using hiddenDays (rather than duration: { days: 5 }) gives a
+          // week-aligned window — `next` always jumps a full week — and
+          // keeps the Monday start regardless of the user's locale's
+          // firstDay setting.
+          timeGridWorkWeek: {
+            type: "timeGridWeek",
+            hiddenDays: [0, 6],
+            firstDay: 1,
           },
         },
 

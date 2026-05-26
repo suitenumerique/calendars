@@ -1,0 +1,18 @@
+{% extends "admin/change_form.html" %}
+
+{% block object-tools-items %}
+  {% if original.pk %}
+    <li>
+      <form action="{% url 'admin:core_channel_rotate_token' original.pk %}"
+            method="post"
+            style="display:inline;"
+            onsubmit="return confirm('Rotate the token for this channel? The current token will be invalidated immediately.');">
+        {% csrf_token %}
+        <button type="submit" class="historylink" style="cursor:pointer;border:0;">
+          Rotate token
+        </button>
+      </form>
+    </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

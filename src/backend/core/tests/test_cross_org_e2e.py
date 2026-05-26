@@ -2206,6 +2206,82 @@ class TestCalDAVProtocolSecurity:
         )
         assert "#e74c3c" in check.content.decode("utf-8", errors="ignore")
 
+    def test_proppatch_calendar_order_own_calendar(self):
+        """Owner can PROPPATCH ``{http://apple.com/ns/ical/}calendar-order``.
+
+        We rely on this property to persist the user's manual sidebar
+        ordering; the frontend writes it via PROPPATCH and reads it back
+        via PROPFIND. Sabre's PropertyStorage plugin handles it as a dead
+        property (no schema change), so this test guards against
+        regressions if that plugin is ever reordered or removed.
+        """
+        org = factories.OrganizationFactory(external_id="proto-order")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-order")
+        cal_id = _get_cal_id(cal_path)
+        cal_url = f"/caldav/calendars/users/{owner.email}/{cal_id}/"
+
+        resp = _proppatch(
+            owner_client,
+            cal_url,
+            "<A:calendar-order>42</A:calendar-order>",
+        )
+        assert resp.status_code == 207
+
+        check = owner_client.generic(
+            "PROPFIND",
+            cal_url,
+            data=(
+                '<?xml version="1.0"?>'
+                '<propfind xmlns="DAV:" xmlns:A="http://apple.com/ns/ical/">'
+                "<prop><A:calendar-order/></prop>"
+                "</propfind>"
+            ),
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        body = check.content.decode("utf-8", errors="ignore")
+        assert "calendar-order" in body
+        assert ">42<" in body
+
+    def test_proppatch_calendar_order_overwrites(self):
+        """Subsequent PROPPATCHes of calendar-order overwrite the prior value.
+
+        The move handler in the frontend rewrites the order of every
+        affected sibling on each reorder, so each calendar may receive
+        multiple PROPPATCHes in a short window. The latest value must win.
+        """
+        org = factories.OrganizationFactory(external_id="proto-order-up")
+        owner, owner_client, cal_path = _create_user_with_calendar(
+            org, "owner-order-up"
+        )
+        cal_id = _get_cal_id(cal_path)
+        cal_url = f"/caldav/calendars/users/{owner.email}/{cal_id}/"
+
+        for value in ("100", "200", "300"):
+            resp = _proppatch(
+                owner_client,
+                cal_url,
+                f"<A:calendar-order>{value}</A:calendar-order>",
+            )
+            assert resp.status_code == 207
+
+        check = owner_client.generic(
+            "PROPFIND",
+            cal_url,
+            data=(
+                '<?xml version="1.0"?>'
+                '<propfind xmlns="DAV:" xmlns:A="http://apple.com/ns/ical/">'
+                "<prop><A:calendar-order/></prop>"
+                "</propfind>"
+            ),
+            content_type="application/xml",
+            HTTP_DEPTH="0",
+        )
+        body = check.content.decode("utf-8", errors="ignore")
+        assert ">300<" in body
+        assert ">100<" not in body
+        assert ">200<" not in body
+
 
 # ===================================================================
 # ResourceAutoSchedulePlugin

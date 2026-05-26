@@ -45,9 +45,14 @@ export const MobileToolbar = ({
         callback: () => handleViewChange("timeGridDay"),
       },
       {
-        value: "timeGridTwoDays",
-        label: t("calendar.views.mobile.twoDays"),
-        callback: () => handleViewChange("timeGridTwoDays"),
+        value: "timeGridWorkWeek",
+        label: t("calendar.views.mobile.workWeek"),
+        callback: () => handleViewChange("timeGridWorkWeek"),
+      },
+      {
+        value: "timeGridWeek",
+        label: t("calendar.views.mobile.week"),
+        callback: () => handleViewChange("timeGridWeek"),
       },
       {
         value: "listWeek",

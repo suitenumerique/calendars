@@ -65,6 +65,12 @@ export type CalDavCalendar = Pick<DAVCalendar, 'url' | 'ctag' | 'syncToken' | 'c
   displayName: string
   description?: string
   color?: string
+  /**
+   * `{http://apple.com/ns/ical/}calendar-order`. Integer used to manually
+   * sort calendars in the sidebar. Undefined when the calendar has never
+   * been reordered.
+   */
+  order?: number
   /** Whether this calendar's events count toward freebusy (default: true) */
   includeInAvailability: boolean
   /** Owner principal type: "MAILBOX" for mailbox calendars, undefined otherwise */
@@ -102,6 +108,8 @@ export type CalDavCalendarUpdate = {
   timezone?: string
   /** Toggle whether this calendar counts toward freebusy/availability */
   includeInAvailability?: boolean
+  /** `calendar-order` for manual sidebar ordering. */
+  order?: number
 }
 
 // ============================================================================

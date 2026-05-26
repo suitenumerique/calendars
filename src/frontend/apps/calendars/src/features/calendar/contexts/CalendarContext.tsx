@@ -80,6 +80,10 @@ export interface CalendarContextType {
     email: string,
     privilege?: SharePrivilege,
   ) => Promise<{ success: boolean; error?: string }>;
+  moveCalendar: (
+    calendarUrl: string,
+    direction: "up" | "down",
+  ) => Promise<{ success: boolean; error?: string }>;
   goToDate: (date: Date) => void;
 }
 
@@ -123,8 +127,19 @@ export const CalendarContextProvider = ({
 
   const { ownedCalendars, sharedCalendars } = useMemo(() => {
     const homeUrl = caldavService.getAccount()?.homeUrl;
+    // Sort by `calendar-order` ascending (missing = end), tie-broken by
+    // displayName so the order is stable for never-reordered calendars.
+    const byOrder = (a: CalDavCalendar, b: CalDavCalendar) => {
+      const ao = a.order ?? Number.POSITIVE_INFINITY;
+      const bo = b.order ?? Number.POSITIVE_INFINITY;
+      if (ao !== bo) return ao - bo;
+      return a.displayName.localeCompare(b.displayName);
+    };
     if (!homeUrl) {
-      return { ownedCalendars: davCalendars, sharedCalendars: [] };
+      return {
+        ownedCalendars: [...davCalendars].sort(byOrder),
+        sharedCalendars: [],
+      };
     }
     const owned: CalDavCalendar[] = [];
     const shared: CalDavCalendar[] = [];
@@ -135,6 +150,8 @@ export const CalendarContextProvider = ({
         shared.push(cal);
       }
     }
+    owned.sort(byOrder);
+    shared.sort(byOrder);
     return { ownedCalendars: owned, sharedCalendars: shared };
   }, [davCalendars, caldavService]);
 
@@ -306,6 +323,57 @@ export const CalendarContextProvider = ({
     [caldavService],
   );
 
+  const moveCalendar = useCallback(
+    async (
+      calendarUrl: string,
+      direction: "up" | "down",
+    ): Promise<{ success: boolean; error?: string }> => {
+      // Pick the bucket the calendar lives in (owned vs shared). Moves
+      // are confined to the bucket the user sees on screen — the buckets
+      // render as separate sections, so cross-bucket reorder would be
+      // meaningless.
+      const bucket = ownedCalendars.some((c) => c.url === calendarUrl)
+        ? [...ownedCalendars]
+        : [...sharedCalendars];
+      const idx = bucket.findIndex((c) => c.url === calendarUrl);
+      if (idx === -1) {
+        return { success: false, error: "Calendar not found" };
+      }
+      const swapWith = direction === "up" ? idx - 1 : idx + 1;
+      if (swapWith < 0 || swapWith >= bucket.length) {
+        return { success: false, error: "Out of bounds" };
+      }
+      [bucket[idx], bucket[swapWith]] = [bucket[swapWith], bucket[idx]];
+
+      // Rewrite the whole bucket as 0, 1, 2, … — small contiguous
+      // integers are the conventional values for this property, so the
+      // order stays consistent if a user reorders the same calendars in
+      // another CalDAV client. PROPPATCHes are skipped for calendars
+      // whose value already matches, so a single swap typically touches
+      // just the two moved siblings.
+      const updates: Promise<unknown>[] = [];
+      for (let i = 0; i < bucket.length; i++) {
+        if (bucket[i].order !== i) {
+          updates.push(
+            caldavService.updateCalendar(bucket[i].url, { order: i }),
+          );
+        }
+      }
+      try {
+        await Promise.all(updates);
+        await refreshCalendars();
+        return { success: true };
+      } catch (error) {
+        console.error("Error moving calendar:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+    [caldavService, ownedCalendars, sharedCalendars, refreshCalendars],
+  );
+
   const goToDate = useCallback((date: Date) => {
     if (calendarRef.current) {
       calendarRef.current.setOption("date", date);
@@ -395,6 +463,7 @@ export const CalendarContextProvider = ({
     updateCalendar,
     deleteCalendar,
     shareCalendar,
+    moveCalendar,
     goToDate,
   };
 
