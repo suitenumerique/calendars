@@ -27,11 +27,9 @@ export interface CalendarItemMenuProps {
   onShare?: () => void;
   onImport?: () => void;
   onSubscription?: () => void;
-  /** Move callbacks are gated by their `can*` flags — undefined means hidden. */
+  /** Pass `undefined` when at the bucket boundary to hide the entry. */
   onMoveUp?: () => void;
   onMoveDown?: () => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
 }
 
 /**
@@ -61,10 +59,9 @@ export interface CalendarListItemProps {
   onShare?: (calendar: CalDavCalendar) => void;
   onImport?: (calendar: CalDavCalendar) => void;
   onSubscription?: (calendar: CalDavCalendar) => void;
-  onMove?: (calendar: CalDavCalendar, direction: "up" | "down") => void;
-  /** False at the bucket boundary — the menu hides the corresponding entry. */
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
+  /** Pass `undefined` at the bucket boundary to hide the entry. */
+  onMoveUp?: (calendar: CalDavCalendar) => void;
+  onMoveDown?: (calendar: CalDavCalendar) => void;
   onCloseMenu: () => void;
 }
 

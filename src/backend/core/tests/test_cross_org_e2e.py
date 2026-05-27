@@ -2239,9 +2239,18 @@ class TestCalDAVProtocolSecurity:
             content_type="application/xml",
             HTTP_DEPTH="0",
         )
-        body = check.content.decode("utf-8", errors="ignore")
-        assert "calendar-order" in body
-        assert ">42<" in body
+        assert check.status_code == 207
+        ns = {"d": "DAV:", "a": "http://apple.com/ns/ical/"}
+        order_value = None
+        for response in ET.fromstring(check.content).findall("d:response", ns):
+            href_el = response.find("d:href", ns)
+            if href_el is None or not (href_el.text or "").rstrip("/").endswith(cal_id):
+                continue
+            order_el = response.find(".//a:calendar-order", ns)
+            if order_el is not None:
+                order_value = order_el.text
+                break
+        assert order_value == "42"
 
     def test_proppatch_calendar_order_overwrites(self):
         """Subsequent PROPPATCHes of calendar-order overwrite the prior value.
@@ -2277,10 +2286,18 @@ class TestCalDAVProtocolSecurity:
             content_type="application/xml",
             HTTP_DEPTH="0",
         )
-        body = check.content.decode("utf-8", errors="ignore")
-        assert ">300<" in body
-        assert ">100<" not in body
-        assert ">200<" not in body
+        assert check.status_code == 207
+        ns = {"d": "DAV:", "a": "http://apple.com/ns/ical/"}
+        order_value = None
+        for response in ET.fromstring(check.content).findall("d:response", ns):
+            href_el = response.find("d:href", ns)
+            if href_el is None or not (href_el.text or "").rstrip("/").endswith(cal_id):
+                continue
+            order_el = response.find(".//a:calendar-order", ns)
+            if order_el is not None:
+                order_value = order_el.text
+                break
+        assert order_value == "300"
 
 
 # ===================================================================

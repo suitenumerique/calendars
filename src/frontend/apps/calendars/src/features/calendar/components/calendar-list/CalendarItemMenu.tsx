@@ -20,8 +20,6 @@ export const CalendarItemMenu = ({
   onSubscription,
   onMoveUp,
   onMoveDown,
-  canMoveUp,
-  canMoveDown,
 }: CalendarItemMenuProps) => {
   const { t } = useTranslation();
 
@@ -58,7 +56,7 @@ export const CalendarItemMenu = ({
       });
     }
 
-    if (onMoveUp && canMoveUp) {
+    if (onMoveUp) {
       items.push({
         label: t("calendar.list.moveUp"),
         icon: <span className="material-icons">arrow_upward</span>,
@@ -66,7 +64,7 @@ export const CalendarItemMenu = ({
       });
     }
 
-    if (onMoveDown && canMoveDown) {
+    if (onMoveDown) {
       items.push({
         label: t("calendar.list.moveDown"),
         icon: <span className="material-icons">arrow_downward</span>,
@@ -81,18 +79,7 @@ export const CalendarItemMenu = ({
     });
 
     return items;
-  }, [
-    t,
-    onEdit,
-    onDelete,
-    onShare,
-    onImport,
-    onSubscription,
-    onMoveUp,
-    onMoveDown,
-    canMoveUp,
-    canMoveDown,
-  ]);
+  }, [t, onEdit, onDelete, onShare, onImport, onSubscription, onMoveUp, onMoveDown]);
 
   return (
     <DropdownMenu options={options} isOpen={isOpen} onOpenChange={onOpenChange}>

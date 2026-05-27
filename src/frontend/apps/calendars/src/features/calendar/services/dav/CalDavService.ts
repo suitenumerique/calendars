@@ -69,6 +69,7 @@ import {
   parseSharePrivilege,
   parseInviteSharees,
   parseInviteOrganizerEmail,
+  parseCalendarOrder,
   getCalendarUrlFromEventUrl,
   withErrorHandling,
   type ShareeXmlParams,
@@ -229,19 +230,9 @@ export class CalDavService {
       ? displayname
       : (displayname as { _cdata?: string } | undefined)?._cdata ?? ''
 
-    // `calendar-order` arrives either as a number or as a numeric string
-    // depending on tsdav's xml-js heuristics (pure-digit text is
-    // auto-coerced to a JS number, anything else stays a string). Accept
-    // both; non-finite/non-numeric values fall through as undefined so
-    // sorting tie-breaks on displayName.
-    const rawOrder = (props as Record<string, unknown> | undefined)?.calendarOrder
-    let order: number | undefined
-    if (typeof rawOrder === 'number' && Number.isFinite(rawOrder)) {
-      order = rawOrder
-    } else if (typeof rawOrder === 'string') {
-      const n = Number.parseInt(rawOrder, 10)
-      if (Number.isFinite(n)) order = n
-    }
+    const order = parseCalendarOrder(
+      (props as Record<string, unknown> | undefined)?.calendarOrder,
+    )
 
     return {
       url,

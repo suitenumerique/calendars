@@ -168,15 +168,6 @@ export interface SchedulerToolbarProps {
 }
 
 /**
- * Mobile-specific view types.
- */
-export type MobileView =
-  | "timeGridDay"
-  | "timeGridWorkWeek"
-  | "timeGridWeek"
-  | "listWeek";
-
-/**
  * Props for the MobileToolbar component.
  */
 export interface MobileToolbarProps {

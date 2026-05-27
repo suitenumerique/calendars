@@ -8,6 +8,10 @@ import { useTranslation } from "react-i18next";
 
 import { useCalendarContext } from "../../contexts";
 import { setupCalendar } from "@/features/mailbox/api";
+import {
+  addToast,
+  ToasterItem,
+} from "@/features/ui/components/toaster/Toaster";
 
 import { CalendarModal } from "./CalendarModal";
 import { CalendarShareModal } from "./CalendarShareModal";
@@ -130,11 +134,37 @@ export const CalendarList = () => {
     }
   }, [calendarRef]);
 
-  const handleMove = useCallback(
-    (calendar: CalDavCalendar, direction: "up" | "down") => {
-      void moveCalendar(calendar.url, direction);
+  const handleMoveUp = useCallback(
+    (calendar: CalDavCalendar) => {
+      // moveCalendar resolves with `{success: false, error}` when any
+      // PROPPATCH fails — surface that to the user instead of swallowing
+      // it (and instead of leaving the visible state quietly stale).
+      void moveCalendar(calendar.url, "up").then((result) => {
+        if (!result.success) {
+          addToast(
+            <ToasterItem type="error" closeButton>
+              {result.error || t("calendar.error.fetchCalendars")}
+            </ToasterItem>,
+          );
+        }
+      });
     },
-    [moveCalendar],
+    [moveCalendar, t],
+  );
+
+  const handleMoveDown = useCallback(
+    (calendar: CalDavCalendar) => {
+      void moveCalendar(calendar.url, "down").then((result) => {
+        if (!result.success) {
+          addToast(
+            <ToasterItem type="error" closeButton>
+              {result.error || t("calendar.error.fetchCalendars")}
+            </ToasterItem>,
+          );
+        }
+      });
+    },
+    [moveCalendar, t],
   );
 
   return (
@@ -184,9 +214,10 @@ export const CalendarList = () => {
                   onShare={handleOpenShareModal}
                   onImport={handleOpenImportModal}
                   onSubscription={handleOpenSubscriptionModal}
-                  onMove={handleMove}
-                  canMoveUp={idx > 0}
-                  canMoveDown={idx < ownedCalendars.length - 1}
+                  onMoveUp={idx > 0 ? handleMoveUp : undefined}
+                  onMoveDown={
+                    idx < ownedCalendars.length - 1 ? handleMoveDown : undefined
+                  }
                   onCloseMenu={handleCloseMenu}
                 />
               ))}
@@ -231,9 +262,12 @@ export const CalendarList = () => {
                     onDelete={handleOpenDeleteModal}
                     onImport={handleOpenImportModal}
                     onSubscription={handleOpenSubscriptionModal}
-                    onMove={handleMove}
-                    canMoveUp={idx > 0}
-                    canMoveDown={idx < sharedCalendars.length - 1}
+                    onMoveUp={idx > 0 ? handleMoveUp : undefined}
+                    onMoveDown={
+                      idx < sharedCalendars.length - 1
+                        ? handleMoveDown
+                        : undefined
+                    }
                     onCloseMenu={handleCloseMenu}
                   />
                 ))}

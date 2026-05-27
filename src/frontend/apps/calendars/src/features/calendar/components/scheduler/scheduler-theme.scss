@@ -3,6 +3,11 @@
 // Aligns @event-calendar/core with La Suite design system (Cunningham)
 // =============================================================================
 
+@use "sass:map";
+@use "@/styles/cunningham-tokens-sass" as *;
+
+$tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
+
 // -----------------------------------------------------------------------------
 // 1. CSS Variables - Map --ec-* to Cunningham tokens
 // -----------------------------------------------------------------------------
@@ -261,19 +266,21 @@
 }
 
 // -----------------------------------------------------------------------------
-// 9. Mobile adjustments — single-day view only.
-//
-// In the 1-day mobile view, the custom WeekDayBar above the grid replaces
-// the library's native day-name row, so we hide that row and the empty
-// top-left sidebar cell. The `.ec-all-day` lane is a sibling under
-// `.ec-header` and must stay visible — that's why the selectors target
-// direct children only.
-//
-// For multi-day mobile views (Work week / Week) the WeekDayBar is not
-// rendered; the native per-column headers stay so each header aligns
-// vertically with its day column, matching desktop.
+// 9. Mobile adjustments.
+// (a) 1-day view: hide the library's native day-name row and the empty
+//     top-left sidebar cell — the custom WeekDayBar above the grid plays
+//     that role instead. The `.ec-all-day` lane is a sibling under
+//     `.ec-header` and must stay visible, so the selectors target direct
+//     children only.
+// (b) Multi-day views (Work week / Week): the WeekDayBar is not rendered;
+//     the native per-column headers stay so each one aligns vertically
+//     with its day column, matching desktop.
+// (c) Today's day-of-month (all multi-day mobile views): marked with a
+//     brand-color pill drawn behind the digit so the layout stays pixel-
+//     stable (the desktop rule's border + extra padding would shift the
+//     column header by ~10 px).
 // -----------------------------------------------------------------------------
-@media (max-width: 768px) {
+@media (max-width: $tablet) {
   .scheduler[data-view="timeGridDay"] {
     .ec-header > .ec-sidebar,
     .ec-header > .ec-grid {
@@ -285,24 +292,44 @@
   // shift the column header layout) and mark today with a brand-color
   // pill drawn as a pseudo-element behind the digit. Same idiom as the
   // 1-day WeekDayBar selected day so the layout stays pixel-stable.
-  .ec-col-head.ec-today time .day-of-month {
-    padding: 3px 0 !important;
-    border-color: transparent !important;
-    position: relative;
-    color: var(--c--contextuals--content--semantic--neutral--on-neutral);
-    z-index: 1;
+  // The `time` element also gets a visually-hidden ", today" suffix so
+  // screen readers announce the today semantics — the library doesn't
+  // set aria-current on the header.
+  .ec-col-head.ec-today {
+    time {
+      .day-of-month {
+        padding: 3px 0 !important;
+        border-color: transparent !important;
+        position: relative;
+        color: var(--c--contextuals--content--semantic--neutral--on-neutral);
+        z-index: 1;
 
-    &::before {
-      content: "";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      background: var(--c--contextuals--background--semantic--brand--primary);
-      z-index: -1;
+        &::before {
+          content: "";
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          background: var(--c--contextuals--background--semantic--brand--primary);
+          z-index: -1;
+        }
+      }
+
+      &::after {
+        content: ", today";
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
     }
   }
 }

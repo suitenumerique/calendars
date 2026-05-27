@@ -500,6 +500,26 @@ export async function executePropfind<T>(
 // Response Parsing Helpers
 // ============================================================================
 
+/**
+ * Coerce a parsed `calendar-order` PROPFIND value to an integer.
+ *
+ * tsdav's xml-js parser auto-coerces pure-digit element text to a JS
+ * `number`, while non-numeric text stays a `string`. Either shape can
+ * arrive depending on what the server stored. Anything else (nullish,
+ * object, NaN, ±Infinity) is treated as "no order set" so sorting can
+ * fall back to displayName.
+ */
+export function parseCalendarOrder(raw: unknown): number | undefined {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    return raw
+  }
+  if (typeof raw === 'string') {
+    const n = Number.parseInt(raw, 10)
+    if (Number.isFinite(n)) return n
+  }
+  return undefined
+}
+
 /** Parse supported-calendar-component-set from PROPFIND response */
 export function parseCalendarComponents(supportedCalendarComponentSet: unknown): string[] | undefined {
   if (!supportedCalendarComponentSet) return undefined

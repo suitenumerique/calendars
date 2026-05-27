@@ -323,52 +323,76 @@ export const CalendarContextProvider = ({
     [caldavService],
   );
 
+  const movingRef = useRef(false);
   const moveCalendar = useCallback(
     async (
       calendarUrl: string,
       direction: "up" | "down",
     ): Promise<{ success: boolean; error?: string }> => {
-      // Pick the bucket the calendar lives in (owned vs shared). Moves
-      // are confined to the bucket the user sees on screen — the buckets
-      // render as separate sections, so cross-bucket reorder would be
-      // meaningless.
-      const bucket = ownedCalendars.some((c) => c.url === calendarUrl)
-        ? [...ownedCalendars]
-        : [...sharedCalendars];
-      const idx = bucket.findIndex((c) => c.url === calendarUrl);
-      if (idx === -1) {
-        return { success: false, error: "Calendar not found" };
+      // Re-entry guard: a second click while the first move's PROPPATCHes
+      // and refresh are still in flight would compute against stale state
+      // (the closure captures ownedCalendars/sharedCalendars at call time)
+      // and could swap the same pair twice or assign duplicate orders.
+      if (movingRef.current) {
+        return { success: false, error: "Move already in progress" };
       }
-      const swapWith = direction === "up" ? idx - 1 : idx + 1;
-      if (swapWith < 0 || swapWith >= bucket.length) {
-        return { success: false, error: "Out of bounds" };
-      }
-      [bucket[idx], bucket[swapWith]] = [bucket[swapWith], bucket[idx]];
-
-      // Rewrite the whole bucket as 0, 1, 2, … — small contiguous
-      // integers are the conventional values for this property, so the
-      // order stays consistent if a user reorders the same calendars in
-      // another CalDAV client. PROPPATCHes are skipped for calendars
-      // whose value already matches, so a single swap typically touches
-      // just the two moved siblings.
-      const updates: Promise<unknown>[] = [];
-      for (let i = 0; i < bucket.length; i++) {
-        if (bucket[i].order !== i) {
-          updates.push(
-            caldavService.updateCalendar(bucket[i].url, { order: i }),
-          );
-        }
-      }
+      movingRef.current = true;
       try {
-        await Promise.all(updates);
-        await refreshCalendars();
-        return { success: true };
-      } catch (error) {
-        console.error("Error moving calendar:", error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        };
+        // Pick the bucket the calendar lives in (owned vs shared). Moves
+        // are confined to the bucket the user sees on screen — the
+        // buckets render as separate sections, so cross-bucket reorder
+        // would be meaningless.
+        const bucket = ownedCalendars.some((c) => c.url === calendarUrl)
+          ? [...ownedCalendars]
+          : [...sharedCalendars];
+        const idx = bucket.findIndex((c) => c.url === calendarUrl);
+        if (idx === -1) {
+          return { success: false, error: "Calendar not found" };
+        }
+        const swapWith = direction === "up" ? idx - 1 : idx + 1;
+        if (swapWith < 0 || swapWith >= bucket.length) {
+          return { success: false, error: "Out of bounds" };
+        }
+        [bucket[idx], bucket[swapWith]] = [bucket[swapWith], bucket[idx]];
+
+        // Rewrite the whole bucket as 0, 1, 2, … — small contiguous
+        // integers are the conventional values for this property, so
+        // the order stays consistent if a user reorders the same
+        // calendars in another CalDAV client. PROPPATCHes are skipped
+        // for calendars whose value already matches, so a single swap
+        // typically touches just the two moved siblings.
+        const updates: Promise<{ success: boolean; error?: string }>[] = [];
+        for (let i = 0; i < bucket.length; i++) {
+          if (bucket[i].order !== i) {
+            updates.push(
+              caldavService.updateCalendar(bucket[i].url, { order: i }),
+            );
+          }
+        }
+        try {
+          const results = await Promise.all(updates);
+          // updateCalendar reports CalDAV-level failures via `{success:
+          // false}` rather than throwing, so Promise.all alone wouldn't
+          // surface them. Bail out before refreshCalendars so the user
+          // sees the error and the visible state isn't quietly stale.
+          const failed = results.find((r) => !r.success);
+          if (failed) {
+            return {
+              success: false,
+              error: failed.error || "Failed to update calendar order",
+            };
+          }
+          await refreshCalendars();
+          return { success: true };
+        } catch (error) {
+          console.error("Error moving calendar:", error);
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : "Unknown error",
+          };
+        }
+      } finally {
+        movingRef.current = false;
       }
     },
     [caldavService, ownedCalendars, sharedCalendars, refreshCalendars],

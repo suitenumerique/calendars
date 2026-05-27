@@ -42,12 +42,19 @@ def truncate_caldav_tables(request, django_db_setup, django_db_blocker):  # pyli
     # Read from the environment so this stays in sync with the compose
     # config and can be overridden in CI without editing code.
     caldav_test_db = os.environ.get("CALDAV_TEST_DB", "caldav_test")
+    # SabreDAV tables live in a dedicated schema (CALDAV_DB_SCHEMA, set to
+    # "sabre" in env.d/development/caldav-test.defaults) so they don't
+    # share namespace with Django's `test_calendars` tables. Mirror that
+    # search_path here — otherwise the unqualified TRUNCATEs below fall
+    # back to "public" and fail with UndefinedTable.
+    caldav_test_schema = os.environ.get("CALDAV_DB_SCHEMA", "sabre")
     conn = psycopg.connect(
         host=db_settings["HOST"],
         port=db_settings["PORT"],
         dbname=caldav_test_db,
         user=db_settings["USER"],
         password=db_settings["PASSWORD"],
+        options=f"-c search_path={caldav_test_schema},public",
     )
     conn.autocommit = True
     try:

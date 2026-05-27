@@ -100,26 +100,26 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
       display: none;
     }
 
-    // Pull the hamburger (and the empty right slot, whose children are
-    // hidden on mobile elsewhere) out of flex flow so the logo sits at
-    // the geometric centre of the viewport. The ui-kit's default header
-    // uses justify-content: space-between, which on mobile centres the
-    // logo between the hamburger and the right slot — visibly offset to
-    // the right because the right slot has no content.
+    // Pull the hamburger out of flex flow so the logo sits at the
+    // geometric centre of the viewport. The ui-kit's default header uses
+    // justify-content: space-between, which on mobile centres the logo
+    // between the hamburger and the right slot — visibly offset to the
+    // right because the right slot has no content. `.c__header__right`
+    // is hidden entirely on mobile (its children are already hidden by
+    // the rule earlier in this file); dropping its layout box too keeps
+    // the empty element from ever floating over the logo if something
+    // is later added to that slot.
     position: relative;
     justify-content: center;
 
-    .c__header__toggle-menu,
-    .c__header__right {
+    .c__header__toggle-menu {
       position: absolute;
+      left: 16px;
       top: 50%;
       transform: translateY(-50%);
     }
-    .c__header__toggle-menu {
-      left: 16px;
-    }
     .c__header__right {
-      right: 16px;
+      display: none;
     }
   }
 }
