@@ -1,10 +1,11 @@
-{# Shared layout for calendar invitation / update / cancel / reply emails.
-   Email-client-safe: table-based, inline styles, no external CSS.
-   Blocks:
-     header_color  — background color of the header strip (default blue).
-     badge_color   — text color of the uppercase header badge (default light blue tint).
-     body          — the per-template body content (after the header, before the footer).
-#}<!doctype html>
+{% comment %}
+Shared layout for calendar invitation / update / cancel / reply emails.
+Email-client-safe: table-based, inline styles, no external CSS.
+Blocks:
+  header_color  — background color of the header strip (default blue).
+  badge_color   — text color of the uppercase header badge (default light blue tint).
+  body          — the per-template body content (after the header, before the footer).
+{% endcomment %}<!doctype html>
 <html lang="{{ lang|default:'en' }}">
 <head>
   <meta charset="UTF-8">

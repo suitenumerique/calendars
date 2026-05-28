@@ -40,7 +40,6 @@
         <p class="title">{{ error_title }}</p>
       </div>
       <div class="body">
-        <div class="icon">&#10060;</div>
         <p>{{ error }}</p>
       </div>
       {% else %}
@@ -49,7 +48,6 @@
         <p class="title">{{ event_summary }}</p>
       </div>
       <div class="body">
-        {% if status_icon %}<div class="icon">{{ status_icon|safe }}</div>{% endif %}
         {% if event_date %}<div class="event-date">{{ event_date }}</div>{% endif %}
         {% if message %}<p>{{ message }}</p>{% endif %}
       </div>
