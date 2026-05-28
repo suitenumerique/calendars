@@ -31,7 +31,9 @@
   {% if event.url %}
   <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
             line-height:1.5; margin:0 0 10px;">
-    <strong style="color:#1b1f2e;">{{ labels.videoConference }}:</strong> {{ event.url }}
+    <strong style="color:#1b1f2e;">{{ labels.videoConference }}:</strong>
+    <a href="{{ event.url }}" target="_blank" rel="noopener noreferrer"
+       style="color:#d2212f; text-decoration:none;">{{ event.url }}</a>
   </p>
   {% endif %}
 

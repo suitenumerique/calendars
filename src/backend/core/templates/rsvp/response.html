@@ -4,31 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ page_title }}</title>
+  {% include "rsvp/_common_styles.html" %}
   <style>
-    body { margin:0; padding:0; background-color:#eef0f3;
-           font-family: Arial, Helvetica, sans-serif; color:#1b1f2e; }
-    .wrap { padding:48px 16px; }
-    .card { max-width:560px; margin:0 auto; border-radius:8px;
-            border:1px solid #d4d7dd; overflow:hidden; background:#fff;
-            box-shadow:0 1px 3px rgba(16,24,40,.04), 0 4px 16px rgba(16,24,40,.06); }
-    .header     { padding:28px 36px; }
-    .header.ok  { background-color:#435de6; }
-    .header.err { background-color:#d2212f; }
-    .badge      { font-size:11px; font-weight:700;
-                  text-transform:uppercase; letter-spacing:0.12em; margin:0 0 6px; }
-    .badge.ok   { color:#bdc6f6; }
-    .badge.err  { color:#f5c2c6; }
-    .title      { font-size:24px; font-weight:700; color:#ffffff;
-                  line-height:1.25; margin:0; word-break:break-word; }
-    .body       { background-color:#f6f8f9; padding:28px 36px 24px; text-align:center; }
-    .body .icon { font-size:36px; line-height:1; margin:0 0 12px; }
-    .body p     { font-size:14px; color:#626a80; line-height:1.6; margin:0; }
-    .body .event-date  { font-size:14px; color:#626a80; line-height:1.4;
-                         margin:0 0 12px; }
-    .divider    { background-color:#e7e9eb; height:1px; padding:0;
-                  font-size:0; line-height:0; }
-    .footer     { background-color:#f6f8f9; padding:18px 36px; text-align:center; }
-    .footer p   { font-size:12px; color:#626a80; line-height:1.6; margin:0; }
+    /* response-specific: centered body + optional event-date line */
+    .body { text-align:center; }
+    .body .event-date { font-size:14px; color:#626a80; line-height:1.4;
+                        margin:0 0 12px; }
   </style>
 </head>
 <body>
@@ -43,8 +24,8 @@
         <p>{{ error }}</p>
       </div>
       {% else %}
-      <div class="header ok">
-        <p class="badge ok">{{ heading }}</p>
+      <div class="header">
+        <p class="badge">{{ heading }}</p>
         <p class="title">{{ event_summary }}</p>
       </div>
       <div class="body">
@@ -54,7 +35,7 @@
       {% endif %}
       <div class="divider"></div>
       <div class="footer">
-        <p>{{ app_name }}</p>
+        <p>Calendars</p>
       </div>
     </div>
   </div>
