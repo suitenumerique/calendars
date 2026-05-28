@@ -57,6 +57,7 @@ def _render_error(request, message, lang="en"):
             "error_title": t("rsvp.error.invalidLink", lang),
             "header_color": "#dc2626",
             "lang": lang,
+            "app_name": getattr(settings, "APP_NAME", "Calendars"),
         },
         status=400,
     )
@@ -159,6 +160,7 @@ class RSVPConfirmView(View):
                 "status_icon": PARTSTAT_ICONS[action],
                 "header_color": PARTSTAT_COLORS[action],
                 "submit_label": label,
+                "app_name": getattr(settings, "APP_NAME", "Calendars"),
             },
         )
 
@@ -199,6 +201,7 @@ class RSVPConfirmView(View):
                 "header_color": PARTSTAT_COLORS[action],
                 "event_summary": summary,
                 "lang": lang,
+                "app_name": getattr(settings, "APP_NAME", "Calendars"),
             },
         )
 
