@@ -514,8 +514,14 @@ export function parseCalendarOrder(raw: unknown): number | undefined {
     return raw
   }
   if (typeof raw === 'string') {
-    const n = Number.parseInt(raw, 10)
-    if (Number.isFinite(n)) return n
+    // Require the entire (trimmed) string to be an optionally-signed
+    // integer — otherwise `Number.parseInt` would happily turn "10abc"
+    // into 10 and swallow attacker-supplied trailing junk.
+    const trimmed = raw.trim()
+    if (/^[+-]?\d+$/.test(trimmed)) {
+      const n = Number.parseInt(trimmed, 10)
+      if (Number.isFinite(n)) return n
+    }
   }
   return undefined
 }
