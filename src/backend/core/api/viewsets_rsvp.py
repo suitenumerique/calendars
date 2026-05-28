@@ -159,7 +159,7 @@ class RSVPConfirmView(View):
                 "status_icon": PARTSTAT_ICONS[action],
                 "header_color": PARTSTAT_COLORS[action],
                 "submit_label": label,
-                },
+            },
         )
 
     def post(self, request):
@@ -199,7 +199,7 @@ class RSVPConfirmView(View):
                 "header_color": PARTSTAT_COLORS[action],
                 "event_summary": summary,
                 "lang": lang,
-                },
+            },
         )
 
 
