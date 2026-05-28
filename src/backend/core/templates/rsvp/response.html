@@ -1,76 +1,56 @@
-<!DOCTYPE html>
-<html lang="{{ lang|default:'fr' }}">
+<!doctype html>
+<html lang="{{ lang|default:'en' }}">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ page_title }}</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 30px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            text-align: center;
-        }
-        .icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
-        h1 {
-            color: {{ header_color }};
-            font-size: 24px;
-            margin: 0 0 16px;
-        }
-        .message {
-            font-size: 16px;
-            color: #555;
-            margin-bottom: 24px;
-        }
-        .event-title {
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-            margin: 16px 0;
-        }
-        .event-date {
-            color: #666;
-            margin-bottom: 24px;
-        }
-        .error-container {
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 30px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            text-align: center;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page_title }}</title>
+  <style>
+    body { margin: 0; padding: 0; background-color: #eef0f3;
+           font-family: Arial, Helvetica, sans-serif; color: #1b1f2e; }
+    .wrap { padding: 48px 16px; }
+    .card { max-width: 560px; margin: 0 auto; border-radius: 8px;
+            border: 1px solid #d4d7dd; overflow: hidden; background: #fff; }
+    .header { padding: 28px 36px; color: #fff; text-align: center; }
+    .header.ok    { background-color: {{ header_color|default:"#435de6" }}; }
+    .header.err   { background-color: #d2212f; }
+    .header .icon { font-size: 40px; line-height: 1; margin-bottom: 10px; }
+    .header h1    { font-size: 22px; font-weight: 700; line-height: 1.25;
+                    margin: 0; color: #fff; }
+    .body { background-color: #f6f8f9; padding: 28px 36px; }
+    .event-title { font-family: Arial, Helvetica, sans-serif;
+                   font-size: 18px; font-weight: 700; color: #1b1f2e;
+                   line-height: 1.4; margin: 0 0 4px; text-align: center; }
+    .event-date  { font-family: Arial, Helvetica, sans-serif;
+                   font-size: 14px; color: #626a80; line-height: 1.4;
+                   margin: 0 0 20px; text-align: center; }
+    .message { font-family: Arial, Helvetica, sans-serif;
+               font-size: 14px; color: #626a80; line-height: 1.6;
+               margin: 0; text-align: center; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        {% if error %}
+  <div class="wrap">
+    <div class="card">
+      {% if error %}
+      <div class="header err">
         <div class="icon">&#10060;</div>
-        <h1 style="color: #dc2626;">{{ error_title }}</h1>
+        <h1>{{ error_title }}</h1>
+      </div>
+      <div class="body">
         <p class="message">{{ error }}</p>
-        {% else %}
+      </div>
+      {% else %}
+      <div class="header ok">
         <div class="icon">{{ status_icon|safe }}</div>
         <h1>{{ heading }}</h1>
-        {% if event_summary %}
-        <div class="event-title">{{ event_summary }}</div>
-        {% endif %}
-        {% if event_date %}
-        <div class="event-date">{{ event_date }}</div>
-        {% endif %}
-        <p class="message">{{ message }}</p>
-        {% endif %}
+      </div>
+      <div class="body">
+        {% if event_summary %}<div class="event-title">{{ event_summary }}</div>{% endif %}
+        {% if event_date %}<div class="event-date">{{ event_date }}</div>{% endif %}
+        {% if message %}<p class="message">{{ message }}</p>{% endif %}
+      </div>
+      {% endif %}
     </div>
+  </div>
 </body>
 </html>

@@ -1,139 +1,42 @@
-<!DOCTYPE html>
-<html lang="{{ lang }}">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ content.title }}</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 30px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .header {
-            border-bottom: 2px solid #dc3545;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-        }
-        .header h1 {
-            color: #dc3545;
-            margin: 0;
-            font-size: 24px;
-        }
-        .cancel-badge {
-            display: inline-block;
-            background-color: #dc3545;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .event-title {
-            font-size: 20px;
-            font-weight: bold;
-            color: #999;
-            margin: 15px 0;
-            text-decoration: line-through;
-        }
-        .event-details {
-            background-color: #f8d7da;
-            border-left: 4px solid #dc3545;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .event-details table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .event-details td {
-            padding: 8px 0;
-            vertical-align: top;
-            color: #721c24;
-        }
-        .event-details td:first-child {
-            font-weight: bold;
-            width: 150px;
-        }
-        .instructions {
-            background-color: #f8d7da;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .instructions p {
-            margin: 0;
-            color: #721c24;
-        }
-        .footer {
-            border-top: 1px solid #eee;
-            padding-top: 15px;
-            margin-top: 20px;
-            font-size: 12px;
-            color: #999;
-            text-align: center;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>{{ content.heading }}</h1>
-        </div>
+{% extends "emails/_invitation_layout.html" %}
 
-        <span class="cancel-badge">{{ content.badge }}</span>
+{% block header_color %}#d2212f{% endblock %}
+{% block badge_color %}#f5c2c6{% endblock %}
 
-        <p>{{ content.body }}</p>
+{% block body %}
+  {# small label above the strikethrough date (cancelled event was scheduled for…) #}
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:11px; font-weight:700;
+            color:#9b1c25; text-transform:uppercase; letter-spacing:0.12em;
+            margin:0 0 6px;">
+    {{ labels.wasScheduledFor }}
+  </p>
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:18px; font-weight:700;
+            color:#1b1f2e; line-height:1.4; margin:0 0 4px;
+            text-decoration:line-through; text-decoration-color:#d2212f;">
+    {{ start_date }}
+  </p>
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
+            line-height:1.4; margin:0 0 20px;
+            text-decoration:line-through; text-decoration-color:#d2212f;">
+    {{ time_str }}{% if start_date != end_date %} · {{ labels.until }} {{ end_date }}{% endif %}
+  </p>
 
-        <div class="event-title">{{ summary }}</div>
+  {% if event.location %}
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
+            line-height:1.5; margin:0 0 10px;">
+    <strong style="color:#1b1f2e;">{{ labels.location }}:</strong> {{ event.location }}
+  </p>
+  {% endif %}
 
-        <div class="event-details">
-            <table>
-                <tr>
-                    <td>{{ labels.wasScheduledFor }}</td>
-                    <td>
-                        {{ start_date }}<br>
-                        <strong>{{ time_str }}</strong>
-                        {% if start_date != end_date %}<br>{{ labels.until }} {{ end_date }}{% endif %}
-                    </td>
-                </tr>
-                {% if event.location %}
-                <tr>
-                    <td>{{ labels.location }}</td>
-                    <td>{{ event.location }}</td>
-                </tr>
-                {% endif %}
-                {% if event.url %}
-                <tr>
-                    <td>{{ labels.videoConference }}</td>
-                    <td>{{ event.url }}</td>
-                </tr>
-                {% endif %}
-                <tr>
-                    <td>{{ labels.organizer }}</td>
-                    <td>{{ organizer_display }}</td>
-                </tr>
-            </table>
-        </div>
+  {% if event.url %}
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
+            line-height:1.5; margin:0 0 10px;">
+    <strong style="color:#1b1f2e;">{{ labels.videoConference }}:</strong> {{ event.url }}
+  </p>
+  {% endif %}
 
-        <div class="instructions">
-            <p>{{ instructions }}</p>
-        </div>
-
-        <div class="footer">
-            <p>{{ footer }}</p>
-        </div>
-    </div>
-</body>
-</html>
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
+            line-height:1.6; margin:0 0 0;">
+    {{ content.body }}
+  </p>
+{% endblock %}

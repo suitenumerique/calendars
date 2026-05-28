@@ -1,158 +1,79 @@
-<!DOCTYPE html>
-<html lang="{{ lang }}">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ content.title }}</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 30px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .header {
-            border-bottom: 2px solid #0066cc;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
-        }
-        .header h1 {
-            color: #0066cc;
-            margin: 0;
-            font-size: 24px;
-        }
-        .event-title {
-            font-size: 20px;
-            font-weight: bold;
-            color: #333;
-            margin: 15px 0;
-        }
-        .event-details {
-            background-color: #f8f9fa;
-            border-left: 4px solid #0066cc;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .event-details table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .event-details td {
-            padding: 8px 0;
-            vertical-align: top;
-        }
-        .event-details td:first-child {
-            font-weight: bold;
-            color: #666;
-            width: 120px;
-        }
-        .event-details td:last-child {
-            color: #333;
-        }
-        .description {
-            background-color: #fff;
-            border: 1px solid #eee;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
-        }
-        .description h3 {
-            margin-top: 0;
-            color: #666;
-        }
-        .instructions {
-            background-color: #e7f3ff;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 20px 0;
-        }
-        .instructions p {
-            margin: 0;
-            color: #0066cc;
-        }
-        .footer {
-            border-top: 1px solid #eee;
-            padding-top: 15px;
-            margin-top: 20px;
-            font-size: 12px;
-            color: #999;
-            text-align: center;
-        }
-        .icon {
-            vertical-align: middle;
-            margin-right: 8px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>{{ content.heading }}</h1>
-        </div>
+{% extends "emails/_invitation_layout.html" %}
 
-        <p>{{ content.body }}</p>
+{# Header defaults (blue) inherited from the base layout. #}
 
-        <div class="event-title">{{ summary }}</div>
+{% block body %}
+  {# date/time #}
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:18px; font-weight:700;
+            color:#1b1f2e; line-height:1.4; margin:0 0 4px;">
+    {{ start_date }}
+  </p>
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
+            line-height:1.4; margin:0 0 20px;">
+    {{ time_str }}{% if start_date != end_date %} · {{ labels.until }} {{ end_date }}{% endif %}
+  </p>
 
-        <div class="event-details">
-            <table>
-                <tr>
-                    <td>{{ labels.when }}</td>
-                    <td>
-                        {{ start_date }}<br>
-                        <strong>{{ time_str }}</strong>
-                        {% if start_date != end_date %}<br>{{ labels.until }} {{ end_date }}{% endif %}
-                    </td>
-                </tr>
-                {% if event.location %}
-                <tr>
-                    <td>{{ labels.location }}</td>
-                    <td>{{ event.location }}</td>
-                </tr>
-                {% endif %}
-                {% if event.url %}
-                <tr>
-                    <td>{{ labels.videoConference }}</td>
-                    <td><a href="{{ event.url }}" style="color: #0066cc;">{{ event.url }}</a></td>
-                </tr>
-                {% endif %}
-                <tr>
-                    <td>{{ labels.organizer }}</td>
-                    <td>{{ organizer_display }}</td>
-                </tr>
-            </table>
-        </div>
+  {% if event.location %}
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
+            line-height:1.5; margin:0 0 10px;">
+    <strong style="color:#1b1f2e;">{{ labels.location }}:</strong> {{ event.location }}
+  </p>
+  {% endif %}
 
-        {% if event.description %}
-        <div class="description">
-            <h3>{{ labels.description }}</h3>
-            <p>{{ event.description|linebreaks }}</p>
-        </div>
-        {% endif %}
+  {% if event.url %}
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
+            line-height:1.5; margin:0 0 10px;">
+    <strong style="color:#1b1f2e;">{{ labels.videoConference }}:</strong>
+    <a href="{{ event.url }}" style="color:#435de6; text-decoration:none;">{{ event.url }}</a>
+  </p>
+  {% endif %}
 
-        {% if rsvp_accepted_url %}
-        <div style="text-align: center; margin: 20px 0;">
-            <a href="{{ rsvp_accepted_url }}" style="display: inline-block; padding: 10px 24px; margin: 0 6px; background-color: #16a34a; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">{{ actions.accept }}</a>
-            <a href="{{ rsvp_tentative_url }}" style="display: inline-block; padding: 10px 24px; margin: 0 6px; background-color: #d97706; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">{{ actions.maybe }}</a>
-            <a href="{{ rsvp_declined_url }}" style="display: inline-block; padding: 10px 24px; margin: 0 6px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">{{ actions.decline }}</a>
-        </div>
-        {% endif %}
-        <div class="instructions">
-            <p>{{ instructions }}</p>
-        </div>
+  {# organizer / body sentence (content.body is i18n-rendered with {{organizer}}) #}
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
+            line-height:1.6; margin:0 0 24px;">
+    {{ content.body }}
+  </p>
 
-        <div class="footer">
-            <p>{{ footer }}</p>
-        </div>
-    </div>
-</body>
-</html>
+  {% if event.description %}
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
+            line-height:1.6; margin:0 0 24px;">
+    {{ event.description|linebreaksbr }}
+  </p>
+  {% endif %}
+
+  {# RSVP buttons — only present for REQUEST-method emails #}
+  {% if rsvp_accepted_url %}
+  <table border="0" cellpadding="0" cellspacing="0" role="presentation"
+         style="border-collapse:collapse; width:100%; table-layout:fixed;">
+    <tr>
+      <td style="padding:0 4px 0 0;">
+        <a href="{{ rsvp_accepted_url }}"
+           style="display:block; text-align:center; background-color:#435de6;
+                  color:#ffffff; font-family:Arial,Helvetica,sans-serif;
+                  font-size:14px; font-weight:700; padding:12px 8px;
+                  border-radius:4px; text-decoration:none;">
+          {{ actions.accept }}
+        </a>
+      </td>
+      <td style="padding:0 4px;">
+        <a href="{{ rsvp_tentative_url }}"
+           style="display:block; text-align:center; background-color:#626a80;
+                  color:#ffffff; font-family:Arial,Helvetica,sans-serif;
+                  font-size:14px; font-weight:700; padding:12px 8px;
+                  border-radius:4px; text-decoration:none;">
+          {{ actions.maybe }}
+        </a>
+      </td>
+      <td style="padding:0 0 0 4px;">
+        <a href="{{ rsvp_declined_url }}"
+           style="display:block; text-align:center; background-color:#d2212f;
+                  color:#ffffff; font-family:Arial,Helvetica,sans-serif;
+                  font-size:14px; font-weight:700; padding:12px 8px;
+                  border-radius:4px; text-decoration:none;">
+          {{ actions.decline }}
+        </a>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+{% endblock %}
