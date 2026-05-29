@@ -1,4 +1,6 @@
 /**
+ * @jest-environment jsdom
+ *
  * Tests for the unified `davRequest` entry point in DavClient.
  *
  * This file is the safety net for the hand-rolled DAV layer:
@@ -8,7 +10,8 @@
  *   401 → redirect-to-login, SabreDAV error parsing.
  *
  * After dropping tsdav, these are what guarantees we still build and
- * parse CalDAV traffic correctly.
+ * parse CalDAV traffic correctly. Requires the jsdom environment because
+ * `parseMultistatus` / `parseDavErrorMessage` use the native `DOMParser`.
  */
 
 jest.mock('@/features/api/fetchApi', () => ({

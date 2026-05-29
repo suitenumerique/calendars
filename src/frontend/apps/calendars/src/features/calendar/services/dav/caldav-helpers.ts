@@ -4,8 +4,6 @@
  * Factorized utilities for XML building, DAV requests, and error handling.
  */
 
-import { xml2js, type ElementCompact } from 'xml-js'
-
 import type { SharePrivilege, CalDavResponse } from './types/caldav-service'
 
 /** XML namespace prefix lookup used when building prop keys in PROPFIND

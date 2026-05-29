@@ -31,10 +31,19 @@ let redirectInFlight = false;
 export function redirectToLogin() {
   if (redirectInFlight) return;
   redirectInFlight = true;
-  sessionStorage.setItem(
-    SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL,
-    window.location.href,
-  );
+  // Persisting the current URL is best-effort: Safari Private Browsing,
+  // a full storage quota, or a `SecurityError` from a sandboxed context
+  // can all throw here. Treat that as "we just won't restore the URL
+  // after login" — never let it suppress the actual navigation, which
+  // is what unsticks the session.
+  try {
+    sessionStorage.setItem(
+      SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL,
+      window.location.href,
+    );
+  } catch {
+    // intentionally swallow — the redirect itself is what matters.
+  }
   window.location.replace(new URL("authenticate/", baseApiUrl()).href);
 }
 

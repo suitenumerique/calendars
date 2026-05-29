@@ -22,8 +22,6 @@
  * below if you ever point this at a non-SabreDAV target).
  */
 
-import { xml2js, type ElementCompact } from "xml-js";
-
 import { redirectToLogin } from "@/features/api/fetchApi";
 import { getOrigin } from "@/features/api/utils";
 
@@ -111,8 +109,6 @@ export type DavResponseEntry = {
    * specific cause than just `status`.
    */
   error?: Record<string, unknown>;
-  /** Raw xml-js node — useful for callers that need to dig deeper. */
-  raw?: unknown;
 };
 
 export type DavRequestResult = {
@@ -140,12 +136,48 @@ function isAuthFailure(status: number | undefined): boolean {
   return status === 401;
 }
 
+// === XML parsing primitives (native DOMParser) ===
+//
+// We parse with the browser-native `DOMParser` so nothing ships in the
+// bundle and the parser is maintained by browser vendors. Hard rules:
+//
+//   1. Always parse with `"application/xml"`. `"text/html"` would change
+//      the security model (`<script>` becomes executable HTML), so it's
+//      pinned to a `const` and never threaded through as a parameter.
+//   2. Detect parse failure by the browser's `<parsererror>` element's
+//      *namespace*, not by tag name — otherwise a malicious server could
+//      sneak a literal `<parsererror>` element into otherwise-valid XML
+//      and trick us into treating the body as malformed.
+//   3. The result tree is read-only. We extract `localName`, `textContent`,
+//      and attribute values into a plain JS shape, then render via React
+//      (auto-escaped). No `innerHTML`, no `setAttribute('on*')`, no eval.
+//
+// External entities, DOCTYPE includes, and billion-laughs are all
+// disabled / capped by every shipping browser; we don't need extra
+// hardening for the SabreDAV traffic we control end-to-end.
+
+const XML_PARSE_TYPE = "application/xml" as const;
+const PARSERERROR_NS =
+  "http://www.mozilla.org/newlayout/xml/parsererror.xml";
+const DAV_NS = "DAV:";
+const SABREDAV_NS = "http://sabredav.org/ns";
+
+function safeParseXml(xml: string): Document | undefined {
+  if (!xml) return undefined;
+  let doc: Document;
+  try {
+    doc = new DOMParser().parseFromString(xml, XML_PARSE_TYPE);
+  } catch {
+    return undefined;
+  }
+  if (doc.getElementsByTagNameNS(PARSERERROR_NS, "parsererror").length > 0) {
+    return undefined;
+  }
+  return doc;
+}
+
 /**
  * Extract the SabreDAV `<s:message>` from a DAV error body.
- *
- * Uses `xml-js` with namespace prefixes stripped so `<s:message>` lands
- * at `parsed.error.message` regardless of which prefix the server emits.
- * Works in both browser and `jest` (no `DOMParser` dependency).
  *
  * Safe to render in React: the value is plain text from our own SabreDAV
  * server, and `server.php`'s exception handler already masks any
@@ -153,28 +185,12 @@ function isAuthFailure(status: number | undefined): boolean {
  * (DB errors, file paths, SQL state) cannot leak through this channel.
  */
 export function parseDavErrorMessage(xmlBody: string): string | undefined {
-  if (!xmlBody) return undefined;
-  let parsed: ElementCompact;
-  try {
-    parsed = xml2js(xmlBody, {
-      compact: true,
-      trim: true,
-      elementNameFn: (name: string) => name.replace(/^.+:/, ""),
-    }) as ElementCompact;
-  } catch {
-    return undefined;
-  }
-  const error = parsed.error as ElementCompact | undefined;
-  const messageNode = error?.message as
-    | ElementCompact
-    | ElementCompact[]
-    | undefined;
-  if (!messageNode) return undefined;
-  const first = Array.isArray(messageNode) ? messageNode[0] : messageNode;
-  const text = first?._text;
-  if (typeof text !== "string") return undefined;
-  const trimmed = text.trim();
-  return trimmed ? trimmed : undefined;
+  const doc = safeParseXml(xmlBody);
+  if (!doc) return undefined;
+  const text = doc
+    .getElementsByTagNameNS(SABREDAV_NS, "message")[0]
+    ?.textContent?.trim();
+  return text ? text : undefined;
 }
 
 /** Build the PROPFIND XML body. Each key in `props` becomes a self-closing
@@ -204,12 +220,6 @@ export function buildPropfindBody(props: Record<string, unknown>): string {
   );
 }
 
-// Strip any `prefix:` from an element name.
-function stripPrefix(name: string): string {
-  const idx = name.indexOf(":");
-  return idx >= 0 ? name.slice(idx + 1) : name;
-}
-
 // `calendar-data` -> `calendarData`, `schedule-outbox-URL` -> `scheduleOutboxURL`.
 // We swallow the hyphen before *any* next character so `-URL` (already
 // uppercase) is preserved; CalDavService accesses
@@ -218,34 +228,62 @@ function toCamel(name: string): string {
   return name.replace(/-(.)/g, (_, ch: string) => ch.toUpperCase());
 }
 
-// Recursively normalize an xml-js ElementCompact node into the
-// camelCase / prefix-stripped shape callers consume (e.g.
-// `props.calendarData`, `props.getetag`, `props.scheduleOutboxURL`).
-function normalizeNode(node: ElementCompact): unknown {
+function parseStatusLine(text: string | null | undefined): number | undefined {
+  const m = text?.match(/HTTP\/[\d.]+ (\d+)/);
+  return m ? Number.parseInt(m[1], 10) : undefined;
+}
+
+// Walk a DOM element into the plain JS shape callers consume, e.g.
+// `props.scheduleOutboxURL.href`, `props.invite['invite-notification']`.
+//
+// Rules (mirrors what xml-js's compact mode gave us; verified by the
+// `parseMultistatus` test suite):
+//   - Element local names are camelCased (`calendar-data` → `calendarData`).
+//   - A leaf element with text content collapses to that string,
+//     trimmed: `<d:displayname>Calendar A</d:displayname>` → `"Calendar A"`.
+//   - An empty element (`<x/>`) collapses to `{}` so callers can do
+//     `if (props.somePreCondition)`-style detection.
+//   - An element with attributes hoists them as direct keys, alongside
+//     any child elements. `<x href="…" access="…"/>` → `{href, access}`.
+//   - Repeated sibling element names → array.
+//   - xmlns attributes are skipped (they're transport, not data).
+function elementToProps(el: Element): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  if (node._attributes) out._attributes = node._attributes;
-  if (node._text !== undefined) out._text = node._text;
-  if (node._cdata !== undefined) out._cdata = node._cdata;
-
-  for (const [rawKey, value] of Object.entries(node)) {
-    if (rawKey.startsWith("_")) continue;
-    const localKey = toCamel(stripPrefix(rawKey));
-    const normalized = Array.isArray(value)
-      ? value.map((v) => normalizeNode(v as ElementCompact))
-      : normalizeNode(value as ElementCompact);
-    out[localKey] = normalized;
-  }
-
-  const keys = Object.keys(out);
-  if (keys.length === 1 && keys[0] === "_text") {
-    return out._text;
+  for (const child of Array.from(el.children)) {
+    const key = toCamel(child.localName);
+    const value = elementToValue(child);
+    const existing = out[key];
+    if (existing === undefined) {
+      out[key] = value;
+    } else if (Array.isArray(existing)) {
+      existing.push(value);
+    } else {
+      out[key] = [existing, value];
+    }
   }
   return out;
 }
 
-function asArray<T>(value: T | T[] | undefined): T[] {
-  if (value === undefined) return [];
-  return Array.isArray(value) ? value : [value];
+function elementToValue(el: Element): unknown {
+  const attrs: Record<string, string> = {};
+  let hasAttrs = false;
+  for (const attr of Array.from(el.attributes)) {
+    if (attr.name === "xmlns" || attr.name.startsWith("xmlns:")) continue;
+    attrs[attr.name] = attr.value;
+    hasAttrs = true;
+  }
+  const hasChildren = el.children.length > 0;
+
+  if (!hasChildren && !hasAttrs) {
+    const text = el.textContent?.trim() ?? "";
+    // Empty leaf → `{}` so callers can detect presence via key existence;
+    // non-empty leaf collapses to the string.
+    return text === "" ? {} : text;
+  }
+
+  const obj: Record<string, unknown> = { ...attrs };
+  if (hasChildren) Object.assign(obj, elementToProps(el));
+  return obj;
 }
 
 /** Parse a 207 multi-status body into per-resource entries.
@@ -254,96 +292,67 @@ function asArray<T>(value: T | T[] | undefined): T[] {
  * `davRequest(...).responses`.
  */
 export function parseMultistatus(xml: string): DavResponseEntry[] {
-  let parsed: ElementCompact;
-  try {
-    parsed = xml2js(xml, {
-      compact: true,
-      ignoreDeclaration: true,
-      ignoreInstruction: true,
-      ignoreComment: true,
-      ignoreDoctype: true,
-    }) as ElementCompact;
-  } catch {
-    return [];
-  }
+  const doc = safeParseXml(xml);
+  if (!doc) return [];
 
-  const root = (parsed["d:multistatus"] ?? parsed["multistatus"]) as
-    | ElementCompact
-    | undefined;
-  if (!root) return [];
+  const root = doc.documentElement;
+  if (!root || root.localName !== "multistatus") return [];
 
-  const responses = asArray(
-    (root["d:response"] ?? root["response"]) as
-      | ElementCompact
-      | ElementCompact[]
-      | undefined,
+  const responses = Array.from(
+    root.getElementsByTagNameNS(DAV_NS, "response"),
   );
 
   return responses.map((resp): DavResponseEntry => {
-    const hrefNode = (resp["d:href"] ?? resp["href"]) as
-      | ElementCompact
-      | undefined;
-    const href = (hrefNode?._text ?? hrefNode?._cdata) as string | undefined;
+    const href =
+      resp.getElementsByTagNameNS(DAV_NS, "href")[0]?.textContent?.trim() ??
+      undefined;
 
-    const propstats = asArray(
-      (resp["d:propstat"] ?? resp["propstat"]) as
-        | ElementCompact
-        | ElementCompact[]
-        | undefined,
+    // Only look at *direct* propstat children — `<d:error>` nesting can
+    // legally contain its own `<d:status>` and we don't want to pull
+    // that into the response-level status.
+    const propstats = Array.from(resp.children).filter(
+      (c) => c.namespaceURI === DAV_NS && c.localName === "propstat",
     );
 
     let combinedProps: Record<string, unknown> = {};
     let firstStatus: number | undefined;
     for (const ps of propstats) {
-      const propNode = (ps["d:prop"] ?? ps["prop"]) as
-        | ElementCompact
-        | undefined;
-      const statusNode = (ps["d:status"] ?? ps["status"]) as
-        | ElementCompact
-        | undefined;
-      const statusText = (statusNode?._text ?? statusNode?._cdata) as
-        | string
-        | undefined;
-      const statusMatch = statusText?.match(/HTTP\/[\d.]+ (\d+)/);
-      const status = statusMatch ? Number.parseInt(statusMatch[1], 10) : 200;
+      const statusEl = Array.from(ps.children).find(
+        (c) => c.namespaceURI === DAV_NS && c.localName === "status",
+      );
+      const status = parseStatusLine(statusEl?.textContent) ?? 200;
       if (firstStatus === undefined) firstStatus = status;
-      if (propNode && status >= 200 && status < 300) {
-        const normalized = normalizeNode(propNode) as Record<string, unknown>;
-        combinedProps = { ...combinedProps, ...normalized };
+      if (status >= 200 && status < 300) {
+        const propEl = Array.from(ps.children).find(
+          (c) => c.namespaceURI === DAV_NS && c.localName === "prop",
+        );
+        if (propEl) {
+          combinedProps = { ...combinedProps, ...elementToProps(propEl) };
+        }
       }
     }
 
-    // Some servers emit `<d:status>` at the response level instead of
-    // inside a propstat (e.g. 207 with a single 404 for a non-existent
-    // resource). Fall back to that when no propstat statuses applied.
+    // Response-level status fallback (some servers emit it directly
+    // inside <d:response> when there's nothing to enumerate).
     if (firstStatus === undefined) {
-      const respStatusNode = (resp["d:status"] ?? resp["status"]) as
-        | ElementCompact
-        | undefined;
-      const statusText = (respStatusNode?._text ?? respStatusNode?._cdata) as
-        | string
-        | undefined;
-      const m = statusText?.match(/HTTP\/[\d.]+ (\d+)/);
-      firstStatus = m ? Number.parseInt(m[1], 10) : 200;
+      const directStatus = Array.from(resp.children).find(
+        (c) => c.namespaceURI === DAV_NS && c.localName === "status",
+      );
+      firstStatus = parseStatusLine(directStatus?.textContent) ?? 200;
     }
 
-    // RFC 4918 §11.5 — per-resource `<d:responsedescription>` carries a
-    // human-readable summary; useful for surfacing a specific cause when
-    // a write fails inside a 207.
-    const respDescNode = (resp["d:responsedescription"] ??
-      resp["responsedescription"]) as ElementCompact | undefined;
-    const responseDescription = (
-      respDescNode?._text ?? respDescNode?._cdata
-    ) as string | undefined;
+    // RFC 4918 §11.5
+    const respDescEl = Array.from(resp.children).find(
+      (c) =>
+        c.namespaceURI === DAV_NS && c.localName === "responsedescription",
+    );
+    const responseDescription = respDescEl?.textContent?.trim() || undefined;
 
-    // RFC 4918 §11.4 — per-resource `<d:error>` block. Surface it normalized
-    // so callers can switch on the precondition name.
-    const respErrorNode = (resp["d:error"] ?? resp["error"]) as
-      | ElementCompact
-      | undefined;
-    const responseError = respErrorNode
-      ? (normalizeNode(respErrorNode) as Record<string, unknown>)
-      : undefined;
+    // RFC 4918 §11.4 — normalize the <d:error> subtree like any prop.
+    const respErrorEl = Array.from(resp.children).find(
+      (c) => c.namespaceURI === DAV_NS && c.localName === "error",
+    );
+    const responseError = respErrorEl ? elementToProps(respErrorEl) : undefined;
 
     const ok = firstStatus >= 200 && firstStatus < 300;
     return {
@@ -353,7 +362,6 @@ export function parseMultistatus(xml: string): DavResponseEntry[] {
       props: combinedProps,
       responseDescription,
       error: responseError,
-      raw: resp,
     };
   });
 }

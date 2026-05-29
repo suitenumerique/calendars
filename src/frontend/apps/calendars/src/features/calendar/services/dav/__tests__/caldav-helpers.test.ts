@@ -1,5 +1,8 @@
 /**
- * Tests for CalDAV Helper functions
+ * @jest-environment jsdom
+ *
+ * Tests for CalDAV Helper functions. Uses jsdom because the imported
+ * `parseDavErrorMessage` (from `DavClient`) parses via native `DOMParser`.
  */
 import {
   escapeXml,

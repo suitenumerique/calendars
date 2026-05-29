@@ -47,7 +47,6 @@ import {
   CALENDAR_PROPS,
   NS,
   parseCalendarComponents,
-  parseSharePrivilege,
   parseInviteSharees,
   parseInviteOrganizerEmail,
   parseCalendarOrder,
@@ -1064,9 +1063,6 @@ export class CalDavService {
     }
 
     const cachedSource = this._events.get(params.sourceEventUrl)
-    const sourceCalendarUrl =
-      cachedSource?.calendarUrl ?? getCalendarUrlFromEventUrl(params.sourceEventUrl)
-    const sourceCalendar = this._calendars.get(sourceCalendarUrl)
 
     return asResult(async () => {
       // Strip trailing slashes before splitting so a stray collection-shaped
@@ -1096,11 +1092,6 @@ export class CalDavService {
       if (!response.success) {
         throw new Error(response.error ?? `Failed to move event: ${response.status}`)
       }
-
-      // `sourceCalendar` is checked above for fallback semantics but we no
-      // longer need to splice its headers; davRequest carries the shared
-      // session auth, and both calendars share the same CalDAV account.
-      void sourceCalendar
 
       const newEtag = response.responseHeaders?.get('etag') ?? undefined
 
