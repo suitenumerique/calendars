@@ -584,8 +584,8 @@ class TestRSVPEndToEndFlow(TestCase):
             alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
         )
 
-        # Find accept link by green button color (#16a34a)
-        accept_url = self._extract_rsvp_link(html_body, "#16a34a")
+        # Find accept link by blue button color (#435de6)
+        accept_url = self._extract_rsvp_link(html_body, "#435de6")
         token = self._extract_token_from_url(accept_url)
 
         # GET the confirm page
@@ -615,8 +615,8 @@ class TestRSVPEndToEndFlow(TestCase):
             alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
         )
 
-        # Find decline link by red button color (#dc2626)
-        decline_url = self._extract_rsvp_link(html_body, "#dc2626")
+        # Find decline link by red button color (#d2212f)
+        decline_url = self._extract_rsvp_link(html_body, "#d2212f")
         token = self._extract_token_from_url(decline_url)
 
         with patch.object(CalDAVHTTPClient, "internal_request") as mock_internal:
@@ -640,9 +640,9 @@ class TestRSVPEndToEndFlow(TestCase):
 
         # Each button has a distinct color
         colors = {
-            "accept": "#16a34a",  # green
-            "tentative": "#d97706",  # amber
-            "decline": "#dc2626",  # red
+            "accept": "#435de6",  # blue
+            "tentative": "#626a80",  # gray
+            "decline": "#d2212f",  # red
         }
         for label, color in colors.items():
             pattern = rf'<a\s+href="([^"]*)"[^>]*background-color:\s*{re.escape(color)}'
@@ -670,7 +670,7 @@ class TestRSVPEndToEndFlow(TestCase):
         html_body = next(
             alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
         )
-        accept_url = self._extract_rsvp_link(html_body, "#16a34a")
+        accept_url = self._extract_rsvp_link(html_body, "#435de6")
         token = self._extract_token_from_url(accept_url)
 
         mock_internal.return_value = _mock_resp(404, {"error": "Event not found"})
