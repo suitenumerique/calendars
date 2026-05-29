@@ -20,8 +20,17 @@ export const SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL =
 /**
  * Redirect to the login page, saving the current URL for post-login redirect.
  * Called on any 401 response to handle expired sessions.
+ *
+ * Idempotent — if several concurrent requests all return 401 (e.g. multiple
+ * React Query refetches on window focus), only the first call actually
+ * persists the URL and triggers navigation; later calls are no-ops so the
+ * stored `redirect_after_login_url` doesn't get overwritten by whatever
+ * the URL happens to be mid-navigation.
  */
+let redirectInFlight = false;
 export function redirectToLogin() {
+  if (redirectInFlight) return;
+  redirectInFlight = true;
   sessionStorage.setItem(
     SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL,
     window.location.href,

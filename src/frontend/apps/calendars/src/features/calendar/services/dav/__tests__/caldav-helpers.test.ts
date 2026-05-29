@@ -5,25 +5,18 @@ import {
   escapeXml,
   XML_NS,
   xmlProp,
-  xmlPropOptional,
   buildCalendarPropsXml,
   buildMkCalendarXml,
   buildProppatchXml,
-  sharePrivilegeToXml,
+  buildCalendarQueryXml,
   parseSharePrivilege,
-  buildShareeSetXml,
   buildShareRequestXml,
   buildUnshareRequestXml,
-  buildInviteReplyXml,
-  buildSyncCollectionXml,
-  buildPrincipalSearchXml,
   parseCalendarComponents,
   parseCalendarOrder,
-  parseDavErrorMessage,
-  parseShareStatus,
   getCalendarUrlFromEventUrl,
 } from '../caldav-helpers'
-import type { SharePrivilege } from '../types/caldav-service'
+import { parseDavErrorMessage } from '@/features/calendar/utils/DavClient'
 
 describe('caldav-helpers', () => {
   // ============================================================================
@@ -81,17 +74,6 @@ describe('caldav-helpers', () => {
       })
     })
 
-    describe('xmlPropOptional', () => {
-      it('returns element when value is defined', () => {
-        expect(xmlPropOptional('D', 'displayname', 'Test')).toBe(
-          '<D:displayname>Test</D:displayname>'
-        )
-      })
-
-      it('returns empty string when value is undefined', () => {
-        expect(xmlPropOptional('D', 'displayname', undefined)).toBe('')
-      })
-    })
   })
 
   // ============================================================================
@@ -141,6 +123,43 @@ describe('caldav-helpers', () => {
         expect(result).toContain('<D:displayname>New Calendar</D:displayname>')
         expect(result).toContain('</C:mkcalendar>')
       })
+
+      it('emits calendar-timezone when timezone is provided', () => {
+        // Calendar-timezone carries the VTIMEZONE block that SabreDAV
+        // uses to render floating events for this calendar.
+        const result = buildMkCalendarXml({
+          displayName: 'TZ Calendar',
+          timezone: 'BEGIN:VTIMEZONE\nTZID:Europe/Paris\nEND:VTIMEZONE',
+        })
+        expect(result).toContain('<C:calendar-timezone>')
+        expect(result).toContain('TZID:Europe/Paris')
+      })
+
+      it('emits calendar-color when color is provided', () => {
+        const result = buildMkCalendarXml({
+          displayName: 'C',
+          color: '#ff0000',
+        })
+        expect(result).toContain('<A:calendar-color>#ff0000</A:calendar-color>')
+      })
+
+      it('escapes displayName to prevent XML/XSS injection', () => {
+        // Verified end-to-end in the browser: a calendar named
+        // `<script>alert(1)</script><img src=x onerror=alert(2)>` renders as
+        // plain text in the sidebar (React auto-escape) AND is stored by
+        // SabreDAV with the angle brackets entity-encoded. The key
+        // invariant: every `<` and `>` is escaped, so no opening tag of
+        // any element survives in the body.
+        const evil = `<script>alert('xss')</script>"><img src=x onerror=alert(2)>`
+        const result = buildMkCalendarXml({ displayName: evil })
+        expect(result).toContain(
+          '<D:displayname>&lt;script&gt;alert(&apos;xss&apos;)&lt;/script&gt;&quot;&gt;&lt;img src=x onerror=alert(2)&gt;</D:displayname>',
+        )
+        // No raw `<script>` or `<img …>` start tag survives the escaping.
+        expect(result).not.toContain('<script>')
+        expect(result).not.toContain('<img ')
+        expect(result).not.toContain('<img>')
+      })
     })
 
     describe('buildProppatchXml', () => {
@@ -151,6 +170,84 @@ describe('caldav-helpers', () => {
         expect(result).toContain('<D:set>')
         expect(result).toContain('<D:displayname>Updated Name</D:displayname>')
       })
+
+      it('emits schedule-calendar-transp transparent when includeInAvailability is false', () => {
+        const result = buildProppatchXml({ scheduleTransp: 'transparent' })
+        expect(result).toContain('<C:schedule-calendar-transp>')
+        expect(result).toContain('<C:transparent/>')
+      })
+
+      it('emits schedule-calendar-transp opaque when includeInAvailability is true', () => {
+        const result = buildProppatchXml({ scheduleTransp: 'opaque' })
+        expect(result).toContain('<C:schedule-calendar-transp>')
+        expect(result).toContain('<C:opaque/>')
+      })
+    })
+
+    describe('buildCalendarQueryXml', () => {
+      it('builds a bare calendar-query with no filter when no timeRange given', () => {
+        const result = buildCalendarQueryXml()
+        expect(result).toContain('<?xml version="1.0"')
+        expect(result).toContain('<C:calendar-query')
+        expect(result).toContain('xmlns:D="DAV:"')
+        expect(result).toContain('xmlns:C="urn:ietf:params:xml:ns:caldav"')
+        expect(result).toContain('<D:getetag/>')
+        expect(result).toContain('<C:calendar-data/>')
+        expect(result).toContain('<C:comp-filter name="VCALENDAR"')
+        expect(result).toContain('<C:comp-filter name="VEVENT"')
+        expect(result).not.toContain('<C:time-range')
+        expect(result).not.toContain('<C:expand')
+      })
+
+      it('includes a time-range filter when timeRange is provided', () => {
+        const result = buildCalendarQueryXml({
+          timeRange: {
+            start: '2026-05-01T00:00:00Z',
+            end: '2026-06-01T00:00:00Z',
+          },
+        })
+        // RFC 4791 §9.6: time-range start/end use the compact
+        // `YYYYMMDDTHHMMSSZ` UTC format.
+        expect(result).toContain('<C:time-range')
+        expect(result).toContain('start="20260501T000000Z"')
+        expect(result).toContain('end="20260601T000000Z"')
+      })
+
+      it('accepts Date objects for timeRange bounds', () => {
+        const result = buildCalendarQueryXml({
+          timeRange: {
+            start: new Date(Date.UTC(2026, 4, 1, 12, 30, 45)),
+            end: new Date(Date.UTC(2026, 5, 1, 0, 0, 0)),
+          },
+        })
+        expect(result).toContain('start="20260501T123045Z"')
+        expect(result).toContain('end="20260601T000000Z"')
+      })
+
+      it('emits <C:expand> inside <C:calendar-data> when expand=true with timeRange', () => {
+        // expand=true asks SabreDAV to materialise individual occurrences
+        // of recurring events for the given window, instead of returning
+        // the master VEVENT with its RRULE.
+        const result = buildCalendarQueryXml({
+          timeRange: {
+            start: '2026-05-01T00:00:00Z',
+            end: '2026-06-01T00:00:00Z',
+          },
+          expand: true,
+        })
+        expect(result).toContain('<C:calendar-data>')
+        expect(result).toContain('<C:expand')
+        expect(result).toContain('start="20260501T000000Z"')
+        expect(result).toContain('end="20260601T000000Z"')
+        expect(result).toContain('</C:calendar-data>')
+      })
+
+      it('does not emit <C:expand> when expand=true but no timeRange', () => {
+        // RFC 4791 §9.6.5: expand requires a time-range bound.
+        const result = buildCalendarQueryXml({ expand: true })
+        expect(result).not.toContain('<C:expand')
+        expect(result).toContain('<C:calendar-data/>')
+      })
     })
   })
 
@@ -158,30 +255,6 @@ describe('caldav-helpers', () => {
   // Sharing XML Builders
   // ============================================================================
   describe('Sharing XML Builders', () => {
-    describe('sharePrivilegeToXml', () => {
-      it('converts read privilege', () => {
-        expect(sharePrivilegeToXml('read')).toBe('<CS:read/>')
-      })
-
-      it('converts read-write privilege', () => {
-        expect(sharePrivilegeToXml('read-write')).toBe('<CS:read-write/>')
-      })
-
-      it('rides admin on top of read-write (no <CS:admin/> upstream)', () => {
-        // Upstream sabre/dav silently demotes <CS:admin/> to read; we
-        // carry the admin marker via LS:share-access instead.
-        expect(sharePrivilegeToXml('admin')).toBe('<CS:read-write/>')
-      })
-
-      it('converts freebusy privilege to read (CalDAV level)', () => {
-        expect(sharePrivilegeToXml('freebusy')).toBe('<CS:read/>')
-      })
-
-      it('defaults to read for unknown', () => {
-        expect(sharePrivilegeToXml('unknown' as SharePrivilege)).toBe('<CS:read/>')
-      })
-    })
-
     describe('parseSharePrivilege', () => {
       it('returns read-write when present and no override', () => {
         expect(parseSharePrivilege({ 'read-write': true })).toBe('read-write')
@@ -214,66 +287,6 @@ describe('caldav-helpers', () => {
       })
     })
 
-    describe('buildShareeSetXml', () => {
-      it('builds basic sharee XML', () => {
-        const result = buildShareeSetXml({
-          href: 'mailto:user@example.com',
-          privilege: 'read-write',
-        })
-        expect(result).toContain('<CS:set>')
-        expect(result).toContain('<D:href>mailto:user@example.com</D:href>')
-        expect(result).toContain('<CS:read-write/>')
-      })
-
-      it('includes displayName when provided', () => {
-        const result = buildShareeSetXml({
-          href: 'mailto:user@example.com',
-          displayName: 'John Doe',
-          privilege: 'read',
-        })
-        expect(result).toContain('<CS:common-name>John Doe</CS:common-name>')
-      })
-
-      it('includes LS:share-access "freebusy" for freebusy privilege', () => {
-        const result = buildShareeSetXml({
-          href: 'mailto:user@example.com',
-          privilege: 'freebusy',
-        })
-        expect(result).toContain('<CS:read/>')
-        expect(result).toContain('<LS:share-access>freebusy</LS:share-access>')
-      })
-
-      it('includes LS:share-access "admin" for admin privilege', () => {
-        const result = buildShareeSetXml({
-          href: 'mailto:user@example.com',
-          privilege: 'admin',
-        })
-        // Admin rides on read-write because upstream sabre/dav has no
-        // CS:admin element; the marker is what makes it admin.
-        expect(result).toContain('<CS:read-write/>')
-        expect(result).toContain('<LS:share-access>admin</LS:share-access>')
-      })
-
-      it('emits empty LS:share-access for read so backend resets the override', () => {
-        // The empty marker tells the backend to clear any previously
-        // stored override (e.g. a sharee being moved off freebusy).
-        // Without it, the share_access_level column stays pinned.
-        const result = buildShareeSetXml({
-          href: 'mailto:user@example.com',
-          privilege: 'read',
-        })
-        expect(result).toContain('<LS:share-access></LS:share-access>')
-      })
-
-      it('emits empty LS:share-access for read-write so backend resets the override', () => {
-        const result = buildShareeSetXml({
-          href: 'mailto:user@example.com',
-          privilege: 'read-write',
-        })
-        expect(result).toContain('<LS:share-access></LS:share-access>')
-      })
-    })
-
     describe('buildShareRequestXml', () => {
       it('builds share request with multiple sharees', () => {
         const result = buildShareRequestXml([
@@ -293,6 +306,65 @@ describe('caldav-helpers', () => {
         expect(result).toMatch(/xmlns:LS=['"]/)
         expect(result).toContain('<LS:share-access>freebusy</LS:share-access>')
       })
+
+      it('emits CS:read for freebusy with LS:share-access marker', () => {
+        // Upstream sabre/dav's CS:share parser only knows CS:read and
+        // CS:read-write — freebusy rides on CS:read with an LS marker.
+        const result = buildShareRequestXml([
+          { href: 'mailto:user@example.com', privilege: 'freebusy' },
+        ])
+        expect(result).toContain('<CS:read/>')
+        expect(result).toContain('<LS:share-access>freebusy</LS:share-access>')
+      })
+
+      it('emits CS:read-write for admin with LS:share-access marker', () => {
+        // Admin rides on CS:read-write because sabre/dav has no CS:admin.
+        const result = buildShareRequestXml([
+          { href: 'mailto:user@example.com', privilege: 'admin' },
+        ])
+        expect(result).toContain('<CS:read-write/>')
+        expect(result).toContain('<LS:share-access>admin</LS:share-access>')
+      })
+
+      it('emits empty LS:share-access for read so backend clears any prior override', () => {
+        // Without the empty marker, share_access_level stays pinned to
+        // its previous value (e.g. a sharee being demoted from freebusy).
+        const result = buildShareRequestXml([
+          { href: 'mailto:user@example.com', privilege: 'read' },
+        ])
+        expect(result).toContain('<LS:share-access></LS:share-access>')
+      })
+
+      it('emits empty LS:share-access for read-write so backend clears any prior override', () => {
+        const result = buildShareRequestXml([
+          { href: 'mailto:user@example.com', privilege: 'read-write' },
+        ])
+        expect(result).toContain('<LS:share-access></LS:share-access>')
+      })
+
+      it('includes CS:common-name when displayName is provided', () => {
+        const result = buildShareRequestXml([
+          {
+            href: 'mailto:user@example.com',
+            displayName: 'John Doe',
+            privilege: 'read',
+          },
+        ])
+        expect(result).toContain('<CS:common-name>John Doe</CS:common-name>')
+      })
+
+      it('escapes displayName to prevent XML injection', () => {
+        const result = buildShareRequestXml([
+          {
+            href: 'mailto:user@example.com',
+            displayName: 'Evil <script>',
+            privilege: 'read',
+          },
+        ])
+        expect(result).toContain(
+          '<CS:common-name>Evil &lt;script&gt;</CS:common-name>',
+        )
+      })
     })
 
     describe('buildUnshareRequestXml', () => {
@@ -304,67 +376,6 @@ describe('caldav-helpers', () => {
       })
     })
 
-    describe('buildInviteReplyXml', () => {
-      it('builds accept reply', () => {
-        const result = buildInviteReplyXml('invite-123', true)
-        expect(result).toContain('<CS:invite-reply')
-        expect(result).toContain('<CS:in-reply-to>invite-123</CS:in-reply-to>')
-        expect(result).toContain('<CS:invite-accepted/>')
-      })
-
-      it('builds decline reply', () => {
-        const result = buildInviteReplyXml('invite-123', false)
-        expect(result).toContain('<CS:invite-declined/>')
-      })
-    })
-  })
-
-  // ============================================================================
-  // Sync XML Builders
-  // ============================================================================
-  describe('Sync XML Builders', () => {
-    describe('buildSyncCollectionXml', () => {
-      it('builds sync-collection XML', () => {
-        const result = buildSyncCollectionXml({
-          syncToken: 'token-123',
-        })
-        expect(result).toContain('<?xml version="1.0"')
-        expect(result).toContain('<D:sync-collection')
-        expect(result).toContain('<D:sync-token>token-123</D:sync-token>')
-        expect(result).toContain('<D:sync-level>1</D:sync-level>')
-        expect(result).toContain('<D:getetag/>')
-        expect(result).toContain('<C:calendar-data/>')
-      })
-
-      it('uses custom sync level', () => {
-        const result = buildSyncCollectionXml({
-          syncToken: 'token-123',
-          syncLevel: 'infinite',
-        })
-        expect(result).toContain('<D:sync-level>infinite</D:sync-level>')
-      })
-    })
-  })
-
-  // ============================================================================
-  // Principal Search XML Builder
-  // ============================================================================
-  describe('Principal Search XML Builder', () => {
-    describe('buildPrincipalSearchXml', () => {
-      it('builds principal search XML', () => {
-        const result = buildPrincipalSearchXml('john')
-        expect(result).toContain('<?xml version="1.0"')
-        expect(result).toContain('<D:principal-property-search')
-        expect(result).toContain('<D:match>john</D:match>')
-        expect(result).toContain('<D:displayname/>')
-        expect(result).toContain('<C:calendar-home-set')
-      })
-
-      it('escapes query', () => {
-        const result = buildPrincipalSearchXml('Tom & Jerry')
-        expect(result).toContain('<D:match>Tom &amp; Jerry</D:match>')
-      })
-    })
   })
 
   // ============================================================================
@@ -441,20 +452,6 @@ describe('caldav-helpers', () => {
       })
     })
 
-    describe('parseShareStatus', () => {
-      it('returns accepted when accepted is truthy', () => {
-        expect(parseShareStatus(true, false)).toBe('accepted')
-      })
-
-      it('returns pending when noResponse is truthy', () => {
-        expect(parseShareStatus(false, true)).toBe('pending')
-      })
-
-      it('returns declined as default', () => {
-        expect(parseShareStatus(false, false)).toBe('declined')
-      })
-    })
-
     describe('parseDavErrorMessage', () => {
       const SABREDAV_FORBIDDEN = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -511,6 +508,43 @@ describe('caldav-helpers', () => {
           + '</d:error>'
         )
         expect(parseDavErrorMessage(body)).toBe('first')
+      })
+
+      it('strips namespace prefixes so any prefix binding works', () => {
+        // Defensive — SabreDAV always uses `s:` for its namespace, but
+        // the parser is prefix-agnostic via `elementNameFn`. Verify a
+        // body with a non-`s:` prefix still lands at `error.message`.
+        const body = (
+          '<?xml version="1.0"?>'
+          + '<x:error xmlns:x="DAV:" xmlns:y="http://sabredav.org/ns">'
+          + '<y:message>weird prefix</y:message>'
+          + '</x:error>'
+        )
+        expect(parseDavErrorMessage(body)).toBe('weird prefix')
+      })
+
+      it('trims surrounding whitespace from the message', () => {
+        const body = (
+          '<?xml version="1.0"?>'
+          + '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">'
+          + '<s:message>  spaced out  </s:message>'
+          + '</d:error>'
+        )
+        expect(parseDavErrorMessage(body)).toBe('spaced out')
+      })
+
+      it('safely handles a 500 with non-DAV HTML body', () => {
+        // Django's debug page (or any non-DAV 500) is HTML, not XML.
+        // We must not throw or surface the HTML as a "friendly" message.
+        const html =
+          '<html><body><h1>500 Internal Server Error</h1></body></html>'
+        expect(parseDavErrorMessage(html)).toBeUndefined()
+      })
+
+      it('returns undefined when the body is a JSON blob', () => {
+        // Some endpoints may serve JSON errors; this isn't DAV.
+        const body = '{"error":"bad","detail":"nope"}'
+        expect(parseDavErrorMessage(body)).toBeUndefined()
       })
     })
 

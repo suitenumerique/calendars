@@ -1,17 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
 import {
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 
-import { CalDavService } from "@/features/calendar/services/dav/CalDavService";
-import {
-  caldavServerUrl,
-  headers,
-  fetchOptions,
-} from "@/features/calendar/utils/DavClient";
-import { useAuth } from "@/features/auth/Auth";
+import { useCalendarContext } from "@/features/calendar/contexts/CalendarContext";
 
 import {
   DEFAULT_AVAILABILITY,
@@ -25,30 +18,8 @@ import {
 const WORKING_HOURS_KEY = ["working-hours"];
 
 export const useWorkingHours = () => {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
-  const caldavService = useMemo(() => new CalDavService(), []);
-  const [isConnected, setIsConnected] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-
-    caldavService
-      .connect({ serverUrl: caldavServerUrl, headers, fetchOptions })
-      .then((result) => {
-        if (!cancelled && result.success) {
-          setIsConnected(true);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to connect to CalDAV:", err);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [caldavService, user]);
+  const { caldavService, isConnected } = useCalendarContext();
 
   const query = useQuery({
     queryKey: WORKING_HOURS_KEY,

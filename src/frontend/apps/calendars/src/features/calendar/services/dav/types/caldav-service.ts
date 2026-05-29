@@ -1,34 +1,17 @@
 /**
  * Types for CalDavService - Pure CalDAV operations
  *
- * Reuses types from tsdav and ts-ics where possible to avoid duplication.
+ * Reuses types from ts-ics where possible to avoid duplication.
  */
 
-import type { DAVCalendar, DAVCalendarObject } from 'tsdav'
 import type {
   IcsCalendar,
   IcsEvent,
   IcsAttendee,
-  IcsOrganizer,
-  IcsAttendeePartStatusType,
-  FreeBusyType as IcsFreeBusyType,
 } from 'ts-ics'
-
-// ============================================================================
-// Re-exports from libraries (avoid duplication)
-// ============================================================================
 
 /** Attendee type from ts-ics */
 export type CalDavAttendee = IcsAttendee
-
-/** Organizer type from ts-ics */
-export type CalDavOrganizer = IcsOrganizer
-
-/** Attendee participation status from ts-ics */
-export type AttendeeStatus = IcsAttendeePartStatusType
-
-/** FreeBusy type from ts-ics */
-export type FreeBusyType = IcsFreeBusyType
 
 // ============================================================================
 // Connection & Authentication
@@ -36,32 +19,28 @@ export type FreeBusyType = IcsFreeBusyType
 
 export type CalDavCredentials = {
   serverUrl: string
-  username?: string
-  password?: string
-  headers?: Record<string, string>
-  fetchOptions?: RequestInit
-  // When provided, principal/home URLs are derived from the SabreDAV URL
-  // pattern (principals/users/<email>, calendars/users/<email>) instead of
-  // running tsdav's discovery roundtrip. Saves three HTTP requests on
-  // every page load.
-  userEmail?: string
+  // SabreDAV's principal/home URLs are derived from this:
+  //   principals/users/<email>, calendars/users/<email>.
+  userEmail: string
 }
 
 export type CalDavAccount = {
   serverUrl: string
-  rootUrl?: string
-  principalUrl?: string
-  homeUrl?: string
-  headers?: Record<string, string>
-  fetchOptions?: RequestInit
+  principalUrl: string
+  homeUrl: string
 }
 
 // ============================================================================
-// Calendar Types (extends tsdav types)
+// Calendar Types
 // ============================================================================
 
-/** Calendar type extending DAVCalendar with additional properties */
-export type CalDavCalendar = Pick<DAVCalendar, 'url' | 'ctag' | 'syncToken' | 'components' | 'timezone'> & {
+/** Calendar resource on the CalDAV server. */
+export type CalDavCalendar = {
+  url: string
+  ctag?: string
+  syncToken?: string
+  components?: string[]
+  timezone?: string
   displayName: string
   description?: string
   color?: string
@@ -89,8 +68,6 @@ export type CalDavCalendar = Pick<DAVCalendar, 'url' | 'ctag' | 'syncToken' | 'c
    */
   sharees?: CalDavSharee[]
   resourcetype?: string[]
-  headers?: Record<string, string>
-  fetchOptions?: RequestInit
 }
 
 export type CalDavCalendarCreate = {
@@ -113,11 +90,13 @@ export type CalDavCalendarUpdate = {
 }
 
 // ============================================================================
-// Event Types (extends tsdav types)
+// Event Types
 // ============================================================================
 
-/** Event type extending DAVCalendarObject with parsed ICS data */
-export type CalDavEvent = Pick<DAVCalendarObject, 'url' | 'etag'> & {
+/** Event resource with parsed ICS data. */
+export type CalDavEvent = {
+  url: string
+  etag?: string
   calendarUrl: string
   data: IcsCalendar
 }
@@ -155,7 +134,7 @@ export type EventFilter = {
 }
 
 // ============================================================================
-// Sharing Types (CalDAV Scheduling & ACL)
+// Sharing Types
 // ============================================================================
 
 export type SharePrivilege = 'freebusy' | 'read' | 'read-write' | 'admin'
@@ -180,28 +159,9 @@ export type CalDavShareResponse = {
   errors?: { href: string; error: string }[]
 }
 
-export type CalDavInvitation = {
-  uid: string
-  calendarUrl: string
-  ownerHref: string
-  ownerDisplayName?: string
-  summary?: string
-  privilege: SharePrivilege
-  status: ShareStatus
-}
-
 // ============================================================================
-// Scheduling (iTIP) Types
+// Scheduling (iTIP) Types — used by respondToMeeting
 // ============================================================================
-
-export type SchedulingMethod = 'REQUEST' | 'REPLY' | 'CANCEL' | 'ADD' | 'REFRESH' | 'COUNTER' | 'DECLINECOUNTER'
-
-export type SchedulingRequest = {
-  method: SchedulingMethod
-  organizer: CalDavOrganizer
-  attendees: CalDavAttendee[]
-  event: IcsEvent
-}
 
 export type SchedulingResponse = {
   success: boolean
@@ -216,87 +176,19 @@ export type SchedulingResponse = {
 // FreeBusy Types
 // ============================================================================
 
-export type FreeBusyPeriod = {
-  start: Date
-  end: Date
-  type: FreeBusyType
-}
-
 export type FreeBusyRequest = {
   attendees: string[] // email addresses
   timeRange: TimeRange
-  organizer?: CalDavOrganizer
+  organizer?: { email: string; name?: string }
 }
 
 export type FreeBusyResponse = {
   attendee: string
-  periods: FreeBusyPeriod[]
-}
-
-// ============================================================================
-// ACL Types
-// ============================================================================
-
-export type AclPrivilege =
-  | 'all'
-  | 'read'
-  | 'write'
-  | 'write-properties'
-  | 'write-content'
-  | 'unlock'
-  | 'bind'
-  | 'unbind'
-  | 'read-acl'
-  | 'write-acl'
-  | 'read-current-user-privilege-set'
-
-export type AclPrincipal = {
-  href?: string
-  all?: boolean
-  authenticated?: boolean
-  unauthenticated?: boolean
-  self?: boolean
-}
-
-export type AclEntry = {
-  principal: AclPrincipal
-  privileges: AclPrivilege[]
-  grant: boolean
-  protected?: boolean
-  inherited?: string
-}
-
-export type CalendarAcl = {
-  calendarUrl: string
-  entries: AclEntry[]
-  ownerHref?: string
-}
-
-// ============================================================================
-// Sync Types
-// ============================================================================
-
-export type SyncReport = {
-  syncToken: string
-  changed: CalDavEvent[]
-  deleted: string[] // URLs of deleted events
-}
-
-export type SyncOptions = {
-  syncToken?: string
-  syncLevel?: 1 | 'infinite'
-}
-
-// ============================================================================
-// Principal Types
-// ============================================================================
-
-export type CalDavPrincipal = {
-  url: string
-  displayName?: string
-  email?: string
-  calendarHomeSet?: string
-  addressBookHomeSet?: string
+  periods: {
+    start: Date
+    end: Date
+    type: string
+  }[]
 }
 
 // ============================================================================
@@ -308,9 +200,4 @@ export type CalDavResponse<T = void> = {
   data?: T
   error?: string
   status?: number
-}
-
-export type CalDavMultiResponse<T> = {
-  success: boolean
-  results: { url: string; data?: T; error?: string }[]
 }

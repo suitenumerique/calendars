@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { propfind } from "tsdav";
 
-import { getOrigin } from "@/features/api/utils";
+import {
+  caldavServerUrl,
+  davRequest,
+} from "@/features/calendar/utils/DavClient";
 
 import type { ResourceType } from "../types";
 
@@ -17,10 +19,9 @@ const RESOURCE_PRINCIPALS_KEY = ["resource-principals"];
 const EMPTY_RESOURCES: ResourcePrincipal[] = [];
 
 async function fetchResourcePrincipals(): Promise<ResourcePrincipal[]> {
-  const caldavUrl = `${getOrigin()}/caldav/principals/resources/`;
-
-  const response = await propfind({
-    url: caldavUrl,
+  const result = await davRequest({
+    url: `${caldavServerUrl}principals/resources/`,
+    method: "PROPFIND",
     props: {
       "d:displayname": {},
       "d:resourcetype": {},
@@ -28,13 +29,15 @@ async function fetchResourcePrincipals(): Promise<ResourcePrincipal[]> {
       "c:calendar-user-address-set": {},
     },
     depth: "1",
-    headers: {},
-    fetchOptions: { credentials: "include" as RequestCredentials },
   });
+
+  if (!result.success || !result.responses) {
+    throw new Error(result.error ?? "Failed to fetch resource principals");
+  }
 
   const resources: ResourcePrincipal[] = [];
 
-  for (const item of response) {
+  for (const item of result.responses) {
     // Skip the collection itself (depth=0 result)
     const href = item.href || "";
     if (!href || href.endsWith("/resources/") || href.endsWith("/resources")) {

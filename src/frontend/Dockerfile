@@ -23,6 +23,23 @@ COPY ./apps/calendars ./apps/calendars
 
 WORKDIR /home/frontend
 
+# Make the image and any anonymous volumes derived from it writable by
+# any host user whose group ID is `node` (1000). Compose runs the
+# container as `${DOCKER_USER:-1000}` which resolves to the host
+# uid:gid — on macOS that's typically 501:20 / 501:1000, on Linux often
+# 1000:1000. Owning everything by `node:node` plus `g+w` lets npm
+# rename/rewrite packages from either case, so `make install-front`
+# Just Works without a root-owned anonymous-volume fight.
+#
+# Also pre-create the npm cache + log directories under HOME so npm
+# doesn't try to write to `/.npm/_logs` (which it can't, as a non-root
+# user with no $HOME).
+RUN mkdir -p /home/frontend/.npm \
+ && chown -R node:node /home/frontend \
+ && chmod -R g+w /home/frontend
+ENV HOME=/home/frontend
+ENV NPM_CONFIG_CACHE=/home/frontend/.npm
+
 ### ---- Front-end builder image ----
 FROM frontend-deps AS calendars
 

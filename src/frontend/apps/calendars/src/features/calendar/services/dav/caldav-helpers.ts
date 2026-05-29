@@ -4,13 +4,22 @@
  * Factorized utilities for XML building, DAV requests, and error handling.
  */
 
-import { davRequest, DAVNamespaceShort } from 'tsdav'
-import type { DAVMethods } from 'tsdav'
 import { xml2js, type ElementCompact } from 'xml-js'
 
-type HTTPMethods = 'GET' | 'HEAD' | 'POST' | 'PUT' | 'DELETE' | 'CONNECT' | 'OPTIONS' | 'TRACE' | 'PATCH'
-type AllowedMethods = DAVMethods | HTTPMethods
 import type { SharePrivilege, CalDavResponse } from './types/caldav-service'
+
+/** XML namespace prefix lookup used when building prop keys in PROPFIND
+ * bodies. Mirrors what tsdav's `DAVNamespaceShort` used to provide; kept
+ * here so the rest of the codebase can construct prop names like
+ * `${NS.CALDAV}:calendar-availability` without depending on tsdav.
+ */
+export const NS = {
+  DAV: 'd',
+  CALDAV: 'c',
+  CALDAV_APPLE: 'ca',
+  CALENDAR_SERVER: 'cs',
+  CARDDAV: 'card',
+} as const
 
 // ============================================================================
 // XML Helpers
@@ -46,11 +55,6 @@ export function xmlProp(namespace: string, name: string, value: string): string 
   return `<${namespace}:${name}>${escapeXml(value)}</${namespace}:${name}>`
 }
 
-/** Build XML with optional value (returns empty string if value is undefined) */
-export function xmlPropOptional(namespace: string, name: string, value: string | undefined): string {
-  return value !== undefined ? xmlProp(namespace, name, value) : ''
-}
-
 // ============================================================================
 // Calendar Property Builders
 // ============================================================================
@@ -59,6 +63,8 @@ export type CalendarProps = {
   displayName?: string
   description?: string
   color?: string
+  /** VTIMEZONE block, sent as `<C:calendar-timezone>`. */
+  timezone?: string
   /**
    * `{http://apple.com/ns/ical/}calendar-order`. Integer used to manually
    * sort calendars in the sidebar; stored as a dead property by Sabre's
@@ -89,6 +95,9 @@ export function buildCalendarPropsXml(props: CalendarProps): string[] {
   if (props.components && props.components.length > 0) {
     const comps = props.components.map((c) => `<C:comp name="${escapeXml(c)}"/>`).join('')
     elements.push(`<C:supported-calendar-component-set>${comps}</C:supported-calendar-component-set>`)
+  }
+  if (typeof props.timezone === 'string' && props.timezone.length > 0) {
+    elements.push(xmlProp('C', 'calendar-timezone', props.timezone))
   }
   if (props.scheduleTransp !== undefined) {
     // RFC 6638: schedule-calendar-transp controls whether this calendar
@@ -147,7 +156,7 @@ export function buildProppatchXml(props: CalendarProps): string {
  *   - r/write  → ``<CS:read-write/>``
  *   - admin    → ``<CS:read-write/>`` + ``<LS:share-access>admin</LS:share-access>``
  */
-export function sharePrivilegeToXml(privilege: SharePrivilege): string {
+function sharePrivilegeToXml(privilege: SharePrivilege): string {
   const map: Record<SharePrivilege, string> = {
     freebusy: '<CS:read/>',
     read: '<CS:read/>',
@@ -196,7 +205,7 @@ export type ShareeXmlParams = {
  * value (e.g. a sharee being moved from ``freebusy`` back to ``read``
  * would still read back as ``freebusy``).
  */
-export function buildShareeSetXml(params: ShareeXmlParams): string {
+function buildShareeSetXml(params: ShareeXmlParams): string {
   const privilege = sharePrivilegeToXml(params.privilege)
   const commonName = params.displayName
     ? `<CS:common-name>${escapeXml(params.displayName)}</CS:common-name>`
@@ -235,154 +244,55 @@ export function buildUnshareRequestXml(shareeHref: string): string {
 </CS:share>`
 }
 
-/** Build invite-reply request body */
-export function buildInviteReplyXml(inReplyTo: string, accept: boolean): string {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<CS:invite-reply ${XML_NS.DAV} ${XML_NS.CS}>
-  <CS:in-reply-to>${escapeXml(inReplyTo)}</CS:in-reply-to>
-  <CS:invite-${accept ? 'accepted' : 'declined'}/>
-</CS:invite-reply>`
-}
-
 // ============================================================================
-// Sync XML Builders
+// Calendar Query XML Builder
 // ============================================================================
 
-export type SyncCollectionParams = {
-  syncToken: string
-  syncLevel?: number | 'infinite'
+/** Format a Date or ISO string as CalDAV `YYYYMMDDTHHMMSSZ` (RFC 4791). */
+function toCalDavTime(value: Date | string): string {
+  const d = typeof value === 'string' ? new Date(value) : value
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  return (
+    `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
+    `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`
+  )
 }
 
-/** Build sync-collection REPORT body */
-export function buildSyncCollectionXml(params: SyncCollectionParams): string {
+type CalendarQueryParams = {
+  /** When provided, results are filtered to events overlapping this range. */
+  timeRange?: { start: Date | string; end: Date | string }
+  /**
+   * When true, the server expands recurring events into individual
+   * occurrences within `timeRange` (RFC 4791 §9.6.5). Requires `timeRange`.
+   */
+  expand?: boolean
+}
+
+/** Build a calendar-query REPORT body that fetches `getetag` + `calendar-data`. */
+export function buildCalendarQueryXml(params: CalendarQueryParams = {}): string {
+  const timeRangeFilter = params.timeRange
+    ? `<C:time-range start="${toCalDavTime(params.timeRange.start)}" end="${toCalDavTime(params.timeRange.end)}"/>`
+    : ''
+
+  const calendarData =
+    params.expand && params.timeRange
+      ? `<C:calendar-data><C:expand start="${toCalDavTime(params.timeRange.start)}" end="${toCalDavTime(params.timeRange.end)}"/></C:calendar-data>`
+      : '<C:calendar-data/>'
+
   return `<?xml version="1.0" encoding="utf-8"?>
-<D:sync-collection ${XML_NS.DAV} ${XML_NS.CALDAV}>
-  <D:sync-token>${escapeXml(params.syncToken)}</D:sync-token>
-  <D:sync-level>${params.syncLevel ?? 1}</D:sync-level>
+<C:calendar-query ${XML_NS.DAV} ${XML_NS.CALDAV}>
   <D:prop>
     <D:getetag/>
-    <C:calendar-data/>
+    ${calendarData}
   </D:prop>
-</D:sync-collection>`
-}
-
-// ============================================================================
-// Principal Search XML Builder
-// ============================================================================
-
-/** Build principal-property-search REPORT body */
-export function buildPrincipalSearchXml(query: string): string {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<D:principal-property-search ${XML_NS.DAV}>
-  <D:property-search>
-    <D:prop>
-      <D:displayname/>
-    </D:prop>
-    <D:match>${escapeXml(query)}</D:match>
-  </D:property-search>
-  <D:prop>
-    <D:displayname/>
-    <C:calendar-home-set ${XML_NS.CALDAV}/>
-  </D:prop>
-</D:principal-property-search>`
-}
-
-// ============================================================================
-// DAV Request Helpers
-// ============================================================================
-
-export type DavRequestOptions = {
-  url: string
-  method: AllowedMethods
-  body: string
-  headers?: Record<string, string>
-  fetchOptions?: RequestInit
-  contentType?: string
-}
-
-/** Redirect to login if a response indicates an expired session. */
-function handleAuthError(status: number | undefined) {
-  if (status === 401) {
-    // Dynamic import to avoid circular dependencies
-    import("@/features/api/fetchApi").then(({ redirectToLogin }) =>
-      redirectToLogin(),
-    );
-  }
-}
-
-/** Execute a DAV request with standard error handling */
-export async function executeDavRequest(options: DavRequestOptions): Promise<CalDavResponse> {
-  try {
-    // Use fetch directly for methods that davRequest doesn't handle well
-    // POST is included because CalDAV sharing requires specific Content-Type handling
-    const useDirectFetch = ['PROPPATCH', 'DELETE', 'POST'].includes(options.method);
-
-    if (useDirectFetch) {
-      const response = await fetch(options.url, {
-        method: options.method,
-        headers: {
-          'Content-Type': options.contentType ?? 'application/xml; charset=utf-8',
-          ...options.headers,
-        },
-        body: options.body || undefined,
-        ...options.fetchOptions,
-      });
-
-      if (!response.ok && response.status !== 204 && response.status !== 207) {
-        handleAuthError(response.status);
-        const errorText = await response.text().catch(() => '');
-        console.error(`[CalDAV] ${options.method} request failed:`, {
-          url: options.url,
-          status: response.status,
-          error: errorText,
-        });
-        // Prefer the SabreDAV ``<s:message>`` over the raw XML body so
-        // users see "This sharee is managed by Messages..." instead of
-        // a wall of escaped angle brackets.
-        const friendly = parseDavErrorMessage(errorText);
-        return {
-          success: false,
-          error: friendly
-            ? `Request failed: ${response.status} ${friendly}`
-            : `Request failed: ${response.status} ${errorText}`,
-          status: response.status,
-        };
-      }
-
-      return { success: true };
-    }
-
-    // Use davRequest for standard WebDAV methods
-    const responses = await davRequest({
-      url: options.url,
-      init: {
-        method: options.method as DAVMethods,
-        headers: {
-          'Content-Type': options.contentType ?? 'application/xml; charset=utf-8',
-          ...options.headers,
-        },
-        body: options.body,
-      },
-      fetchOptions: options.fetchOptions,
-    })
-
-    const response = responses[0]
-    if (!response?.ok && response?.status !== 204) {
-      handleAuthError(response?.status);
-      return {
-        success: false,
-        error: `Request failed: ${response?.status}`,
-        status: response?.status,
-      }
-    }
-
-    return { success: true }
-  } catch (error) {
-    return {
-      success: false,
-      error: `Request failed: ${error instanceof Error ? error.message : String(error)}`,
-    }
-  }
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VEVENT">
+        ${timeRangeFilter}
+      </C:comp-filter>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>`
 }
 
 /** Standard PROPFIND props for calendar fetching.
@@ -399,102 +309,20 @@ export async function executeDavRequest(options: DavRequestOptions): Promise<Cal
  * those levels correctly.
  */
 export const CALENDAR_PROPS = {
-  [`${DAVNamespaceShort.CALDAV}:calendar-description`]: {},
-  [`${DAVNamespaceShort.CALDAV}:calendar-timezone`]: {},
-  [`${DAVNamespaceShort.DAV}:displayname`]: {},
-  [`${DAVNamespaceShort.CALDAV_APPLE}:calendar-color`]: {},
-  [`${DAVNamespaceShort.CALDAV_APPLE}:calendar-order`]: {},
-  [`${DAVNamespaceShort.CALENDAR_SERVER}:getctag`]: {},
-  [`${DAVNamespaceShort.DAV}:resourcetype`]: {},
-  [`${DAVNamespaceShort.CALDAV}:supported-calendar-component-set`]: {},
-  [`${DAVNamespaceShort.DAV}:sync-token`]: {},
-  [`${DAVNamespaceShort.CALDAV}:schedule-calendar-transp`]: {},
-  [`${DAVNamespaceShort.CALENDAR_SERVER}:invite`]: {},
+  [`${NS.CALDAV}:calendar-description`]: {},
+  [`${NS.CALDAV}:calendar-timezone`]: {},
+  [`${NS.DAV}:displayname`]: {},
+  [`${NS.CALDAV_APPLE}:calendar-color`]: {},
+  [`${NS.CALDAV_APPLE}:calendar-order`]: {},
+  [`${NS.CALENDAR_SERVER}:getctag`]: {},
+  [`${NS.DAV}:resourcetype`]: {},
+  [`${NS.CALDAV}:supported-calendar-component-set`]: {},
+  [`${NS.DAV}:sync-token`]: {},
+  [`${NS.CALDAV}:schedule-calendar-transp`]: {},
+  [`${NS.CALENDAR_SERVER}:invite`]: {},
   'LS:calendar-owner-type': {},
   'LS:share-access-map': {},
 } as const
-
-/**
- * Drop-in replacement for tsdav's ``propfind()`` that also declares
- * ``xmlns:LS=...`` on the root ``<propfind>`` element.
- *
- * tsdav's built-in ``propfind()`` hardcodes the xmlns map and has no
- * extension point for custom namespaces, so any ``LS:<prop>`` we put in
- * the props object would be serialized as ``<LS:foo/>`` in a body that
- * never declared the prefix — SabreDAV rejects it with
- * ``BadRequest: Namespace prefix LS is not defined``.
- *
- * This wrapper mirrors tsdav's body shape exactly so the response
- * shape matches what callers already expect (camelCased keys with
- * namespace prefixes stripped).
- */
-export async function propfindLs(params: {
-  url: string
-  props: Record<string, unknown>
-  depth?: '0' | '1' | 'infinity'
-  headers?: Record<string, string>
-  fetchOptions?: RequestInit
-}) {
-  return davRequest({
-    url: params.url,
-    init: {
-      method: 'PROPFIND' as DAVMethods,
-      headers: { depth: params.depth ?? '0', ...params.headers },
-      namespace: DAVNamespaceShort.DAV,
-      body: {
-        propfind: {
-          _attributes: {
-            'xmlns:c': 'urn:ietf:params:xml:ns:caldav',
-            'xmlns:ca': 'http://apple.com/ns/ical/',
-            'xmlns:cs': 'http://calendarserver.org/ns/',
-            'xmlns:card': 'urn:ietf:params:xml:ns:carddav',
-            'xmlns:d': 'DAV:',
-            'xmlns:LS': 'http://lasuite.numerique.gouv.fr/ns/',
-          },
-          prop: params.props,
-        },
-      },
-    },
-    fetchOptions: params.fetchOptions,
-  })
-}
-
-/** Execute PROPFIND with error handling */
-export async function executePropfind<T>(
-  url: string,
-  props: Record<string, unknown>,
-  options?: {
-    headers?: Record<string, string>
-    fetchOptions?: RequestInit
-    depth?: '0' | '1' | 'infinity'
-  }
-): Promise<CalDavResponse<T>> {
-  try {
-    const response = await propfindLs({
-      url,
-      props,
-      headers: options?.headers,
-      fetchOptions: options?.fetchOptions,
-      depth: options?.depth ?? '0',
-    })
-
-    const rs = response[0]
-    if (!rs.ok) {
-      return {
-        success: false,
-        error: `PROPFIND failed: ${rs.status}`,
-        status: rs.status,
-      }
-    }
-
-    return { success: true, data: rs.props as T }
-  } catch (error) {
-    return {
-      success: false,
-      error: `PROPFIND failed: ${error instanceof Error ? error.message : String(error)}`,
-    }
-  }
-}
 
 // ============================================================================
 // Response Parsing Helpers
@@ -541,64 +369,13 @@ export function parseCalendarComponents(supportedCalendarComponentSet: unknown):
 }
 
 /** Parse share status from invite response */
-export function parseShareStatus(
+function parseShareStatus(
   accepted: unknown,
   noResponse: unknown
 ): 'pending' | 'accepted' | 'declined' {
   if (accepted) return 'accepted'
   if (noResponse) return 'pending'
   return 'declined'
-}
-
-/**
- * Extract the human-readable ``<s:message>`` from a SabreDAV-style
- * XML error body. Returns ``undefined`` when the body is empty,
- * malformed, missing the ``s:message`` element, or whitespace-only.
- *
- * Background: SabreDAV serialises errors as
- * ``<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">
- *   <s:exception>...</s:exception>
- *   <s:message>human-readable text</s:message>
- *  </d:error>``
- * Surfacing the raw XML to the user is unhelpful — the message child
- * is what we actually want to display.
- *
- * Uses ``xml-js``'s ``xml2js`` (the same parser tsdav itself uses
- * internally), with namespace prefixes stripped so ``<s:message>``
- * lands at ``parsed.error.message`` regardless of which prefix the
- * server happens to bind. Works in both browser and ``node``
- * jest environments — no ``DOMParser`` dependency.
- *
- * Safe to render in React: the value is plain text from our own
- * SabreDAV server (not user-supplied), and ``server.php``'s exception
- * handler already masks any non-DAV exception's message as
- * ``Internal server error`` so internal details (DB errors, file
- * paths, SQL state) cannot leak through this channel.
- */
-export function parseDavErrorMessage(xmlBody: string): string | undefined {
-  if (!xmlBody) return undefined
-  let parsed: ElementCompact
-  try {
-    parsed = xml2js(xmlBody, {
-      compact: true,
-      trim: true,
-      // Strip namespace prefixes (``s:message`` → ``message``) so the
-      // resulting object is prefix-agnostic. Mirrors how tsdav parses
-      // its own DAV responses internally.
-      elementNameFn: (name) => name.replace(/^.+:/, ''),
-    }) as ElementCompact
-  } catch {
-    return undefined
-  }
-  const error = parsed.error as ElementCompact | undefined
-  const messageNode = error?.message as ElementCompact | ElementCompact[] | undefined
-  if (!messageNode) return undefined
-  // xml-js compact mode: multiple same-named children → array.
-  const first = Array.isArray(messageNode) ? messageNode[0] : messageNode
-  const text = first?._text
-  if (typeof text !== 'string') return undefined
-  const trimmed = text.trim()
-  return trimmed ? trimmed : undefined
 }
 
 /**
@@ -609,7 +386,7 @@ export function parseDavErrorMessage(xmlBody: string): string | undefined {
  * and ``admin`` levels that the standard CalendarServer ``access``
  * tokens cannot express.
  */
-export function parseShareAccessMap(rawMap: unknown): Map<string, string> {
+function parseShareAccessMap(rawMap: unknown): Map<string, string> {
   const accessMap = new Map<string, string>()
   if (!rawMap) return accessMap
   const map = rawMap as Record<string, unknown>
@@ -663,7 +440,7 @@ export function parseInviteSharees(
 /** Shape returned by ``parseInviteSharees`` — kept here to avoid a
  *  cycle with ``types/caldav-service``. Identical structure to the
  *  ``CalDavSharee`` re-exported there. */
-export type SharePrivilegeAndStatus = {
+type SharePrivilegeAndStatus = {
   href: string
   displayName?: string
   privilege: SharePrivilege
@@ -705,18 +482,22 @@ export function getCalendarUrlFromEventUrl(eventUrl: string): string {
   return parts.join('/') + '/'
 }
 
-/** Extract calendar ID from calendar URL (e.g., /calendars/user/calendar-id/ -> calendar-id) */
-export function getCalendarIdFromUrl(calendarUrl: string): string {
-  const parts = calendarUrl.replace(/\/$/, '').split('/')
-  return parts[parts.length - 1]
-}
-
 // ============================================================================
-// Error Handling
+// Result wrapper
 // ============================================================================
 
-/** Wrap async operation with standard error handling */
-export async function withErrorHandling<T>(
+/** Run an async operation and pack its outcome into a `CalDavResponse`.
+ *
+ * Catches throws from the operation body (e.g. `convertIcsCalendar`
+ * parse errors, network failures from `fetch`) and turns them into
+ * `{ success: false, error }`. HTTP-level errors are already surfaced
+ * as `{ success: false, … }` by `davRequest`, so callers should
+ * `throw new Error(result.error)` inside the operation when a DAV call
+ * fails — this wrapper then catches that throw and re-prefixes it.
+ *
+ * 401 → redirect-to-login lives inside `davRequest`, not here.
+ */
+export async function asResult<T>(
   operation: () => Promise<T>,
   errorPrefix: string
 ): Promise<CalDavResponse<T>> {
@@ -724,10 +505,7 @@ export async function withErrorHandling<T>(
     const data = await operation()
     return { success: true, data }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('401')) {
-      handleAuthError(401);
-    }
+    const message = error instanceof Error ? error.message : String(error)
     return {
       success: false,
       error: `${errorPrefix}: ${message}`,

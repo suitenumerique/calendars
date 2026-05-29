@@ -50,6 +50,11 @@ docker/auth/*.local
 # npm / pnpm
 node_modules
 .pnpm-store
+# npm cache lands here because the frontend Dockerfile sets
+# NPM_CONFIG_CACHE=/home/frontend/.npm (so npm can write a cache without
+# needing /.npm/_logs at the root). When the host bind-mounts
+# ./src/frontend onto /home/frontend, the cache ends up on the host.
+.npm/
 
 # Mails
 src/backend/core/templates/mail/

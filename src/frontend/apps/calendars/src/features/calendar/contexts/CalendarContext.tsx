@@ -11,7 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { CalDavService } from "../services/dav/CalDavService";
 import { EventCalendarAdapter } from "../services/dav/EventCalendarAdapter";
-import { caldavServerUrl, headers, fetchOptions } from "../utils/DavClient";
+import { caldavServerUrl } from "../utils/DavClient";
 import type {
   CalDavCalendar,
   CalDavCalendarCreate,
@@ -415,8 +415,6 @@ export const CalendarContextProvider = ({
       try {
         const result = await caldavService.connect({
           serverUrl: caldavServerUrl,
-          headers,
-          fetchOptions,
           userEmail,
         });
         if (isMounted && result.success) {

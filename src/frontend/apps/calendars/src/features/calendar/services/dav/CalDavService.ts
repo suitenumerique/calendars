@@ -16,17 +16,7 @@ import {
   type IcsDateObject,
   type IcsEvent,
 } from 'ts-ics'
-import {
-  createAccount,
-  fetchCalendarObjects as davFetchCalendarObjects,
-  createCalendarObject as davCreateCalendarObject,
-  updateCalendarObject as davUpdateCalendarObject,
-  deleteCalendarObject as davDeleteCalendarObject,
-  makeCalendar as davMakeCalendar,
-  DAVNamespaceShort,
-  type DAVCalendarObject,
-  davRequest,
-} from 'tsdav'
+import { davRequest } from '@/features/calendar/utils/DavClient'
 import type {
   CalDavCredentials,
   CalDavAccount,
@@ -40,16 +30,9 @@ import type {
   EventFilter,
   CalDavShareInvite,
   CalDavShareResponse,
-  CalDavSharee,
-  CalDavInvitation,
   CalDavResponse,
-  SyncReport,
-  SyncOptions,
   FreeBusyRequest,
   FreeBusyResponse,
-  CalendarAcl,
-  CalDavPrincipal,
-  SchedulingRequest,
   SchedulingResponse,
   CalDavAttendee,
 } from './types/caldav-service'
@@ -58,20 +41,18 @@ import {
   buildProppatchXml,
   buildShareRequestXml,
   buildUnshareRequestXml,
-  buildInviteReplyXml,
-  buildSyncCollectionXml,
-  buildPrincipalSearchXml,
-  executeDavRequest,
+  buildMkCalendarXml,
+  buildCalendarQueryXml,
   escapeXml,
   CALENDAR_PROPS,
-  propfindLs,
+  NS,
   parseCalendarComponents,
   parseSharePrivilege,
   parseInviteSharees,
   parseInviteOrganizerEmail,
   parseCalendarOrder,
   getCalendarUrlFromEventUrl,
-  withErrorHandling,
+  asResult,
   type ShareeXmlParams,
   type CalendarProps,
 } from './caldav-helpers'
@@ -88,10 +69,10 @@ export class CalDavService {
   // ============================================================================
 
   async connect(credentials: CalDavCredentials): Promise<CalDavResponse<CalDavAccount>> {
-    return withErrorHandling(async () => {
-      // Fast path: skip tsdav discovery (.well-known redirect + two PROPFINDs)
-      // when we know the user's email. SabreDAV exposes principals and
-      // calendar homes at fixed paths (see src/caldav/server.php).
+    return asResult(async () => {
+      // SabreDAV exposes principals and calendar homes at fixed paths
+      // derived from the user's email (see src/caldav/server.php), so we
+      // can build the account locally without round-tripping discovery.
       //
       // The path segment encoding must match what SabreDAV emits in its
       // PROPFIND hrefs — otherwise the hardcoded homeUrl won't be a
@@ -100,49 +81,25 @@ export class CalDavService {
       // URLUtil::encodePath leaves RFC 3986 sub-delims and `@` literal,
       // whereas encodeURIComponent escapes `@` (→ %40) and `+` (→ %2B),
       // so we put those two back.
-      if (credentials.userEmail) {
-        const serverUrl = credentials.serverUrl.endsWith('/')
-          ? credentials.serverUrl
-          : `${credentials.serverUrl}/`
-        const encodedEmail = encodeURIComponent(credentials.userEmail)
-          .replace(/%40/g, '@')
-          .replace(/%2B/g, '+')
-        this._account = {
-          serverUrl,
-          rootUrl: serverUrl,
-          principalUrl: `${serverUrl}principals/users/${encodedEmail}/`,
-          homeUrl: `${serverUrl}calendars/users/${encodedEmail}/`,
-          headers: credentials.headers,
-          fetchOptions: credentials.fetchOptions,
-        }
-        return this._account
+      //
+      // Defensive runtime check — TypeScript marks `userEmail` as required,
+      // but callers could pass `undefined` at runtime (JSON, dynamic, etc).
+      // Without this, `encodeURIComponent(undefined)` yields the literal
+      // string `"undefined"` and silently produces a bogus homeUrl.
+      if (!credentials.userEmail) {
+        throw new Error('CalDAV connect requires a userEmail')
       }
-
-      const account = await createAccount({
-        account: {
-          serverUrl: credentials.serverUrl,
-          accountType: 'caldav',
-        },
-        headers: credentials.headers,
-        fetchOptions: credentials.fetchOptions,
-      })
-
-      if (!account.homeUrl) {
-        throw new Error(
-          'CalDAV discovery failed: calendar home URL not found. ' +
-          'The server may not have a calendar provisioned for this user.'
-        )
-      }
-
+      const serverUrl = credentials.serverUrl.endsWith('/')
+        ? credentials.serverUrl
+        : `${credentials.serverUrl}/`
+      const encodedEmail = encodeURIComponent(credentials.userEmail)
+        .replace(/%40/g, '@')
+        .replace(/%2B/g, '+')
       this._account = {
-        serverUrl: credentials.serverUrl,
-        rootUrl: account.rootUrl,
-        principalUrl: account.principalUrl,
-        homeUrl: account.homeUrl,
-        headers: credentials.headers,
-        fetchOptions: credentials.fetchOptions,
+        serverUrl,
+        principalUrl: `${serverUrl}principals/users/${encodedEmail}/`,
+        homeUrl: `${serverUrl}calendars/users/${encodedEmail}/`,
       }
-
       return this._account
     }, 'Failed to connect')
   }
@@ -167,23 +124,25 @@ export class CalDavService {
       return { success: false, error: 'Calendar home URL not available' }
     }
 
-    return withErrorHandling(async () => {
-      const responses = await propfindLs({
+    return asResult(async () => {
+      const result = await davRequest({
         url: this._account!.homeUrl!,
+        method: 'PROPFIND',
         props: CALENDAR_PROPS,
         depth: '1',
-        headers: this._account!.headers,
-        fetchOptions: this._account!.fetchOptions,
       })
+      if (!result.success || !result.responses) {
+        throw new Error(result.error ?? 'Failed to fetch calendars')
+      }
 
-      const calendars: CalDavCalendar[] = responses
+      const calendars: CalDavCalendar[] = result.responses
         .filter((r) =>
           Object.keys(
             (r.props?.resourcetype ?? {}) as Record<string, unknown>,
           ).includes('calendar'),
         )
         .map((rs) => this.parseCalendarPropfindResponse(
-          new URL(rs.href ?? '', this._account!.rootUrl ?? '').href,
+          new URL(rs.href ?? '', this._account!.serverUrl).href,
           rs.props,
         ))
 
@@ -253,24 +212,24 @@ export class CalDavService {
       resourcetype: props?.resourcetype
         ? Object.keys(props.resourcetype as Record<string, unknown>)
         : undefined,
-      headers: this._account?.headers,
-      fetchOptions: this._account?.fetchOptions,
     }
   }
 
   async fetchCalendar(calendarUrl: string): Promise<CalDavResponse<CalDavCalendar>> {
-    return withErrorHandling(async () => {
-      const response = await propfindLs({
+    return asResult(async () => {
+      const result = await davRequest({
         url: calendarUrl,
+        method: 'PROPFIND',
         props: CALENDAR_PROPS,
         depth: '0',
-        headers: this._account?.headers,
-        fetchOptions: this._account?.fetchOptions,
       })
+      if (!result.success || !result.responses) {
+        throw new Error(result.error ?? `Calendar not found: ${result.status}`)
+      }
 
-      const rs = response[0]
-      if (!rs.ok) {
-        throw new Error(`Calendar not found: ${rs.status}`)
+      const rs = result.responses[0]
+      if (!rs?.ok) {
+        throw new Error(`Calendar not found: ${rs?.status}`)
       }
 
       const calendar = this.parseCalendarPropfindResponse(calendarUrl, rs.props)
@@ -285,41 +244,26 @@ export class CalDavService {
       return { success: false, error: 'Not connected or home URL not available' }
     }
 
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       const calendarUrl = `${this._account!.homeUrl}${crypto.randomUUID()}/`
 
-      // Build props for makeCalendar
-      const props: Record<string, unknown> = {
-        displayname: params.displayName,
-      }
-
-      if (params.description) {
-        props[`${DAVNamespaceShort.CALDAV}:calendar-description`] = params.description
-      }
-
-      if (params.color) {
-        props[`${DAVNamespaceShort.CALDAV_APPLE}:calendar-color`] = params.color
-      }
-
-      if (params.timezone) {
-        props[`${DAVNamespaceShort.CALDAV}:calendar-timezone`] = params.timezone
-      }
-
-      // Use tsdav's makeCalendar
-      const responses = await davMakeCalendar({
-        url: calendarUrl,
-        props,
-        headers: this._account!.headers,
-        fetchOptions: this._account!.fetchOptions,
+      const body = buildMkCalendarXml({
+        displayName: params.displayName,
+        description: params.description,
+        color: params.color,
+        timezone: params.timezone,
       })
 
-      // Check response
-      const response = responses[0]
-      if (response && !response.ok && response.status && response.status >= 400) {
-        throw new Error(`Failed to create calendar: ${response.status}`)
+      const result = await davRequest({
+        url: calendarUrl,
+        method: 'MKCALENDAR',
+        body,
+      })
+
+      if (!result.success) {
+        throw new Error(result.error ?? `Failed to create calendar: ${result.status}`)
       }
 
-      // Fetch the created calendar to get all properties
       const calendarResult = await this.fetchCalendar(calendarUrl)
       if (!calendarResult.success || !calendarResult.data) {
         throw new Error(calendarResult.error || 'Failed to fetch created calendar')
@@ -349,12 +293,10 @@ export class CalDavService {
     }
     const body = buildProppatchXml(proppatchParams)
 
-    const result = await executeDavRequest({
+    const result = await davRequest({
       url: calendarUrl,
       method: 'PROPPATCH',
       body,
-      headers: this._account?.headers,
-      fetchOptions: this._account?.fetchOptions,
     })
 
     if (!result.success) {
@@ -365,27 +307,21 @@ export class CalDavService {
   }
 
   async deleteCalendar(calendarUrl: string): Promise<CalDavResponse> {
-    const result = await executeDavRequest({
+    const result = await davRequest({
       url: calendarUrl,
       method: 'DELETE',
-      body: '',
-      headers: this._account?.headers,
-      fetchOptions: this._account?.fetchOptions,
     })
 
     if (result.success) {
       this._calendars.delete(calendarUrl)
+      return { success: true }
     }
 
-    return result
+    return { success: false, error: result.error, status: result.status }
   }
 
   getCalendar(calendarUrl: string): CalDavCalendar | undefined {
     return this._calendars.get(calendarUrl)
-  }
-
-  getCalendars(): CalDavCalendar[] {
-    return Array.from(this._calendars.values())
   }
 
   // ============================================================================
@@ -398,7 +334,7 @@ export class CalDavService {
       return { success: false, error: 'Calendar not found in cache. Fetch calendars first.' }
     }
 
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       const timeRange = filter?.timeRange
         ? {
             start:
@@ -412,24 +348,33 @@ export class CalDavService {
           }
         : undefined
 
-      const davObjects = await davFetchCalendarObjects({
-        calendar: {
-          url: calendar.url,
-          ctag: calendar.ctag,
-          syncToken: calendar.syncToken,
-        },
+      const body = buildCalendarQueryXml({
         timeRange,
         expand: filter?.expand ?? false,
-        headers: calendar.headers,
-        fetchOptions: calendar.fetchOptions,
       })
 
-      const events: CalDavEvent[] = davObjects.map((obj) => ({
-        url: obj.url,
-        etag: obj.etag,
-        calendarUrl,
-        data: convertIcsCalendar(undefined, obj.data),
-      }))
+      const result = await davRequest({
+        url: calendar.url,
+        method: 'REPORT',
+        body,
+        depth: '1',
+      })
+      if (!result.success || !result.responses) {
+        throw new Error(result.error ?? 'Failed to fetch events')
+      }
+
+      const events: CalDavEvent[] = result.responses
+        .filter((r) => r.ok && r.props?.calendarData)
+        .map((r) => {
+          const url = new URL(r.href ?? '', this._account!.serverUrl).href
+          const ics = r.props?.calendarData as string
+          return {
+            url,
+            etag: r.props?.getetag as string | undefined,
+            calendarUrl,
+            data: convertIcsCalendar(undefined, ics),
+          }
+        })
 
       events.forEach((evt) => this._events.set(evt.url, evt))
       return events
@@ -498,22 +443,21 @@ export class CalDavService {
     exdateToAdd: Date,
     etag?: string
   ): Promise<CalDavResponse<{ etag?: string; shouldDeleteEntireEvent?: boolean }>> {
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       // Fetch the raw ICS file
-      const fetchResponse = await fetch(eventUrl, {
+      const fetchResult = await davRequest({
+        url: eventUrl,
         method: 'GET',
-        headers: {
-          Accept: 'text/calendar',
-          ...this._account?.headers,
-        },
-        ...this._account?.fetchOptions,
+        headers: { Accept: 'text/calendar' },
       })
 
-      if (!fetchResponse.ok) {
-        throw new Error(`Failed to fetch event: ${fetchResponse.status}`)
+      if (!fetchResult.success || fetchResult.body === undefined) {
+        throw new Error(
+          fetchResult.error ?? `Failed to fetch event: ${fetchResult.status}`,
+        )
       }
 
-      const icsText = await fetchResponse.text()
+      const icsText = fetchResult.body
 
       // Parse ICS into structured object
       const calendar = convertIcsCalendar(undefined, icsText)
@@ -563,22 +507,21 @@ export class CalDavService {
       const updatedIcsText = generateIcsCalendar(calendar)
 
       // PUT the updated event back
-      const updateResponse = await fetch(eventUrl, {
+      const updateResult = await davRequest({
+        url: eventUrl,
         method: 'PUT',
-        headers: {
-          'Content-Type': 'text/calendar; charset=utf-8',
-          ...(etag ? { 'If-Match': etag } : {}),
-          ...this._account?.headers,
-        },
         body: updatedIcsText,
-        ...this._account?.fetchOptions,
+        contentType: 'text/calendar; charset=utf-8',
+        headers: etag ? { 'If-Match': etag } : undefined,
       })
 
-      if (!updateResponse.ok) {
-        throw new Error(`Failed to update event: ${updateResponse.status}`)
+      if (!updateResult.success) {
+        throw new Error(
+          updateResult.error ?? `Failed to update event: ${updateResult.status}`,
+        )
       }
 
-      const newEtag = updateResponse.headers.get('ETag') || undefined
+      const newEtag = updateResult.responseHeaders?.get('ETag') || undefined
 
       return { etag: newEtag }
     }, 'Failed to add EXDATE to event')
@@ -597,22 +540,21 @@ export class CalDavService {
     uid: string,
     etag?: string,
   ): Promise<CalDavResponse<{ etag?: string; shouldDeleteEntireEvent?: boolean }>> {
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       // Fetch the raw ICS
-      const fetchResponse = await fetch(eventUrl, {
+      const fetchResult = await davRequest({
+        url: eventUrl,
         method: 'GET',
-        headers: {
-          Accept: 'text/calendar',
-          ...this._account?.headers,
-        },
-        ...this._account?.fetchOptions,
+        headers: { Accept: 'text/calendar' },
       })
 
-      if (!fetchResponse.ok) {
-        throw new Error(`Failed to fetch event: ${fetchResponse.status}`)
+      if (!fetchResult.success || fetchResult.body === undefined) {
+        throw new Error(
+          fetchResult.error ?? `Failed to fetch event: ${fetchResult.status}`,
+        )
       }
 
-      const icsText = await fetchResponse.text()
+      const icsText = fetchResult.body
       const calendar = convertIcsCalendar(undefined, icsText)
 
       const sourceEvent = calendar.events?.find(
@@ -673,22 +615,21 @@ export class CalDavService {
       const updatedIcsText = generateIcsCalendar(calendar)
 
       // PUT the updated ICS
-      const updateResponse = await fetch(eventUrl, {
+      const updateResult = await davRequest({
+        url: eventUrl,
         method: 'PUT',
-        headers: {
-          'Content-Type': 'text/calendar; charset=utf-8',
-          ...(etag ? { 'If-Match': etag } : {}),
-          ...this._account?.headers,
-        },
         body: updatedIcsText,
-        ...this._account?.fetchOptions,
+        contentType: 'text/calendar; charset=utf-8',
+        headers: etag ? { 'If-Match': etag } : undefined,
       })
 
-      if (!updateResponse.ok) {
-        throw new Error(`Failed to update event: ${updateResponse.status}`)
+      if (!updateResult.success) {
+        throw new Error(
+          updateResult.error ?? `Failed to update event: ${updateResult.status}`,
+        )
       }
 
-      const newEtag = updateResponse.headers.get('ETag') || undefined
+      const newEtag = updateResult.responseHeaders?.get('ETag') || undefined
       return { etag: newEtag }
     }, 'Failed to delete override instance')
   }
@@ -705,22 +646,21 @@ export class CalDavService {
     uid: string,
     etag?: string,
   ): Promise<CalDavResponse<{ etag?: string }>> {
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       // Fetch the raw ICS
-      const fetchResponse = await fetch(eventUrl, {
+      const fetchResult = await davRequest({
+        url: eventUrl,
         method: 'GET',
-        headers: {
-          Accept: 'text/calendar',
-          ...this._account?.headers,
-        },
-        ...this._account?.fetchOptions,
+        headers: { Accept: 'text/calendar' },
       })
 
-      if (!fetchResponse.ok) {
-        throw new Error(`Failed to fetch event: ${fetchResponse.status}`)
+      if (!fetchResult.success || fetchResult.body === undefined) {
+        throw new Error(
+          fetchResult.error ?? `Failed to fetch event: ${fetchResult.status}`,
+        )
       }
 
-      const icsText = await fetchResponse.text()
+      const icsText = fetchResult.body
       const calendar = convertIcsCalendar(undefined, icsText)
 
       const sourceEvent = calendar.events?.find(
@@ -771,22 +711,21 @@ export class CalDavService {
       const updatedIcsText = generateIcsCalendar(calendar)
 
       // PUT the updated ICS
-      const updateResponse = await fetch(eventUrl, {
+      const updateResult = await davRequest({
+        url: eventUrl,
         method: 'PUT',
-        headers: {
-          'Content-Type': 'text/calendar; charset=utf-8',
-          ...(etag ? { 'If-Match': etag } : {}),
-          ...this._account?.headers,
-        },
         body: updatedIcsText,
-        ...this._account?.fetchOptions,
+        contentType: 'text/calendar; charset=utf-8',
+        headers: etag ? { 'If-Match': etag } : undefined,
       })
 
-      if (!updateResponse.ok) {
-        throw new Error(`Failed to update event: ${updateResponse.status}`)
+      if (!updateResult.success) {
+        throw new Error(
+          updateResult.error ?? `Failed to update event: ${updateResult.status}`,
+        )
       }
 
-      const newEtag = updateResponse.headers.get('ETag') || undefined
+      const newEtag = updateResult.responseHeaders?.get('ETag') || undefined
       return { etag: newEtag }
     }, 'Failed to truncate recurring series')
   }
@@ -804,22 +743,21 @@ export class CalDavService {
     occurrenceDate: Date,
     etag?: string,
   ): Promise<CalDavResponse<{ etag?: string }>> {
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       // Fetch the raw ICS
-      const fetchResponse = await fetch(eventUrl, {
+      const fetchResult = await davRequest({
+        url: eventUrl,
         method: 'GET',
-        headers: {
-          Accept: 'text/calendar',
-          ...this._account?.headers,
-        },
-        ...this._account?.fetchOptions,
+        headers: { Accept: 'text/calendar' },
       })
 
-      if (!fetchResponse.ok) {
-        throw new Error(`Failed to fetch event: ${fetchResponse.status}`)
+      if (!fetchResult.success || fetchResult.body === undefined) {
+        throw new Error(
+          fetchResult.error ?? `Failed to fetch event: ${fetchResult.status}`,
+        )
       }
 
-      const icsText = await fetchResponse.text()
+      const icsText = fetchResult.body
       const calendar = convertIcsCalendar(undefined, icsText)
       const sourceEvent = calendar.events?.find(
         (e) => e.uid === overrideEvent.uid && !e.recurrenceId,
@@ -898,49 +836,46 @@ export class CalDavService {
       const updatedIcsText = generateIcsCalendar(calendar)
 
       // PUT the updated ICS
-      const updateResponse = await fetch(eventUrl, {
+      const updateResult = await davRequest({
+        url: eventUrl,
         method: 'PUT',
-        headers: {
-          'Content-Type': 'text/calendar; charset=utf-8',
-          ...(etag ? { 'If-Match': etag } : {}),
-          ...this._account?.headers,
-        },
         body: updatedIcsText,
-        ...this._account?.fetchOptions,
+        contentType: 'text/calendar; charset=utf-8',
+        headers: etag ? { 'If-Match': etag } : undefined,
       })
 
-      if (!updateResponse.ok) {
-        throw new Error(`Failed to update event: ${updateResponse.status}`)
+      if (!updateResult.success) {
+        throw new Error(
+          updateResult.error ?? `Failed to update event: ${updateResult.status}`,
+        )
       }
 
-      const newEtag = updateResponse.headers.get('ETag') || undefined
+      const newEtag = updateResult.responseHeaders?.get('ETag') || undefined
       return { etag: newEtag }
     }, 'Failed to create override instance')
   }
 
   async fetchEvent(eventUrl: string): Promise<CalDavResponse<CalDavEvent>> {
-    return withErrorHandling(async () => {
-      const fetchResponse = await fetch(eventUrl, {
+    return asResult(async () => {
+      const result = await davRequest({
+        url: eventUrl,
         method: 'GET',
-        headers: {
-          Accept: 'text/calendar',
-          ...this._account?.headers,
-        },
-        ...this._account?.fetchOptions,
+        headers: { Accept: 'text/calendar' },
       })
 
-      if (!fetchResponse.ok) {
-        throw new Error(`Event not found: ${fetchResponse.status}`)
+      if (!result.success || result.body === undefined) {
+        throw new Error(
+          result.error ?? `Event not found: ${result.status}`,
+        )
       }
 
-      const icsData = await fetchResponse.text()
       const calendarUrl = getCalendarUrlFromEventUrl(eventUrl)
 
       const event: CalDavEvent = {
         url: eventUrl,
-        etag: fetchResponse.headers.get('etag') ?? undefined,
+        etag: result.responseHeaders?.get('etag') ?? undefined,
         calendarUrl,
-        data: convertIcsCalendar(undefined, icsData),
+        data: convertIcsCalendar(undefined, result.body),
       }
 
       this._events.set(event.url, event)
@@ -954,7 +889,7 @@ export class CalDavService {
       return { success: false, error: 'Calendar not found' }
     }
 
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       const event = { ...params.event }
       if (!event.uid) {
         event.uid = crypto.randomUUID()
@@ -969,26 +904,22 @@ export class CalDavService {
       this.validateTimezones(icsCalendar)
       const iCalString = generateIcsCalendar(icsCalendar)
 
-      const response = await davCreateCalendarObject({
-        calendar: {
-          url: calendar.url,
-          ctag: calendar.ctag,
-          syncToken: calendar.syncToken,
-        },
-        iCalString,
-        filename: `${event.uid}.ics`,
-        headers: calendar.headers,
-        fetchOptions: calendar.fetchOptions,
+      const eventUrl = `${params.calendarUrl}${event.uid}.ics`
+      const response = await davRequest({
+        url: eventUrl,
+        method: 'PUT',
+        body: iCalString,
+        contentType: 'text/calendar; charset=utf-8',
+        headers: { 'If-None-Match': '*' },
       })
 
-      if (!response.ok) {
-        throw new Error(`Failed to create event: ${response.status}`)
+      if (!response.success) {
+        throw new Error(response.error ?? `Failed to create event: ${response.status}`)
       }
 
-      const eventUrl = `${params.calendarUrl}${event.uid}.ics`
       const createdEvent: CalDavEvent = {
         url: eventUrl,
-        etag: response.headers.get('etag') ?? undefined,
+        etag: response.responseHeaders?.get('etag') ?? undefined,
         calendarUrl: params.calendarUrl,
         data: icsCalendar,
       }
@@ -1007,7 +938,7 @@ export class CalDavService {
       return { success: false, error: 'Calendar not found' }
     }
 
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       const icsCalendar: IcsCalendar = cachedEvent?.data ?? {
         prodId: '-//CalDavService//NONSGML v1.0//EN',
         version: '2.0',
@@ -1085,25 +1016,23 @@ export class CalDavService {
       this.validateTimezones(icsCalendar)
       const iCalString = generateIcsCalendar(icsCalendar)
 
-      const davObject: DAVCalendarObject = {
-        url: params.eventUrl,
-        etag: params.etag ?? cachedEvent?.etag,
-        data: iCalString,
-      }
+      const ifMatchEtag = params.etag ?? cachedEvent?.etag
 
-      const response = await davUpdateCalendarObject({
-        calendarObject: davObject,
-        headers: calendar.headers,
-        fetchOptions: calendar.fetchOptions,
+      const response = await davRequest({
+        url: params.eventUrl,
+        method: 'PUT',
+        body: iCalString,
+        contentType: 'text/calendar; charset=utf-8',
+        headers: ifMatchEtag ? { 'If-Match': ifMatchEtag } : undefined,
       })
 
-      if (!response.ok) {
-        throw new Error(`Failed to update event: ${response.status}`)
+      if (!response.success) {
+        throw new Error(response.error ?? `Failed to update event: ${response.status}`)
       }
 
       const updatedEvent: CalDavEvent = {
         url: params.eventUrl,
-        etag: response.headers.get('etag') ?? undefined,
+        etag: response.responseHeaders?.get('etag') ?? undefined,
         calendarUrl,
         data: icsCalendar,
       }
@@ -1139,7 +1068,7 @@ export class CalDavService {
       cachedSource?.calendarUrl ?? getCalendarUrlFromEventUrl(params.sourceEventUrl)
     const sourceCalendar = this._calendars.get(sourceCalendarUrl)
 
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       // Strip trailing slashes before splitting so a stray collection-shaped
       // URL (ends with `/`) doesn't yield an empty filename that we'd then
       // concatenate onto the target — producing the target collection URL
@@ -1154,35 +1083,26 @@ export class CalDavService {
       const newEventUrl = `${params.targetCalendarUrl}${filename}`
       const sourceEtag = params.sourceEtag ?? cachedSource?.etag
 
-      // The source calendar may not be in the cache (stale state, refresh
-      // race, or a source URL whose calendar key doesn't normalize to a
-      // cached entry). Fall back to the target calendar's auth/fetch
-      // settings so credentials are always sent — both calendars belong
-      // to the same CalDAV account, so the headers are interchangeable.
-      const fetchOptions = {
-        ...targetCalendar.fetchOptions,
-        ...sourceCalendar?.fetchOptions,
-      }
-      const authHeaders = {
-        ...targetCalendar.headers,
-        ...sourceCalendar?.headers,
-      }
-      const response = await fetch(params.sourceEventUrl, {
-        ...fetchOptions,
+      const response = await davRequest({
+        url: params.sourceEventUrl,
         method: 'MOVE',
         headers: {
-          ...authHeaders,
           Destination: newEventUrl,
           Overwrite: 'F',
           ...(sourceEtag ? { 'If-Match': sourceEtag } : {}),
         },
       })
 
-      if (!response.ok) {
-        throw new Error(`Failed to move event: ${response.status}`)
+      if (!response.success) {
+        throw new Error(response.error ?? `Failed to move event: ${response.status}`)
       }
 
-      const newEtag = response.headers.get('etag') ?? undefined
+      // `sourceCalendar` is checked above for fallback semantics but we no
+      // longer need to splice its headers; davRequest carries the shared
+      // session auth, and both calendars share the same CalDAV account.
+      void sourceCalendar
+
+      const newEtag = response.responseHeaders?.get('etag') ?? undefined
 
       if (cachedSource) {
         this._events.delete(params.sourceEventUrl)
@@ -1200,42 +1120,23 @@ export class CalDavService {
 
   async deleteEvent(eventUrl: string, etag?: string): Promise<CalDavResponse> {
     const cachedEvent = this._events.get(eventUrl)
-    const calendarUrl = cachedEvent?.calendarUrl ?? getCalendarUrlFromEventUrl(eventUrl)
-    const calendar = this._calendars.get(calendarUrl)
 
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       const resolvedEtag = etag ?? cachedEvent?.etag
 
-      const davObject: DAVCalendarObject = {
+      const response = await davRequest({
         url: eventUrl,
-        etag: resolvedEtag,
-        data: cachedEvent?.data ? generateIcsCalendar(cachedEvent.data) : '',
-      }
-
-      const response = await davDeleteCalendarObject({
-        calendarObject: davObject,
-        headers: {
-          ...(resolvedEtag ? { 'If-Match': resolvedEtag } : {}),
-          ...calendar?.headers,
-        },
-        fetchOptions: calendar?.fetchOptions,
+        method: 'DELETE',
+        headers: resolvedEtag ? { 'If-Match': resolvedEtag } : undefined,
       })
 
-      if (!response.ok && response.status !== 204) {
-        throw new Error(`Failed to delete event: ${response.status}`)
+      if (!response.success) {
+        throw new Error(response.error ?? `Failed to delete event: ${response.status}`)
       }
 
       this._events.delete(eventUrl)
       return undefined
     }, 'Failed to delete event')
-  }
-
-  getEvent(eventUrl: string): CalDavEvent | undefined {
-    return this._events.get(eventUrl)
-  }
-
-  getEventsForCalendar(calendarUrl: string): CalDavEvent[] {
-    return Array.from(this._events.values()).filter((e) => e.calendarUrl === calendarUrl)
   }
 
   // ============================================================================
@@ -1256,12 +1157,10 @@ export class CalDavService {
 
     const body = buildShareRequestXml(shareeParams)
 
-    const result = await executeDavRequest({
+    const result = await davRequest({
       url: params.calendarUrl,
       method: 'POST',
       body,
-      headers: this._account?.headers,
-      fetchOptions: this._account?.fetchOptions,
     })
 
     if (!result.success) {
@@ -1280,191 +1179,20 @@ export class CalDavService {
   async unshareCalendar(calendarUrl: string, shareeHref: string): Promise<CalDavResponse> {
     const body = buildUnshareRequestXml(shareeHref)
 
-    return executeDavRequest({
+    const result = await davRequest({
       url: calendarUrl,
       method: 'POST',
       body,
-      headers: this._account?.headers,
-      fetchOptions: this._account?.fetchOptions,
-    })
-  }
-
-  async getShareInvitations(): Promise<CalDavResponse<CalDavInvitation[]>> {
-    if (!this._account?.homeUrl) {
-      return { success: false, error: 'Not connected' }
-    }
-
-    return withErrorHandling(async () => {
-      const response = await propfindLs({
-        url: this._account!.homeUrl!,
-        props: { [`${DAVNamespaceShort.CALENDAR_SERVER}:notification-URL`]: {} },
-        headers: this._account!.headers,
-        fetchOptions: this._account!.fetchOptions,
-        depth: '0',
-      })
-
-      const notificationUrl = response[0]?.props?.['notification-URL']?.href
-      if (!notificationUrl) {
-        return []
-      }
-
-      const notificationsResponse = await propfindLs({
-        url: notificationUrl,
-        props: { [`${DAVNamespaceShort.CALENDAR_SERVER}:notification`]: {} },
-        headers: this._account!.headers,
-        fetchOptions: this._account!.fetchOptions,
-        depth: '1',
-      })
-
-      const invitations: CalDavInvitation[] = []
-      for (const item of notificationsResponse) {
-        const notification = item.props?.notification
-        if (notification?.['invite-notification']) {
-          const invite = notification['invite-notification']
-          invitations.push({
-            uid: invite.uid || crypto.randomUUID(),
-            calendarUrl: invite['hosturl']?.href || '',
-            ownerHref: invite['organizer']?.href || '',
-            ownerDisplayName: invite['organizer']?.['common-name'],
-            summary: invite.summary,
-            privilege: parseSharePrivilege(invite['access']),
-            status: 'pending',
-          })
-        }
-      }
-
-      return invitations
-    }, 'Failed to get invitations')
-  }
-
-  async acceptShareInvitation(
-    invitationUid: string,
-    inReplyTo: string
-  ): Promise<CalDavResponse<CalDavCalendar>> {
-    return this.respondToShareInvitation(invitationUid, inReplyTo, true)
-  }
-
-  async declineShareInvitation(invitationUid: string, inReplyTo: string): Promise<CalDavResponse> {
-    const result = await this.respondToShareInvitation(invitationUid, inReplyTo, false)
-    return { success: result.success, error: result.error, status: result.status }
-  }
-
-  private async respondToShareInvitation(
-    _invitationUid: string,
-    inReplyTo: string,
-    accept: boolean
-  ): Promise<CalDavResponse<CalDavCalendar>> {
-    if (!this._account?.homeUrl) {
-      return { success: false, error: 'Not connected' }
-    }
-
-    const body = buildInviteReplyXml(inReplyTo, accept)
-
-    const result = await executeDavRequest({
-      url: this._account.homeUrl,
-      method: 'POST',
-      body,
-      headers: this._account.headers,
-      fetchOptions: this._account.fetchOptions,
     })
 
-    if (!result.success) {
-      return { success: false, error: result.error, status: result.status }
-    }
-
-    if (accept) {
-      await this.fetchCalendars()
-    }
-
-    return { success: true }
-  }
-
-  /**
-   * Re-fetch the calendar and return its sharees. ``CS:invite`` is now
-   * part of the standard calendar PROPFIND, so this is a thin wrapper
-   * over ``fetchCalendar`` — kept as a public method to preserve the
-   * existing API surface and to give callers a single round-trip way
-   * to refresh the share list after an invite/update/delete.
-   */
-  async getCalendarSharees(calendarUrl: string): Promise<CalDavResponse<CalDavSharee[]>> {
-    const result = await this.fetchCalendar(calendarUrl)
-    if (!result.success || !result.data) {
-      return { success: false, error: result.error }
-    }
-    return { success: true, data: result.data.sharees ?? [] }
+    return result.success
+      ? { success: true }
+      : { success: false, error: result.error, status: result.status }
   }
 
   // ============================================================================
   // Scheduling (iTIP - RFC 5546)
   // ============================================================================
-
-  async sendSchedulingRequest(request: SchedulingRequest): Promise<CalDavResponse<SchedulingResponse>> {
-    if (!this._account) {
-      return { success: false, error: 'Not connected' }
-    }
-
-    return withErrorHandling(async () => {
-      const event = { ...request.event }
-      event.organizer = {
-        email: request.organizer.email,
-        name: request.organizer.name,
-      }
-      event.attendees = request.attendees.map((att) => ({
-        email: att.email,
-        name: att.name,
-        role: att.role,
-        partstat: att.partstat ?? 'NEEDS-ACTION',
-        rsvp: att.rsvp,
-        cutype: att.cutype,
-      }))
-
-      const icsCalendar: IcsCalendar = {
-        prodId: '-//CalDavService//NONSGML v1.0//EN',
-        version: '2.0',
-        method: request.method,
-        events: [event],
-      }
-
-      this.validateTimezones(icsCalendar)
-      const iCalString = generateIcsCalendar(icsCalendar)
-
-      const outboxUrl = await this.findSchedulingOutbox()
-      if (!outboxUrl) {
-        throw new Error('Scheduling outbox not found')
-      }
-
-      // Construct full URL - outboxUrl from PROPFIND is an absolute path (e.g. /caldav/calendars/...)
-      // so we only need to prepend the origin, not the full serverUrl (which already has /caldav/)
-      const fullOutboxUrl = outboxUrl.startsWith('http')
-        ? outboxUrl
-        : `${new URL(this._account!.serverUrl).origin}${outboxUrl}`
-
-      // Use fetch directly to avoid davRequest URL construction issues in dev mode
-      // Note: fetchOptions is spread first so its headers don't override our Content-Type
-      const response = await fetch(fullOutboxUrl, {
-        ...this._account!.fetchOptions,
-        method: 'POST',
-        headers: {
-          ...this._account!.headers,
-          'Content-Type': 'text/calendar; charset=utf-8; method=' + request.method,
-        },
-        body: iCalString,
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Failed to send scheduling request: ${response.status} - ${errorText}`)
-      }
-
-      return {
-        success: true,
-        responses: request.attendees.map((att) => ({
-          recipient: att.email,
-          status: 'delivered' as const,
-        })),
-      }
-    }, 'Failed to send scheduling request')
-  }
 
   async respondToMeeting(
     eventUrl: string,
@@ -1523,7 +1251,7 @@ export class CalDavService {
       return { success: false, error: 'Not connected' }
     }
 
-    return withErrorHandling(async () => {
+    return asResult(async () => {
       const outboxUrl = await this.findSchedulingOutbox()
       if (!outboxUrl) {
         throw new Error('Scheduling outbox not found')
@@ -1537,23 +1265,20 @@ export class CalDavService {
         ? outboxUrl
         : `${new URL(this._account!.serverUrl).origin}${outboxUrl}`
 
-      // Note: fetchOptions is spread first so its headers don't override our Content-Type
-      const response = await fetch(fullOutboxUrl, {
-        ...this._account!.fetchOptions,
+      const response = await davRequest({
+        url: fullOutboxUrl,
         method: 'POST',
-        headers: {
-          ...this._account!.headers,
-          'Content-Type': 'text/calendar; charset=utf-8',
-        },
         body: fbRequest,
+        contentType: 'text/calendar; charset=utf-8',
       })
 
-      if (!response.ok) {
-        throw new Error(`Failed to query free/busy: ${response.status}`)
+      if (!response.success || response.body === undefined) {
+        throw new Error(
+          response.error ?? `Failed to query free/busy: ${response.status}`,
+        )
       }
 
-      const xmlText = await response.text()
-      return parseScheduleFreeBusyResponse(xmlText)
+      return parseScheduleFreeBusyResponse(response.body)
     }, 'Failed to query free/busy')
   }
 
@@ -1571,18 +1296,20 @@ export class CalDavService {
       return { success: false, error: 'Not connected' }
     }
 
-    return withErrorHandling(async () => {
-      const response = await propfindLs({
+    return asResult(async () => {
+      const result = await davRequest({
         url: this._account!.homeUrl!,
+        method: 'PROPFIND',
         props: {
-          [`${DAVNamespaceShort.CALDAV}:calendar-availability`]: {},
+          [`${NS.CALDAV}:calendar-availability`]: {},
         },
-        headers: this._account!.headers,
-        fetchOptions: this._account!.fetchOptions,
         depth: '0',
       })
+      if (!result.success || !result.responses) {
+        throw new Error(result.error ?? 'Failed to get availability')
+      }
 
-      return response[0]?.props?.['calendarAvailability'] ?? null
+      return result.responses[0]?.props?.['calendarAvailability'] ?? null
     }, 'Failed to get availability')
   }
 
@@ -1607,147 +1334,14 @@ export class CalDavService {
   </D:set>
 </D:propertyupdate>`
 
-    return executeDavRequest({
+    const result = await davRequest({
       url: this._account.homeUrl,
       method: 'PROPPATCH',
       body,
-      headers: this._account.headers,
-      fetchOptions: this._account.fetchOptions,
     })
-  }
-
-  // ============================================================================
-  // Sync Operations
-  // ============================================================================
-
-  async syncCalendar(calendarUrl: string, options?: SyncOptions): Promise<CalDavResponse<SyncReport>> {
-    const calendar = this._calendars.get(calendarUrl)
-    if (!calendar) {
-      return { success: false, error: 'Calendar not found' }
-    }
-
-    return withErrorHandling(async () => {
-      const syncToken = options?.syncToken ?? calendar.syncToken ?? ''
-      const body = buildSyncCollectionXml({ syncToken, syncLevel: options?.syncLevel })
-
-      const responses = await davRequest({
-        url: calendarUrl,
-        init: {
-          method: 'REPORT',
-          headers: {
-            'Content-Type': 'application/xml; charset=utf-8',
-            Depth: '1',
-            ...calendar.headers,
-          },
-          body,
-        },
-        fetchOptions: calendar.fetchOptions,
-      })
-
-      const response = responses[0]
-      if (!response?.ok) {
-        throw new Error(`Failed to sync calendar: ${response?.status}`)
-      }
-
-      const newSyncToken = (response.props?.['sync-token'] as string) ?? ''
-
-      return {
-        syncToken: newSyncToken,
-        changed: [],
-        deleted: [],
-      }
-    }, 'Failed to sync calendar')
-  }
-
-  // ============================================================================
-  // ACL Operations
-  // ============================================================================
-
-  async getCalendarAcl(calendarUrl: string): Promise<CalDavResponse<CalendarAcl>> {
-    return withErrorHandling(async () => {
-      const response = await propfindLs({
-        url: calendarUrl,
-        props: {
-          [`${DAVNamespaceShort.DAV}:acl`]: {},
-          [`${DAVNamespaceShort.DAV}:owner`]: {},
-        },
-        headers: this._account?.headers,
-        fetchOptions: this._account?.fetchOptions,
-        depth: '0',
-      })
-
-      const rs = response[0]
-      if (!rs.ok) {
-        throw new Error(`Failed to get ACL: ${rs.status}`)
-      }
-
-      return {
-        calendarUrl,
-        entries: [],
-        ownerHref: rs.props?.owner?.href,
-      }
-    }, 'Failed to get ACL')
-  }
-
-  // ============================================================================
-  // Principal Operations
-  // ============================================================================
-
-  async getPrincipal(principalUrl?: string): Promise<CalDavResponse<CalDavPrincipal>> {
-    const url = principalUrl ?? this._account?.principalUrl
-    if (!url) {
-      return { success: false, error: 'Principal URL not available' }
-    }
-
-    return withErrorHandling(async () => {
-      const response = await propfindLs({
-        url,
-        props: {
-          [`${DAVNamespaceShort.DAV}:displayname`]: {},
-          [`${DAVNamespaceShort.CALDAV}:calendar-home-set`]: {},
-          [`${DAVNamespaceShort.CARDDAV}:addressbook-home-set`]: {},
-          [`${DAVNamespaceShort.CALENDAR_SERVER}:email-address-set`]: {},
-        },
-        headers: this._account?.headers,
-        fetchOptions: this._account?.fetchOptions,
-        depth: '0',
-      })
-
-      const rs = response[0]
-      if (!rs.ok) {
-        throw new Error(`Failed to get principal: ${rs.status}`)
-      }
-
-      return {
-        url,
-        displayName: rs.props?.displayname?._cdata ?? rs.props?.displayname,
-        email: rs.props?.['email-address-set']?.['email-address'],
-        calendarHomeSet: rs.props?.['calendar-home-set']?.href,
-        addressBookHomeSet: rs.props?.['addressbook-home-set']?.href,
-      }
-    }, 'Failed to get principal')
-  }
-
-  async searchPrincipals(query: string): Promise<CalDavResponse<CalDavPrincipal[]>> {
-    if (!this._account?.principalUrl) {
-      return { success: false, error: 'Not connected' }
-    }
-
-    const body = buildPrincipalSearchXml(query)
-
-    const result = await executeDavRequest({
-      url: this._account.principalUrl,
-      method: 'REPORT',
-      body,
-      headers: { Depth: '0', ...this._account.headers },
-      fetchOptions: this._account.fetchOptions,
-    })
-
-    if (!result.success) {
-      return { success: false, error: result.error, status: result.status }
-    }
-
-    return { success: true, data: [] }
+    return result.success
+      ? { success: true }
+      : { success: false, error: result.error, status: result.status }
   }
 
   // ============================================================================
@@ -1790,16 +1384,15 @@ export class CalDavService {
     if (!this._account?.principalUrl) return null
 
     try {
-      const response = await propfindLs({
+      const result = await davRequest({
         url: this._account.principalUrl,
-        props: { [`${DAVNamespaceShort.CALDAV}:schedule-outbox-URL`]: {} },
-        headers: this._account.headers,
-        fetchOptions: this._account.fetchOptions,
+        method: 'PROPFIND',
+        props: { [`${NS.CALDAV}:schedule-outbox-URL`]: {} },
         depth: '0',
       })
 
       // Note: tsdav converts XML property names to camelCase
-      return response[0]?.props?.['scheduleOutboxURL']?.href ?? null
+      return result.responses?.[0]?.props?.['scheduleOutboxURL']?.href ?? null
     } catch {
       return null
     }
@@ -1820,20 +1413,24 @@ export class CalDavService {
       return { success: false, error: 'Not connected or principal URL not found' }
     }
 
-    return withErrorHandling(async () => {
-      const response = await propfindLs({
+    return asResult(async () => {
+      const result = await davRequest({
         url: this._account!.principalUrl!,
+        method: 'PROPFIND',
         props: {
-          [`${DAVNamespaceShort.CALDAV}:schedule-outbox-URL`]: {},
-          [`${DAVNamespaceShort.CALDAV}:schedule-inbox-URL`]: {},
-          [`${DAVNamespaceShort.CALDAV}:calendar-user-address-set`]: {},
+          [`${NS.CALDAV}:schedule-outbox-URL`]: {},
+          [`${NS.CALDAV}:schedule-inbox-URL`]: {},
+          [`${NS.CALDAV}:calendar-user-address-set`]: {},
         },
-        headers: this._account!.headers,
-        fetchOptions: this._account!.fetchOptions,
         depth: '0',
       })
+      if (!result.success || !result.responses) {
+        throw new Error(
+          result.error ?? 'Failed to get scheduling capabilities',
+        )
+      }
 
-      const props = response[0]?.props ?? {}
+      const props = result.responses[0]?.props ?? {}
 
       // Note: tsdav converts XML property names to camelCase
       // schedule-outbox-URL becomes scheduleOutboxURL
@@ -1861,7 +1458,7 @@ export class CalDavService {
         scheduleOutboxUrl,
         scheduleInboxUrl,
         calendarUserAddressSet,
-        rawResponse: response,
+        rawResponse: result.responses,
       }
     }, 'Failed to get scheduling capabilities')
   }
