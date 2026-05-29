@@ -1,4 +1,4 @@
-import { useTranslation } from "next-i18next";
+import { useTranslation } from "react-i18next";
 import { Hero, Footer, HomeGutter } from "@gouvfr-lasuite/ui-kit";
 import { login } from "@/features/auth/Auth";
 import { useEffect } from "react";
