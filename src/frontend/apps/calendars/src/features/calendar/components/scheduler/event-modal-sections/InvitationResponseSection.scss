@@ -1,22 +1,11 @@
 .invitation-response {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
   padding: 0.75rem;
   background: #f8f9fa;
   border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-
-  &__header {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  &__label {
-    font-weight: 600;
-    font-size: 0.875rem;
-    color: #202124;
-  }
+  border: 1px solid #e5e7eb;
 
   &__organizer {
     font-size: 0.8125rem;
@@ -30,7 +19,37 @@
   }
 
   &__status {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
     font-size: 0.8125rem;
     color: #5f6368;
+
+    .material-icons {
+      font-size: 1rem;
+    }
+
+    &--success {
+      color: #137333;
+    }
+    &--warning {
+      color: #b06000;
+    }
+    &--danger {
+      color: #c5221f;
+    }
+  }
+
+  &__cancelled {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: #c5221f;
+    font-weight: 500;
+
+    .material-icons {
+      font-size: 1.125rem;
+    }
   }
 }

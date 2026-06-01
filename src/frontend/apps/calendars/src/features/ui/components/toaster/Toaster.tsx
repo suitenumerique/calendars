@@ -68,3 +68,16 @@ export const addErrorToast = (message: string) => {
     hideProgressBar: true,
   });
 };
+
+/**
+ * Show a success toast with a simple string message.
+ * Convenience wrapper usable from .ts files (no JSX needed).
+ */
+export const addSuccessToast = (message: string) => {
+  return toast.success(message, {
+    position: "bottom-center",
+    className: "suite__toaster__wrapper",
+    autoClose: 4000,
+    hideProgressBar: true,
+  });
+};

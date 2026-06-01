@@ -46,7 +46,8 @@ export interface EventModalProps {
   ) => Promise<void>;
   onRespondToInvitation?: (
     event: IcsEvent,
-    status: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED'
+    status: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED',
+    option?: RecurringEditOption,
   ) => Promise<void>;
   onClose: () => void;
 }
@@ -68,6 +69,10 @@ export interface RecurringEditModalProps {
   isOpen: boolean;
   onConfirm: (option: RecurringEditOption) => void;
   onCancel: () => void;
+  title?: string;
+  prompt?: string;
+  confirmLabel?: string;
+  disableFuture?: boolean;
 }
 
 /**

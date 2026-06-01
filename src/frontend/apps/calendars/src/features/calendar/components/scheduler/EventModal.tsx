@@ -53,6 +53,9 @@ export const EventModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditRecurringModal, setShowEditRecurringModal] = useState(false);
+  const [pendingRsvpStatus, setPendingRsvpStatus] = useState<
+    "ACCEPTED" | "TENTATIVE" | "DECLINED" | null
+  >(null);
 
   const { resources: availableResources } = useResourcePrincipals();
 
@@ -118,7 +121,13 @@ export const EventModal = ({
     }
   }, [isOpen, calendars, calendarUrl, form]);
 
-  // Check if current user is invited
+  // Check if current user is invited.
+  // We deliberately exclude:
+  //   - the organizer (RSVP'ing to your own invite is meaningless)
+  //   - resources / rooms (CUTYPE=RESOURCE)
+  //   - NON-PARTICIPANT roles (resources, informational attendees)
+  // The CANCELLED case is still considered "invited" — the section
+  // renders a cancelled notice instead of buttons.
   const currentUserAttendee = event?.attendees?.find(
     (att) =>
       user?.email && att.email.toLowerCase() === user.email.toLowerCase(),
@@ -126,10 +135,21 @@ export const EventModal = ({
   const isInvited = !!(
     event?.organizer &&
     currentUserAttendee &&
-    event.organizer.email?.toLowerCase() !== user?.email?.toLowerCase()
+    event.organizer.email?.toLowerCase() !== user?.email?.toLowerCase() &&
+    currentUserAttendee.cutype !== "RESOURCE" &&
+    currentUserAttendee.role !== "NON-PARTICIPANT"
   );
+  // Read the partstat from the form state, not from the event prop, so that
+  // the section reflects in-flight RSVP changes in place (we update
+  // form.attendees on success without re-pulling the event prop, and the
+  // modal no longer auto-closes after responding).
   const currentParticipationStatus =
-    currentUserAttendee?.partstat || "NEEDS-ACTION";
+    form.attendees.find(
+      (att) =>
+        user?.email && att.email.toLowerCase() === user.email.toLowerCase(),
+    )?.partstat ||
+    currentUserAttendee?.partstat ||
+    "NEEDS-ACTION";
 
   const showError = (message: string) => {
     addToast(
@@ -196,13 +216,14 @@ export const EventModal = ({
     }
   };
 
-  const handleRespondToInvitation = async (
+  const doRespondToInvitation = async (
     status: "ACCEPTED" | "TENTATIVE" | "DECLINED",
+    option?: RecurringEditOption,
   ) => {
     if (!onRespondToInvitation || !event) return;
     setIsLoading(true);
     try {
-      await onRespondToInvitation(event as IcsEvent, status);
+      await onRespondToInvitation(event as IcsEvent, status, option);
       form.setAttendees((prev) =>
         prev.map((att) =>
           user?.email && att.email.toLowerCase() === user.email.toLowerCase()
@@ -211,11 +232,28 @@ export const EventModal = ({
         ),
       );
     } catch (error) {
+      // Toast is shown by the parent handler; just stop the spinner.
       console.error("Failed to respond to invitation:", error);
-      showError(t("api.error.unexpected"));
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleRespondToInvitation = async (
+    status: "ACCEPTED" | "TENTATIVE" | "DECLINED",
+  ) => {
+    if (isRecurringEvent) {
+      setPendingRsvpStatus(status);
+      return;
+    }
+    await doRespondToInvitation(status);
+  };
+
+  const handleRsvpRecurringConfirm = async (option: RecurringEditOption) => {
+    const status = pendingRsvpStatus;
+    setPendingRsvpStatus(null);
+    if (!status) return;
+    await doRespondToInvitation(status, option);
   };
 
   const { config } = useConfig();
@@ -362,14 +400,6 @@ export const EventModal = ({
               alwaysOpen
             />
           )}
-          {isInvited && mode === "edit" && onRespondToInvitation && (
-            <InvitationResponseSection
-              organizer={event?.organizer}
-              currentStatus={currentParticipationStatus}
-              isLoading={isLoading}
-              onRespond={handleRespondToInvitation}
-            />
-          )}
           {form.isSectionExpanded("videoConference") && (
             <VideoConferenceSection
               url={form.videoConferenceUrl}
@@ -457,6 +487,15 @@ export const EventModal = ({
             isSectionExpanded={form.isSectionExpanded}
             onToggle={form.toggleSection}
           />
+          {isInvited && mode === "edit" && onRespondToInvitation && (
+            <InvitationResponseSection
+              organizer={event?.organizer}
+              currentStatus={currentParticipationStatus}
+              isLoading={isLoading}
+              eventStatus={event?.status}
+              onRespond={handleRespondToInvitation}
+            />
+          )}
         </div>
       </Modal>
 
@@ -471,6 +510,16 @@ export const EventModal = ({
         isOpen={showEditRecurringModal}
         onConfirm={handleEditRecurringConfirm}
         onCancel={() => setShowEditRecurringModal(false)}
+      />
+
+      <RecurringEditModal
+        isOpen={pendingRsvpStatus !== null}
+        onConfirm={handleRsvpRecurringConfirm}
+        onCancel={() => setPendingRsvpStatus(null)}
+        title={t("calendar.event.rsvpRecurringTitle")}
+        prompt={t("calendar.event.rsvpRecurringPrompt")}
+        confirmLabel={t("calendar.event.send")}
+        disableFuture
       />
     </>
   );

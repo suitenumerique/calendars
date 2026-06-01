@@ -14,6 +14,7 @@ import {
   type UserSearchResult,
 } from "@/features/users/hooks/useUserSearch";
 import { filterSuggestions, isValidEmail } from "./attendees-utils";
+import { getBadgeType, getPartstatIcon } from "./partstatBadge";
 
 interface AttendeesInputProps {
   attendees: IcsAttendee[];
@@ -21,40 +22,6 @@ interface AttendeesInputProps {
   organizerEmail?: string;
   organizer?: IcsOrganizer;
 }
-
-type BadgeType =
-  | "accent"
-  | "neutral"
-  | "danger"
-  | "success"
-  | "warning"
-  | "info";
-
-const getBadgeType = (partstat?: string): BadgeType => {
-  switch (partstat) {
-    case "ACCEPTED":
-      return "success";
-    case "DECLINED":
-      return "danger";
-    case "TENTATIVE":
-      return "warning";
-    default:
-      return "neutral";
-  }
-};
-
-const getPartstatIcon = (partstat?: string): string => {
-  switch (partstat) {
-    case "ACCEPTED":
-      return "check_circle";
-    case "DECLINED":
-      return "cancel";
-    case "TENTATIVE":
-      return "help";
-    default:
-      return "schedule";
-  }
-};
 
 export function AttendeesInput({
   attendees,

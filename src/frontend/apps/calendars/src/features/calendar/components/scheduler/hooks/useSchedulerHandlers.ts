@@ -6,8 +6,12 @@
 import { useCallback, useState, MutableRefObject } from "react";
 import { IcsEvent, IcsDateObject } from "ts-ics";
 
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/features/auth/Auth";
-import { addErrorToast } from "@/features/ui/components/toaster/Toaster";
+import {
+  addErrorToast,
+  addSuccessToast,
+} from "@/features/ui/components/toaster/Toaster";
 import type {
   EventCalendarEvent,
   EventCalendarSelectInfo,
@@ -100,6 +104,7 @@ export const useSchedulerHandlers = ({
   setModalState,
 }: UseSchedulerHandlersProps) => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [pendingRecurringAction, setPendingRecurringAction] =
     useState<PendingRecurringAction | null>(null);
 
@@ -640,9 +645,26 @@ export const useSchedulerHandlers = ({
 
   /**
    * Handle respond to invitation.
+   *
+   * For non-recurring events (or option === "all" / undefined) the change is
+   * applied to the master VEVENT via respondToMeeting — SabreDAV detects the
+   * PARTSTAT change and emits the iTIP REPLY.
+   *
+   * For option === "this" we materialize a single-occurrence override (same
+   * UID + RECURRENCE-ID, no RRULE) with only the responding attendee's
+   * PARTSTAT changed. SabreDAV likewise emits a REPLY scoped to that
+   * RECURRENCE-ID.
+   *
+   * On a 412 Precondition Failed (the local ETag was stale because the
+   * organizer updated the event meanwhile) we refetch and retry once. A
+   * second conflict bubbles up as a user-facing error.
    */
   const handleRespondToInvitation = useCallback(
-    async (event: IcsEvent, status: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED') => {
+    async (
+      event: IcsEvent,
+      status: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED',
+      option?: RecurringEditOption,
+    ) => {
       if (!user?.email) {
         console.error('No user email available');
         return;
@@ -653,34 +675,134 @@ export const useSchedulerHandlers = ({
         return;
       }
 
-      try {
-        const result = await caldavService.respondToMeeting(
-          modalState.eventUrl,
+      const eventUrl = modalState.eventUrl;
+      const userEmail = user.email;
+
+      const isEtagConflict = (err?: string) =>
+        !!err && (err.includes('412') || /Precondition\s*Failed/i.test(err));
+
+      // For the "this occurrence" path we need the occurrence date from the
+      // event as it was opened in the modal (modalState.event), not from the
+      // potentially edited form-built event.
+      const occurrenceDate: Date | undefined = (() => {
+        const src = modalState.event;
+        if (src?.recurrenceId?.value?.date instanceof Date) {
+          return src.recurrenceId.value.date;
+        }
+        if (src?.start?.date instanceof Date) return src.start.date;
+        if (src?.start?.date) return new Date(src.start.date as unknown as string);
+        if (event.start.date instanceof Date) return event.start.date;
+        return new Date(event.start.date as unknown as string);
+      })();
+
+      const withUpdatedPartstat = (e: IcsEvent): IcsEvent => ({
+        ...e,
+        attendees: e.attendees?.map((att) =>
+          att.email.toLowerCase() === userEmail.toLowerCase()
+            ? { ...att, partstat: status }
+            : att,
+        ),
+      });
+
+      const attempt = async (currentEtag: string | undefined) => {
+        if (option === 'this') {
+          if (!occurrenceDate) {
+            return { success: false as const, error: 'No occurrence date' };
+          }
+          // Strip RRULE on the override; createOverrideInstance also clears it
+          // defensively, but be explicit so the ICS we pass in is well-formed.
+          const overrideEvent: IcsEvent = {
+            ...withUpdatedPartstat(event),
+            recurrenceRule: undefined,
+          };
+          return caldavService.createOverrideInstance(
+            eventUrl,
+            overrideEvent,
+            occurrenceDate,
+            currentEtag,
+          );
+        }
+        // "all" or undefined: apply PARTSTAT to the master VEVENT.
+        //
+        // When the modal opened a specific occurrence of a recurring event,
+        // `event` has the occurrence's start/end and a recurrenceId. Routing
+        // that through respondToMeeting → updateEvent would either replace
+        // the entire ICS with the occurrence (when no override matches the
+        // recurrenceId — the cache lookup falls into the "replace events
+        // array" branch) or shift the master DTSTART. So if we're touching a
+        // recurring event series, refetch the canonical master VEVENT and
+        // change only its attendee's PARTSTAT.
+        if (event.recurrenceId || event.recurrenceRule) {
+          const fetched = await caldavService.fetchEvent(eventUrl);
+          if (!fetched.success || !fetched.data) {
+            return {
+              success: false as const,
+              error: fetched.error ?? 'Failed to fetch event',
+            };
+          }
+          const master = fetched.data.data.events?.find(
+            (e) => e.uid === event.uid && !e.recurrenceId,
+          );
+          if (!master) {
+            return {
+              success: false as const,
+              error: 'Master event not found',
+            };
+          }
+          // Use the etag from the fetch we just made — not currentEtag,
+          // which may be the stale one from the modal's initial open and
+          // would force a guaranteed 412 against the freshly-read state.
+          return caldavService.respondToMeeting(
+            eventUrl,
+            master,
+            userEmail,
+            status,
+            fetched.data.etag,
+          );
+        }
+        return caldavService.respondToMeeting(
+          eventUrl,
           event,
-          user.email,
+          userEmail,
           status,
-          modalState.etag
+          currentEtag,
         );
+      };
+
+      try {
+        let result = await attempt(modalState.etag);
+
+        if (!result.success && isEtagConflict(result.error)) {
+          const refresh = await caldavService.fetchEvent(eventUrl);
+          if (refresh.success && refresh.data) {
+            result = await attempt(refresh.data.etag);
+          }
+        }
 
         if (!result.success) {
           throw new Error(result.error || 'Failed to respond to invitation');
         }
 
-        console.log('✉️ Response sent successfully:', status);
+        addSuccessToast(t('rsvp.responseSent'));
 
-        // Refetch events to update the UI with the new status
         if (calendarRef.current) {
           calendarRef.current.refetchEvents();
         }
-
-        // Close the modal
-        setModalState((prev) => ({ ...prev, isOpen: false }));
       } catch (error) {
+        addErrorToast(t('rsvp.failed'));
         console.error('Error responding to invitation:', error);
         throw error;
       }
     },
-    [caldavService, user, calendarRef, modalState.eventUrl, modalState.etag, setModalState]
+    [
+      caldavService,
+      user,
+      calendarRef,
+      modalState.event,
+      modalState.eventUrl,
+      modalState.etag,
+      t,
+    ],
   );
 
   /**

@@ -14,12 +14,15 @@ export const RecurringEditModal = ({
   isOpen,
   onConfirm,
   onCancel,
+  title,
+  prompt,
+  confirmLabel,
+  disableFuture = false,
 }: RecurringEditModalProps) => {
   const { t } = useTranslation();
   const [selectedOption, setSelectedOption] =
     useState<RecurringEditOption>("this");
 
-  // Reset selection when modal opens
   useEffect(() => {
     if (isOpen) {
       setSelectedOption("this");
@@ -30,7 +33,7 @@ export const RecurringEditModal = ({
     <Modal
       isOpen={isOpen}
       onClose={onCancel}
-      title={t("calendar.event.editRecurringTitle")}
+      title={title ?? t("calendar.event.editRecurringTitle")}
       size={ModalSize.SMALL}
       rightActions={
         <>
@@ -41,14 +44,14 @@ export const RecurringEditModal = ({
             color="brand"
             onClick={() => onConfirm(selectedOption)}
           >
-            {t("calendar.event.save")}
+            {confirmLabel ?? t("calendar.event.save")}
           </Button>
         </>
       }
     >
       <div className="delete-modal__content">
         <p className="delete-modal__message">
-          {t("calendar.event.editRecurringPrompt")}
+          {prompt ?? t("calendar.event.editRecurringPrompt")}
         </p>
         <div className="delete-modal__options">
           <label className="delete-modal__option">
@@ -63,18 +66,20 @@ export const RecurringEditModal = ({
             />
             <span>{t("calendar.event.editThisOccurrence")}</span>
           </label>
-          <label className="delete-modal__option">
-            <input
-              type="radio"
-              name="edit-option"
-              value="future"
-              checked={selectedOption === "future"}
-              onChange={(e) =>
-                setSelectedOption(e.target.value as RecurringEditOption)
-              }
-            />
-            <span>{t("calendar.event.editThisAndFuture")}</span>
-          </label>
+          {!disableFuture && (
+            <label className="delete-modal__option">
+              <input
+                type="radio"
+                name="edit-option"
+                value="future"
+                checked={selectedOption === "future"}
+                onChange={(e) =>
+                  setSelectedOption(e.target.value as RecurringEditOption)
+                }
+              />
+              <span>{t("calendar.event.editThisAndFuture")}</span>
+            </label>
+          )}
           <label className="delete-modal__option">
             <input
               type="radio"

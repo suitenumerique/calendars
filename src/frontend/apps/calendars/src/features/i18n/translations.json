@@ -224,7 +224,21 @@
             "label": "Availability",
             "busy": "Busy",
             "free": "Free"
-          }
+          },
+          "send": "Send",
+          "invitation": "Invitation",
+          "organizedBy": "Organized by",
+          "accept": "Accept",
+          "maybe": "Maybe",
+          "decline": "Decline",
+          "accepted": "Accepted",
+          "tentative": "Tentative",
+          "declined": "Declined",
+          "needsAction": "No response",
+          "yourResponse": "Your response",
+          "cancelledNotice": "This event has been cancelled.",
+          "rsvpRecurringTitle": "Respond to recurring event",
+          "rsvpRecurringPrompt": "This is a recurring event. Apply your response to:"
         },
         "list": {
           "defaultCalendarName": "My calendar",
@@ -489,6 +503,7 @@
         "tentative": "You have replied \"maybe\" to the invitation",
         "declined": "You have declined the invitation",
         "responseSent": "Your response has been sent to the organizer.",
+        "failed": "Failed to send your response. Please try again.",
         "error": {
           "title": "Error",
           "invalidLink": "Invalid link",
@@ -1148,7 +1163,21 @@
             "label": "Disponibilité",
             "busy": "Occupé",
             "free": "Libre"
-          }
+          },
+          "send": "Envoyer",
+          "invitation": "Invitation",
+          "organizedBy": "Organisé par",
+          "accept": "Accepter",
+          "maybe": "Peut-être",
+          "decline": "Refuser",
+          "accepted": "Accepté",
+          "tentative": "Peut-être",
+          "declined": "Refusé",
+          "needsAction": "En attente",
+          "yourResponse": "Votre réponse",
+          "cancelledNotice": "Cet événement a été annulé.",
+          "rsvpRecurringTitle": "Répondre à un événement récurrent",
+          "rsvpRecurringPrompt": "Ceci est un événement récurrent. Appliquer votre réponse à :"
         },
         "list": {
           "defaultCalendarName": "Mon calendrier",
@@ -1413,6 +1442,7 @@
         "tentative": "Vous avez répondu « peut-être » à l'invitation",
         "declined": "Vous avez décliné l'invitation",
         "responseSent": "Votre réponse a été envoyée à l'organisateur.",
+        "failed": "Échec de l'envoi de votre réponse. Veuillez réessayer.",
         "error": {
           "title": "Erreur",
           "invalidLink": "Lien invalide",
@@ -1814,7 +1844,21 @@
             "label": "Beschikbaarheid",
             "busy": "Bezet",
             "free": "Vrij"
-          }
+          },
+          "send": "Verzenden",
+          "invitation": "Uitnodiging",
+          "organizedBy": "Georganiseerd door",
+          "accept": "Accepteren",
+          "maybe": "Misschien",
+          "decline": "Weigeren",
+          "accepted": "Geaccepteerd",
+          "tentative": "Misschien",
+          "declined": "Geweigerd",
+          "needsAction": "Geen antwoord",
+          "yourResponse": "Uw antwoord",
+          "cancelledNotice": "Dit evenement is geannuleerd.",
+          "rsvpRecurringTitle": "Antwoorden op terugkerend evenement",
+          "rsvpRecurringPrompt": "Dit is een terugkerend evenement. Pas uw antwoord toe op:"
         },
         "list": {
           "defaultCalendarName": "Mijn kalender",
@@ -2079,6 +2123,7 @@
         "tentative": "U heeft \"misschien\" geantwoord op de uitnodiging",
         "declined": "U heeft de uitnodiging afgewezen",
         "responseSent": "Uw antwoord is naar de organisator gestuurd.",
+        "failed": "Het verzenden van uw antwoord is mislukt. Probeer het opnieuw.",
         "error": {
           "title": "Fout",
           "invalidLink": "Ongeldige link",
