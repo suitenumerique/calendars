@@ -12,5 +12,10 @@
         "psr-4": {
             "Calendars\\SabreDav\\": "src/"
         }
+    },
+    "scripts": {
+        "patch-sabredav-max-date": "@php bin/patch-sabredav-max-date.php",
+        "post-install-cmd": "@patch-sabredav-max-date",
+        "post-update-cmd": "@patch-sabredav-max-date"
     }
 }

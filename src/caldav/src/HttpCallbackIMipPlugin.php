@@ -99,15 +99,26 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         // Serialize the iCalendar message
         $vcalendar = $iTipMessage->message ? $iTipMessage->message->serialize() : '';
         
-        // Prepare headers
-        // Trim API key to remove any whitespace from environment variable
+        // Prepare headers.
+        //
+        // SECURITY: every header VALUE concatenated below was sourced
+        // from attacker-influenceable iCalendar property text
+        // (ORGANIZER/ATTENDEE URIs, METHOD token). vobject's parser
+        // preserves lone CR bytes (no following LF) inside URI
+        // properties, and while our re-serialize invariant strips
+        // them at storage time, the Schedule plugin may consume the
+        // iTip message before that re-serialize lands. Sanitize at
+        // the boundary regardless — anything other than printable
+        // ASCII becomes underscore. libcurl rejects literal CR/LF
+        // in headers in modern versions, but defense-in-depth here
+        // means we don't depend on that.
         $apiKey = trim($this->apiKey);
         $headers = [
             'Content-Type: text/calendar',
             'X-LS-Api-Key: ' . $apiKey,
-            'X-LS-Sender: ' . $iTipMessage->sender,
-            'X-LS-Recipient: ' . $iTipMessage->recipient,
-            'X-LS-Method: ' . $iTipMessage->method,
+            'X-LS-Sender: ' . $this->sanitizeHeaderValue($iTipMessage->sender),
+            'X-LS-Recipient: ' . $this->sanitizeHeaderValue($iTipMessage->recipient),
+            'X-LS-Method: ' . $this->sanitizeHeaderValue($iTipMessage->method),
         ];
 
         // Check if the sender is a MAILBOX principal and tell Django
@@ -162,6 +173,24 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         
         // Success
         $iTipMessage->scheduleStatus = '1.1;Scheduling message forwarded via HTTP callback';
+    }
+
+    /**
+     * Strip anything that could break the HTTP header line.
+     *
+     * Replaces every byte outside the printable-ASCII range (0x20-0x7E)
+     * with `_`. Catches CR/LF (header injection) and high-bit bytes
+     * (libcurl semantics vary by version). Returns a string short
+     * enough not to make oversized headers — 1024 bytes is the cap
+     * (typical CalDAV URI / iTIP token is well under 256).
+     */
+    private function sanitizeHeaderValue($value): string
+    {
+        $s = (string) $value;
+        if (strlen($s) > 1024) {
+            $s = substr($s, 0, 1024);
+        }
+        return preg_replace('/[^\x20-\x7E]/', '_', $s) ?? '';
     }
 
     /** @var array Per-request cache for mailbox checks */

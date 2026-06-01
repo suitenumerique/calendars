@@ -21,8 +21,11 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Create application directory
 WORKDIR /var/www/sabredav
 
-# Copy composer files and install dependencies from the lockfile
+# Copy composer files and install dependencies from the lockfile.
+# The post-install script (declared in composer.json) bumps SabreDAV's
+# MAX_DATE constant — see bin/patch-sabredav-max-date.php for the why.
 COPY composer.json composer.lock ./
+COPY bin/ ./bin/
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Copy server configuration

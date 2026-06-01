@@ -8,6 +8,21 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { IcsRecurrenceRule, IcsWeekDay } from "ts-ics";
 
+import { FOREVER_YEARS_THRESHOLD } from "../../services/dav/constants";
+
+const SECONDS_PER_YEAR = 86400 * 365;
+const FOREVER_THRESHOLD_SECS = FOREVER_YEARS_THRESHOLD * SECONDS_PER_YEAR;
+
+const FREQ_SECONDS: Record<string, number> = {
+  YEARLY: SECONDS_PER_YEAR,
+  MONTHLY: 86400 * 30,
+  WEEKLY: 86400 * 7,
+  DAILY: 86400,
+  HOURLY: 3600,
+  MINUTELY: 60,
+  SECONDLY: 1,
+};
+
 type RecurrenceFrequency = IcsRecurrenceRule["frequency"];
 type EndType = "never" | "count" | "date";
 
@@ -98,9 +113,27 @@ function getDateWarning(
   return null;
 }
 
-function getEndType(value?: IcsRecurrenceRule): EndType {
-  if (value?.count) return "count";
-  if (value?.until) return "date";
+export function isForeverCount(rule: IcsRecurrenceRule): boolean {
+  if (!rule.count) return false;
+  const stepSecs = FREQ_SECONDS[rule.frequency];
+  if (!stepSecs) return false;
+  const interval = rule.interval ?? 1;
+  return rule.count * interval * stepSecs > FOREVER_THRESHOLD_SECS;
+}
+
+export function isForeverUntil(rule: IcsRecurrenceRule): boolean {
+  const date = rule.until?.local?.date ?? rule.until?.date;
+  if (!(date instanceof Date)) return false;
+  return date.getTime() - Date.now() > FOREVER_THRESHOLD_SECS * 1000;
+}
+
+export function getEndType(value?: IcsRecurrenceRule): EndType {
+  if (value?.count) {
+    return isForeverCount(value) ? "never" : "count";
+  }
+  if (value?.until) {
+    return isForeverUntil(value) ? "never" : "date";
+  }
   return "never";
 }
 
@@ -109,13 +142,17 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
 
   const [isCustom, setIsCustom] = useState(() => {
     if (!value) return false;
+    const userCount =
+      value.count && !isForeverCount(value) ? value.count : undefined;
+    const userUntil =
+      value.until && !isForeverUntil(value) ? value.until : undefined;
     return !!(
       value.interval !== 1 ||
       value.byDay?.length ||
       value.byMonthday?.length ||
       value.byMonth?.length ||
-      value.count ||
-      value.until
+      userCount ||
+      userUntil
     );
   });
 

@@ -34,6 +34,21 @@ class CalDAVHTTPClient:
     BASE_URI_PATH = "/caldav"
     DEFAULT_TIMEOUT = 30
 
+    # Module-level connection-pooled HTTP session. The python-caldav
+    # library reuses TCP connections internally via its own Session;
+    # without this our raw-HTTP path would pay a fresh-connection cost
+    # per call (~hundreds of ms per request in tests), and lookups /
+    # uploads at module-call cadence multiply that cost. Sharing one
+    # ``requests.Session`` across instances reuses keep-alive and
+    # urllib3's connection pool.
+    _session: requests.Session | None = None
+
+    @classmethod
+    def _get_session(cls) -> requests.Session:
+        if cls._session is None:
+            cls._session = requests.Session()
+        return cls._session
+
     def __init__(self):
         self.base_url = settings.CALDAV_URL.rstrip("/")
 
@@ -128,7 +143,7 @@ class CalDAVHTTPClient:
             headers.update(extra_headers)
 
         url = self.build_url(path, query)
-        return requests.request(
+        return self._get_session().request(
             method=method,
             url=url,
             headers=headers,
@@ -464,19 +479,46 @@ class CalDAVClient:
         Create an event in CalDAV server from raw ICS data.
         The ics_data should be a complete VCALENDAR string.
         Returns the event UID.
-        """
-        client = self._get_client(user)
-        calendar_url = self._calendar_url(calendar_path)
-        calendar = client.calendar(url=calendar_url)
 
-        try:
-            event = calendar.save_event(ics_data)
-            event_uid = str(event.icalendar_component.get("uid", ""))
-            logger.info("Created event in CalDAV server: %s", event_uid)
-            return event_uid
-        except Exception as e:
-            logger.error("Failed to create event in CalDAV server: %s", str(e))
-            raise
+        Uses a raw HTTP PUT with explicit UTF-8 encoding and charset.
+        The python ``caldav`` library's ``save_event`` round-trips
+        the ICS body through a Latin-1 path internally, double-
+        encoding non-ASCII text (e.g. ``中`` → ``c3 a4 c2 b8 c2 ad``
+        instead of ``e4 b8 ad``). Writing bytes directly avoids the
+        mojibake and matches the behaviour the frontend gets from
+        ``fetch``.
+        """
+        uid_match = re.search(r"^UID:(.+)$", ics_data, re.MULTILINE)
+        if not uid_match:
+            raise ValueError("ics_data missing UID property")
+        event_uid = uid_match.group(1).strip().strip("\r")
+
+        normalized = calendar_path.rstrip("/")
+        if not normalized.startswith("/"):
+            normalized = "/" + normalized
+        href = f"{normalized}/{event_uid}.ics"
+
+        http = CalDAVHTTPClient()
+        response = http.request(
+            "PUT",
+            user,
+            href,
+            data=ics_data.encode("utf-8"),
+            content_type="text/calendar; charset=utf-8",
+            extra_headers={"If-None-Match": "*"},
+        )
+        if response.status_code not in (200, 201, 204):
+            logger.error(
+                "Failed to create event in CalDAV server (%s): %s",
+                response.status_code,
+                response.text[:500],
+            )
+            raise RuntimeError(
+                f"CalDAV PUT failed with {response.status_code}: "
+                f"{response.text[:200]}"
+            )
+        logger.info("Created event in CalDAV server: %s", event_uid)
+        return event_uid
 
     def create_event(self, user, calendar_path: str, event_data: dict) -> str:
         """

@@ -9,6 +9,7 @@ use Sabre\DAVACL;
 use Sabre\CalDAV;
 use Sabre\CardDAV;
 use Sabre\DAV;
+use Sabre\VObject\Settings as VObjectSettings;
 use Calendars\SabreDav\PrincipalBackend;
 use Calendars\SabreDav\HttpCallbackIMipPlugin;
 use Calendars\SabreDav\ApiKeyAuthBackend;
@@ -101,6 +102,47 @@ $nodes = [
 // outbound mail. Useless to legitimate clients and a free
 // fingerprinting hint for attackers.
 DAV\Server::$exposeVersion = false;
+
+// Raise the vobject recurrence iteration cap to accommodate our
+// per-frequency RRULE bounds (CalendarSanitizerPlugin caps DAILY at
+// 20 years = ~7305 instances). The cap is also the DoS control against
+// attacker-crafted ICS, so this value must stay strictly greater than
+// the maximum instance count the sanitizer can produce.
+VObjectSettings::$maxRecurrences = 8000;
+
+// Fail-loud assertions so misconfiguration surfaces at boot instead
+// of becoming a quiet data-loss bug months later.
+//
+// 1. The MAX_DATE vendor patch must have applied
+//    (composer post-install-cmd, see bin/patch-sabredav-max-date.php).
+//    Without it, RRULE events recurring past 2038 silently drop out
+//    of CalDAV time-range REPORTs.
+$pdoMaxDate = (new \ReflectionClass(\Sabre\CalDAV\Backend\PDO::class))
+    ->getConstant('MAX_DATE');
+if ($pdoMaxDate !== '2200-01-01') {
+    fwrite(
+        STDERR,
+        "[sabre/dav] FATAL: Sabre\\CalDAV\\Backend\\PDO::MAX_DATE = "
+        . "{$pdoMaxDate}, expected 2200-01-01. The composer post-install"
+        . " patch did not apply — check that `composer install` was not"
+        . " run with --no-scripts.\n"
+    );
+    exit(1);
+}
+// 2. Every per-FREQ COUNT cap must stay strictly under
+//    `maxRecurrences`. If someone bumps a cap above the iterator
+//    limit, every newly-stored event with that FREQ would 500 on
+//    read.
+$maxCap = max(CalendarSanitizerPlugin::DEFAULT_RRULE_CAPS);
+if ($maxCap >= VObjectSettings::$maxRecurrences) {
+    fwrite(
+        STDERR,
+        "[sabre/dav] FATAL: RRULE cap {$maxCap} >= maxRecurrences "
+        . VObjectSettings::$maxRecurrences
+        . ". Raise maxRecurrences in server.php or lower the cap.\n"
+    );
+    exit(1);
+}
 
 // Create server
 $server = new DAV\Server($nodes);

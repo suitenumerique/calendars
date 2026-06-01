@@ -8,12 +8,16 @@
  *
  * Sanitizations:
  * 1. Strip inline binary attachments (ATTACH;VALUE=BINARY / ENCODING=BASE64)
- *    These are typically Outlook/Exchange email signature images that bloat storage.
- *    URL-based attachments (e.g. Google Drive links) are preserved.
+ *    and ATTACH entries whose URI scheme isn't on the allowlist
+ *    (http/https/mailto/cid). Blocks file:// exfiltration, smb:// NTLM
+ *    hash leaks, javascript: XSS-in-client. URL-based HTTPS attachments
+ *    (e.g. Google Drive links) are preserved.
  * 2. Truncate oversized text properties:
  *    - Long text fields (DESCRIPTION, X-ALT-DESC, COMMENT): configurable limit (default 100KB)
  *    - Short text fields (SUMMARY, LOCATION): fixed 1KB safety guardrail
- * 3. Enforce max resource size (default 1MB) on the final serialized object.
+ * 3. Bound unbounded RRULEs (no COUNT/UNTIL) with a per-FREQ COUNT cap.
+ *    Strips MINUTELY/SECONDLY RRULEs that can't be safely iterated.
+ * 4. Enforce max resource size (default 1MB) on the final serialized object.
  *    Returns HTTP 507 Insufficient Storage if exceeded after sanitization.
  *
  * Controlled by constructor parameters (read from env vars in server.php).
@@ -50,14 +54,34 @@ class CalendarSanitizerPlugin extends ServerPlugin
     /** @var array Short text properties subject to MAX_SHORT_TEXT_BYTES */
     private const SHORT_TEXT_PROPERTIES = ['SUMMARY', 'LOCATION'];
 
+    /**
+     * URI schemes allowed in `ATTACH` properties.
+     *
+     * Other schemes get the property stripped on write. Rationale:
+     *   - `file://`        — auto-fetched by some clients → local
+     *     file exfiltration via SCHEDULE-FORCE-SEND-style chains.
+     *   - `smb://` / `cifs://` / `ftp://...\\...` — credential
+     *     prompt / NTLM hash leak when a Windows client auto-fetches.
+     *   - `javascript:` / `vbscript:` / `data:text/html;…` — XSS in
+     *     clients that render the attachment URI as a link target.
+     *   - Bare schemes / unknown — drop by default; the allowlist is
+     *     opt-in.
+     *
+     * `cid:` is allowed because some clients reference inline images
+     * already embedded in the iTIP MIME envelope.
+     */
+    private const ATTACH_URI_ALLOWED_SCHEMES = ['http', 'https', 'mailto', 'cid'];
+
     public function __construct(
         bool $stripBinaryAttachments = true,
         int $maxDescriptionBytes = 102400,
-        int $maxResourceSize = 1048576
+        int $maxResourceSize = 1048576,
+        ?array $rruleCaps = null
     ) {
         $this->stripBinaryAttachments = $stripBinaryAttachments;
         $this->maxDescriptionBytes = $maxDescriptionBytes;
         $this->maxResourceSize = $maxResourceSize;
+        $this->rruleCaps = $rruleCaps ?? self::DEFAULT_RRULE_CAPS;
     }
 
     public function getPluginName()
@@ -104,36 +128,300 @@ class CalendarSanitizerPlugin extends ServerPlugin
     }
 
     /**
-     * Sanitize raw calendar data from a beforeCreateFile/beforeWriteContent hook.
+     * Default per-frequency COUNT caps for unbounded RRULEs.
      *
-     * Runs for every object in a calendar collection regardless of file
-     * extension. CalDAV places no constraint on the basename of a
-     * calendar resource — clients are free to use ``UID``, ``UID.ics``,
-     * ``ev.txt``, or anything else — and SabreDAV's own
-     * ``validateICalendar`` runs on every write to a calendar
-     * collection. Pinning the sanitizer on a ``.ics`` suffix would let
-     * an attacker bypass the binary attachment / description-length /
-     * max-resource-size limits by uploading the same payload under a
-     * different name. The parent-node-type check above is what gates
-     * the call, not the file extension.
+     * COUNT bounds the number of *occurrences* directly. UNTIL would
+     * leave us open to BY-expansion attacks: an iTIP REQUEST with
+     * `FREQ=DAILY;BYHOUR=0,1,...,23` (no UNTIL/COUNT) under a
+     * 20-year UNTIL injection expands to ~175k instances, blowing
+     * past `maxRecurrences` and 500-ing every subsequent read of
+     * the stored event. With COUNT, vobject stops at the bound
+     * regardless of BY-fan-out.
+     *
+     * Values are chosen so that INTERVAL=1 + no BY-expansion roughly
+     * matches the human intent in the comments (e.g. ~20 years of
+     * DAILY). BY-expansion compresses the time span proportionally,
+     * which is fine — the event is still bounded.
+     *
+     * Every value MUST stay strictly under
+     * `Sabre\VObject\Settings::$maxRecurrences` (8000, set in
+     * server.php) so vobject's iterator never trips.
+     *
+     * MINUTELY and SECONDLY are intentionally absent — they are
+     * stripped from the event entirely (see STRIPPED_FREQUENCIES).
      */
+    public const DEFAULT_RRULE_CAPS = [
+        'DAILY'   => 7300,  // ~20 years of daily occurrences
+        'WEEKLY'  => 2600,  // ~50 years of weekly occurrences
+        'MONTHLY' => 600,   // ~50 years of monthly occurrences
+        'YEARLY'  => 100,   // 100 yearly occurrences
+        'HOURLY'  => 720,   // ~30 days of hourly occurrences
+    ];
+
+    /**
+     * Frequencies where the RRULE is stripped on inbound writes (PUT,
+     * iTIP routing, imports), leaving the master VEVENT as a one-off.
+     *
+     * `sabre/vobject`'s `RRuleIterator::next()` has no case for
+     * MINUTELY/SECONDLY: the clock never advances, so neither UNTIL nor
+     * COUNT can effectively bound iteration. We can't safely store these
+     * RRULEs at all.
+     *
+     * Stripping (rather than rejecting) keeps bulk .ics imports and
+     * iTIP REQUEST routing from failing wholesale when a single event
+     * in a batch carries one of these frequencies — the master VEVENT
+     * still lands in the calendar as a non-recurring occurrence.
+     */
+    public const STRIPPED_FREQUENCIES = ['MINUTELY', 'SECONDLY'];
+
+    /** @var array<string, int> */
+    private array $rruleCaps;
+
+    /**
+     * Approximate seconds per FREQ step. MONTHLY uses the shortest
+     * month (28 d) so the instance estimate is upper-bound — we'd
+     * rather over-clamp than under-clamp.
+     */
+    private const FREQ_SECONDS = [
+        'YEARLY'  => 86400 * 365,
+        'MONTHLY' => 86400 * 28,
+        'WEEKLY'  => 86400 * 7,
+        'DAILY'   => 86400,
+        'HOURLY'  => 3600,
+    ];
+
+    /**
+     * Per-FREQ list of BY-parts that EXPAND (multiply occurrences)
+     * per RFC 5545 §3.3.10 Table 1. Anything not listed is a filter
+     * (or N/A) and doesn't multiply.
+     *
+     * BYSETPOS is never an expander — always a post-filter on the
+     * generated set, so it's omitted here.
+     */
+    private const BY_EXPANSION_PARTS = [
+        'YEARLY'  => ['BYMONTH', 'BYWEEKNO', 'BYYEARDAY', 'BYMONTHDAY', 'BYDAY', 'BYHOUR', 'BYMINUTE', 'BYSECOND'],
+        'MONTHLY' => ['BYMONTHDAY', 'BYDAY', 'BYHOUR', 'BYMINUTE', 'BYSECOND'],
+        'WEEKLY'  => ['BYDAY', 'BYHOUR', 'BYMINUTE', 'BYSECOND'],
+        'DAILY'   => ['BYHOUR', 'BYMINUTE', 'BYSECOND'],
+        'HOURLY'  => ['BYMINUTE', 'BYSECOND'],
+    ];
+
+    /**
+     * Heuristic cutoff for clamping unparseable UNTIL on a VTODO
+     * without DTSTART — `estimateInstances` returns null in that
+     * case because we can't compute a delta, and an attacker could
+     * smuggle ``RRULE:FREQ=DAILY;UNTIL=99991231T000000Z`` past the
+     * cap by omitting DTSTART (legal on VTODO). If the parsed UNTIL
+     * year is past this, force a COUNT clamp anyway.
+     */
+    private const ABSURD_UNTIL_YEAR = 2300;
+
+    /**
+     * Return a sanitized RRULE parts array if the rule needs bounding,
+     * or null if the existing rule is already safe.
+     */
+    private function boundRrule(array $parts, string $freq, int $cap, $component): ?array
+    {
+        $hasCount = isset($parts['COUNT']);
+        $hasUntil = isset($parts['UNTIL']);
+
+        if (!$hasCount && !$hasUntil) {
+            $parts['COUNT'] = (string) $cap;
+            return $parts;
+        }
+
+        $estimated = $this->estimateInstances($parts, $freq, $component);
+
+        if ($estimated === null) {
+            // Can't estimate (e.g. VTODO with UNTIL but no DTSTART).
+            // Defuse the obvious attack: clamp if UNTIL is absurd.
+            if ($hasUntil) {
+                $until = $this->parseRRuleUntil((string) $parts['UNTIL']);
+                if ($until !== null
+                    && (int) $until->format('Y') > self::ABSURD_UNTIL_YEAR
+                ) {
+                    unset($parts['UNTIL']);
+                    $parts['COUNT'] = (string) $cap;
+                    return $parts;
+                }
+            }
+            return null;
+        }
+        if ($estimated <= $cap) {
+            return null;
+        }
+
+        unset($parts['COUNT'], $parts['UNTIL']);
+        $parts['COUNT'] = (string) $cap;
+        return $parts;
+    }
+
+    /**
+     * Upper-bound estimate of how many occurrences the RRULE would
+     * produce, factoring INTERVAL and BY-expansion. Returns null when
+     * we can't estimate (unknown FREQ, missing DTSTART for UNTIL, …).
+     */
+    private function estimateInstances(array $parts, string $freq, $component): ?int
+    {
+        $interval = isset($parts['INTERVAL']) ? max(1, (int) $parts['INTERVAL']) : 1;
+
+        $base = null;
+        if (isset($parts['COUNT'])) {
+            $base = (int) $parts['COUNT'];
+        } elseif (isset($parts['UNTIL'])) {
+            if (!isset($component->DTSTART)) {
+                return null;
+            }
+            $until = $this->parseRRuleUntil((string) $parts['UNTIL']);
+            if ($until === null) {
+                return null;
+            }
+            try {
+                $dtstart = $component->DTSTART->getDateTime();
+            } catch (\Exception $e) {
+                return null;
+            }
+            $deltaSecs = max(0, $until->getTimestamp() - $dtstart->getTimestamp());
+            $perFreqSecs = self::FREQ_SECONDS[$freq] ?? null;
+            if ($perFreqSecs === null) {
+                return null;
+            }
+            $base = (int) ceil($deltaSecs / $perFreqSecs / $interval) + 1;
+        }
+        if ($base === null) {
+            return null;
+        }
+        return $base * $this->byExpansionFactor($parts, $freq);
+    }
+
+    /**
+     * Multiplicative upper bound of BY-expansion for the given FREQ.
+     * Per RFC 5545 §3.3.10 Table 1, some BY-parts EXPAND and others
+     * FILTER depending on FREQ — see ``BY_EXPANSION_PARTS``. Only
+     * counts expanders so a benign filter (``BYMONTH=6`` on
+     * ``FREQ=MONTHLY``) doesn't trip a false clamp.
+     */
+    private function byExpansionFactor(array $parts, string $freq): int
+    {
+        $expanders = self::BY_EXPANSION_PARTS[$freq] ?? [];
+        $factor = 1;
+        foreach ($expanders as $key) {
+            if (!isset($parts[$key])) {
+                continue;
+            }
+            $values = is_array($parts[$key]) ? $parts[$key] : [$parts[$key]];
+            $factor *= max(1, count($values));
+        }
+        return $factor;
+    }
+
+    /**
+     * VTIMEZONE STANDARD/DAYLIGHT FREQs we refuse to store.
+     *
+     * Real-world timezone transitions are at most annual
+     * (`FREQ=YEARLY;BYMONTH=…;BYDAY=…`). Anything sub-monthly is
+     * either a malformed rule or a deliberate iteration bomb: a
+     * `FREQ=DAILY` STANDARD rule means vobject's TimeZoneUtil
+     * produces 365 transitions per year while resolving the TZID
+     * for any event that uses it, hitting `maxRecurrences` and
+     * 500-ing every read. Strip the RRULE in those cases — the
+     * STANDARD/DAYLIGHT subcomponent then describes a single
+     * transition at its DTSTART, which vobject can handle.
+     */
+    private const VTIMEZONE_DISALLOWED_FREQS = [
+        'SECONDLY', 'MINUTELY', 'HOURLY', 'DAILY', 'WEEKLY',
+    ];
+
+    /**
+     * Strip malicious RRULEs from a VTIMEZONE's STANDARD/DAYLIGHT
+     * subcomponents.
+     *
+     * @return bool True if anything was modified.
+     */
+    private function sanitizeVTimezone($vtimezone): bool
+    {
+        $modified = false;
+        foreach ($vtimezone->getComponents() as $sub) {
+            if ($sub->name !== 'STANDARD' && $sub->name !== 'DAYLIGHT') {
+                continue;
+            }
+            if (!isset($sub->RRULE)) {
+                continue;
+            }
+            foreach ($sub->select('RRULE') as $rrule) {
+                $parts = $rrule->getParts();
+                $freq = isset($parts['FREQ'])
+                    ? strtoupper((string) $parts['FREQ'])
+                    : null;
+                if ($freq === null) {
+                    continue;
+                }
+                if (in_array($freq, self::VTIMEZONE_DISALLOWED_FREQS, true)) {
+                    $sub->remove($rrule);
+                    $modified = true;
+                }
+            }
+        }
+        return $modified;
+    }
+
+    /**
+     * Parse an UNTIL value (DATE or DATE-TIME, UTC or floating) into
+     * a `DateTimeImmutable`. Returns null on malformed input — the
+     * caller treats this as "can't estimate", which is safe.
+     */
+    private function parseRRuleUntil(string $raw): ?\DateTimeImmutable
+    {
+        $raw = strtoupper(trim($raw));
+        if (preg_match('/^\d{8}$/', $raw)) {
+            $dt = \DateTimeImmutable::createFromFormat(
+                '!Ymd', $raw, new \DateTimeZone('UTC')
+            );
+        } elseif (preg_match('/^\d{8}T\d{6}Z$/', $raw)) {
+            $dt = \DateTimeImmutable::createFromFormat(
+                '!Ymd\THis\Z', $raw, new \DateTimeZone('UTC')
+            );
+        } elseif (preg_match('/^\d{8}T\d{6}$/', $raw)) {
+            $dt = \DateTimeImmutable::createFromFormat('!Ymd\THis', $raw);
+        } else {
+            return null;
+        }
+        return $dt instanceof \DateTimeImmutable ? $dt : null;
+    }
+
     private function sanitizeCalendarData($path, &$data, &$modified)
     {
+        // Get the data as string. (`stream_get_contents` / `rewind`
+        // don't throw on a closed stream — they return false / fail
+        // silently — so no try/catch needed here.)
+        if (is_resource($data)) {
+            $dataStr = stream_get_contents($data);
+            rewind($data);
+        } else {
+            $dataStr = $data;
+        }
+
+        // Reader::read throws on malformed iCal. We catch ONLY there
+        // and let downstream validators surface a clean 4xx — that's
+        // the only "expected" exception in this flow. Errors thrown
+        // during sanitizeVCalendar / serialize would be internal bugs
+        // and must propagate so we fail-closed instead of silently
+        // letting unsanitized bytes hit storage.
         try {
-            // Get the data as string
-            if (is_resource($data)) {
-                $dataStr = stream_get_contents($data);
-                rewind($data);
-            } else {
-                $dataStr = $data;
-            }
-
             $vcalendar = Reader::read($dataStr);
+        } catch (\Exception $e) {
+            error_log(
+                "[CalendarSanitizerPlugin] iCalendar parse error: "
+                . $e->getMessage()
+            );
+            return;
+        }
 
-            if (!$vcalendar instanceof VCalendar) {
-                return;
-            }
+        if (!$vcalendar instanceof VCalendar) {
+            return;
+        }
 
+        try {
             // Run the structural sanitizer first (binary attachments,
             // long text truncation, RRULE caps, …). The return value
             // tells us whether anything was structurally changed, but we
@@ -182,9 +470,6 @@ class CalendarSanitizerPlugin extends ServerPlugin
         } catch (InsufficientStorage $e) {
             // Re-throw size limit errors — these must reach the client as HTTP 507
             throw $e;
-        } catch (\Exception $e) {
-            // Log other errors but don't block the request
-            error_log("[CalendarSanitizerPlugin] Error processing calendar object: " . $e->getMessage());
         }
     }
 
@@ -203,10 +488,14 @@ class CalendarSanitizerPlugin extends ServerPlugin
 
         foreach ($vcalendar->getComponents() as $component) {
             if ($component->name === 'VTIMEZONE') {
+                if ($this->sanitizeVTimezone($component)) {
+                    $wasModified = true;
+                }
                 continue;
             }
 
-            // Strip inline binary attachments
+            // Strip inline binary attachments and dangerous URI
+            // schemes (file://, smb://, javascript:, …).
             if ($this->stripBinaryAttachments && isset($component->ATTACH)) {
                 $toRemove = [];
                 foreach ($component->select('ATTACH') as $attach) {
@@ -217,6 +506,18 @@ class CalendarSanitizerPlugin extends ServerPlugin
                         ($encodingParam && strtoupper((string)$encodingParam) === 'BASE64')
                     ) {
                         $toRemove[] = $attach;
+                        continue;
+                    }
+                    $uri = (string) $attach;
+                    if ($uri === '') {
+                        continue;
+                    }
+                    $scheme = strtolower((string) parse_url($uri, PHP_URL_SCHEME));
+                    if (
+                        $scheme === ''
+                        || !in_array($scheme, self::ATTACH_URI_ALLOWED_SCHEMES, true)
+                    ) {
+                        $toRemove[] = $attach;
                     }
                 }
                 foreach ($toRemove as $attach) {
@@ -225,53 +526,86 @@ class CalendarSanitizerPlugin extends ServerPlugin
                 }
             }
 
-            // Truncate oversized long text properties (DESCRIPTION, X-ALT-DESC, COMMENT)
+            // Truncate oversized long text properties (DESCRIPTION,
+            // X-ALT-DESC, COMMENT). Uses ``mb_strcut`` so a
+            // truncation that lands inside a multi-byte UTF-8
+            // sequence backs up to the previous valid boundary
+            // instead of emitting an invalid byte stream.
             if ($this->maxDescriptionBytes > 0) {
                 foreach (self::LONG_TEXT_PROPERTIES as $prop) {
                     if (isset($component->{$prop})) {
                         $val = (string)$component->{$prop};
                         if (strlen($val) > $this->maxDescriptionBytes) {
-                            $component->{$prop} = substr($val, 0, $this->maxDescriptionBytes) . '...';
+                            $component->{$prop} = mb_strcut(
+                                $val, 0, $this->maxDescriptionBytes, 'UTF-8'
+                            ) . '...';
                             $wasModified = true;
                         }
                     }
                 }
             }
 
-            // Cap unbounded RRULEs: add UNTIL if neither COUNT nor UNTIL is set.
-            // Prevents infinite recurrence expansion. Default: 10 years from DTSTART.
+            // Bound every RRULE so vobject's iterator can't trip
+            // `Settings::$maxRecurrences`. Three paths:
+            //
+            //   1. FREQ in STRIPPED_FREQUENCIES → strip RRULE + sibling
+            //      EXDATE/RDATE (event survives as one-off).
+            //   2. RRULE already has COUNT/UNTIL → estimate the upper-
+            //      bound instance count. If > cap, replace the bound
+            //      with COUNT=cap. Catches the attacker case
+            //      (COUNT=999999, UNTIL=99991231, UNTIL+BY-expansion).
+            //   3. RRULE has no COUNT/UNTIL → inject COUNT=cap.
+            //
+            // We can't keep UNTIL alongside an injected COUNT (RFC 5545
+            // §3.3.10 says they're mutually exclusive), so over-bound
+            // UNTILs are replaced. Estimates over-count for BY-FILTER
+            // parts (BYMONTH on YEARLY filters rather than expands),
+            // which means some legitimate events get COUNT-bounded
+            // when they didn't need to be — the trade-off keeps the
+            // logic simple and errs safely.
             if (isset($component->RRULE)) {
                 foreach ($component->select('RRULE') as $rrule) {
-                    $rruleStr = (string)$rrule;
-                    $hasCount = stripos($rruleStr, 'COUNT=') !== false;
-                    $hasUntil = stripos($rruleStr, 'UNTIL=') !== false;
+                    $parts = $rrule->getParts();
+                    $freq = isset($parts['FREQ']) ? strtoupper((string) $parts['FREQ']) : null;
+                    if ($freq === null) {
+                        continue;
+                    }
 
-                    if (!$hasCount && !$hasUntil && isset($component->DTSTART)) {
-                        // Calculate UNTIL as 10 years from DTSTART, preserving date type.
-                        // All-day events (VALUE=DATE) need date-only UNTIL (Ymd),
-                        // timed events need date-time UNTIL matching DTSTART format.
-                        $dtstart = $component->DTSTART;
-                        $until = $dtstart->getDateTime()->modify('+10 years');
-                        $valueParam = $dtstart->offsetGet('VALUE');
-                        $isDateOnly = $valueParam && strtoupper((string)$valueParam) === 'DATE';
-
-                        if ($isDateOnly) {
-                            $untilStr = $until->format('Ymd');
-                        } else {
-                            $untilStr = $until->format('Ymd\THis\Z');
+                    if (in_array($freq, self::STRIPPED_FREQUENCIES, true)) {
+                        $component->remove($rrule);
+                        foreach (['EXDATE', 'RDATE'] as $orphan) {
+                            if (isset($component->{$orphan})) {
+                                foreach ($component->select($orphan) as $p) {
+                                    $component->remove($p);
+                                }
+                            }
                         }
-                        $rrule->setValue($rruleStr . ';UNTIL=' . $untilStr);
+                        $wasModified = true;
+                        continue;
+                    }
+
+                    $cap = $this->rruleCaps[$freq] ?? null;
+                    if ($cap === null) {
+                        continue;
+                    }
+
+                    $bounded = $this->boundRrule($parts, $freq, $cap, $component);
+                    if ($bounded !== null) {
+                        $rrule->setParts($bounded);
                         $wasModified = true;
                     }
                 }
             }
 
-            // Truncate oversized short text properties (SUMMARY, LOCATION)
+            // Truncate oversized short text properties (SUMMARY,
+            // LOCATION). Multi-byte safe (see long-text branch above).
             foreach (self::SHORT_TEXT_PROPERTIES as $prop) {
                 if (isset($component->{$prop})) {
                     $val = (string)$component->{$prop};
                     if (strlen($val) > self::MAX_SHORT_TEXT_BYTES) {
-                        $component->{$prop} = substr($val, 0, self::MAX_SHORT_TEXT_BYTES) . '...';
+                        $component->{$prop} = mb_strcut(
+                            $val, 0, self::MAX_SHORT_TEXT_BYTES, 'UTF-8'
+                        ) . '...';
                         $wasModified = true;
                     }
                 }
