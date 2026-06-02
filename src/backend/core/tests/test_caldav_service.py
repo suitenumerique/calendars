@@ -963,18 +963,21 @@ class TestCalendarSanitizerRRULECap:
         # security invariant: the target's calendar must NOT receive
         # an iTIP-routed copy. Verify that invariant regardless of
         # the PUT outcome so an unrelated failure can't mask a
-        # routing regression.
+        # routing regression — but capture the exception so a
+        # failure of the invariant check shows *why* PUT raised, not
+        # a silent green test.
+        put_exception: Exception | None = None
         try:
             service.create_event_raw(attacker, attacker_cal_path, ics)
-        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-            pass
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            put_exception = exc
 
         http = CalDAVHTTPClient()
         ical_data, _, _ = http.find_event_by_uid(target, uid)
         assert ical_data is None, (
             "ORGANIZER spoofing detected — target received an iTIP "
             "copy from the wrong principal. Stored content: "
-            f"{ical_data!r}"
+            f"{ical_data!r}. PUT exception (if any): {put_exception!r}"
         )
 
     def test_utf8_round_trip_preserves_bytes(self):

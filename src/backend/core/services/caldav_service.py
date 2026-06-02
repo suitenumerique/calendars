@@ -143,6 +143,7 @@ class CalDAVHTTPClient:
             headers.update(extra_headers)
 
         url = self.build_url(path, query)
+        session = self._get_session()
         # ``allow_redirects=False`` is load-bearing: ``requests.Session``
         # strips ``Authorization`` on cross-host redirects but NOT
         # custom headers, so a 30x off our internal CalDAV would leak
@@ -150,7 +151,7 @@ class CalDAVHTTPClient:
         # redirect target. SabreDAV doesn't redirect today; if it ever
         # does, we want to see the 30x in our logs, not silently
         # follow it.
-        return self._get_session().request(
+        response = session.request(
             method=method,
             url=url,
             headers=headers,
@@ -158,6 +159,16 @@ class CalDAVHTTPClient:
             timeout=timeout or self.DEFAULT_TIMEOUT,
             allow_redirects=False,
         )
+        # The session is module-level and shared across users for
+        # connection-pool reuse. SabreDAV doesn't set cookies today,
+        # but a future plugin (or a misconfigured reverse proxy)
+        # could — and any cookie that lands in the jar would then
+        # propagate into the next user's request. Clear the jar
+        # after every response so cookie state stays per-call, not
+        # per-process. Keep-alive / pool reuse is unaffected
+        # (cookies and connection pooling are independent).
+        session.cookies.clear()
+        return response
 
     def internal_request(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         self,
