@@ -143,12 +143,20 @@ class CalDAVHTTPClient:
             headers.update(extra_headers)
 
         url = self.build_url(path, query)
+        # ``allow_redirects=False`` is load-bearing: ``requests.Session``
+        # strips ``Authorization`` on cross-host redirects but NOT
+        # custom headers, so a 30x off our internal CalDAV would leak
+        # ``X-LS-Api-Key`` / ``X-LS-User`` / ``X-LS-Org-Id`` to the
+        # redirect target. SabreDAV doesn't redirect today; if it ever
+        # does, we want to see the 30x in our logs, not silently
+        # follow it.
         return self._get_session().request(
             method=method,
             url=url,
             headers=headers,
             data=data,
             timeout=timeout or self.DEFAULT_TIMEOUT,
+            allow_redirects=False,
         )
 
     def internal_request(  # noqa: PLR0913  # pylint: disable=too-many-arguments
@@ -488,7 +496,17 @@ class CalDAVClient:
         mojibake and matches the behaviour the frontend gets from
         ``fetch``.
         """
-        uid_match = re.search(r"^UID:(.+)$", ics_data, re.MULTILINE)
+        # Extract the UID from the body. Two iCal quirks to handle:
+        #   1. RFC 5545 §3.1 line folding: a CRLF immediately followed
+        #      by a single linear whitespace (space/tab) is a
+        #      continuation of the previous line. Unfold before
+        #      matching, otherwise a long UID split across lines
+        #      reads as truncated.
+        #   2. Property parameters: ``UID;X-FOO=bar:value`` is valid
+        #      iCal — the property name can be followed by zero or
+        #      more ``;PARAM=VAL`` segments before the ``:``.
+        unfolded_ics = re.sub(r"\r?\n[ \t]", "", ics_data)
+        uid_match = re.search(r"^UID(?:;[^:\r\n]*)?:(.+)$", unfolded_ics, re.MULTILINE)
         if not uid_match:
             raise ValueError("ics_data missing UID property")
         event_uid = uid_match.group(1).strip().strip("\r")
@@ -496,7 +514,13 @@ class CalDAVClient:
         normalized = calendar_path.rstrip("/")
         if not normalized.startswith("/"):
             normalized = "/" + normalized
-        href = f"{normalized}/{event_uid}.ics"
+        # UIDs from ICS bodies are attacker-influenceable; RFC 5545 §3.8.4.7
+        # only requires globally-unique text, so a UID can legally contain
+        # ``/``, ``?``, ``#``, etc. URL-escape it before embedding in the
+        # href so a crafted UID cannot break out of the calendar collection
+        # path or smuggle a query string.
+        encoded_uid = quote(event_uid, safe="")
+        href = f"{normalized}/{encoded_uid}.ics"
 
         http = CalDAVHTTPClient()
         response = http.request(
@@ -514,8 +538,7 @@ class CalDAVClient:
                 response.text[:500],
             )
             raise RuntimeError(
-                f"CalDAV PUT failed with {response.status_code}: "
-                f"{response.text[:200]}"
+                f"CalDAV PUT failed with {response.status_code}: {response.text[:200]}"
             )
         logger.info("Created event in CalDAV server: %s", event_uid)
         return event_uid

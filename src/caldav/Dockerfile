@@ -7,13 +7,18 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     libpq-dev \
+    libonig-dev \
     postgresql-client \
     git \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_pgsql
+# Install PHP extensions. ``mbstring`` is mandatory: the
+# CalendarSanitizerPlugin uses ``mb_strcut`` to truncate
+# DESCRIPTION/SUMMARY/LOCATION on a UTF-8 boundary, and there is no
+# safe fallback — without it a multi-byte truncation would emit
+# invalid UTF-8 (or fatal).
+RUN docker-php-ext-install pdo pdo_pgsql mbstring
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer

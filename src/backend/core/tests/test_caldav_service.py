@@ -1,5 +1,6 @@
 """Tests for CalDAV service integration."""
 
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -97,10 +98,12 @@ class TestCalendarSanitizerRRULECap:
       (e.g. ``FREQ=DAILY;BYHOUR=0,...,23``) multiplies instances per
       iteration; UNTIL would silently allow blowing past
       `maxRecurrences`, while COUNT caps occurrences directly.
-    - MINUTELY/SECONDLY: strips the RRULE (and any RDATE/EXDATE on
-      the same component) entirely. `sabre/vobject`'s RRuleIterator
-      never advances the clock for sub-day frequencies, so no bound
-      we inject can stop iteration.
+    - MINUTELY/SECONDLY: strips the RRULE. `sabre/vobject`'s
+      RRuleIterator never advances the clock for sub-day frequencies,
+      so no bound we inject can stop iteration. EXDATE is dropped
+      only if every RRULE was stripped AND there's no surviving
+      RDATE — otherwise the exceptions still apply to the surviving
+      recurrence and are kept.
     """
 
     @staticmethod
@@ -279,9 +282,7 @@ class TestCalendarSanitizerRRULECap:
         ical_data, _, _ = http.find_event_by_uid(user, uid)
         rrule_line = self._rrule_line(ical_data)
         assert rrule_line, "RRULE missing after PUT"
-        assert "COUNT=999999" not in rrule_line, (
-            f"COUNT not clamped: {rrule_line!r}"
-        )
+        assert "COUNT=999999" not in rrule_line, f"COUNT not clamped: {rrule_line!r}"
         assert "COUNT=7300" in rrule_line, (
             f"expected COUNT=7300 (DAILY cap), got: {rrule_line!r}"
         )
@@ -324,9 +325,7 @@ class TestCalendarSanitizerRRULECap:
         service.create_event_raw(
             user,
             caldav_path,
-            self._make_ics(
-                uid, "DAILY", f";BYHOUR={byhour};UNTIL=20310101T000000Z"
-            ),
+            self._make_ics(uid, "DAILY", f";BYHOUR={byhour};UNTIL=20310101T000000Z"),
         )
         http = CalDAVHTTPClient()
         ical_data, _, _ = http.find_event_by_uid(user, uid)
@@ -349,9 +348,7 @@ class TestCalendarSanitizerRRULECap:
         http = CalDAVHTTPClient()
         ical_data, _, _ = http.find_event_by_uid(user, uid)
         rrule_line = self._rrule_line(ical_data)
-        assert "COUNT=50" in rrule_line, (
-            f"under-cap COUNT got changed: {rrule_line!r}"
-        )
+        assert "COUNT=50" in rrule_line, f"under-cap COUNT got changed: {rrule_line!r}"
 
     def test_until_within_cap_is_untouched(self):
         """A reasonable UNTIL under the cap stays exactly as supplied."""
@@ -479,9 +476,9 @@ class TestCalendarSanitizerRRULECap:
 
         Only the MINUTELY one should be stripped; the DAILY one is
         bound with COUNT. Pinning this prevents accidental wipes of
-        the surviving rule. Note that EXDATE/RDATE on the same
-        component will be wiped — documented trade-off, not tested
-        here.
+        the surviving rule. EXDATE/RDATE on the same component are
+        preserved as long as any recurrence property (RRULE or RDATE)
+        survives, so exceptions intended for the kept rule aren't lost.
         """
         user = factories.UserFactory(email="multi-rrule@example.com")
         service = CalendarService()
@@ -509,18 +506,121 @@ class TestCalendarSanitizerRRULECap:
             line for line in ical_data.splitlines() if line.startswith("RRULE:")
         ]
         # MINUTELY stripped, DAILY remains with injected COUNT.
-        assert len(rrule_lines) == 1, (
-            f"expected 1 surviving RRULE, got {rrule_lines!r}"
-        )
+        assert len(rrule_lines) == 1, f"expected 1 surviving RRULE, got {rrule_lines!r}"
         surviving = rrule_lines[0]
-        assert "FREQ=DAILY" in surviving, (
-            f"wrong RRULE survived: {surviving!r}"
-        )
-        assert "MINUTELY" not in surviving, (
-            f"MINUTELY not stripped: {surviving!r}"
-        )
+        assert "FREQ=DAILY" in surviving, f"wrong RRULE survived: {surviving!r}"
+        assert "MINUTELY" not in surviving, f"MINUTELY not stripped: {surviving!r}"
         assert "COUNT=" in surviving, (
             f"surviving RRULE not COUNT-bounded: {surviving!r}"
+        )
+
+    def test_multi_rrule_preserves_exdate_when_safe_rrule_survives(self):
+        """EXDATE must survive when a sibling RRULE survives stripping.
+
+        With MINUTELY + DAILY + EXDATE, the MINUTELY gets stripped but
+        the DAILY remains — exceptions are still meaningful against the
+        kept rule. The previous behavior wiped EXDATE/RDATE on any
+        stripped RRULE, which dropped exceptions the user expected to
+        keep.
+        """
+        user = factories.UserFactory(email="multi-rrule-exdate@example.com")
+        service = CalendarService()
+        caldav_path = service.create_calendar(user, name="ExdateMix", color="#000000")
+        uid = "multi-rrule-exdate-test"
+        ics = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            "DTSTAMP:20260530T120000Z\r\n"
+            "DTSTART:20260530T140000Z\r\n"
+            "DTEND:20260530T150000Z\r\n"
+            "SUMMARY:multi-rrule-exdate\r\n"
+            "RRULE:FREQ=DAILY\r\n"
+            "RRULE:FREQ=MINUTELY\r\n"
+            "EXDATE:20260601T140000Z\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        service.create_event_raw(user, caldav_path, ics)
+        http = CalDAVHTTPClient()
+        ical_data, _, _ = http.find_event_by_uid(user, uid)
+        assert ical_data, "event not stored"
+        assert "MINUTELY" not in ical_data, f"MINUTELY not stripped: {ical_data!r}"
+        assert "FREQ=DAILY" in ical_data, f"DAILY not preserved: {ical_data!r}"
+        assert "20260601T140000Z" in ical_data and "EXDATE" in ical_data, (
+            "EXDATE wiped despite a surviving safe RRULE — exceptions "
+            f"lost: {ical_data!r}"
+        )
+
+    def test_stripped_only_rrule_drops_orphan_exdate(self):
+        """When the only RRULE is stripped and no RDATE remains,
+        EXDATE must be dropped — it has nothing left to except from
+        and would otherwise sit in storage as RFC-invalid garbage.
+        """
+        user = factories.UserFactory(email="strip-orphan-exdate@example.com")
+        service = CalendarService()
+        caldav_path = service.create_calendar(user, name="Orphan", color="#000000")
+        uid = "strip-orphan-exdate-test"
+        ics = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            "DTSTAMP:20260530T120000Z\r\n"
+            "DTSTART:20260530T140000Z\r\n"
+            "DTEND:20260530T150000Z\r\n"
+            "SUMMARY:strip-orphan-exdate\r\n"
+            "RRULE:FREQ=MINUTELY\r\n"
+            "EXDATE:20260601T140000Z\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        service.create_event_raw(user, caldav_path, ics)
+        http = CalDAVHTTPClient()
+        ical_data, _, _ = http.find_event_by_uid(user, uid)
+        assert ical_data, "event not stored"
+        assert "RRULE" not in ical_data, f"RRULE not stripped: {ical_data!r}"
+        assert "EXDATE" not in ical_data, (
+            f"orphan EXDATE survived despite no recurrence remaining: {ical_data!r}"
+        )
+
+    def test_stripped_rrule_preserves_rdate_driven_recurrence(self):
+        """RDATE alone is a valid recurrence form. When MINUTELY RRULE
+        coexists with RDATE + EXDATE, stripping the RRULE must keep
+        both RDATE and EXDATE — the RDATE-driven occurrences remain
+        and the EXDATE still excludes a date from them.
+        """
+        user = factories.UserFactory(email="rdate-survives@example.com")
+        service = CalendarService()
+        caldav_path = service.create_calendar(user, name="Rdate", color="#000000")
+        uid = "rdate-survives-test"
+        ics = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            "DTSTAMP:20260530T120000Z\r\n"
+            "DTSTART:20260530T140000Z\r\n"
+            "DTEND:20260530T150000Z\r\n"
+            "SUMMARY:rdate-survives\r\n"
+            "RRULE:FREQ=MINUTELY\r\n"
+            "RDATE:20260531T140000Z,20260602T140000Z\r\n"
+            "EXDATE:20260602T140000Z\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        service.create_event_raw(user, caldav_path, ics)
+        http = CalDAVHTTPClient()
+        ical_data, _, _ = http.find_event_by_uid(user, uid)
+        assert ical_data, "event not stored"
+        assert "MINUTELY" not in ical_data, f"MINUTELY not stripped: {ical_data!r}"
+        assert "RDATE" in ical_data, f"RDATE wiped despite being safe: {ical_data!r}"
+        assert "EXDATE" in ical_data, (
+            f"EXDATE wiped despite RDATE-driven recurrence: {ical_data!r}"
         )
 
     def test_vtodo_without_dtstart_absurd_until_is_clamped(self):
@@ -556,9 +656,7 @@ class TestCalendarSanitizerRRULECap:
         assert "99991231" not in rrule_line, (
             f"absurd UNTIL not clamped on VTODO: {rrule_line!r}"
         )
-        assert "COUNT=" in rrule_line, (
-            f"VTODO RRULE not COUNT-bounded: {rrule_line!r}"
-        )
+        assert "COUNT=" in rrule_line, f"VTODO RRULE not COUNT-bounded: {rrule_line!r}"
 
     def test_itip_request_routes_through_sanitizer(self):
         """iTIP REQUEST auto-routed by SabreDAV's Schedule plugin
@@ -651,9 +749,7 @@ class TestCalendarSanitizerRRULECap:
         ``javascript:`` / ``data:text/html`` XSS in clients that
         render the link target.
         """
-        user = factories.UserFactory(
-            email=f"attach-{abs(hash(uri))}@example.com"
-        )
+        user = factories.UserFactory(email=f"attach-{abs(hash(uri))}@example.com")
         service = CalendarService()
         caldav_path = service.create_calendar(user, name="Attach", color="#000000")
         uid = f"attach-{abs(hash(uri))}"
@@ -750,9 +846,7 @@ class TestCalendarSanitizerRRULECap:
         start = datetime(2026, 6, 1, tzinfo=timezone.utc)
         end = datetime(2026, 6, 2, tzinfo=timezone.utc)
         events = service.get_events(user, caldav_path, start=start, end=end)
-        assert events, (
-            "VTIMEZONE-bomb event is unreadable after sanitizer ran."
-        )
+        assert events, "VTIMEZONE-bomb event is unreadable after sanitizer ran."
 
     def test_legitimate_vtimezone_rrule_is_preserved(self):
         """A real-world VTIMEZONE (``FREQ=YEARLY;BYMONTH=…;BYDAY=…``)
@@ -864,14 +958,16 @@ class TestCalendarSanitizerRRULECap:
             "END:VCALENDAR\r\n"
         )
         # The PUT itself may succeed (RFC 5545 allows any string
-        # as ORGANIZER on a non-scheduled event). What matters is:
-        # the target's calendar must NOT receive an iTIP-routed copy.
+        # as ORGANIZER on a non-scheduled event) or be refused by
+        # SabreDAV. Either is acceptable. What matters is the
+        # security invariant: the target's calendar must NOT receive
+        # an iTIP-routed copy. Verify that invariant regardless of
+        # the PUT outcome so an unrelated failure can't mask a
+        # routing regression.
         try:
             service.create_event_raw(attacker, attacker_cal_path, ics)
-        except Exception:  # noqa: BLE001
-            # Acceptable: SabreDAV refused outright. The spoof never
-            # reaches storage, so target can't receive a copy.
-            return
+        except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            pass
 
         http = CalDAVHTTPClient()
         ical_data, _, _ = http.find_event_by_uid(target, uid)
@@ -894,9 +990,7 @@ class TestCalendarSanitizerRRULECap:
         """
         user = factories.UserFactory(email="utf8-roundtrip@example.com")
         service = CalendarService()
-        caldav_path = service.create_calendar(
-            user, name="UTF8RT", color="#000000"
-        )
+        caldav_path = service.create_calendar(user, name="UTF8RT", color="#000000")
         uid = "utf8-roundtrip-test"
         # One 中 in SUMMARY, one in DESCRIPTION. Each is e4 b8 ad
         # (3 bytes). Mojibake would double them to 6 bytes.
@@ -976,15 +1070,13 @@ class TestCalendarSanitizerRRULECap:
         # invalid UTF-8 in the stored ICS. The bytes themselves are
         # what downstream consumers (Django, frontend) see.
         response = http.request("GET", user, href)
-        assert response.status_code == 200, (
-            f"GET {href} failed: {response.status_code}"
-        )
+        assert response.status_code == 200, f"GET {href} failed: {response.status_code}"
         try:
             response.content.decode("utf-8", errors="strict")
         except UnicodeDecodeError as e:
             # Show a small window around the offending byte for
             # easier diagnosis.
-            window = response.content[max(0, e.start - 10): e.start + 10]
+            window = response.content[max(0, e.start - 10) : e.start + 10]
             raise AssertionError(
                 f"truncated DESCRIPTION contains invalid UTF-8 at "
                 f"byte {e.start}: {window!r}"
@@ -1046,8 +1138,7 @@ class TestCalendarSanitizerRRULECap:
         assert ical_data, "target never got the iTIP-routed event"
         rrule_line = self._rrule_line(ical_data)
         assert rrule_line and "COUNT=" in rrule_line, (
-            "iTIP-routed event arrived without sanitizer bound — "
-            f"RRULE: {rrule_line!r}"
+            f"iTIP-routed event arrived without sanitizer bound — RRULE: {rrule_line!r}"
         )
 
     def test_propfind_depth_infinity_is_not_honoured(self):
@@ -1084,9 +1175,9 @@ class TestCalendarSanitizerRRULECap:
         )
         # Either rejected outright, OR treated as Depth: 1
         # (SabreDAV's default downgrade). Both are acceptable.
-        assert response.status_code != 207 or response.text.count(
-            "<d:response"
-        ) < 200, (
+        assert (
+            response.status_code != 207 or response.text.count("<d:response") < 200
+        ), (
             "Depth: infinity returned a large multistatus — server "
             "appears to be walking the whole tree (DoS vector)."
         )
@@ -1129,9 +1220,7 @@ class TestCalendarSanitizerRRULECap:
             "XXE resolved — /etc/passwd content appears in PROPFIND "
             f"response: {response.text[:500]!r}"
         )
-        assert "/bin/bash" not in response.text and (
-            "/bin/sh" not in response.text
-        ), (
+        assert "/bin/bash" not in response.text and ("/bin/sh" not in response.text), (
             "XXE resolved — shell paths from /etc/passwd in PROPFIND "
             f"response: {response.text[:500]!r}"
         )
@@ -1171,16 +1260,49 @@ class TestCalendarSanitizerRRULECap:
         )
         service.create_event_raw(user, caldav_path, ics)
         http = CalDAVHTTPClient()
-        ical_data, _, _ = http.find_event_by_uid(user, uid)
-        assert ical_data, "event not stored"
-        # The lone CR (0x0D) must not appear inside any line of the
-        # stored body. ``splitlines()`` handles both CR/LF and lone
-        # CR / LF, so a smuggled bare CR would be invisible to it —
-        # check the raw payload for mid-line CR bytes directly.
-        for line in ical_data.splitlines():
-            assert "\r" not in line, (
-                f"lone CR survived canonicalization in line: {line!r}"
-            )
+        _, href, _ = http.find_event_by_uid(user, uid)
+        assert href, "event not stored"
+        # Fetch the raw stored bytes — checking ``ical_data`` via
+        # ``splitlines()`` would silently split on a smuggled lone CR
+        # and hide the very byte we're trying to detect. Inspect the
+        # GET response bytes directly so any 0x0D that isn't part of
+        # the canonical CRLF line ending surfaces.
+        raw_content = http.request("GET", user, href).content
+        assert not re.search(rb"\r(?!\n)", raw_content), (
+            f"lone CR survived canonicalization in raw body: {raw_content!r}"
+        )
+
+    def test_create_event_raw_handles_uid_parameters_and_folding(self):
+        """``create_event_raw`` extracts the UID for the PUT href via
+        regex. The naive ``^UID:(.+)$`` form misses two legal iCal
+        shapes: property parameters (``UID;X-FOO=bar:value``) and
+        RFC 5545 line folding (a CRLF + linear whitespace continues
+        the previous line). Pin both — without these the PUT raises
+        ``ValueError`` on a perfectly valid client payload.
+        """
+        user = factories.UserFactory(email="uid-edge@example.com")
+        service = CalendarService()
+        caldav_path = service.create_calendar(user, name="UidEdge", color="#000000")
+        # Property parameter on UID + folded UID across two lines.
+        # Unfolded the UID reads "uid-edge-test-folded-tail".
+        ics = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//test//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            "UID;X-LS-NOTE=foo:uid-edge-test-folded\r\n"
+            " -tail\r\n"
+            "DTSTAMP:20260530T120000Z\r\n"
+            "DTSTART:20260601T140000Z\r\n"
+            "DTEND:20260601T150000Z\r\n"
+            "SUMMARY:uid-edge-test\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        service.create_event_raw(user, caldav_path, ics)
+        http = CalDAVHTTPClient()
+        ical_data, _, _ = http.find_event_by_uid(user, "uid-edge-test-folded-tail")
+        assert ical_data, "event not stored under unfolded UID"
 
     def test_capped_event_iterates_via_caldav_report(self):
         """A capped RRULE must iterate cleanly — proves vobject can

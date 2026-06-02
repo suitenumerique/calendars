@@ -215,13 +215,18 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
       result += ` · ${dayLabels.join(", ")}`;
     }
 
-    if (value.until) {
+    // Defer to ``getEndType``: a ``count`` / ``until`` past the
+    // forever threshold classifies as ``never`` and must not show
+    // a date / count fragment, otherwise the summary contradicts
+    // the active end-of-recurrence button.
+    const summaryEndType = getEndType(value);
+    if (summaryEndType === "date" && value.until) {
       const dateStr =
         value.until.date instanceof Date
           ? value.until.date.toISOString().split("T")[0]
           : "";
       result += ` · ${t("calendar.recurrence.on")} ${dateStr}`;
-    } else if (value.count) {
+    } else if (summaryEndType === "count" && value.count) {
       result += ` · ${value.count} ${t("calendar.recurrence.occurrences")}`;
     }
 

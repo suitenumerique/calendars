@@ -132,8 +132,12 @@ if ($pdoMaxDate !== '2200-01-01') {
 // 2. Every per-FREQ COUNT cap must stay strictly under
 //    `maxRecurrences`. If someone bumps a cap above the iterator
 //    limit, every newly-stored event with that FREQ would 500 on
-//    read.
-$maxCap = max(CalendarSanitizerPlugin::DEFAULT_RRULE_CAPS);
+//    read. ``$rruleCaps`` is built here so the boot check and the
+//    plugin constructor share the same array — if a future change
+//    makes caps tunable via env vars, update this one variable and
+//    both the assertion and the runtime stay in sync.
+$rruleCaps = CalendarSanitizerPlugin::DEFAULT_RRULE_CAPS;
+$maxCap = max($rruleCaps);
 if ($maxCap >= VObjectSettings::$maxRecurrences) {
     fwrite(
         STDERR,
@@ -261,7 +265,8 @@ $sanitizerMaxResourceSize = ($sanitizerMaxResourceSize !== false) ? (int)$saniti
 $server->addPlugin(new CalendarSanitizerPlugin(
     $sanitizerStripAttachments,
     $sanitizerMaxDescBytes,
-    $sanitizerMaxResourceSize
+    $sanitizerMaxResourceSize,
+    $rruleCaps
 ));
 
 // Add attendee normalizer plugin to fix duplicate attendees issue

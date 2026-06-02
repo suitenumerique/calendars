@@ -6,7 +6,8 @@
         "php": ">=8.1",
         "sabre/dav": "dev-master#eb16eb7fdaa384c4a827e40152cc53c0e1488cab",
         "ext-pdo": "*",
-        "ext-pdo_pgsql": "*"
+        "ext-pdo_pgsql": "*",
+        "ext-mbstring": "*"
     },
     "autoload": {
         "psr-4": {

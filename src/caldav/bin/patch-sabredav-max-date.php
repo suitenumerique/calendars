@@ -35,6 +35,10 @@ if (!file_exists($target)) {
 $needle  = "const MAX_DATE = '2038-01-01';";
 $replace = "const MAX_DATE = '2200-01-01';";
 $source  = file_get_contents($target);
+if ($source === false) {
+    fwrite(STDERR, "patch-sabredav-max-date: failed to read $target\n");
+    exit(1);
+}
 
 $count = substr_count($source, $needle);
 if ($count === 0 && substr_count($source, $replace) === 1) {
@@ -51,5 +55,9 @@ if ($count !== 1) {
     exit(1);
 }
 
-file_put_contents($target, str_replace($needle, $replace, $source));
+$written = file_put_contents($target, str_replace($needle, $replace, $source));
+if ($written === false) {
+    fwrite(STDERR, "patch-sabredav-max-date: failed to write $target\n");
+    exit(1);
+}
 echo "patch-sabredav-max-date: patched $target\n";

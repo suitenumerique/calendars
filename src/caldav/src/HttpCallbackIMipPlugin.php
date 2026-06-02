@@ -128,11 +128,16 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             $headers[] = 'X-LS-Is-Mailbox: true';
         }
 
-        // Pass org_id so Django can include it in RSVP tokens
+        // Pass org_id so Django can include it in RSVP tokens.
+        // Sanitize before concatenating: while the inbound request
+        // header is normally already CR/LF-stripped by the SAPI,
+        // we apply the same defense-in-depth pass we use for the
+        // iTip-sourced headers above so a misbehaving reverse proxy
+        // (or a future direct caller) can't smuggle a header break.
         if ($this->server && $this->server->httpRequest) {
             $orgId = $this->server->httpRequest->getHeader('X-LS-Org-Id');
             if ($orgId) {
-                $headers[] = 'X-LS-Org-Id: ' . $orgId;
+                $headers[] = 'X-LS-Org-Id: ' . $this->sanitizeHeaderValue($orgId);
             }
         }
         

@@ -291,6 +291,13 @@ class CalendarSanitizerPlugin extends ServerPlugin
         if ($base === null) {
             return null;
         }
+        // ``$base * factor`` can overflow PHP_INT_MAX for absurd
+        // COUNT × BY-expansion inputs (COUNT=999999 + BYHOUR=0..23 +
+        // BYMINUTE=0..59 etc). PHP promotes overflow to float, which
+        // PRESERVES the ``$estimated > $cap`` comparison (float >= int
+        // works numerically), so the clamp still fires. Do not
+        // introduce a pre-multiplication bounds check here — it would
+        // short-circuit the clamp on the very inputs we want to clamp.
         return $base * $this->byExpansionFactor($parts, $freq);
     }
 
@@ -496,16 +503,25 @@ class CalendarSanitizerPlugin extends ServerPlugin
 
             // Strip inline binary attachments and dangerous URI
             // schemes (file://, smb://, javascript:, …).
-            if ($this->stripBinaryAttachments && isset($component->ATTACH)) {
+            //
+            // The URI-scheme allowlist runs unconditionally — turning
+            // off ``stripBinaryAttachments`` should only re-enable
+            // base64/binary payloads, not re-enable ``file://`` /
+            // ``smb://`` / ``javascript:`` URIs whose risk is
+            // independent of the inline-binary path.
+            if (isset($component->ATTACH)) {
                 $toRemove = [];
                 foreach ($component->select('ATTACH') as $attach) {
                     $valueParam = $attach->offsetGet('VALUE');
                     $encodingParam = $attach->offsetGet('ENCODING');
-                    if (
+                    $isBinary = (
                         ($valueParam && strtoupper((string)$valueParam) === 'BINARY') ||
                         ($encodingParam && strtoupper((string)$encodingParam) === 'BASE64')
-                    ) {
-                        $toRemove[] = $attach;
+                    );
+                    if ($isBinary) {
+                        if ($this->stripBinaryAttachments) {
+                            $toRemove[] = $attach;
+                        }
                         continue;
                     }
                     $uri = (string) $attach;
@@ -573,13 +589,6 @@ class CalendarSanitizerPlugin extends ServerPlugin
 
                     if (in_array($freq, self::STRIPPED_FREQUENCIES, true)) {
                         $component->remove($rrule);
-                        foreach (['EXDATE', 'RDATE'] as $orphan) {
-                            if (isset($component->{$orphan})) {
-                                foreach ($component->select($orphan) as $p) {
-                                    $component->remove($p);
-                                }
-                            }
-                        }
                         $wasModified = true;
                         continue;
                     }
@@ -592,6 +601,19 @@ class CalendarSanitizerPlugin extends ServerPlugin
                     $bounded = $this->boundRrule($parts, $freq, $cap, $component);
                     if ($bounded !== null) {
                         $rrule->setParts($bounded);
+                        $wasModified = true;
+                    }
+                }
+
+                // Only collapse EXDATE/RDATE if every RRULE was stripped.
+                // Removing them while another safe RRULE survives would
+                // drop exceptions that still belong to that surviving
+                // rule.
+                if (!isset($component->RRULE) && !isset($component->RDATE)) {
+                    if (isset($component->EXDATE)) {
+                        foreach ($component->select('EXDATE') as $p) {
+                            $component->remove($p);
+                        }
                         $wasModified = true;
                     }
                 }
