@@ -517,7 +517,12 @@ class CalDAVClient:
         #      iCal — the property name can be followed by zero or
         #      more ``;PARAM=VAL`` segments before the ``:``.
         unfolded_ics = re.sub(r"\r?\n[ \t]", "", ics_data)
-        uid_match = re.search(r"^UID(?:;[^:\r\n]*)?:(.+)$", unfolded_ics, re.MULTILINE)
+        # RFC 5545 §3.1: property names are case-insensitive.
+        uid_match = re.search(
+            r"^UID(?:;[^:\r\n]*)?:(.+)$",
+            unfolded_ics,
+            re.MULTILINE | re.IGNORECASE,
+        )
         if not uid_match:
             raise ValueError("ics_data missing UID property")
         event_uid = uid_match.group(1).strip().strip("\r")

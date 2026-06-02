@@ -1162,6 +1162,33 @@ class TestCalendarSanitizerRRULECap:
         user = factories.UserFactory(email="depth-inf@example.com")
         service = CalendarService()
         service.ensure_default_calendar(user)
+        # Build a tree the assertion can actually distinguish: 3 extra
+        # calendars (4 total with the default) × 5 events each = 20
+        # events. Depth: 1 → ~5 responses (home + calendars); Depth:
+        # infinity honoured → 25+ responses (also every event).
+        num_extra_calendars = 3
+        events_per_calendar = 5
+        for cal_idx in range(num_extra_calendars):
+            cal_path = service.create_calendar(
+                user, name=f"depth-cal-{cal_idx}", color="#000000"
+            )
+            for evt_idx in range(events_per_calendar):
+                uid = f"depth-evt-{cal_idx}-{evt_idx}"
+                ics = (
+                    "BEGIN:VCALENDAR\r\n"
+                    "VERSION:2.0\r\n"
+                    "PRODID:-//test//EN\r\n"
+                    "BEGIN:VEVENT\r\n"
+                    f"UID:{uid}\r\n"
+                    "DTSTAMP:20260530T120000Z\r\n"
+                    "DTSTART:20260601T140000Z\r\n"
+                    "DTEND:20260601T150000Z\r\n"
+                    f"SUMMARY:{uid}\r\n"
+                    "END:VEVENT\r\n"
+                    "END:VCALENDAR\r\n"
+                )
+                service.create_event_raw(user, cal_path, ics)
+
         http = CalDAVHTTPClient()
         body = (
             '<?xml version="1.0" encoding="utf-8"?>'
@@ -1179,12 +1206,15 @@ class TestCalendarSanitizerRRULECap:
             content_type="application/xml; charset=utf-8",
             extra_headers={"Depth": "infinity"},
         )
-        # Either rejected outright, OR treated as Depth: 1
-        # (SabreDAV's default downgrade). Both are acceptable.
-        assert (
-            response.status_code != 207 or response.text.count("<d:response") < 200
-        ), (
-            "Depth: infinity returned a large multistatus — server "
+        # Either rejected outright, OR downgraded to Depth: 1
+        # (SabreDAV's default behaviour). Cap at "immediate children
+        # plus headroom" — well below the event count, so honouring
+        # infinity will fail the assertion.
+        response_count = response.text.count("<d:response")
+        max_allowed = num_extra_calendars + events_per_calendar  # 8, < 20 events
+        assert response.status_code != 207 or response_count <= max_allowed, (
+            f"Depth: infinity returned {response_count} responses with "
+            f"{num_extra_calendars * events_per_calendar} events present — server "
             "appears to be walking the whole tree (DoS vector)."
         )
 
