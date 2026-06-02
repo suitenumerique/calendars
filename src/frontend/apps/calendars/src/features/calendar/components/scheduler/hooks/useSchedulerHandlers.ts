@@ -704,6 +704,37 @@ export const useSchedulerHandlers = ({
         ),
       });
 
+      // When the modal opened a specific occurrence of a recurring event,
+      // `event` has the occurrence's start/end and a recurrenceId. Routing
+      // that through respondToMeeting → updateEvent would either replace
+      // the entire ICS with the occurrence (when no override matches the
+      // recurrenceId — the cache lookup falls into the "replace events
+      // array" branch) or shift the master DTSTART. So for "all" on a
+      // recurring series we fetch the canonical master VEVENT upfront and
+      // change only its attendee's PARTSTAT. The fresh etag from that
+      // fetch is also what we PUT with — the modal's etag may be stale
+      // and would force a guaranteed 412.
+      const isRecurringAll =
+        option !== 'this' && !!(event.recurrenceId || event.recurrenceRule);
+      let masterEvent: IcsEvent = event;
+      let initialEtag: string | undefined = modalState.etag;
+      if (isRecurringAll) {
+        const fetched = await caldavService.fetchEvent(eventUrl);
+        if (!fetched.success || !fetched.data) {
+          addErrorToast(t('rsvp.failed'));
+          throw new Error(fetched.error ?? 'Failed to fetch event');
+        }
+        const master = fetched.data.data.events?.find(
+          (e) => e.uid === event.uid && !e.recurrenceId,
+        );
+        if (!master) {
+          addErrorToast(t('rsvp.failed'));
+          throw new Error('Master event not found');
+        }
+        masterEvent = master;
+        initialEtag = fetched.data.etag;
+      }
+
       const attempt = async (currentEtag: string | undefined) => {
         if (option === 'this') {
           if (!occurrenceDate) {
@@ -722,47 +753,9 @@ export const useSchedulerHandlers = ({
             currentEtag,
           );
         }
-        // "all" or undefined: apply PARTSTAT to the master VEVENT.
-        //
-        // When the modal opened a specific occurrence of a recurring event,
-        // `event` has the occurrence's start/end and a recurrenceId. Routing
-        // that through respondToMeeting → updateEvent would either replace
-        // the entire ICS with the occurrence (when no override matches the
-        // recurrenceId — the cache lookup falls into the "replace events
-        // array" branch) or shift the master DTSTART. So if we're touching a
-        // recurring event series, refetch the canonical master VEVENT and
-        // change only its attendee's PARTSTAT.
-        if (event.recurrenceId || event.recurrenceRule) {
-          const fetched = await caldavService.fetchEvent(eventUrl);
-          if (!fetched.success || !fetched.data) {
-            return {
-              success: false as const,
-              error: fetched.error ?? 'Failed to fetch event',
-            };
-          }
-          const master = fetched.data.data.events?.find(
-            (e) => e.uid === event.uid && !e.recurrenceId,
-          );
-          if (!master) {
-            return {
-              success: false as const,
-              error: 'Master event not found',
-            };
-          }
-          // Use the etag from the fetch we just made — not currentEtag,
-          // which may be the stale one from the modal's initial open and
-          // would force a guaranteed 412 against the freshly-read state.
-          return caldavService.respondToMeeting(
-            eventUrl,
-            master,
-            userEmail,
-            status,
-            fetched.data.etag,
-          );
-        }
         return caldavService.respondToMeeting(
           eventUrl,
-          event,
+          masterEvent,
           userEmail,
           status,
           currentEtag,
@@ -770,11 +763,17 @@ export const useSchedulerHandlers = ({
       };
 
       try {
-        let result = await attempt(modalState.etag);
+        let result = await attempt(initialEtag);
 
         if (!result.success && isEtagConflict(result.error)) {
           const refresh = await caldavService.fetchEvent(eventUrl);
           if (refresh.success && refresh.data) {
+            if (isRecurringAll) {
+              const newMaster = refresh.data.data.events?.find(
+                (e) => e.uid === event.uid && !e.recurrenceId,
+              );
+              if (newMaster) masterEvent = newMaster;
+            }
             result = await attempt(refresh.data.etag);
           }
         }

@@ -11,7 +11,7 @@ type Partstat = "ACCEPTED" | "TENTATIVE" | "DECLINED" | "NEEDS-ACTION";
 
 interface InvitationResponseSectionProps {
   organizer?: IcsOrganizer;
-  currentStatus: Partstat | string;
+  currentStatus: Partstat | (string & {});
   isLoading: boolean;
   eventStatus?: string;
   onRespond: (status: "ACCEPTED" | "TENTATIVE" | "DECLINED") => void;
