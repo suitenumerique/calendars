@@ -54,7 +54,7 @@ def test_create_resource_success():
     client = APIClient()
     client.force_authenticate(user=admin)
 
-    with mock.patch("core.services.caldav_service.requests.request") as mock_request:
+    with mock.patch("core.services.caldav_service.requests.Session.request") as mock_request:
         # Mock the internal API response for resource creation
         mock_response = mock.Mock()
         mock_response.status_code = 201
@@ -111,7 +111,7 @@ def test_delete_resource():
 
     resource_id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
-    with mock.patch("core.services.caldav_service.requests.request") as mock_request:
+    with mock.patch("core.services.caldav_service.requests.Session.request") as mock_request:
         mock_response = mock.Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"deleted": True}
@@ -150,7 +150,7 @@ def test_delete_resource_cross_org_blocked():
     client = APIClient()
     client.force_authenticate(user=admin)
 
-    with mock.patch("core.services.caldav_service.requests.request") as mock_request:
+    with mock.patch("core.services.caldav_service.requests.Session.request") as mock_request:
         mock_response = mock.Mock()
         mock_response.status_code = 403
         mock_response.json.return_value = {
@@ -189,7 +189,7 @@ def test_create_resource_sends_user_org_id():
     client = APIClient()
     client.force_authenticate(user=admin)
 
-    with mock.patch("core.services.caldav_service.requests.request") as mock_request:
+    with mock.patch("core.services.caldav_service.requests.Session.request") as mock_request:
         mock_response = mock.Mock()
         mock_response.status_code = 201
         mock_response.text = '{"principal_uri": "principals/resources/x"}'
@@ -227,7 +227,7 @@ def test_delete_resource_sends_user_org_id():
 
     resource_id = "a1b2c3d4-0000-0000-0000-000000000001"
 
-    with mock.patch("core.services.caldav_service.requests.request") as mock_request:
+    with mock.patch("core.services.caldav_service.requests.Session.request") as mock_request:
         mock_response = mock.Mock()
         mock_response.status_code = 200
         mock_response.text = '{"deleted": true}'
@@ -279,7 +279,7 @@ class TestResourceIdValidation:
         service = ResourceService()
 
         with mock.patch(
-            "core.services.caldav_service.requests.request"
+            "core.services.caldav_service.requests.Session.request"
         ) as mock_request:
             mock_response = mock.Mock()
             mock_response.status_code = 200

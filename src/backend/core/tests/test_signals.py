@@ -30,7 +30,7 @@ class TestDeleteUserCaldavData(TestCase):
         user = factories.UserFactory(email="alice@example.com")
 
         with mock.patch(
-            "core.services.caldav_service.requests.request"
+            "core.services.caldav_service.requests.Session.request"
         ) as mock_request:
             mock_response = mock.Mock()
             mock_response.status_code = 200
@@ -55,7 +55,7 @@ class TestDeleteUserCaldavData(TestCase):
         user = factories.UserFactory(email="")
 
         with mock.patch(
-            "core.services.caldav_service.requests.request"
+            "core.services.caldav_service.requests.Session.request"
         ) as mock_request:
             user.delete()
 
@@ -67,7 +67,7 @@ class TestDeleteUserCaldavData(TestCase):
         user = factories.UserFactory(email="alice@example.com")
 
         with mock.patch(
-            "core.services.caldav_service.requests.request"
+            "core.services.caldav_service.requests.Session.request"
         ) as mock_request:
             user.delete()
 
@@ -78,7 +78,7 @@ class TestDeleteUserCaldavData(TestCase):
         user = factories.UserFactory(email="alice@example.com")
 
         with mock.patch(
-            "core.services.caldav_service.requests.request",
+            "core.services.caldav_service.requests.Session.request",
             side_effect=Exception("Connection refused"),
         ):
             # Should not raise — the signal catches exceptions
@@ -109,7 +109,7 @@ class TestDeleteOrganizationCaldavData(TestCase):
         factories.UserFactory(email="bob@example.com", organization=org)
 
         with mock.patch(
-            "core.services.caldav_service.requests.request"
+            "core.services.caldav_service.requests.Session.request"
         ) as mock_request:
             mock_response = mock.Mock()
             mock_response.status_code = 200
@@ -135,7 +135,7 @@ class TestDeleteOrganizationCaldavData(TestCase):
         factories.UserFactory(email="bob@example.com", organization=org)
 
         with mock.patch(
-            "core.services.caldav_service.requests.request"
+            "core.services.caldav_service.requests.Session.request"
         ) as mock_request:
             mock_response = mock.Mock()
             mock_response.status_code = 200
@@ -153,7 +153,7 @@ class TestDeleteOrganizationCaldavData(TestCase):
         org = factories.OrganizationFactory(external_id="empty-org")
 
         with mock.patch(
-            "core.services.caldav_service.requests.request"
+            "core.services.caldav_service.requests.Session.request"
         ) as mock_request:
             org.delete()
 
@@ -177,7 +177,7 @@ class TestDeleteOrganizationCaldavData(TestCase):
             return resp
 
         with mock.patch(
-            "core.services.caldav_service.requests.request",
+            "core.services.caldav_service.requests.Session.request",
             side_effect=side_effect,
         ):
             with self.captureOnCommitCallbacks(execute=True):
@@ -194,7 +194,7 @@ class TestDeleteOrganizationCaldavData(TestCase):
         factories.UserFactory(email="alice@example.com", organization=org)
 
         with mock.patch(
-            "core.services.caldav_service.requests.request"
+            "core.services.caldav_service.requests.Session.request"
         ) as mock_request:
             # Without the API key, the signal skips CalDAV cleanup but
             # also doesn't delete members, so PROTECT FK blocks deletion.

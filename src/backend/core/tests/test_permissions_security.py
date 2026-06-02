@@ -185,7 +185,7 @@ class TestIsOrgAdminPermission:
         client.force_authenticate(user=admin)
 
         with mock.patch(
-            "core.services.caldav_service.requests.request"
+            "core.services.caldav_service.requests.Session.request"
         ) as mock_request:
             mock_response = mock.Mock()
             mock_response.status_code = 201

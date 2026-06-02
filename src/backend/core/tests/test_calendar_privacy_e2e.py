@@ -399,10 +399,10 @@ class TestValarmStripping:
 
 
 class TestRRuleCap:
-    """Unbounded RRULEs should get an UNTIL cap added automatically on write."""
+    """Unbounded RRULEs should get a COUNT cap added automatically on write."""
 
     def test_unbounded_rrule_gets_until_cap(self):
-        """An RRULE with no COUNT or UNTIL should get UNTIL added."""
+        """An RRULE with no COUNT or UNTIL should get COUNT added."""
         org = factories.OrganizationFactory(external_id="rrule-cap")
         owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-rc")
         cal_id = _get_cal_id(cal_path)
@@ -430,12 +430,12 @@ class TestRRuleCap:
         )
         assert resp.status_code in (200, 201, 204)
 
-        # Read it back and verify UNTIL was added
+        # Read it back and verify COUNT was added
         http = CalDAVHTTPClient()
         data, _, _ = http.find_event_by_uid(owner, "rrule-unbounded")
         assert data is not None, "Event should exist"
-        assert "UNTIL=" in data, (
-            f"Unbounded RRULE should have UNTIL added. Got: {data[:500]}"
+        assert "COUNT=" in data, (
+            f"Unbounded RRULE should have COUNT added. Got: {data[:500]}"
         )
 
     def test_bounded_rrule_with_count_unchanged(self):

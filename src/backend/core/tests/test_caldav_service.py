@@ -1,5 +1,7 @@
 """Tests for CalDAV service integration."""
 
+# pylint: disable=too-many-lines
+
 import re
 from datetime import datetime, timezone
 
@@ -81,6 +83,7 @@ class TestCalDAVClient:
 
 @pytest.mark.django_db
 @pytest.mark.xdist_group("caldav")
+# pylint: disable=too-many-public-methods
 class TestCalendarSanitizerRRULECap:
     """CalendarSanitizerPlugin caps unbounded RRULEs on every CalDAV write.
 

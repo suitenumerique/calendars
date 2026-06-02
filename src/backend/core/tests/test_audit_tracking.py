@@ -162,7 +162,7 @@ class TestCalDAVProxyChannelIdHeader:
 class TestImportChannelId:
     """Verify the import service passes channel_id as a header."""
 
-    @patch("core.services.caldav_service.requests.request")
+    @patch("core.services.caldav_service.requests.Session.request")
     def test_import_with_channel_id_sends_header(self, mock_request):
         mock_request.return_value = _make_sabredav_response(
             total_events=1, imported_count=1
@@ -180,7 +180,7 @@ class TestImportChannelId:
         headers = mock_request.call_args.kwargs["headers"]
         assert headers["X-LS-Channel-Id"] == channel_id
 
-    @patch("core.services.caldav_service.requests.request")
+    @patch("core.services.caldav_service.requests.Session.request")
     def test_import_without_channel_id_omits_header(self, mock_request):
         mock_request.return_value = _make_sabredav_response(
             total_events=1, imported_count=1
@@ -205,7 +205,7 @@ class TestImportChannelId:
 class TestInternalRequest:
     """Verify internal_request adds API key and handles json= param."""
 
-    @patch("core.services.caldav_service.requests.request")
+    @patch("core.services.caldav_service.requests.Session.request")
     def test_adds_internal_api_key(self, mock_request):
         mock_request.return_value = MagicMock(status_code=200)
 
@@ -216,7 +216,7 @@ class TestInternalRequest:
         headers = mock_request.call_args.kwargs["headers"]
         assert headers["X-LS-Internal-Api-Key"] == "test-internal-key"
 
-    @patch("core.services.caldav_service.requests.request")
+    @patch("core.services.caldav_service.requests.Session.request")
     def test_json_param_serializes_body(self, mock_request):
         mock_request.return_value = MagicMock(status_code=200)
 
@@ -248,7 +248,7 @@ class TestInternalRequest:
         with pytest.raises(ValueError, match="CALDAV_INTERNAL_API_KEY"):
             http.internal_request("GET", user, "internal-api/test")
 
-    @patch("core.services.caldav_service.requests.request")
+    @patch("core.services.caldav_service.requests.Session.request")
     def test_extra_headers_merged(self, mock_request):
         mock_request.return_value = MagicMock(status_code=200)
 
