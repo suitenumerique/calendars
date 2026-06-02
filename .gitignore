@@ -56,6 +56,9 @@ node_modules
 # ./src/frontend onto /home/frontend, the cache ends up on the host.
 .npm/
 
+# Composer (PHP)
+src/caldav/vendor/
+
 # Mails
 src/backend/core/templates/mail/
 

@@ -21,8 +21,8 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Create application directory
 WORKDIR /var/www/sabredav
 
-# Copy composer files and install dependencies
-COPY composer.json ./
+# Copy composer files and install dependencies from the lockfile
+COPY composer.json composer.lock ./
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Copy server configuration

@@ -128,6 +128,13 @@ restart: \
 	start
 .PHONY: restart
 
+# -- CalDAV
+
+caldav-lock: ## regenerate src/caldav/composer.lock
+	@echo "$(BOLD)Regenerating composer.lock$(RESET)"
+	@docker run --rm -v $(PWD)/src/caldav:/app -w /app composer:2.9.5 composer update --no-install --no-interaction --ignore-platform-reqs
+.PHONY: caldav-lock
+
 migrate-caldav: ## Initialize CalDAV server database schema
 	@echo "$(BOLD)Initializing CalDAV server database schema...$(RESET)"
 	@$(COMPOSE) run --rm caldav /usr/local/bin/init-database.sh
