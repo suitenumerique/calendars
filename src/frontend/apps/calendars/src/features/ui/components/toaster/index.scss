@@ -42,5 +42,13 @@
     &--error {
       @include toaster-theme("info");
     }
+
+    &--success {
+      @include toaster-theme("success");
+    }
+
+    &--warning {
+      @include toaster-theme("warning");
+    }
   }
 }

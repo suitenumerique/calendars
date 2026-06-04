@@ -17,7 +17,7 @@ export const ToasterItem = ({
   children: React.ReactNode;
   closeButton?: boolean;
   className?: string;
-  type?: "error" | "info";
+  type?: "error" | "info" | "success" | "warning";
   onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
 } & Partial<ToastContentProps>) => {
   return (
@@ -56,28 +56,12 @@ export const addToast = (
   });
 };
 
-/**
- * Show an error toast with a simple string message.
- * Convenience wrapper usable from .ts files (no JSX needed).
- */
 export const addErrorToast = (message: string) => {
-  return toast.error(message, {
-    position: "bottom-center",
-    className: "suite__toaster__wrapper",
-    autoClose: 8000,
-    hideProgressBar: true,
-  });
+  return addToast(<ToasterItem type="error">{message}</ToasterItem>);
 };
 
-/**
- * Show a success toast with a simple string message.
- * Convenience wrapper usable from .ts files (no JSX needed).
- */
 export const addSuccessToast = (message: string) => {
-  return toast.success(message, {
-    position: "bottom-center",
-    className: "suite__toaster__wrapper",
+  return addToast(<ToasterItem type="success">{message}</ToasterItem>, {
     autoClose: 4000,
-    hideProgressBar: true,
   });
 };
