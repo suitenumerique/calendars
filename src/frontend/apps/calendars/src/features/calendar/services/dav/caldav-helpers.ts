@@ -484,14 +484,39 @@ export function getCalendarUrlFromEventUrl(eventUrl: string): string {
 // Result wrapper
 // ============================================================================
 
+/** Error type that preserves an HTTP status code through `asResult`.
+ *
+ * Throw this (instead of a bare `Error`) when a DAV call fails so the
+ * caller's `CalDavResponse.status` is populated. Lets callers branch on
+ * the HTTP status (e.g. retry on 412) without parsing error strings.
+ */
+export class DavCallError extends Error {
+  readonly status?: number
+  constructor(message: string, status?: number) {
+    super(message)
+    this.name = 'DavCallError'
+    this.status = status
+  }
+}
+
+/** Build a `DavCallError` from a failed `davRequest` result. */
+export function davFailure(
+  response: { error?: string; status?: number },
+  fallback: string,
+): DavCallError {
+  const message = response.error ?? `${fallback}: ${response.status}`
+  return new DavCallError(message, response.status)
+}
+
 /** Run an async operation and pack its outcome into a `CalDavResponse`.
  *
  * Catches throws from the operation body (e.g. `convertIcsCalendar`
  * parse errors, network failures from `fetch`) and turns them into
  * `{ success: false, error }`. HTTP-level errors are already surfaced
  * as `{ success: false, … }` by `davRequest`, so callers should
- * `throw new Error(result.error)` inside the operation when a DAV call
- * fails — this wrapper then catches that throw and re-prefixes it.
+ * `throw davFailure(result, "...")` inside the operation when a DAV
+ * call fails — this wrapper then catches that throw, re-prefixes the
+ * message, and preserves the HTTP status for the caller.
  *
  * 401 → redirect-to-login lives inside `davRequest`, not here.
  */
@@ -504,9 +529,11 @@ export async function asResult<T>(
     return { success: true, data }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const status = error instanceof DavCallError ? error.status : undefined
     return {
       success: false,
       error: `${errorPrefix}: ${message}`,
+      status,
     }
   }
 }

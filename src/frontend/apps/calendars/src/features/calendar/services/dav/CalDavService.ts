@@ -52,6 +52,7 @@ import {
   parseCalendarOrder,
   getCalendarUrlFromEventUrl,
   asResult,
+  davFailure,
   type ShareeXmlParams,
   type CalendarProps,
 } from './caldav-helpers'
@@ -515,9 +516,7 @@ export class CalDavService {
       })
 
       if (!updateResult.success) {
-        throw new Error(
-          updateResult.error ?? `Failed to update event: ${updateResult.status}`,
-        )
+        throw davFailure(updateResult, 'Failed to update event')
       }
 
       const newEtag = updateResult.responseHeaders?.get('ETag') || undefined
@@ -623,9 +622,7 @@ export class CalDavService {
       })
 
       if (!updateResult.success) {
-        throw new Error(
-          updateResult.error ?? `Failed to update event: ${updateResult.status}`,
-        )
+        throw davFailure(updateResult, 'Failed to update event')
       }
 
       const newEtag = updateResult.responseHeaders?.get('ETag') || undefined
@@ -719,9 +716,7 @@ export class CalDavService {
       })
 
       if (!updateResult.success) {
-        throw new Error(
-          updateResult.error ?? `Failed to update event: ${updateResult.status}`,
-        )
+        throw davFailure(updateResult, 'Failed to update event')
       }
 
       const newEtag = updateResult.responseHeaders?.get('ETag') || undefined
@@ -844,9 +839,7 @@ export class CalDavService {
       })
 
       if (!updateResult.success) {
-        throw new Error(
-          updateResult.error ?? `Failed to update event: ${updateResult.status}`,
-        )
+        throw davFailure(updateResult, 'Failed to update event')
       }
 
       const newEtag = updateResult.responseHeaders?.get('ETag') || undefined
@@ -913,7 +906,7 @@ export class CalDavService {
       })
 
       if (!response.success) {
-        throw new Error(response.error ?? `Failed to create event: ${response.status}`)
+        throw davFailure(response, 'Failed to create event')
       }
 
       const createdEvent: CalDavEvent = {
@@ -1026,7 +1019,7 @@ export class CalDavService {
       })
 
       if (!response.success) {
-        throw new Error(response.error ?? `Failed to update event: ${response.status}`)
+        throw davFailure(response, 'Failed to update event')
       }
 
       const updatedEvent: CalDavEvent = {
@@ -1090,7 +1083,7 @@ export class CalDavService {
       })
 
       if (!response.success) {
-        throw new Error(response.error ?? `Failed to move event: ${response.status}`)
+        throw davFailure(response, 'Failed to move event')
       }
 
       const newEtag = response.responseHeaders?.get('etag') ?? undefined
@@ -1109,20 +1102,55 @@ export class CalDavService {
     }, 'Failed to move event')
   }
 
+  /** Idempotent delete with one ETag retry.
+   *
+   * - 204: success.
+   * - 404: success (already gone — the caller's intent is fulfilled).
+   * - 412: our ETag drifted. Refetch and retry once. If the refetch is also
+   *   404, the resource is gone (SabreDAV emits 412 when If-Match cannot
+   *   match a missing resource, so the original status alone doesn't tell
+   *   us whether to retry or treat as success — the GET disambiguates).
+   * - anything else: propagate as an error. */
   async deleteEvent(eventUrl: string, etag?: string): Promise<CalDavResponse> {
     const cachedEvent = this._events.get(eventUrl)
 
     return asResult(async () => {
-      const resolvedEtag = etag ?? cachedEvent?.etag
+      const tryDelete = (e: string | undefined) =>
+        davRequest({
+          url: eventUrl,
+          method: 'DELETE',
+          headers: e ? { 'If-Match': e } : undefined,
+        })
 
-      const response = await davRequest({
-        url: eventUrl,
-        method: 'DELETE',
-        headers: resolvedEtag ? { 'If-Match': resolvedEtag } : undefined,
-      })
+      let response = await tryDelete(etag ?? cachedEvent?.etag)
+
+      if (response.status === 404) {
+        this._events.delete(eventUrl)
+        return undefined
+      }
+
+      if (response.status === 412) {
+        const fresh = await davRequest({
+          url: eventUrl,
+          method: 'GET',
+          headers: { Accept: 'text/calendar' },
+        })
+        if (fresh.status === 404) {
+          this._events.delete(eventUrl)
+          return undefined
+        }
+        const freshEtag = fresh.responseHeaders?.get('etag')
+        if (fresh.success && freshEtag) {
+          response = await tryDelete(freshEtag)
+          if (response.status === 404) {
+            this._events.delete(eventUrl)
+            return undefined
+          }
+        }
+      }
 
       if (!response.success) {
-        throw new Error(response.error ?? `Failed to delete event: ${response.status}`)
+        throw davFailure(response, 'Failed to delete event')
       }
 
       this._events.delete(eventUrl)

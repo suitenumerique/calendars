@@ -23,6 +23,7 @@ import type {
 import type { EventCalendarAdapter, CalDavExtendedProps } from "../../../services/dav/EventCalendarAdapter";
 import type { CalDavService } from "../../../services/dav/CalDavService";
 import { getCalendarUrlFromEventUrl } from "../../../services/dav/caldav-helpers";
+import type { CalDavResponse } from "../../../services/dav/types/caldav-service";
 import type {
   EventModalState,
   RecurringDeleteOption,
@@ -31,6 +32,26 @@ import type {
 
 // Get browser timezone
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** Run an etag-guarded write; on a 412 Precondition Failed fetch the
+ * latest etag and retry once.
+ *
+ * The modal opens with whatever etag the calendar grid had cached. By
+ * the time the user clicks delete/edit/RSVP that etag may be stale (a
+ * fresh RSVP, a server-side iMIP update, a write from another device).
+ * Without a retry the user sees a confusing precondition error. */
+async function withEtagRetry<T>(
+  caldavService: CalDavService,
+  eventUrl: string,
+  initialEtag: string | undefined,
+  attempt: (etag: string | undefined) => Promise<CalDavResponse<T>>,
+): Promise<CalDavResponse<T>> {
+  const first = await attempt(initialEtag);
+  if (first.success || first.status !== 412) return first;
+  const refresh = await caldavService.fetchEvent(eventUrl);
+  if (!refresh.success || !refresh.data?.etag) return first;
+  return attempt(refresh.data.etag);
+}
 
 /**
  * Merge source event's date (year/month/day) with form event's time
@@ -542,11 +563,16 @@ export const useSchedulerHandlers = ({
           if (event.recurrenceId) {
             // This is an override instance — remove the override VEVENT
             // and ensure EXDATE exists on the source event
-            const deleteResult = await caldavService.deleteOverrideInstance(
+            const deleteResult = await withEtagRetry(
+              caldavService,
               modalState.eventUrl,
-              occurrenceDate,
-              event.uid,
-              modalState.etag
+              modalState.etag,
+              (etag) => caldavService.deleteOverrideInstance(
+                modalState.eventUrl!,
+                occurrenceDate,
+                event.uid,
+                etag,
+              ),
             );
 
             if (!deleteResult.success) {
@@ -555,10 +581,15 @@ export const useSchedulerHandlers = ({
             shouldDeleteEntireEvent = !!deleteResult.data?.shouldDeleteEntireEvent;
           } else {
             // Regular occurrence (not an override) — just add EXDATE
-            const addExdateResult = await caldavService.addExdateToEvent(
+            const addExdateResult = await withEtagRetry(
+              caldavService,
               modalState.eventUrl,
-              occurrenceDate,
-              modalState.etag
+              modalState.etag,
+              (etag) => caldavService.addExdateToEvent(
+                modalState.eventUrl!,
+                occurrenceDate,
+                etag,
+              ),
             );
 
             if (!addExdateResult.success) {
@@ -569,9 +600,11 @@ export const useSchedulerHandlers = ({
 
           // If the EXDATE would leave zero occurrences, delete entirely
           if (shouldDeleteEntireEvent) {
-            const fullDeleteResult = await caldavService.deleteEvent(
+            const fullDeleteResult = await withEtagRetry(
+              caldavService,
               modalState.eventUrl,
               modalState.etag,
+              (etag) => caldavService.deleteEvent(modalState.eventUrl!, etag),
             );
             if (!fullDeleteResult.success) {
               throw new Error(fullDeleteResult.error || "Failed to delete event");
@@ -596,19 +629,26 @@ export const useSchedulerHandlers = ({
           // Use local.date (fake UTC) to match occurrenceDate format (also fake UTC)
           const sourceStartDate = sourceEvent?.start.local?.date ?? sourceEvent?.start.date;
           if (sourceEvent && sourceStartDate && occurrenceDate.getTime() <= sourceStartDate.getTime()) {
-            const deleteResult = await caldavService.deleteEvent(
+            const deleteResult = await withEtagRetry(
+              caldavService,
               modalState.eventUrl,
               modalState.etag,
+              (etag) => caldavService.deleteEvent(modalState.eventUrl!, etag),
             );
             if (!deleteResult.success) {
               throw new Error(deleteResult.error || "Failed to delete event");
             }
           } else {
-            const truncateResult = await caldavService.truncateRecurringSeries(
+            const truncateResult = await withEtagRetry(
+              caldavService,
               modalState.eventUrl,
-              occurrenceDate,
-              event.uid,
               modalState.etag,
+              (etag) => caldavService.truncateRecurringSeries(
+                modalState.eventUrl!,
+                occurrenceDate,
+                event.uid,
+                etag,
+              ),
             );
             if (!truncateResult.success) {
               throw new Error(truncateResult.error || "Failed to truncate series");
@@ -621,7 +661,12 @@ export const useSchedulerHandlers = ({
         }
       } else {
         // Option 3: Delete all occurrences OR non-recurring event
-        const result = await caldavService.deleteEvent(modalState.eventUrl, modalState.etag);
+        const result = await withEtagRetry(
+          caldavService,
+          modalState.eventUrl,
+          modalState.etag,
+          (etag) => caldavService.deleteEvent(modalState.eventUrl!, etag),
+        );
 
         if (!result.success) {
           throw new Error(result.error || "Failed to delete event");
@@ -677,9 +722,6 @@ export const useSchedulerHandlers = ({
 
       const eventUrl = modalState.eventUrl;
       const userEmail = user.email;
-
-      const isEtagConflict = (err?: string) =>
-        !!err && (err.includes('412') || /Precondition\s*Failed/i.test(err));
 
       // For the "this occurrence" path we need the occurrence date from the
       // event as it was opened in the modal (modalState.event), not from the
@@ -765,7 +807,7 @@ export const useSchedulerHandlers = ({
       try {
         let result = await attempt(initialEtag);
 
-        if (!result.success && isEtagConflict(result.error)) {
+        if (!result.success && result.status === 412) {
           const refresh = await caldavService.fetchEvent(eventUrl);
           if (refresh.success && refresh.data) {
             if (isRecurringAll) {

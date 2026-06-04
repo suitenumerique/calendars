@@ -478,6 +478,12 @@ class Base(Configuration):
         "MKCALENDAR",
         "MOVE",
     ]
+    # Headers the browser must let JavaScript read on cross-origin responses.
+    # ``etag`` is needed so the frontend can capture the fresh ETag from
+    # PUT/GET responses and retry If-Match writes on a 412.
+    CORS_EXPOSE_HEADERS = [
+        "etag",
+    ]
     # Allow CalDAV headers (case-sensitive for CORS preflight)
     CORS_ALLOW_HEADERS = [
         "accept",

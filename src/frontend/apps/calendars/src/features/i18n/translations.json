@@ -440,14 +440,14 @@
         "update": {
           "title": "Event updated",
           "heading": "Event updated",
-          "badge": "UPDATED",
+          "badge": "INVITATION UPDATED",
           "body": "{{organizer}} has updated an event you are invited to"
         },
         "cancel": {
           "title": "Event cancelled",
           "heading": "Event cancelled",
-          "badge": "CANCELLED",
-          "body": "{{organizer}} has cancelled the following event"
+          "badge": "INVITATION CANCELLED",
+          "body": "{{organizer}} has cancelled this event"
         },
         "reply": {
           "title": "Event reply",
@@ -1381,14 +1381,14 @@
         "update": {
           "title": "Événement modifié",
           "heading": "Événement modifié",
-          "badge": "MODIFIÉ",
+          "badge": "INVITATION MODIFIÉE",
           "body": "{{organizer}} a modifié un événement auquel vous êtes invité(e)"
         },
         "cancel": {
           "title": "Événement annulé",
           "heading": "Événement annulé",
-          "badge": "ANNULÉ",
-          "body": "{{organizer}} a annulé l'événement suivant"
+          "badge": "INVITATION ANNULÉE",
+          "body": "{{organizer}} a annulé cet événement"
         },
         "reply": {
           "title": "Réponse à l'événement",
@@ -2064,14 +2064,14 @@
         "update": {
           "title": "Evenement bijgewerkt",
           "heading": "Evenement bijgewerkt",
-          "badge": "BIJGEWERKT",
+          "badge": "UITNODIGING BIJGEWERKT",
           "body": "{{organizer}} heeft een evenement bijgewerkt waarvoor u bent uitgenodigd"
         },
         "cancel": {
           "title": "Evenement geannuleerd",
           "heading": "Evenement geannuleerd",
-          "badge": "GEANNULEERD",
-          "body": "{{organizer}} heeft het volgende evenement geannuleerd"
+          "badge": "UITNODIGING GEANNULEERD",
+          "body": "{{organizer}} heeft dit evenement geannuleerd"
         },
         "reply": {
           "title": "Antwoord op evenement",

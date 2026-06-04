@@ -242,6 +242,114 @@ END:VCALENDAR"""
             server.shutdown()
             server.server_close()
 
+    def test_scheduling_callback_fires_cancel_when_deleting_event_with_attendee(  # pylint: disable=too-many-locals,too-many-statements
+        self,
+    ):
+        """Deleting an event with an external attendee must trigger an
+        iTIP CANCEL callback so the attendee gets a cancellation email.
+
+        Reproduces the production symptom: invitation arrives fine, but
+        deleting the event produces no cancellation email. The chain is
+        SabreDAV ``Schedule\\Plugin::beforeUnbind`` → ``deliver()`` →
+        ``HttpCallbackIMipPlugin::schedule()`` → Django callback. If any
+        link is broken, the attendee never knows the meeting is off.
+        """
+        organizer = factories.UserFactory(email="organizer-cancel@example.com")
+        service = CalendarService()
+        caldav_path = service.create_calendar(
+            organizer, name="Cancel Test Calendar", color="#ff0000"
+        )
+
+        server, _port, callback_data = create_test_server()
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        time.sleep(0.5)
+
+        try:
+            client = service._get_client(organizer)  # pylint: disable=protected-access
+            calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
+
+            try:
+                caldav_calendar = client.calendar(url=calendar_url)
+
+                dtstart = datetime.now() + timedelta(days=7)
+                dtend = dtstart + timedelta(hours=1)
+                external_attendee = "cancel-external@external-domain.com"
+                event_uid = f"cancel-test-{datetime.now().timestamp()}"
+
+                ical_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test Client//EN
+BEGIN:VEVENT
+UID:{event_uid}
+DTSTART:{dtstart.strftime("%Y%m%dT%H%M%SZ")}
+DTEND:{dtend.strftime("%Y%m%dT%H%M%SZ")}
+SUMMARY:Event to be cancelled
+ORGANIZER;CN=Organizer:mailto:{organizer.email}
+ATTENDEE;CN=External;RSVP=TRUE:mailto:{external_attendee}
+END:VEVENT
+END:VCALENDAR"""
+
+                event = caldav_calendar.save_event(ical_content)
+
+                # Wait for and assert the REQUEST callback (sanity check —
+                # the same path the cancel relies on).
+                time.sleep(2)
+                assert callback_data["called"], (
+                    "REQUEST callback should fire on event creation"
+                )
+                assert (
+                    callback_data["request_data"]["headers"]["X-LS-Method"] == "REQUEST"
+                )
+
+                # Reset so we can observe what (if anything) DELETE triggers.
+                callback_data["called"] = False
+                callback_data["request_data"] = None
+
+                # Delete the event. SabreDAV's Schedule\\Plugin::beforeUnbind
+                # must turn this into a CANCEL iTIP message and route it
+                # back through our HTTP callback.
+                event.delete()
+
+                # Scheduling is synchronous in SabreDAV; give the callback
+                # POST a beat to land just in case.
+                time.sleep(2)
+
+                assert callback_data["called"], (
+                    "CANCEL callback was not received after deleting the "
+                    "event. SabreDAV's beforeUnbind hook either did not "
+                    "fire or did not emit an iTIP message — the attendee "
+                    "will never get a cancellation email."
+                )
+
+                request_data: dict = callback_data["request_data"]
+                method = request_data["headers"].get("X-LS-Method", "")
+                assert method == "CANCEL", (
+                    f"Expected X-LS-Method=CANCEL after delete, got {method!r}"
+                )
+
+                recipient = request_data["headers"].get("X-LS-Recipient", "")
+                assert external_attendee in recipient, (
+                    f"CANCEL should target {external_attendee}, got {recipient!r}"
+                )
+
+                body = request_data["body"]
+                # Unfold long iCalendar lines before content checks.
+                normalized = body.replace("\r\n ", "").replace("\r\n\t", "")
+                normalized = normalized.replace("\n ", "").replace("\n\t", "")
+                assert "METHOD:CANCEL" in normalized, (
+                    "CANCEL iTIP payload must carry METHOD:CANCEL"
+                )
+                assert event_uid in normalized, (
+                    "CANCEL payload should reference the deleted event's UID"
+                )
+
+            except NotFoundError:
+                pytest.skip("Calendar not found - CalDAV server may not be running")
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_scheduling_callback_for_shared_mailbox_calendar(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements,redefined-outer-name,unused-variable,no-member
         self,
     ):
