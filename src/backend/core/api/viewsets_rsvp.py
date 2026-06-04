@@ -26,18 +26,6 @@ from core.services.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
 
-PARTSTAT_ICONS = {
-    "accepted": "&#9989;",  # green check
-    "tentative": "&#10067;",  # question mark
-    "declined": "&#10060;",  # red cross
-}
-
-PARTSTAT_COLORS = {
-    "accepted": "#16a34a",
-    "tentative": "#d97706",
-    "declined": "#dc2626",
-}
-
 PARTSTAT_VALUES = {
     "accepted": "ACCEPTED",
     "tentative": "TENTATIVE",
@@ -55,7 +43,6 @@ def _render_error(request, message, lang="en"):
             "page_title": t("rsvp.error.title", lang),
             "error": message,
             "error_title": t("rsvp.error.invalidLink", lang),
-            "header_color": "#dc2626",
             "lang": lang,
         },
         status=400,
@@ -155,9 +142,6 @@ class RSVPConfirmView(View):
                 "page_title": label,
                 "token": token,
                 "lang": lang,
-                "heading": label,
-                "status_icon": PARTSTAT_ICONS[action],
-                "header_color": PARTSTAT_COLORS[action],
                 "submit_label": label,
             },
         )
@@ -195,8 +179,6 @@ class RSVPConfirmView(View):
                 "page_title": label,
                 "heading": label,
                 "message": t("rsvp.responseSent", lang),
-                "status_icon": PARTSTAT_ICONS[action],
-                "header_color": PARTSTAT_COLORS[action],
                 "event_summary": summary,
                 "lang": lang,
             },

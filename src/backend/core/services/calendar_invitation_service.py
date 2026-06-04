@@ -32,6 +32,28 @@ from core.services.translation_service import TranslationService
 logger = logging.getLogger(__name__)
 
 
+class _CalendarEmail(EmailMultiAlternatives):
+    """EmailMultiAlternatives that preserves the iMIP ``method=`` parameter
+    on a ``text/calendar`` alternative.
+
+    Django's ``_create_mime_attachment`` only forwards the base type and
+    subtype to ``SafeMIMEText``, losing any extra Content-Type parameters
+    passed via ``attach_alternative``. We override that hook to re-apply
+    the ``method=`` once the part is built.
+    """
+
+    ics_method: Optional[str] = None
+
+    def _create_mime_attachment(self, content, mimetype):
+        attachment = super()._create_mime_attachment(content, mimetype)
+        if mimetype == "text/calendar" and self.ics_method:
+            attachment.replace_header(
+                "Content-Type",
+                f'text/calendar; charset="utf-8"; method={self.ics_method}',
+            )
+        return attachment
+
+
 @dataclass
 class EventDetails:  # pylint: disable=too-many-instance-attributes
     """Parsed event details from iCalendar data."""
@@ -589,36 +611,62 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         """
         Send the actual email with ICS attachment.
 
-        The email structure follows RFC 6047 for iTip over email:
-        - multipart/mixed
-          - multipart/alternative
-            - text/plain
-            - text/html
-          - text/calendar (ICS attachment)
+        MIME layout (when ITIP is enabled):
+
+            multipart/mixed
+            ├── multipart/alternative
+            │   ├── text/plain                       (plain-text body)
+            │   ├── text/html                        (rich card)
+            │   └── text/calendar; method=REQUEST    (iMIP payload)
+            └── text/calendar; method=REQUEST        (attached invite.ics)
+
+        Why ``text/calendar`` lives inside ``multipart/alternative`` and not
+        only as a top-level attachment: Outlook (desktop + OWA) treats any
+        ``text/calendar; method=REQUEST`` part as an iMIP meeting request
+        and replaces the visible email body with its own meeting card. Per
+        ``MS-STANOICAL`` V0346, Outlook picks the meeting description from
+        the first ``text/html`` *sibling of the calendar part inside its
+        multipart/alternative parent* — so when calendar is a sibling of
+        ``multipart/alternative`` (and not a child of it), Outlook finds no
+        HTML and the message renders blank. This is the structure Google
+        Calendar and Exchange itself emit. The second ``text/calendar`` at
+        top level is treated by Outlook as a download attachment (V0343)
+        and gives non-iMIP clients (Apple Mail, Thunderbird) a file they
+        can act on directly.
+
+        When ``CALENDAR_ITIP_ENABLED`` is False the inline alternative is
+        omitted and the .ics is sent only as an attachment.
         """
         try:
             # Get email settings
             from_addr = (
                 settings.CALENDAR_INVITATION_FROM_EMAIL or settings.DEFAULT_FROM_EMAIL
             )
+            itip_enabled = settings.CALENDAR_ITIP_ENABLED
 
             # Create the email message
-            email = EmailMultiAlternatives(
+            email = _CalendarEmail(
                 subject=subject,
                 body=text_body,
                 from_email=from_addr,
                 to=[to_email],
                 reply_to=[from_email],  # Allow replies to the organizer
             )
+            if itip_enabled:
+                email.ics_method = ics_method
 
             # Add HTML alternative
             email.attach_alternative(html_body, "text/html")
 
-            # Add ICS attachment with proper MIME type
+            # Add iMIP calendar alternative so Outlook finds the HTML
+            # description as a sibling of the calendar part (see docstring).
+            if itip_enabled:
+                email.attach_alternative(ics_content, "text/calendar")
+
+            # Add ICS as a downloadable file for non-iMIP clients
             ics_attachment = MIMEBase("text", "calendar")
             ics_attachment.set_payload(ics_content.encode("utf-8"))
             encoders.encode_base64(ics_attachment)
-            itip_enabled = settings.CALENDAR_ITIP_ENABLED
             content_type = "text/calendar; charset=utf-8"
             if itip_enabled:
                 content_type += f"; method={ics_method}"

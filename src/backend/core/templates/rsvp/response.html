@@ -17,7 +17,6 @@
     <div class="card">
       {% if error %}
       <div class="header err">
-        <p class="badge err">{{ error_title }}</p>
         <p class="title">{{ error_title }}</p>
       </div>
       <div class="body">
@@ -33,10 +32,6 @@
         {% if message %}<p>{{ message }}</p>{% endif %}
       </div>
       {% endif %}
-      <div class="divider"></div>
-      <div class="footer">
-        <p>Calendars</p>
-      </div>
     </div>
   </div>
 </body>

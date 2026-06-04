@@ -461,6 +461,103 @@ class TestRSVPConfirmViewPost(TestCase):
         assert response.status_code == 400
 
 
+@override_settings(
+    CALDAV_URL="http://caldav:80",
+    CALDAV_OUTBOUND_API_KEY="test-api-key",
+    APP_URL="http://localhost:8931",
+    API_VERSION="v1.0",
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
+class TestInvitationMimeStructure(TestCase):
+    """The MIME tree must place ``text/calendar`` inside the
+    ``multipart/alternative`` next to ``text/html``.
+
+    Outlook (desktop + OWA) renders the meeting card from the first HTML
+    sibling of the calendar part inside its multipart/alternative parent
+    (see MS-STANOICAL V0346). When calendar is only a top-level
+    attachment, Outlook shows a blank email body. The asserts below pin
+    the structure so we don't regress.
+    """
+
+    def setUp(self):
+        org = factories.OrganizationFactory(external_id="mime-org")
+        self.organizer = factories.UserFactory(
+            email="alice@example.com", organization=org
+        )
+
+    def _send(self):
+        CalendarInvitationService().send_invitation(
+            sender_email="alice@example.com",
+            recipient_email="bob@example.com",
+            method="REQUEST",
+            icalendar_data=SAMPLE_ICS,
+            org_id=str(self.organizer.organization_id),
+        )
+        assert len(mail.outbox) == 1
+        return mail.outbox[0].message()
+
+    @staticmethod
+    def _find_alternative_part(msg):
+        for part in msg.walk():
+            if part.get_content_type() == "multipart/alternative":
+                return part
+        return None
+
+    @override_settings(CALENDAR_ITIP_ENABLED=True)
+    def test_itip_enabled_puts_calendar_inside_alternative(self):
+        """With iTIP on, text/calendar is a sibling of text/html.
+
+        This is the structure Outlook needs in order to pick up the
+        HTML card as the meeting description. Without it, Outlook
+        shows the email body as blank.
+        """
+        msg = self._send()
+        alt = self._find_alternative_part(msg)
+        assert alt is not None, "expected a multipart/alternative in the tree"
+
+        child_types = [c.get_content_type() for c in alt.get_payload()]
+        assert "text/plain" in child_types
+        assert "text/html" in child_types
+        assert "text/calendar" in child_types, (
+            "text/calendar MUST be a sibling of text/html inside "
+            "multipart/alternative for Outlook to render the HTML body"
+        )
+
+        # The inline calendar part must carry method=REQUEST for iMIP
+        cal_part = next(
+            c for c in alt.get_payload() if c.get_content_type() == "text/calendar"
+        )
+        assert cal_part.get_param("method") == "REQUEST"
+
+    @override_settings(CALENDAR_ITIP_ENABLED=True)
+    def test_itip_enabled_keeps_ics_attachment(self):
+        """The downloadable invite.ics attachment is still present for
+        non-iMIP clients that look for a file to import."""
+        msg = self._send()
+        attachments = [
+            p
+            for p in msg.walk()
+            if p.get_content_disposition() == "attachment"
+            and p.get_filename() == "invite.ics"
+        ]
+        assert len(attachments) == 1
+        assert attachments[0].get_content_type() == "text/calendar"
+
+    @override_settings(CALENDAR_ITIP_ENABLED=False)
+    def test_itip_disabled_omits_inline_calendar(self):
+        """With iTIP off, no inline text/calendar (no auto-recognition by
+        Outlook) — only the downloadable attachment, without method=."""
+        msg = self._send()
+        alt = self._find_alternative_part(msg)
+        assert alt is not None
+        child_types = [c.get_content_type() for c in alt.get_payload()]
+        assert "text/calendar" not in child_types
+
+        ics_parts = [p for p in msg.walk() if p.get_content_type() == "text/calendar"]
+        assert len(ics_parts) == 1
+        assert ics_parts[0].get_param("method") is None
+
+
 def _make_ics_with_method(method="REQUEST"):
     """Build a sample ICS string that includes a METHOD property."""
     return (
