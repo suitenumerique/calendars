@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Input, useModal } from "@gouvfr-lasuite/cunningham-react";
-import { useRouter } from "next/router";
+import { useNavigate } from "@tanstack/react-router";
 
 import { useAuth } from "@/features/auth/Auth";
 import { ResourceCard } from "./ResourceCard";
@@ -28,7 +28,7 @@ export const ResourceList = ({
 }: ResourceListProps) => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const router = useRouter();
+  const navigate = useNavigate();
   const canAdmin = user?.can_admin ?? false;
 
   const createModal = useModal();
@@ -68,7 +68,7 @@ export const ResourceList = ({
             color="neutral"
             size="small"
             icon={<span className="material-icons">arrow_back</span>}
-            onClick={() => void router.push("/")}
+            onClick={() => void navigate({ to: "/" })}
             aria-label={t("app_title")}
           />
           <h2>{t("resources.title")}</h2>

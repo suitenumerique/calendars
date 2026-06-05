@@ -4,7 +4,7 @@ import {
   useCunninghamTheme,
 } from "../../cunningham/useCunninghamTheme";
 import { useConfig } from "@/features/config/ConfigProvider";
-import { useAppContext } from "@/pages/_app";
+import { useAppContext } from "@/features/app/AppContext";
 
 export const Gaufre = () => {
   const { config } = useConfig();

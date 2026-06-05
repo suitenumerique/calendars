@@ -49,7 +49,7 @@ FROM frontend-deps AS calendars-dev
 
 WORKDIR /home/frontend
 
-EXPOSE 3000
+EXPOSE 8930
 
 RUN cd apps/calendars && npm run build-theme
 
@@ -70,7 +70,7 @@ RUN npm run build
 # Scratch stage that normalises the build output path.
 # When FRONTEND_IMAGE keeps its default value, BuildKit uses this stage.
 FROM scratch AS frontend-build-output
-COPY --from=calendars-builder /home/frontend/apps/calendars/out /srv
+COPY --from=calendars-builder /home/frontend/apps/calendars/dist /srv
 
 # When FRONTEND_IMAGE is overridden to an external image tag, BuildKit
 # pulls that image instead and skips every stage above.

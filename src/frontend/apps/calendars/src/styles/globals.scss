@@ -29,8 +29,8 @@
 @use "./../features/resources/components/Resources";
 @use "./../features/integrations/components/Integrations";
 @use "./../features/settings/components/WorkingHoursSettings";
-@use "./../pages/index" as *;
-@use "./../pages/calendar" as *;
+@use "./views/index" as *;
+@use "./views/calendar" as *;
 html,
 body {
   margin: 0;

@@ -8,7 +8,7 @@
  * the data boundary so every UI consumer is safe by default — and we
  * pin that contract here.
  */
-import { describe, it, expect } from '@jest/globals'
+import { describe, it, expect } from 'vitest'
 import { sanitizeIcsUrl } from '../EventCalendarAdapter'
 
 describe('sanitizeIcsUrl', () => {

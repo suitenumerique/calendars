@@ -12,7 +12,7 @@
  *   - Round-trip: feeding the output back into ts-ics's parser yields
  *     a structurally-equivalent VFREEBUSY component.
  */
-import { describe, it, expect } from '@jest/globals'
+import { describe, it, expect } from 'vitest'
 import { convertIcsCalendar } from 'ts-ics'
 import {
   buildFreeBusyRequestIcs,

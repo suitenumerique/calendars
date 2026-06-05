@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import { useRouter } from "next/router";
+import { useNavigate } from "@tanstack/react-router";
 
 import {
   addToast,
@@ -28,7 +28,7 @@ const AvailabilityForm = ({
   isSaving,
 }: AvailabilityFormProps) => {
   const { t } = useTranslation();
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const [slots, setSlots] = useState<AvailabilitySlots>(initialSlots);
 
@@ -84,7 +84,7 @@ const AvailabilityForm = ({
             icon={
               <span className="material-icons">arrow_back</span>
             }
-            onClick={() => void router.push("/")}
+            onClick={() => void navigate({ to: "/" })}
             aria-label={t("app_title")}
           />
           <h2>{t("settings.workingHours.title")}</h2>

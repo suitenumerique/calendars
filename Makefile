@@ -173,8 +173,12 @@ lint-front: ## run the frontend linter
 .PHONY: lint-front
 
 typecheck-front: ## run the frontend type checker
-	@$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npx tsc --noEmit"
+	@$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npm run ts:check"
 .PHONY: typecheck-front
+
+analyze-front: ## analyze frontend bundle sizes (per-chunk + per-package breakdown)
+	@$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npm run analyze"
+.PHONY: analyze-front
 
 # -- Tests
 
@@ -298,6 +302,10 @@ install-frozen-front: ## install frontend dependencies from lockfile
 shell-front: ## open a shell in the frontend container
 	@$(COMPOSE) run --rm frontend-dev /bin/sh
 .PHONY: shell-front
+
+clean-front: ## reset the frontend node_modules volumes (run after dep changes)
+	@$(COMPOSE) rm -sfv frontend-dev
+.PHONY: clean-front
 
 # -- Misc
 

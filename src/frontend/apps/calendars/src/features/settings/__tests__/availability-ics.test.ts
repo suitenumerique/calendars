@@ -8,11 +8,11 @@ import type { AvailabilitySlots } from "../types";
 describe("availability-ics", () => {
   // Freeze "today" so tests with specific dates never become stale.
   beforeEach(() => {
-    jest.useFakeTimers();
-    jest.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
   });
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   describe("slotsToVCalendar", () => {

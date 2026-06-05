@@ -135,7 +135,7 @@ services:
       - /home/frontend/node_modules
       - /home/frontend/apps/calendars/node_modules
     ports:
-      - "8930:3000"
+      - "8930:8930"
 
   node:
     image: node:24

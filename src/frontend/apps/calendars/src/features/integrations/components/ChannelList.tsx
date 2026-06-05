@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
-import { useRouter } from "next/router";
+import { useNavigate } from "@tanstack/react-router";
 
 import type { Channel } from "../types";
 import { useChannels } from "../api/useChannels";
@@ -11,7 +11,7 @@ import { DeleteChannelModal } from "./DeleteChannelModal";
 
 export const ChannelList = () => {
   const { t } = useTranslation();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { data: channels, isLoading } = useChannels();
   const createModal = useModal();
 
@@ -32,7 +32,7 @@ export const ChannelList = () => {
                 arrow_back
               </span>
             }
-            onClick={() => void router.push("/")}
+            onClick={() => void navigate({ to: "/" })}
             aria-label={t("app_title")}
           />
           <h2>{t("integrations.title")}</h2>

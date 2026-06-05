@@ -10,15 +10,16 @@
  * - Select range to create (select)
  * - Custom toolbar with navigation and view selection
  * - Mobile-optimized views (1 day, 2 days, list)
- *
- * Next.js consideration: This component must be client-side only
- * due to DOM manipulation. Use dynamic import with ssr: false if needed.
  */
 
 import "@event-calendar/core/index.css";
 
-import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import { MobileToolbar } from "./mobile/MobileToolbar";
+import { WeekDayBar } from "./mobile/WeekDayBar";
+import { FloatingActionButton } from "./mobile/FloatingActionButton";
+import { MobileListView } from "./mobile/MobileListView";
 
 import { useCalendarContext } from "../../contexts/CalendarContext";
 import { useCalendarLocale } from "../../hooks/useCalendarLocale";
@@ -37,36 +38,6 @@ import {
   useSchedulingCapabilitiesCheck,
 } from "./hooks/useSchedulerInit";
 import { useMobileNavigation } from "./hooks/useMobileNavigation";
-
-const MobileToolbar = dynamic(
-  () =>
-    import("./mobile/MobileToolbar").then((m) => ({
-      default: m.MobileToolbar,
-    })),
-  { ssr: false },
-);
-
-const WeekDayBar = dynamic(
-  () =>
-    import("./mobile/WeekDayBar").then((m) => ({ default: m.WeekDayBar })),
-  { ssr: false },
-);
-
-const FloatingActionButton = dynamic(
-  () =>
-    import("./mobile/FloatingActionButton").then((m) => ({
-      default: m.FloatingActionButton,
-    })),
-  { ssr: false },
-);
-
-const MobileListView = dynamic(
-  () =>
-    import("./mobile/MobileListView").then((m) => ({
-      default: m.MobileListView,
-    })),
-  { ssr: false },
-);
 
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 

@@ -9,7 +9,7 @@ import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useAuth } from "@/features/auth/Auth";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useRouter } from "next/router";
+import { useNavigate } from "@tanstack/react-router";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { Feedback } from "@/features/feedback/Feedback";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
@@ -18,17 +18,17 @@ import { UserProfile } from "@/features/ui/components/user/UserProfile";
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 
 export const HeaderIcon = () => {
-  const router = useRouter();
+  const navigate = useNavigate();
 
   return (
     <div className="calendars__header__left">
       <div
-        onClick={() => void router.push("/")}
+        onClick={() => void navigate({ to: "/" })}
         style={{ cursor: "pointer" }}
         role="link"
         tabIndex={0}
         onKeyDown={(e) => {
-          if (e.key === "Enter") void router.push("/");
+          if (e.key === "Enter") void navigate({ to: "/" });
         }}
       >
         <DynamicCalendarLogo variant="header" />
@@ -41,7 +41,7 @@ export const HeaderIcon = () => {
 const ApplicationMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { t } = useTranslation();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const isResourcesEnabled = useFeatureFlag(FeatureFlag.ADMIN_RESOURCES);
@@ -59,7 +59,7 @@ const ApplicationMenu = () => {
               {
                 label: t("resources.title"),
                 icon: <Icon name="meeting_room" type={IconType.OUTLINED} />,
-                callback: () => void router.push("/resources"),
+                callback: () => void navigate({ to: "/resources" }),
               },
             ]
           : []),
@@ -73,7 +73,7 @@ const ApplicationMenu = () => {
                     type={IconType.OUTLINED}
                   />
                 ),
-                callback: () => void router.push("/integrations"),
+                callback: () => void navigate({ to: "/integrations" }),
               },
             ]
           : []),
@@ -86,7 +86,7 @@ const ApplicationMenu = () => {
           {
             label: t("settings.workingHours.title"),
             icon: <Icon name="schedule" type={IconType.OUTLINED} />,
-            callback: () => void router.push("/settings"),
+            callback: () => void navigate({ to: "/availabilities" }),
           },
         ]
       : []),

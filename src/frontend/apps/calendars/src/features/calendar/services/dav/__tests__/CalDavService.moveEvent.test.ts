@@ -9,6 +9,7 @@
  * source calendar entry wasn't cached. This test pins the request
  * shape so a future refactor can't silently regress it.
  */
+import type { Mock } from 'vitest'
 import { CalDavService } from '../CalDavService'
 
 type CalendarStubInit = {
@@ -30,10 +31,10 @@ function injectCalendar(svc: CalDavService, init: CalendarStubInit) {
 
 describe('CalDavService.moveEvent — request shape', () => {
   const originalFetch = globalThis.fetch
-  let fetchMock: jest.Mock
+  let fetchMock: Mock
 
   beforeEach(() => {
-    fetchMock = jest.fn().mockResolvedValue({
+    fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 201,
       headers: new Headers({ etag: '"new-etag"' }),

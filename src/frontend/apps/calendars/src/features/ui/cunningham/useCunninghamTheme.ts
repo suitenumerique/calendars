@@ -1,4 +1,4 @@
-import { useAppContext } from "@/pages/_app";
+import { useAppContext } from "@/features/app/AppContext";
 import { tokens } from "@/styles/cunningham-tokens";
 
 export const useCunninghamTheme = () => {

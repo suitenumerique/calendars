@@ -2,7 +2,7 @@ import { Spinner } from "@gouvfr-lasuite/ui-kit";
 import { useApiConfig } from "./useApiConfig";
 import { ApiConfig } from "@/features/api/types";
 import { createContext, useContext, useEffect } from "react";
-import { useAppContext } from "@/pages/_app";
+import { useAppContext } from "@/features/app/AppContext";
 
 export interface ConfigContextType {
   config: ApiConfig;

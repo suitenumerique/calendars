@@ -17,6 +17,7 @@
  * A bare 404 on the initial DELETE is also treated as success for the
  * same reason: delete is idempotent.
  */
+import type { Mock } from 'vitest'
 import { CalDavService } from '../CalDavService'
 
 const EVENT_URL =
@@ -39,10 +40,10 @@ function mockResponse(init: {
 
 describe('CalDavService.deleteEvent', () => {
   const originalFetch = globalThis.fetch
-  let fetchMock: jest.Mock
+  let fetchMock: Mock
 
   beforeEach(() => {
-    fetchMock = jest.fn()
+    fetchMock = vi.fn()
     globalThis.fetch = fetchMock as unknown as typeof fetch
   })
 

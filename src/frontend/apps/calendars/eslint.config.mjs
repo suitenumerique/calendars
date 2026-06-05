@@ -1,21 +1,28 @@
-import nextConfig from "eslint-config-next";
-import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
-import nextTypescript from "eslint-config-next/typescript";
+import { defineConfig, globalIgnores } from "eslint/config";
+import reactHooks from "eslint-plugin-react-hooks";
+import tseslint from "typescript-eslint";
 
-const eslintConfig = [
-  ...nextConfig,
-  ...nextCoreWebVitals,
-  ...nextTypescript,
+const eslintConfig = defineConfig([
+  globalIgnores([
+    "dist/**",
+    "src/routes.gen.ts",
+    "node_modules/**",
+    ".next/**",
+    "test-dst.js",
+    "src/styles/cunningham-tokens.ts",
+    "src/styles/cunningham-tokens-sass.scss",
+  ]),
+  ...tseslint.configs.recommended,
+  reactHooks.configs.flat.recommended,
   {
     rules: {
       "react-hooks/exhaustive-deps": "off",
-      // TODO: fix these patterns to be React Compiler compatible
-      "react-hooks/set-state-in-effect": "warn",
       "react-hooks/refs": "warn",
+      "react-hooks/set-state-in-effect": "warn",
       "react-hooks/preserve-manual-memoization": "warn",
-      "@next/next/no-img-element": "off",
+      "@typescript-eslint/no-empty-object-type": "off",
     },
   },
-];
+]);
 
 export default eslintConfig;

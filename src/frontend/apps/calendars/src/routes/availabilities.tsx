@@ -1,8 +1,9 @@
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
-import Head from "next/head";
-import { useTranslation } from "react-i18next";
+import { useEffect } from "react";
 
 import { useAuth } from "@/features/auth/Auth";
+import { CalendarContextProvider } from "@/features/calendar/contexts";
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";
 import {
   HeaderIcon,
@@ -11,64 +12,45 @@ import {
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
 import { WorkingHoursSettings } from "@/features/settings/components/WorkingHoursSettings";
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
-import { useRouter } from "next/router";
-import { useEffect } from "react";
 
-export default function SettingsPage() {
-  const { t } = useTranslation();
+const AvailabilitiesPage = () => {
   const { user } = useAuth();
   const isEnabled = useFeatureFlag(FeatureFlag.ADMIN_AVAILABILITIES);
-  const router = useRouter();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!isEnabled) {
-      void router.replace("/");
+      void navigate({ to: "/", replace: true });
     }
-  }, [isEnabled, router]);
+  }, [isEnabled, navigate]);
 
   if (!user || !isEnabled) return null;
 
   return (
     <>
-      <Head>
-        <title>
-          {t("settings.workingHours.title")} -{" "}
-          {t("app_title")}
-        </title>
-        <meta
-          name="description"
-          content={t(
-            "settings.workingHours.description",
-          )}
-        />
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1"
-        />
-      </Head>
-
       <div className="settings-page">
         <WorkingHoursSettings />
       </div>
-
       <Toaster />
     </>
   );
-}
+};
 
-SettingsPage.getLayout = function getLayout(
-  page: React.ReactElement,
-) {
-  return (
-    <GlobalLayout>
+const AvailabilitiesRoute = () => (
+  <GlobalLayout>
+    <CalendarContextProvider>
       <MainLayout
         enableResize={false}
         hideLeftPanelOnDesktop={true}
         icon={<HeaderIcon />}
         rightHeaderContent={<HeaderRight />}
       >
-        {page}
+        <AvailabilitiesPage />
       </MainLayout>
-    </GlobalLayout>
-  );
-};
+    </CalendarContextProvider>
+  </GlobalLayout>
+);
+
+export const Route = createFileRoute("/availabilities")({
+  component: AvailabilitiesRoute,
+});

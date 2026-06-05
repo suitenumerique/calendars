@@ -13,5 +13,8 @@
     "build": "npm run build -w calendars",
     "lint": "npm run lint -w calendars",
     "build-theme": "npm run build-theme -w calendars"
+  },
+  "devDependencies": {
+    "jsdom": "27.4.0"
   }
 }

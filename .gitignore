@@ -27,7 +27,6 @@ share/python-wheels/
 *.egg
 MANIFEST
 .DS_Store
-.next/
 
 # Translations	# Translations
 *.mo
@@ -50,6 +49,8 @@ docker/auth/*.local
 # npm / pnpm
 node_modules
 .pnpm-store
+src/frontend/apps/calendars/dist/
+src/frontend/apps/calendars/src/routes.gen.ts
 # npm cache lands here because the frontend Dockerfile sets
 # NPM_CONFIG_CACHE=/home/frontend/.npm (so npm can write a cache without
 # needing /.npm/_logs at the root). When the host bind-mounts

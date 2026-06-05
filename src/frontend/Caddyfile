@@ -8,12 +8,17 @@
 	header X-Frame-Options DENY
 
 	route {
-		try_files {path} {path}.html /index.html
+		# SPA fallback: any unmatched request returns index.html so the
+		# client-side router can resolve the path.
+		try_files {path} /index.html
 		file_server
 	}
 
 	handle_errors {
-		rewrite * /404.html
-		file_server
+		@spa_404 expression `{err.status_code} == 404`
+		handle @spa_404 {
+			rewrite * /index.html
+			file_server
+		}
 	}
 }

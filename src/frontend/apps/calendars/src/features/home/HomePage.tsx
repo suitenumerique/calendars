@@ -36,7 +36,7 @@ export const HomePage = () => {
       <HomeGutter>
         <Hero
           logo={<DynamicCalendarLogo variant="icon" />}
-          banner={banner.src}
+          banner={banner}
           title={t("home.title")}
           subtitle={t("home.subtitle")}
           mainButton={

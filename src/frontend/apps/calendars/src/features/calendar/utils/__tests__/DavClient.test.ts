@@ -1,5 +1,5 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  *
  * Tests for the unified `davRequest` entry point in DavClient.
  *
@@ -14,8 +14,10 @@
  * `parseMultistatus` / `parseDavErrorMessage` use the native `DOMParser`.
  */
 
-jest.mock('@/features/api/fetchApi', () => ({
-  redirectToLogin: jest.fn(),
+import type { Mock, MockedFunction } from 'vitest'
+
+vi.mock('@/features/api/fetchApi', () => ({
+  redirectToLogin: vi.fn(),
 }))
 
 import {
@@ -25,15 +27,15 @@ import {
 } from '../DavClient'
 import { redirectToLogin } from '@/features/api/fetchApi'
 
-const redirectToLoginMock = redirectToLogin as jest.MockedFunction<
+const redirectToLoginMock = redirectToLogin as MockedFunction<
   typeof redirectToLogin
 >
 
 const originalFetch = globalThis.fetch
-let fetchMock: jest.Mock
+let fetchMock: Mock
 
 beforeEach(() => {
-  fetchMock = jest.fn()
+  fetchMock = vi.fn()
   globalThis.fetch = fetchMock as unknown as typeof fetch
   redirectToLoginMock.mockClear()
 })
