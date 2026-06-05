@@ -7,7 +7,7 @@ const FAVICON_SIZE = 64;
 // active theme. Currently the cunningham config doesn't map these assets, so
 // this would require extending the theme schema and making these hooks
 // theme-aware.
-const ICON_PATH = "/assets/cal_icon_no_number.svg";
+const ICON_PATH = "/cal_icon_no_number.svg";
 
 function generateFaviconDataUrl(day: number): Promise<string> {
   return new Promise((resolve, reject) => {

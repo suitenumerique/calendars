@@ -16,7 +16,7 @@ const NoAccessPage = () => {
   return (
     <GenericDisclaimer
       message={t("no_access.title")}
-      imageSrc="/assets/403-background.png"
+      imageSrc="/403-background.png"
     >
       <p>{t("no_access.description")}</p>
       <Button onClick={() => logout()}>{t("no_access.button")}</Button>

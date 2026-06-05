@@ -11,7 +11,7 @@ const UnauthorizedPage = () => {
   return (
     <GenericDisclaimer
       message={t("401.title")}
-      imageSrc="/assets/401-background.png"
+      imageSrc="/401-background.png"
     >
       <Button onClick={() => login()}>{t("401.button")}</Button>
     </GenericDisclaimer>

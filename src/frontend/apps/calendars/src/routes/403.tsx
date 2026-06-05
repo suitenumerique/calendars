@@ -11,7 +11,7 @@ const ForbiddenPage = () => {
   return (
     <GenericDisclaimer
       message={t("403.title")}
-      imageSrc="/assets/403-background.png"
+      imageSrc="/403-background.png"
     >
       <Button href="/" icon={<Icon name="home" />}>
         {t("403.button")}

@@ -29,8 +29,8 @@ export const DynamicCalendarLogo = ({
       <img
         src={
           isIcon
-            ? "/assets/cal_icon_no_number.svg"
-            : "/assets/cal_logotype_text_no_number.svg"
+            ? "/cal_icon_no_number.svg"
+            : "/cal_logotype_text_no_number.svg"
         }
         alt={t("app_title")}
         className="calendars__dynamic-logo__img"

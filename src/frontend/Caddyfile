@@ -7,13 +7,17 @@
 	root * /srv
 	header X-Frame-Options DENY
 
-	# Hashed Vite outputs under /assets/* are content-addressed — cache
-	# them forever.
+	# Vite emits every bundled output under /assets/ with a
+	# content-addressed hash in its filename, so the whole directory is
+	# safe to cache forever. Verbatim public/ files (favicon.png, logos,
+	# error-page backgrounds, …) live at the dist root and keep the
+	# default revalidation behavior, so updating them in-place still
+	# propagates.
 	@hashed_assets path /assets/*
 	header @hashed_assets Cache-Control "public, max-age=31536000, immutable"
 
-	# Never cache the SPA shell — clients must re-fetch index.html to pick
-	# up the new bundle hashes on each deploy.
+	# Never cache the SPA shell — clients must re-fetch index.html to
+	# pick up the new bundle hashes on each deploy.
 	@spa_shell path / /index.html
 	header @spa_shell Cache-Control "no-cache"
 
