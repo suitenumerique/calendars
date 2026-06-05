@@ -1,3 +1,10 @@
+# Scalingo monolith proxy: frontend (Vite dist), Django backend, and
+# SabreDAV (PHP-FPM) all run in one slug; Caddy fans out by path.
+#
+# For the standalone frontend Docker image (no backend in-process) see
+# src/frontend/Caddyfile. The cache + handle_errors logic below is
+# intentionally duplicated there; keep both in sync.
+
 {
 	auto_https off
 	admin off
@@ -6,6 +13,19 @@
 :{$PORT} {
 	root * {$CALENDARS_FRONTEND_ROOT:/app}
 	header -Server
+
+	# Vite emits every bundled output under /assets/ with a
+	# content-addressed hash, so the whole directory is safe to cache
+	# forever. Verbatim public/ files (favicon.png, logos, error-page
+	# backgrounds, …) live at the dist root and keep the default
+	# revalidation behavior, so updating them in-place still propagates.
+	@hashed_assets path /assets/*
+	header @hashed_assets Cache-Control "public, max-age=31536000, immutable"
+
+	# Never cache the SPA shell — clients must re-fetch index.html to
+	# pick up the new bundle hashes on each deploy.
+	@spa_shell path / /index.html
+	header @spa_shell Cache-Control "no-cache"
 
 	route {
 		# Health checks
@@ -60,14 +80,36 @@
 			header_up X-Forwarded-Proto https
 		}
 
-		# Default: SPA fallback
+		# Hashed Vite assets — serve as real files. A miss must surface
+		# as a 404, not the SPA fallback: returning index.html as JS
+		# would crash the page with a SyntaxError when a browser cached
+		# on an old deploy requests a deleted chunk.
+		handle /assets/* {
+			file_server
+		}
+
+		# Default: SPA fallback for client-side routes.
 		try_files {path} /index.html
 		file_server
 	}
 
 	handle_errors {
-		rewrite * /404.html
-		file_server
+		# Asset 404s stay 404s.
+		@asset_404 {
+			expression `{err.status_code} == 404`
+			path /assets/*
+		}
+		handle @asset_404 {
+			respond "Not Found" 404
+		}
+
+		# Any other 404 is a client-side route the SPA should resolve.
+		# (Was: rewrite * /404.html — but Vite never emits 404.html.)
+		@spa_404 expression `{err.status_code} == 404`
+		handle @spa_404 {
+			rewrite * /index.html
+			file_server
+		}
 	}
 }
 

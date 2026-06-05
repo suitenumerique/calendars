@@ -1,3 +1,12 @@
+# Standalone frontend image (Docker `frontend-production` stage).
+# When deployed behind an external reverse proxy / ingress, that proxy
+# is responsible for routing /api/* to the backend — Caddy here only
+# serves static frontend assets.
+#
+# For the Scalingo monolith (frontend + Django + SabreDAV in one slug)
+# see src/proxy/Caddyfile. The cache + handle_errors logic below is
+# intentionally duplicated there; keep both in sync.
+
 {
 	auto_https off
 	admin off

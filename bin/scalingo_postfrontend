@@ -5,9 +5,12 @@ set -o pipefail   # don't ignore exit codes when piping output
 
 echo "-----> Running post-frontend script"
 
-# Move the frontend build to the app root and clean up
+# Move the frontend build to the app root and clean up. Vite emits to
+# dist/ (was out/ under Next.js static export). The slug-relative
+# destination keeps the same name so bin/scalingo_run_web's
+# CALENDARS_FRONTEND_ROOT default stays valid.
 mkdir -p build/
-mv src/frontend/apps/calendars/out build/frontend-out
+mv src/frontend/apps/calendars/dist build/frontend-out
 
 cp src/frontend/apps/calendars/src/features/i18n/translations.json translations.json
 
