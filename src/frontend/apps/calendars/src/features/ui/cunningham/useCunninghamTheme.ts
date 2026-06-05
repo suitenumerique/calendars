@@ -1,12 +1,12 @@
 import { useAppContext } from "@/features/app/AppContext";
 import { tokens } from "@/styles/cunningham-tokens";
 
-export const useCunninghamTheme = () => {
-  const { theme } = useAppContext();
+type Theme = (typeof tokens.themes)["default"];
 
-  return tokens.themes[
-    theme as keyof typeof tokens.themes
-  ] as (typeof tokens.themes)["default"];
+export const useCunninghamTheme = (): Theme => {
+  const { theme } = useAppContext();
+  const themes = tokens.themes as unknown as Record<string, Theme>;
+  return themes[theme] ?? tokens.themes.default;
 };
 
 // Once the cunningham sass generated string is fixed, we can remove this function.

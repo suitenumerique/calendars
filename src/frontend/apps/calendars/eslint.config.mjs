@@ -7,7 +7,6 @@ const eslintConfig = defineConfig([
     "dist/**",
     "src/routes.gen.ts",
     "node_modules/**",
-    ".next/**",
     "test-dst.js",
     "src/styles/cunningham-tokens.ts",
     "src/styles/cunningham-tokens-sass.scss",
