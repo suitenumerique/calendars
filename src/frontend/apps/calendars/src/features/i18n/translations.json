@@ -504,6 +504,7 @@
         "accepted": "You have accepted the invitation",
         "tentative": "You have replied \"maybe\" to the invitation",
         "declined": "You have declined the invitation",
+        "processing": "Sending your response…",
         "responseSent": "Your response has been sent to the organizer.",
         "failed": "Failed to send your response. Please try again.",
         "error": {
@@ -1445,6 +1446,7 @@
         "accepted": "Vous avez accepté l'invitation",
         "tentative": "Vous avez répondu « peut-être » à l'invitation",
         "declined": "Vous avez décliné l'invitation",
+        "processing": "Envoi de votre réponse…",
         "responseSent": "Votre réponse a été envoyée à l'organisateur.",
         "failed": "Échec de l'envoi de votre réponse. Veuillez réessayer.",
         "error": {
@@ -2128,6 +2130,7 @@
         "accepted": "U heeft de uitnodiging geaccepteerd",
         "tentative": "U heeft \"misschien\" geantwoord op de uitnodiging",
         "declined": "U heeft de uitnodiging afgewezen",
+        "processing": "Uw antwoord wordt verzonden…",
         "responseSent": "Uw antwoord is naar de organisator gestuurd.",
         "failed": "Het verzenden van uw antwoord is mislukt. Probeer het opnieuw.",
         "error": {

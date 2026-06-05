@@ -1,0 +1,39 @@
+{% comment %}
+Accept / Maybe / Decline buttons for REQUEST-method emails.
+Rendered only when rsvp_accepted_url is in context — CANCEL/REPLY
+templates omit the RSVP URLs so the include is a no-op there.
+{% endcomment %}
+{% if rsvp_accepted_url %}
+<table border="0" cellpadding="0" cellspacing="0" role="presentation"
+       style="border-collapse:collapse; width:100%; table-layout:fixed;">
+  <tr>
+    <td style="padding:0 4px 0 0;">
+      <a href="{{ rsvp_accepted_url }}"
+         style="display:block; text-align:center; background-color:#435de6;
+                color:#ffffff; font-family:Arial,Helvetica,sans-serif;
+                font-size:14px; font-weight:700; padding:12px 8px;
+                border-radius:4px; text-decoration:none;">
+        {{ actions.accept }}
+      </a>
+    </td>
+    <td style="padding:0 4px;">
+      <a href="{{ rsvp_tentative_url }}"
+         style="display:block; text-align:center; background-color:#626a80;
+                color:#ffffff; font-family:Arial,Helvetica,sans-serif;
+                font-size:14px; font-weight:700; padding:12px 8px;
+                border-radius:4px; text-decoration:none;">
+        {{ actions.maybe }}
+      </a>
+    </td>
+    <td style="padding:0 0 0 4px;">
+      <a href="{{ rsvp_declined_url }}"
+         style="display:block; text-align:center; background-color:#d2212f;
+                color:#ffffff; font-family:Arial,Helvetica,sans-serif;
+                font-size:14px; font-weight:700; padding:12px 8px;
+                border-radius:4px; text-decoration:none;">
+        {{ actions.decline }}
+      </a>
+    </td>
+  </tr>
+</table>
+{% endif %}

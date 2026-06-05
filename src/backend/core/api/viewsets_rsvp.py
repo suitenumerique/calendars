@@ -143,6 +143,7 @@ class RSVPConfirmView(View):
                 "token": token,
                 "lang": lang,
                 "submit_label": label,
+                "loading_message": TranslationService.t("rsvp.processing", lang),
             },
         )
 

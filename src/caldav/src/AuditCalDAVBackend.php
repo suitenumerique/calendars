@@ -165,7 +165,12 @@ class AuditCalDAVBackend extends PDO
             return $row;
         }
         if (isset($row['calendardata']) && is_resource($row['calendardata'])) {
-            $row['calendardata'] = stream_get_contents($row['calendardata']);
+            $contents = stream_get_contents($row['calendardata']);
+            // stream_get_contents() returns false on read failure; coerce to
+            // null so downstream `is_string()` checks treat the row as
+            // "no data" instead of `false` (a bool would otherwise sneak
+            // through and corrupt iTIP/REPORT serialization).
+            $row['calendardata'] = $contents === false ? null : $contents;
         }
         return $row;
     }

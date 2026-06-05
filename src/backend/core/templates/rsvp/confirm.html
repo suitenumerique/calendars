@@ -26,7 +26,9 @@
           <noscript>
             <button type="submit" class="submit-btn">{{ submit_label }}</button>
           </noscript>
-          <p id="loading-msg">…</p>
+          <p id="loading-msg" role="status" aria-live="polite" aria-busy="true">
+            {{ loading_message }}
+          </p>
         </form>
       </div>
     </div>
