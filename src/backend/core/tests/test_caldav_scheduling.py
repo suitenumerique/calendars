@@ -59,6 +59,27 @@ class CallbackHandler(http.server.BaseHTTPRequestHandler):
         """Suppress default logging."""
 
 
+def _wait_for_callbacks(callback_data, expected_count=1, timeout=5.0, interval=0.05):
+    """Poll until ``callback_data['requests']`` has at least ``expected_count``
+    entries, bounded by ``timeout``. Returns silently in either case — the
+    caller asserts the count afterward.
+
+    Why polling instead of ``time.sleep(2)``: SabreDAV's iTip dispatch is
+    typically <100ms but a fixed 2s sleep both slows the suite and is
+    still racy on a loaded CI runner. Polling at 50ms intervals returns
+    as soon as the callbacks land and gives up to 5s of grace before
+    declaring failure. For tests that expect ZERO callbacks (e.g.
+    spoofing rejection), pass ``expected_count=1`` with a short timeout
+    — the helper returns cleanly on timeout and the caller asserts that
+    ``requests`` is still empty.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if len(callback_data.get("requests", [])) >= expected_count:
+            return
+        time.sleep(interval)
+
+
 def create_test_server() -> tuple:
     """Create a test HTTP server that captures callbacks.
 
@@ -161,9 +182,7 @@ END:VCALENDAR"""
                 # Save event to trigger scheduling
                 caldav_calendar.save_event(ical_content)
 
-                # Give the callback a moment to be called (scheduling may be async)
-                # sabre/dav processes scheduling synchronously during the request
-                time.sleep(2)
+                _wait_for_callbacks(callback_data, expected_count=1)
 
                 # Verify callback was called
                 assert callback_data["called"], (
@@ -306,9 +325,7 @@ END:VCALENDAR"""
 
                 caldav_calendar.save_event(ical_content)
 
-                # Scheduling is synchronous in SabreDAV; give the two
-                # callback POSTs a beat to land.
-                time.sleep(2)
+                _wait_for_callbacks(callback_data, expected_count=2)
 
                 requests = callback_data["requests"]
                 assert len(requests) == 2, (
@@ -406,7 +423,7 @@ END:VCALENDAR"""
 
                 # Wait for and assert the REQUEST callback (sanity check —
                 # the same path the cancel relies on).
-                time.sleep(2)
+                _wait_for_callbacks(callback_data, expected_count=1)
                 assert callback_data["called"], (
                     "REQUEST callback should fire on event creation"
                 )
@@ -414,18 +431,19 @@ END:VCALENDAR"""
                     callback_data["request_data"]["headers"]["X-LS-Method"] == "REQUEST"
                 )
 
-                # Reset so we can observe what (if anything) DELETE triggers.
+                # Reset all three so we can observe what (if anything) DELETE
+                # triggers — ``requests`` is reset too so the next
+                # ``_wait_for_callbacks`` polls for the post-delete count.
                 callback_data["called"] = False
                 callback_data["request_data"] = None
+                callback_data["requests"] = []
 
                 # Delete the event. SabreDAV's Schedule\\Plugin::beforeUnbind
                 # must turn this into a CANCEL iTIP message and route it
                 # back through our HTTP callback.
                 event.delete()
 
-                # Scheduling is synchronous in SabreDAV; give the callback
-                # POST a beat to land just in case.
-                time.sleep(2)
+                _wait_for_callbacks(callback_data, expected_count=1)
 
                 assert callback_data["called"], (
                     "CANCEL callback was not received after deleting the "
@@ -600,8 +618,7 @@ END:VCALENDAR"""
 
                 caldav_calendar.save_event(ical_content)
 
-                # Wait for callback
-                time.sleep(2)
+                _wait_for_callbacks(callback_data, expected_count=1)
 
                 # 5. Verify callback was called
                 assert callback_data["called"], (
@@ -729,7 +746,9 @@ class TestOrganizerSpoofingRejection:
                 # so long as the callback doesn't fire with the spoof.
                 pass
 
-            time.sleep(2)
+            # Zero callbacks is the expected outcome; a short bounded wait
+            # is enough to catch any rogue ones.
+            _wait_for_callbacks(callback_data, expected_count=1, timeout=2.0)
 
             if callback_data["called"]:
                 sender = callback_data["request_data"]["headers"].get("X-LS-Sender", "")
@@ -768,7 +787,7 @@ class TestOrganizerSpoofingRejection:
 
             ical_content = self._build_event(user.email)
             caldav_calendar.save_event(ical_content)
-            time.sleep(2)
+            _wait_for_callbacks(callback_data, expected_count=1)
             assert callback_data["called"], (
                 "Negative control failed: own-ORGANIZER PUT did not "
                 "trigger the scheduling callback. The spoofing test "

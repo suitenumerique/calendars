@@ -513,8 +513,26 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             ics_content = self._prepare_ics_attachment(icalendar_data, method)
 
             # Send email via Messages API (for mailbox calendars)
-            # or via default SMTP (for standalone calendars)
-            if is_mailbox and settings.FEATURE_MESSAGES_INTEGRATION:
+            # or via default SMTP (for standalone calendars).
+            #
+            # ``is_mailbox`` is runtime truth from SabreDAV
+            # (``X-LS-Is-Mailbox`` set in ``viewsets_caldav.py``). If it's
+            # true but Messages integration is disabled, fall-through to
+            # SMTP would send the invitation from the system address
+            # instead of the mailbox identity — silently wrong, and worse
+            # than not sending. Refuse instead.
+            if is_mailbox:
+                if not settings.FEATURE_MESSAGES_INTEGRATION:
+                    logger.error(
+                        "Mailbox invitation requested but "
+                        "FEATURE_MESSAGES_INTEGRATION is disabled — "
+                        "refusing to fall back to SMTP (would send from "
+                        "system address instead of %s). recipient=%s uid=%s",
+                        sender,
+                        recipient,
+                        event.uid,
+                    )
+                    return False
                 return self._send_via_messages(
                     mailbox_email=sender,
                     to_email=recipient,
@@ -822,9 +840,13 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 ics_method=ics_method,
                 itip_enabled=settings.CALENDAR_ITIP_ENABLED,
             )
-            # ``message()`` builds the SafeMIMEMultipart and adds Date +
-            # Message-ID automatically — fixes audit findings A, B.
-            mime_bytes = email.message().as_bytes()
+            # ``message()`` builds the SafeMIMEMultipart and adds Date.
+            # ``linesep="\r\n"`` forces CRLF line endings (RFC 5322 §2.1)
+            # — Django's ``MIMEMixin.as_bytes`` default is ``"\n"``, which
+            # strict MTAs reject and lenient ones may rewrite in a way
+            # that changes content hashes and Message-IDs. The Messages
+            # submit endpoint and any MTA downstream both expect CRLF.
+            mime_bytes = email.message().as_bytes(linesep="\r\n")
 
             success = messages.submit_raw_message(
                 mailbox_id=mailbox_id,

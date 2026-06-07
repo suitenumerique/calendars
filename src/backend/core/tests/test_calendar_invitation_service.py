@@ -1,6 +1,6 @@
 """Tests for ICalendarParser and email template rendering."""
 
-# pylint: disable=missing-function-docstring,protected-access
+# pylint: disable=missing-function-docstring,protected-access,too-many-lines
 
 import re
 from unittest.mock import MagicMock, patch
@@ -494,6 +494,43 @@ class TestMailboxInvitationRouting:
         assert result is False, "Invitation should fail when Messages API fails"
         mock_send_email.assert_not_called()
 
+    def test_mailbox_invitation_refuses_when_feature_flag_disabled(
+        self, service, settings
+    ):
+        """When ``is_mailbox=True`` but ``FEATURE_MESSAGES_INTEGRATION``
+        is off, the invitation must FAIL — not fall back to SMTP. SMTP
+        would send from the system address instead of the mailbox
+        identity, silently sending invitations from the wrong sender
+        (the exact production bug the Messages integration was meant to
+        prevent).
+        """
+        settings.FEATURE_MESSAGES_INTEGRATION = False
+
+        with (
+            patch(
+                "core.services.calendar_invitation_service"
+                ".CalendarInvitationService._send_email",
+            ) as mock_send_email,
+            patch(
+                "core.services.calendar_invitation_service"
+                ".CalendarInvitationService._send_via_messages",
+            ) as mock_send_messages,
+        ):
+            result = service.send_invitation(
+                sender_email="team@company.com",
+                recipient_email="external@other.com",
+                method="REQUEST",
+                icalendar_data=ICS_MAILBOX_INVITE,
+                is_mailbox=True,
+            )
+
+        assert result is False, (
+            "Mailbox invitation must NOT succeed when Messages integration "
+            "is disabled — falling back to SMTP would leak the system address"
+        )
+        mock_send_email.assert_not_called()
+        mock_send_messages.assert_not_called()
+
 
 # ICS payload with TWO external attendees — what SabreDAV sees when the
 # user creates an event with two invitees on a mailbox calendar.
@@ -737,6 +774,50 @@ class TestMessageIdDomain:
     def test_domain_derived_from_app_url(self, app_url, expected_host, settings):
         settings.APP_URL = app_url
         assert _message_id_domain() == f"_lst_mail.{expected_host}"
+
+    def test_rendered_mime_uses_crlf_line_endings(self):
+        """RFC 5322 §2.1 mandates CRLF line terminators. Bare LF is
+        rejected by strict MTAs and may be rewritten by lenient ones —
+        which changes content hashes and breaks Message-ID dedup. The
+        Messages-path serialization must call ``.as_bytes(linesep="\\r\\n")``
+        so the bytes we POST are CRLF-terminated.
+
+        Asserts on the bytes that actually flow to the Messages submit
+        endpoint (the same call site as production)."""
+        mime_bytes = (
+            _build_calendar_email(
+                from_email="alice@example.com",
+                to_email="bob@example.com",
+                reply_to=None,
+                subject="t",
+                text_body="t",
+                html_body="<p>h</p>",
+                ics_content="BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+                ics_method="REQUEST",
+                itip_enabled=True,
+            )
+            .message()
+            .as_bytes(linesep="\r\n")
+        )
+
+        # Split headers from body at the first blank line (CRLFCRLF).
+        # If the message used LF-only, this split would not find CRLFCRLF
+        # — the assertion below would fail loudly.
+        sep = mime_bytes.find(b"\r\n\r\n")
+        assert sep != -1, (
+            "MIME bytes must have a CRLF-CRLF header/body separator. "
+            "Bare LF here means the serializer fell back to LF linesep. "
+            f"First 200 bytes: {mime_bytes[:200]!r}"
+        )
+        headers = mime_bytes[:sep]
+        # Every header line break must be CRLF. We search for any "\n"
+        # whose preceding byte is not "\r" — that's a bare LF.
+        for i, b in enumerate(headers):
+            if b == 0x0A and (i == 0 or headers[i - 1] != 0x0D):
+                pytest.fail(
+                    f"Bare LF at header byte {i} — expected CRLF. "
+                    f"Context: {headers[max(0, i - 20) : i + 5]!r}"
+                )
 
     def test_message_id_uses_app_url_domain(self, settings):
         """Pin the end-to-end: the actual ``Message-ID`` header on a
