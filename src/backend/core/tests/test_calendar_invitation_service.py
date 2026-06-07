@@ -6,13 +6,18 @@ import re
 from unittest.mock import MagicMock, patch
 
 from django.template.loader import render_to_string
+from django.test import Client
 
 import pytest
+import requests
 
 from core.services.calendar_invitation_service import (
     CalendarInvitationService,
     ICalendarParser,
+    _build_calendar_email,
+    _message_id_domain,
 )
+from core.services.messages_service import MessagesService
 
 # Sample ICS with URL property
 ICS_WITH_URL = """BEGIN:VCALENDAR
@@ -401,7 +406,7 @@ class TestMailboxInvitationRouting:
             "id": "mbx-123",
             "email": "team@company.com",
         }
-        mock_messages.submit_raw_email.return_value = True
+        mock_messages.submit_raw_message.return_value = True
 
         with (
             patch(
@@ -417,8 +422,8 @@ class TestMailboxInvitationRouting:
                 mock_messages.get_mailbox_by_email,
             ),
             patch(
-                "core.services.messages_service.MessagesService.submit_raw_email",
-                mock_messages.submit_raw_email,
+                "core.services.messages_service.MessagesService.submit_raw_message",
+                mock_messages.submit_raw_message,
             ),
         ):
             result = service.send_invitation(
@@ -431,7 +436,7 @@ class TestMailboxInvitationRouting:
 
         assert result is True, "Invitation should succeed via Messages API"
         mock_messages.get_mailbox_by_email.assert_called_once_with("team@company.com")
-        mock_messages.submit_raw_email.assert_called_once()
+        mock_messages.submit_raw_message.assert_called_once()
         mock_send_email.assert_not_called()
 
     @pytest.mark.usefixtures("_messages_settings")
@@ -488,3 +493,433 @@ class TestMailboxInvitationRouting:
 
         assert result is False, "Invitation should fail when Messages API fails"
         mock_send_email.assert_not_called()
+
+
+# ICS payload with TWO external attendees — what SabreDAV sees when the
+# user creates an event with two invitees on a mailbox calendar.
+ICS_MAILBOX_INVITE_TWO_ATTENDEES = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+BEGIN:VEVENT
+UID:mailbox-invite-two-attendees-1
+DTSTART:20260310T100000Z
+DTEND:20260310T110000Z
+SUMMARY:Mailbox Team Meeting
+ORGANIZER;CN=Team Mailbox:mailto:team@company.com
+ATTENDEE;CN=Alice;RSVP=TRUE:mailto:alice@external-a.test
+ATTENDEE;CN=Bob;RSVP=TRUE:mailto:bob@external-b.test
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR"""
+
+
+@pytest.mark.django_db
+class TestMailboxCallbackTwoExternalAttendees:
+    """End-to-end Django-side check for the reported bug: when a mailbox
+    event has two external attendees, both must reach Messages.
+
+    Reproduces what SabreDAV actually does in production: per RFC 6638,
+    its iTip broker emits one schedule() per recipient. We've separately
+    pinned that fan-out in ``test_caldav_scheduling.py``; here we feed
+    those two POSTs into the real ``CalDAVSchedulingCallbackView`` and
+    assert ``MessagesService.submit_raw_message`` is invoked twice — once
+    per attendee — with distinct ``to_email`` values.
+
+    What this test does NOT verify: that the live Messages backend then
+    accepts both submits. That is the next link in the chain and would
+    need either the fake Messages server or a real Messages instance.
+    """
+
+    CALLBACK_PATH = "/api/v1.0/caldav-scheduling-callback/"
+    SENDER = "team@company.com"
+    ATTENDEE_A = "alice@external-a.test"
+    ATTENDEE_B = "bob@external-b.test"
+
+    @pytest.fixture()
+    def _messages_settings(self, settings):
+        settings.FEATURE_MESSAGES_INTEGRATION = True
+        settings.MESSAGES_API_URL = "https://messages.test"
+        settings.MESSAGES_API_KEY = "test-key"
+        settings.MESSAGES_CHANNEL_ID = "test-channel"
+        settings.CALDAV_INBOUND_API_KEY = "callback-test-key"
+
+    def _post_callback(self, client, recipient: str):
+        """Mirror one SabreDAV callback POST for a given recipient."""
+        return client.post(
+            self.CALLBACK_PATH,
+            data=ICS_MAILBOX_INVITE_TWO_ATTENDEES.encode("utf-8"),
+            content_type="text/calendar",
+            HTTP_X_LS_API_KEY="callback-test-key",
+            HTTP_X_LS_SENDER=f"mailto:{self.SENDER}",
+            HTTP_X_LS_RECIPIENT=f"mailto:{recipient}",
+            HTTP_X_LS_METHOD="REQUEST",
+            HTTP_X_LS_IS_MAILBOX="true",
+        )
+
+    @pytest.mark.usefixtures("_messages_settings")
+    def test_both_external_attendees_reach_messages_api(self):
+        """Two sequential callbacks (one per attendee) must result in
+        two ``submit_raw_message`` calls with distinct recipients.
+
+        This is the end-to-end check the user asked for: given the two
+        POSTs SabreDAV actually sends, does the Django callback path
+        forward both to the Messages API? A pass means our code is fine
+        and any drop is happening inside the Messages backend itself.
+        """
+        mailbox = {"id": "mbx-123", "email": self.SENDER}
+
+        with (
+            patch(
+                "core.services.messages_service.MessagesService.__init__",
+                return_value=None,
+            ),
+            patch(
+                "core.services.messages_service.MessagesService.get_mailbox_by_email",
+                return_value=mailbox,
+            ),
+            patch(
+                "core.services.messages_service.MessagesService.submit_raw_message",
+                return_value=True,
+            ) as mock_submit,
+        ):
+            client = Client()
+            resp_a = self._post_callback(client, self.ATTENDEE_A)
+            resp_b = self._post_callback(client, self.ATTENDEE_B)
+
+        assert resp_a.status_code == 200, (
+            f"First callback (recipient {self.ATTENDEE_A}) failed: "
+            f"{resp_a.status_code} {resp_a.content!r}"
+        )
+        assert resp_b.status_code == 200, (
+            f"Second callback (recipient {self.ATTENDEE_B}) failed: "
+            f"{resp_b.status_code} {resp_b.content!r}. "
+            "If the first succeeded and this failed, the Django callback "
+            "view is dropping the second invite — the chain breaks here."
+        )
+
+        assert mock_submit.call_count == 2, (
+            f"Expected MessagesService.submit_raw_message to be called twice "
+            f"(once per external attendee), got {mock_submit.call_count}. "
+            "This means Django is not forwarding the second attendee to "
+            "the Messages API — fix the callback path, not Messages."
+        )
+
+        # Each call should target a distinct recipient — guards against
+        # a bug where both submits go to the same address.
+        rcpts = [
+            kwargs.get("rcpt_to") or (args[1] if len(args) > 1 else None)
+            for args, kwargs in (call for call in mock_submit.call_args_list)
+        ]
+        assert set(rcpts) == {self.ATTENDEE_A, self.ATTENDEE_B}, (
+            f"submit_raw_message recipients {rcpts} do not match the "
+            f"two external attendees {{{self.ATTENDEE_A!r}, "
+            f"{self.ATTENDEE_B!r}}}"
+        )
+
+
+class TestSmtpMessagesParity:
+    """The SMTP and Messages paths must produce equivalent MIME — Date,
+    Message-ID, iMIP layout, ICS ``method=`` Content-Type — so a mailbox
+    recipient gets the same calendar-client experience as an SMTP one.
+
+    Historically the Messages path was missing all three (audit findings
+    A, B, D). The shared ``_build_calendar_email`` is now the single
+    source of truth; these tests pin it.
+    """
+
+    @staticmethod
+    def _build(**overrides):
+        kwargs = {
+            "from_email": "alice@example.com",
+            "to_email": "bob@example.com",
+            "reply_to": "alice@example.com",
+            "subject": "Test",
+            "text_body": "text",
+            "html_body": "<p>html</p>",
+            "ics_content": (
+                "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\n"
+                "BEGIN:VEVENT\r\nUID:x\r\nDTSTART:20260101T100000Z\r\n"
+                "SUMMARY:x\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+            ),
+            "ics_method": "REQUEST",
+            "itip_enabled": True,
+        }
+        kwargs.update(overrides)
+        return _build_calendar_email(**kwargs)
+
+    def test_rendered_mime_has_date_and_message_id(self):
+        """Audit findings A + B: a MIME without Date or Message-ID is RFC
+        5322-non-conformant and is the most likely cause of MTA dedup
+        collapsing two near-identical invitations into one."""
+        mime = self._build().message()
+        assert mime["Date"], "MIME must carry a Date header (RFC 5322 §3.6)"
+        assert mime["Message-ID"], (
+            "MIME must carry a Message-ID — without it, downstream MTAs "
+            "may dedup two invitations as the same message"
+        )
+
+    def test_two_invitations_get_distinct_message_ids(self):
+        """Belt-and-braces on the reported bug: each per-recipient build
+        must produce a distinct Message-ID. Two emails with the same
+        Message-ID is exactly the condition under which most MTAs treat
+        the second as a duplicate of the first."""
+        m1 = self._build(to_email="alice@external-a.test").message()
+        m2 = self._build(to_email="bob@external-b.test").message()
+        assert m1["Message-ID"] != m2["Message-ID"], (
+            "Per-recipient builds must yield distinct Message-IDs"
+        )
+
+    def test_ics_attachment_carries_method_param(self):
+        """Audit finding D: when ITIP is on, the attached ``invite.ics``
+        Content-Type must include ``method=REQUEST`` so non-iMIP clients
+        (Apple Mail, Thunderbird) still treat the file as an invitation
+        rather than a generic calendar dump."""
+        mime = self._build(itip_enabled=True).message()
+        ics_parts = [
+            p
+            for p in mime.walk()
+            if p.get_content_type() == "text/calendar"
+            and p.get_filename() == "invite.ics"
+        ]
+        assert len(ics_parts) == 1
+        content_type = ics_parts[0]["Content-Type"]
+        assert "method=REQUEST" in content_type, (
+            f"ICS attachment Content-Type must carry method=REQUEST, "
+            f"got: {content_type!r}"
+        )
+
+    def test_inline_imip_calendar_part_when_itip_enabled(self):
+        """Outlook needs ``text/calendar`` as a sibling of ``text/html``
+        inside ``multipart/alternative`` to render the HTML description.
+        This is the structure the SMTP path has always produced; the
+        Messages path now produces the same one through the shared builder."""
+        mime = self._build(itip_enabled=True).message()
+        alt = next(
+            (p for p in mime.walk() if p.get_content_type() == "multipart/alternative"),
+            None,
+        )
+        assert alt is not None, "Expected a multipart/alternative in the MIME tree"
+        child_types = [c.get_content_type() for c in alt.get_payload()]
+        assert "text/plain" in child_types
+        assert "text/html" in child_types
+        assert "text/calendar" in child_types, (
+            "text/calendar must sit inside multipart/alternative for Outlook"
+        )
+
+    def test_no_imip_inline_part_when_itip_disabled(self):
+        """When ITIP is off, the inline iMIP alternative is omitted and
+        the .ics is attachment-only."""
+        mime = self._build(itip_enabled=False).message()
+        alt = next(
+            (p for p in mime.walk() if p.get_content_type() == "multipart/alternative"),
+            None,
+        )
+        assert alt is not None
+        child_types = [c.get_content_type() for c in alt.get_payload()]
+        assert "text/calendar" not in child_types
+
+
+class TestMessageIdDomain:
+    """The Message-ID domain must come from the instance URL, not from
+    Django's default ``DNS_NAME`` (which is the container hostname and
+    leaks deployment topology). Format: ``_lst_mail.<host-of-APP_URL>``.
+    """
+
+    @pytest.mark.parametrize(
+        "app_url,expected_host",
+        [
+            ("https://calendars.example.com", "calendars.example.com"),
+            ("http://localhost:8931", "localhost"),
+            ("https://calendars.example.com/some/path", "calendars.example.com"),
+            ("", "localhost"),  # fallback when APP_URL is unset
+        ],
+    )
+    def test_domain_derived_from_app_url(self, app_url, expected_host, settings):
+        settings.APP_URL = app_url
+        assert _message_id_domain() == f"_lst_mail.{expected_host}"
+
+    def test_message_id_uses_app_url_domain(self, settings):
+        """Pin the end-to-end: the actual ``Message-ID`` header on a
+        built invitation carries the configured domain, NOT the container
+        hostname (which would be Django's default)."""
+        settings.APP_URL = "https://calendars.example.com"
+        mime = _build_calendar_email(
+            from_email="alice@example.com",
+            to_email="bob@example.com",
+            reply_to=None,
+            subject="x",
+            text_body="t",
+            html_body="<p>h</p>",
+            ics_content="BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+            ics_method="REQUEST",
+            itip_enabled=True,
+        ).message()
+        msg_id = mime["Message-ID"] or ""
+        assert msg_id.endswith("@_lst_mail.calendars.example.com>"), (
+            f"Message-ID must use the APP_URL-derived domain, got: {msg_id!r}"
+        )
+
+
+class TestMessagesServiceSubmitRawMessage:
+    """Tests for the HTTP boundary of ``submit_raw_message`` — audit
+    findings C (response-body logging), G (auth-header overlay), H
+    (retry on transient failure), and J (header sanitization).
+    """
+
+    @pytest.fixture(autouse=True)
+    def _settings(self, settings):
+        settings.MESSAGES_API_URL = "https://messages.test"
+        settings.MESSAGES_API_KEY = "real-key"
+        settings.MESSAGES_CHANNEL_ID = "real-channel"
+
+    @staticmethod
+    def _mock_response(status_code=200, text="OK"):
+        resp = MagicMock(spec=["status_code", "text", "raise_for_status"])
+        resp.status_code = status_code
+        resp.text = text
+        if status_code >= 400:
+            resp.raise_for_status.side_effect = requests.HTTPError(response=resp)
+        else:
+            resp.raise_for_status.return_value = None
+        return resp
+
+    @pytest.mark.parametrize(
+        "attacker_key,attacker_channel",
+        [
+            # Exact case — the obvious attempt.
+            ("X-API-Key", "X-Channel-Id"),
+            # Lowercase — HTTP headers are case-insensitive, so a server
+            # might honor this alongside our X-API-Key. The naive overlay
+            # (``hdrs.update``) would let it through.
+            ("x-api-key", "x-channel-id"),
+            # Mixed case — same threat as lowercase.
+            ("X-Api-Key", "x-Channel-id"),
+        ],
+    )
+    def test_caller_cannot_override_auth_headers(self, attacker_key, attacker_channel):
+        """Audit finding G: ``_request`` must drop ANY caller header whose
+        lowercased name collides with a reserved auth header — not just
+        exact-case matches. A lowercase ``x-api-key`` from the caller
+        would otherwise survive alongside the configured ``X-API-Key``,
+        and most servers honor whichever they parse first."""
+
+        with patch("core.services.messages_service.requests.request") as mock_req:
+            mock_req.return_value = self._mock_response(202, '{"ok": true}')
+            svc = MessagesService()
+            svc._request(  # pylint: disable=protected-access
+                "POST",
+                "/api/v1.0/submit/",
+                data=b"",
+                headers={attacker_key: "ATTACKER", attacker_channel: "EVIL"},
+            )
+
+        sent_headers = mock_req.call_args.kwargs["headers"]
+        # Walk the dict case-insensitively: only one header per name should
+        # remain, and its value must be ours.
+        api_keys = [v for k, v in sent_headers.items() if k.lower() == "x-api-key"]
+        channels = [v for k, v in sent_headers.items() if k.lower() == "x-channel-id"]
+        assert api_keys == ["real-key"], (
+            f"Expected exactly one X-API-Key with the configured value, "
+            f"got: {api_keys!r} (full headers: {sent_headers!r})"
+        )
+        assert channels == ["real-channel"]
+
+    def test_rcpt_to_header_strips_crlf(self):
+        """Audit finding J: a CR/LF in ``rcpt_to`` must never reach the
+        wire — that would let an attacker who controls the recipient
+        email smuggle a second header (Bcc, X-anything) into the request."""
+
+        with patch("core.services.messages_service.requests.request") as mock_req:
+            mock_req.return_value = self._mock_response(202, '{"ok": true}')
+            svc = MessagesService()
+            svc.submit_raw_message(
+                mailbox_id="mbx-1",
+                rcpt_to="bob@example.com\r\nBcc: leak@evil.test",
+                mime_bytes=b"raw",
+            )
+
+        sent_headers = mock_req.call_args.kwargs["headers"]
+        rcpt = sent_headers["X-Rcpt-To"]
+        assert "\r" not in rcpt and "\n" not in rcpt, (
+            f"X-Rcpt-To must be free of CR/LF, got: {rcpt!r}"
+        )
+
+    def test_empty_rcpt_after_sanitization_aborts_without_submit(self):
+        """An ``rcpt_to`` that sanitizes down to the empty string (e.g.
+        all CR/LF) must abort BEFORE the HTTP call — sending
+        ``X-Rcpt-To: `` empty leaves Messages-backend behavior
+        unspecified and we'd waste a submit either way."""
+
+        with patch("core.services.messages_service.requests.request") as mock_req:
+            svc = MessagesService()
+            ok = svc.submit_raw_message(
+                mailbox_id="mbx-1",
+                rcpt_to="\r\n\r\n",
+                mime_bytes=b"raw",
+            )
+
+        assert ok is False
+        assert mock_req.call_count == 0, (
+            "submit_raw_message must NOT hit the network when rcpt_to "
+            "sanitizes to empty"
+        )
+
+    def test_retry_once_on_5xx(self):
+        """Audit finding H: a transient 5xx from Messages must trigger
+        one retry; if the retry succeeds, the caller sees success."""
+
+        with (
+            patch("core.services.messages_service.requests.request") as mock_req,
+            patch("core.services.messages_service.time.sleep"),
+        ):
+            mock_req.side_effect = [
+                self._mock_response(503, "upstream busy"),
+                self._mock_response(202, '{"id": "ok"}'),
+            ]
+            svc = MessagesService()
+            ok = svc.submit_raw_message(
+                mailbox_id="mbx-1",
+                rcpt_to="bob@example.com",
+                mime_bytes=b"raw",
+            )
+
+        assert ok is True
+        assert mock_req.call_count == 2, "Expected exactly one retry on 5xx"
+
+    def test_no_retry_on_4xx(self):
+        """A 4xx is deterministic — retrying would just repeat the failure
+        and burn time. Must fail fast."""
+
+        with (
+            patch("core.services.messages_service.requests.request") as mock_req,
+            patch("core.services.messages_service.time.sleep"),
+        ):
+            mock_req.return_value = self._mock_response(400, '{"err": "bad"}')
+            svc = MessagesService()
+            ok = svc.submit_raw_message(
+                mailbox_id="mbx-1",
+                rcpt_to="bob@example.com",
+                mime_bytes=b"raw",
+            )
+
+        assert ok is False
+        assert mock_req.call_count == 1, "4xx must NOT retry"
+
+    def test_two_x_calls_each_succeed_independently(self):
+        """Two back-to-back submits must each result in a fresh HTTP
+        request. Guards against any accidental memoization that would
+        cause the second of two attendee invitations to be skipped."""
+
+        with patch("core.services.messages_service.requests.request") as mock_req:
+            mock_req.return_value = self._mock_response(202, '{"ok": true}')
+            svc = MessagesService()
+            svc.submit_raw_message(
+                mailbox_id="mbx-1", rcpt_to="alice@a.test", mime_bytes=b"raw1"
+            )
+            svc.submit_raw_message(
+                mailbox_id="mbx-1", rcpt_to="bob@b.test", mime_bytes=b"raw2"
+            )
+
+        assert mock_req.call_count == 2
+        rcpts = [c.kwargs["headers"]["X-Rcpt-To"] for c in mock_req.call_args_list]
+        assert rcpts == ["alice@a.test", "bob@b.test"]

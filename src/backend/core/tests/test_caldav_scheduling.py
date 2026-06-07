@@ -1,9 +1,10 @@
 """Tests for CalDAV scheduling callback integration."""
 
-# pylint: disable=no-member,redefined-outer-name,unsubscriptable-object
+# pylint: disable=no-member,redefined-outer-name,unsubscriptable-object,too-many-lines
 
 import http.server
 import logging
+import re
 import secrets
 import socket
 import threading
@@ -36,12 +37,17 @@ class CallbackHandler(http.server.BaseHTTPRequestHandler):
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""
 
-        # Store callback data
-        self.callback_data["called"] = True
-        self.callback_data["request_data"] = {
+        # Store callback data. ``request_data`` keeps the LAST request for
+        # the single-recipient tests; ``requests`` accumulates ALL POSTs so
+        # multi-recipient tests can verify the fan-out (SabreDAV emits one
+        # iTip schedule() per recipient, so we expect one POST per attendee).
+        record = {
             "headers": dict(self.headers),
             "body": body.decode("utf-8", errors="ignore") if body else "",
         }
+        self.callback_data["called"] = True
+        self.callback_data["request_data"] = record
+        self.callback_data.setdefault("requests", []).append(record)
 
         # Send success response
         self.send_response(200)
@@ -59,7 +65,7 @@ def create_test_server() -> tuple:
     Returns:
         Tuple of (server, port, callback_data)
     """
-    callback_data = {"called": False, "request_data": None}
+    callback_data = {"called": False, "request_data": None, "requests": []}
 
     def handler_factory(*args, **kwargs):
         return CallbackHandler(callback_data, *args, **kwargs)
@@ -239,6 +245,112 @@ END:VCALENDAR"""
                 pytest.fail(f"Failed to create event with attendee: {str(e)}")
         finally:
             # Shutdown server
+            server.shutdown()
+            server.server_close()
+
+    def test_scheduling_callback_fires_once_per_external_attendee(  # pylint: disable=too-many-locals,too-many-statements
+        self,
+    ):
+        """Creating an event with TWO external attendees must trigger
+        TWO separate scheduling callbacks — one per recipient.
+
+        Reproduces a production report where only one of two invited
+        externals received an email. The full chain is
+        SabreDAV ``Schedule\\Plugin`` → iTip Broker (one Message per
+        attendee) → ``HttpCallbackIMipPlugin::schedule()`` (called once
+        per Message) → Django callback (one POST per Message). If
+        SabreDAV's broker silently collapses the fan-out, or if our
+        plugin only forwards the first, this test catches it before
+        the downstream Messages-API step ever runs.
+        """
+        organizer = factories.UserFactory(email="organizer-multi@example.com")
+        service = CalendarService()
+        caldav_path = service.create_calendar(
+            organizer, name="Multi Attendee Calendar", color="#00aaff"
+        )
+
+        server, _port, callback_data = create_test_server()
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        time.sleep(0.5)
+
+        try:
+            client = service._get_client(organizer)  # pylint: disable=protected-access
+            calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
+
+            try:
+                caldav_calendar = client.calendar(url=calendar_url)
+
+                dtstart = datetime.now() + timedelta(days=2)
+                dtend = dtstart + timedelta(hours=1)
+
+                # Two clearly-external attendees (no principal in the
+                # CalDAV server). Distinct domains so we can't be fooled
+                # by accidental dedup on domain or local-part.
+                attendee_a = "alice@external-a.test"
+                attendee_b = "bob@external-b.test"
+
+                ical_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test Client//EN
+BEGIN:VEVENT
+UID:multi-attendee-{datetime.now().timestamp()}
+DTSTART:{dtstart.strftime("%Y%m%dT%H%M%SZ")}
+DTEND:{dtend.strftime("%Y%m%dT%H%M%SZ")}
+SUMMARY:Event with Two External Attendees
+ORGANIZER;CN=Organizer:mailto:{organizer.email}
+ATTENDEE;CN=Alice;RSVP=TRUE:mailto:{attendee_a}
+ATTENDEE;CN=Bob;RSVP=TRUE:mailto:{attendee_b}
+END:VEVENT
+END:VCALENDAR"""
+
+                caldav_calendar.save_event(ical_content)
+
+                # Scheduling is synchronous in SabreDAV; give the two
+                # callback POSTs a beat to land.
+                time.sleep(2)
+
+                requests = callback_data["requests"]
+                assert len(requests) == 2, (
+                    f"Expected 2 scheduling callbacks (one per external "
+                    f"attendee), got {len(requests)}. "
+                    f"Recipients seen: "
+                    f"{[r['headers'].get('X-LS-Recipient') for r in requests]}. "
+                    "If this is 1, SabreDAV's iTip broker is not fanning out "
+                    "or HttpCallbackIMipPlugin is dropping the second message — "
+                    "either way the second attendee will never receive an email."
+                )
+
+                methods = {r["headers"].get("X-LS-Method", "") for r in requests}
+                assert methods == {"REQUEST"}, (
+                    f"All callbacks should carry METHOD=REQUEST, got {methods}"
+                )
+
+                recipients = {
+                    re.sub(r"(?i)^mailto:", "", r["headers"].get("X-LS-Recipient", ""))
+                    for r in requests
+                }
+                assert recipients == {attendee_a, attendee_b}, (
+                    f"Callback recipients {recipients} do not match the two "
+                    f"external attendees {{{attendee_a!r}, {attendee_b!r}}}"
+                )
+
+                # Each POST should carry the full iCalendar payload (per
+                # RFC 6638, the per-recipient iTip message still lists all
+                # attendees — what differs is the X-LS-Recipient header).
+                for r in requests:
+                    body = r["body"]
+                    normalized = body.replace("\r\n ", "").replace("\r\n\t", "")
+                    normalized = normalized.replace("\n ", "").replace("\n\t", "")
+                    assert "BEGIN:VCALENDAR" in normalized
+                    assert attendee_a in normalized
+                    assert attendee_b in normalized
+
+            except NotFoundError:
+                pytest.skip("Calendar not found - CalDAV server may not be running")
+            except Exception as e:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                pytest.fail(f"Failed to create multi-attendee event: {e}")
+        finally:
             server.shutdown()
             server.server_close()
 

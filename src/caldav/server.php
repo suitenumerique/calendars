@@ -34,6 +34,18 @@ ini_set('memory_limit', getenv('PHP_MEMORY_LIMIT') ?: '512M');
 // Composer autoloader
 require_once __DIR__ . '/vendor/autoload.php';
 
+// Lightweight liveness probe for container healthchecks. Must be handled
+// BEFORE the DAV/auth chain is wired up: probing `/caldav/` triggers
+// SabreDAV's `NotAuthenticated` exception every interval, and the
+// `$server->on('exception')` handler then writes both the class line
+// AND a full PHP stack trace to the Apache error log — every 2 seconds.
+if (($_SERVER['REQUEST_URI'] ?? '') === '/caldav/healthz') {
+    http_response_code(200);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "ok\n";
+    exit;
+}
+
 // Get base URI from environment variable (set by compose.yaml)
 // This ensures sabre/dav generates URLs with the correct proxy path
 $baseUri = getenv('CALDAV_BASE_URI') ?: '/';

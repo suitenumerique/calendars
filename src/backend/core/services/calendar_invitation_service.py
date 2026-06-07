@@ -15,6 +15,7 @@ from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from email import encoders
 from email.mime.base import MIMEBase
+from email.utils import make_msgid
 from typing import Optional
 from urllib.parse import urlencode, urlparse
 
@@ -309,6 +310,119 @@ class ICalendarParser:
         return str(vevent.get("SUMMARY") or "")
 
 
+def _message_id_domain() -> str:
+    """Domain portion for invitation Message-ID headers.
+
+    Format: ``_lst_mail.<host>`` where ``<host>`` is the hostname of
+    ``settings.APP_URL`` (the instance's public URL). Falls back to
+    ``localhost`` if APP_URL is unset or malformed.
+
+    Django's default ``DNS_NAME`` would otherwise be ``socket.getfqdn()``
+    — i.e. the container hostname, which is opaque and per-pod. Anchoring
+    the Message-ID domain to the instance URL means receiving MTAs can
+    correlate invitations to the issuing instance, and the
+    ``_lst_mail.`` prefix scopes our Message-IDs to a subdomain that
+    cannot collide with any real-mail traffic served from APP_URL.
+    """
+    parsed = urlparse(settings.APP_URL or "")
+    host = parsed.hostname or "localhost"
+    return f"_lst_mail.{host}"
+
+
+def _build_calendar_email(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    *,
+    from_email: str,
+    to_email: str,
+    reply_to: Optional[str],
+    subject: str,
+    text_body: str,
+    html_body: str,
+    ics_content: str,
+    ics_method: str,
+    itip_enabled: bool,
+) -> _CalendarEmail:
+    """Build the canonical iMIP calendar email — single source of truth
+    for BOTH the SMTP and Messages paths.
+
+    The SMTP path calls ``email.send()``; the Messages path calls
+    ``email.message().as_bytes()`` and POSTs the bytes. Building from
+    the same function guarantees both recipients see the same MIME
+    structure, the same ``Date`` / ``Message-ID`` (Django generates Date
+    inside ``message()``; we inject Message-ID explicitly via
+    ``extra_headers`` so its domain is ours, not the container's), and
+    the same iMIP ``method=`` on the ``text/calendar`` Content-Type —
+    historically the Messages path was missing all three.
+
+    MIME layout (when ITIP is enabled):
+
+        multipart/mixed
+        ├── multipart/alternative
+        │   ├── text/plain                       (plain-text body)
+        │   ├── text/html                        (rich card)
+        │   └── text/calendar; method=REQUEST    (iMIP payload)
+        └── text/calendar; method=REQUEST        (attached invite.ics)
+
+    Why ``text/calendar`` lives inside ``multipart/alternative`` and
+    not only as a top-level attachment: Outlook (desktop + OWA) treats
+    any ``text/calendar; method=REQUEST`` part as an iMIP meeting
+    request and replaces the visible email body with its own meeting
+    card. Per ``MS-STANOICAL`` V0346, Outlook picks the description
+    from the first ``text/html`` *sibling of the calendar part inside
+    its multipart/alternative parent* — so when calendar is a sibling
+    of ``multipart/alternative`` (and not a child of it), Outlook
+    finds no HTML and the message renders blank. This is the structure
+    Google Calendar and Exchange itself emit. The top-level second
+    ``text/calendar`` is treated by Outlook as a download attachment
+    (V0343) and gives non-iMIP clients (Apple Mail, Thunderbird) a
+    file they can act on directly.
+
+    When ``itip_enabled`` is False the inline alternative is omitted
+    and the .ics is sent only as an attachment.
+    """
+    # Pre-generate the Message-ID so Django's ``message()`` skips its
+    # default ``make_msgid(domain=DNS_NAME)`` path (which would otherwise
+    # leak the container hostname). When ``Message-ID`` is in
+    # ``extra_headers``, Django bypasses the auto-injection.
+    extra_headers = {"Message-ID": make_msgid(domain=_message_id_domain())}
+
+    email = _CalendarEmail(
+        subject=subject,
+        body=text_body,
+        from_email=from_email,
+        to=[to_email],
+        reply_to=[reply_to] if reply_to else None,
+        headers=extra_headers,
+    )
+    if itip_enabled:
+        email.ics_method = ics_method
+
+    email.attach_alternative(html_body, "text/html")
+
+    # iMIP calendar alternative — sibling of HTML so Outlook can find
+    # the description (see docstring).
+    if itip_enabled:
+        email.attach_alternative(ics_content, "text/calendar")
+
+    # ICS as a downloadable attachment for non-iMIP clients.
+    # ``MIMEBase("text", "calendar")`` already sets a Content-Type
+    # header; ``add_header`` would APPEND a second one and most
+    # parsers honor the first — silently dropping ``method=``. Use
+    # ``replace_header`` so the iMIP method actually lands.
+    ics_attachment = MIMEBase("text", "calendar")
+    ics_attachment.set_payload(ics_content.encode("utf-8"))
+    encoders.encode_base64(ics_attachment)
+    content_type = "text/calendar; charset=utf-8"
+    if itip_enabled:
+        content_type += f"; method={ics_method}"
+    ics_attachment.replace_header("Content-Type", content_type)
+    ics_attachment.add_header(
+        "Content-Disposition", 'attachment; filename="invite.ics"'
+    )
+    email.attach(ics_attachment)
+
+    return email
+
+
 class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
     """
     Service for sending calendar invitation emails.
@@ -408,6 +522,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                     text_body=text_body,
                     html_body=html_body,
                     ics_content=ics_content,
+                    ics_method=method,
                     event_uid=event.uid,
                 )
 
@@ -608,81 +723,31 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         ics_method: str,
         event_uid: str,
     ) -> bool:
-        """
-        Send the actual email with ICS attachment.
+        """Send via SMTP using Django's email backend.
 
-        MIME layout (when ITIP is enabled):
-
-            multipart/mixed
-            ├── multipart/alternative
-            │   ├── text/plain                       (plain-text body)
-            │   ├── text/html                        (rich card)
-            │   └── text/calendar; method=REQUEST    (iMIP payload)
-            └── text/calendar; method=REQUEST        (attached invite.ics)
-
-        Why ``text/calendar`` lives inside ``multipart/alternative`` and not
-        only as a top-level attachment: Outlook (desktop + OWA) treats any
-        ``text/calendar; method=REQUEST`` part as an iMIP meeting request
-        and replaces the visible email body with its own meeting card. Per
-        ``MS-STANOICAL`` V0346, Outlook picks the meeting description from
-        the first ``text/html`` *sibling of the calendar part inside its
-        multipart/alternative parent* — so when calendar is a sibling of
-        ``multipart/alternative`` (and not a child of it), Outlook finds no
-        HTML and the message renders blank. This is the structure Google
-        Calendar and Exchange itself emit. The second ``text/calendar`` at
-        top level is treated by Outlook as a download attachment (V0343)
-        and gives non-iMIP clients (Apple Mail, Thunderbird) a file they
-        can act on directly.
-
-        When ``CALENDAR_ITIP_ENABLED`` is False the inline alternative is
-        omitted and the .ics is sent only as an attachment.
+        Thin wrapper around ``_build_calendar_email``: From is the system
+        sender, Reply-To is the organizer so replies bypass the system
+        address.
         """
         try:
-            # Get email settings
             from_addr = (
                 settings.CALENDAR_INVITATION_FROM_EMAIL or settings.DEFAULT_FROM_EMAIL
             )
-            itip_enabled = settings.CALENDAR_ITIP_ENABLED
-
-            # Create the email message
-            email = _CalendarEmail(
-                subject=subject,
-                body=text_body,
+            email = _build_calendar_email(
                 from_email=from_addr,
-                to=[to_email],
-                reply_to=[from_email],  # Allow replies to the organizer
+                to_email=to_email,
+                reply_to=from_email,
+                subject=subject,
+                text_body=text_body,
+                html_body=html_body,
+                ics_content=ics_content,
+                ics_method=ics_method,
+                itip_enabled=settings.CALENDAR_ITIP_ENABLED,
             )
-            if itip_enabled:
-                email.ics_method = ics_method
-
-            # Add HTML alternative
-            email.attach_alternative(html_body, "text/html")
-
-            # Add iMIP calendar alternative so Outlook finds the HTML
-            # description as a sibling of the calendar part (see docstring).
-            if itip_enabled:
-                email.attach_alternative(ics_content, "text/calendar")
-
-            # Add ICS as a downloadable file for non-iMIP clients
-            ics_attachment = MIMEBase("text", "calendar")
-            ics_attachment.set_payload(ics_content.encode("utf-8"))
-            encoders.encode_base64(ics_attachment)
-            content_type = "text/calendar; charset=utf-8"
-            if itip_enabled:
-                content_type += f"; method={ics_method}"
-            ics_attachment.add_header("Content-Type", content_type)
-            ics_attachment.add_header(
-                "Content-Disposition", 'attachment; filename="invite.ics"'
-            )
-
-            # Attach the ICS file
-            email.attach(ics_attachment)
-
-            # Send the email
             email.send(fail_silently=False)
 
             logger.info(
-                "Calendar invitation sent: %s -> %s (method: %s, uid: %s)",
+                "Calendar invitation sent via SMTP: %s -> %s (method: %s, uid: %s)",
                 from_email,
                 to_email,
                 ics_method,
@@ -704,13 +769,15 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         text_body: str,
         html_body: str,
         ics_content: str,
+        ics_method: str,
         event_uid: str,
     ) -> bool:
-        """Send an invitation via the Messages API from a mailbox.
+        """Send via the Messages API from a mailbox.
 
-        Looks up the mailbox by email, then submits the email through Messages.
-        Returns False on failure (no SMTP fallback — mailbox invitations must
-        come from the mailbox identity or not at all).
+        Looks up the mailbox by email, builds the SAME MIME structure as
+        the SMTP path, renders it to bytes, and POSTs it. No SMTP
+        fallback — mailbox invitations must come from the mailbox identity
+        or not at all.
         """
         try:
             from core.services.messages_service import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
@@ -721,8 +788,12 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             mailbox = messages.get_mailbox_by_email(mailbox_email)
             if not mailbox:
                 logger.error(
-                    "Mailbox %s not found in Messages, cannot send invitation",
+                    "Mailbox %s not found in Messages (lookup may have errored — "
+                    "check earlier 'fetch_mailboxes failed' lines), cannot send "
+                    "invitation to %s (uid: %s)",
                     mailbox_email,
+                    to_email,
+                    event_uid,
                 )
                 return False
 
@@ -730,21 +801,36 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             if not mailbox_id:
                 logger.error(
                     "Mailbox %s has no id in Messages response (got %r), "
-                    "cannot send invitation to %s",
+                    "cannot send invitation to %s (uid: %s)",
                     mailbox_email,
                     mailbox_id,
                     to_email,
+                    event_uid,
                 )
                 return False
 
-            success = messages.submit_raw_email(
-                mailbox_id=mailbox_id,
-                mailbox_email=mailbox_email,
+            email = _build_calendar_email(
+                from_email=mailbox_email,
                 to_email=to_email,
+                # From is already the mailbox/organizer; an extra Reply-To
+                # would be redundant noise on mailbox-calendar invites.
+                reply_to=None,
                 subject=subject,
                 text_body=text_body,
                 html_body=html_body,
-                ics_attachment=ics_content,
+                ics_content=ics_content,
+                ics_method=ics_method,
+                itip_enabled=settings.CALENDAR_ITIP_ENABLED,
+            )
+            # ``message()`` builds the SafeMIMEMultipart and adds Date +
+            # Message-ID automatically — fixes audit findings A, B.
+            mime_bytes = email.message().as_bytes()
+
+            success = messages.submit_raw_message(
+                mailbox_id=mailbox_id,
+                rcpt_to=to_email,
+                mime_bytes=mime_bytes,
+                correlation_id=event_uid,
             )
 
             if success:
@@ -756,17 +842,19 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 )
             else:
                 logger.error(
-                    "Messages API send failed for %s -> %s",
+                    "Messages API send failed for %s -> %s (uid: %s)",
                     mailbox_email,
                     to_email,
+                    event_uid,
                 )
             return success
 
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception(
-                "Failed to send via Messages for %s -> %s",
+                "Failed to send via Messages for %s -> %s (uid: %s)",
                 mailbox_email,
                 to_email,
+                event_uid,
             )
             return False
 

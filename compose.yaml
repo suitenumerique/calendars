@@ -196,12 +196,15 @@ services:
       postgresql:
         condition: service_healthy
     healthcheck:
-      # Probe the actual SabreDAV base URI. Unauthenticated, it returns
-      # 401 — a clean "server is up and routing" signal that doesn't
-      # spam the Apache error log. Any HTTP reply counts as healthy.
+      # Probe the dedicated /caldav/healthz endpoint in server.php that
+      # short-circuits before the DAV/auth chain. Probing the real /caldav/
+      # would trigger SabreDAV's NotAuthenticated on every interval and
+      # the exception handler would log a full PHP stack trace each time.
+      # -f makes curl exit non-zero on >=400 so a broken deployment is
+      # actually surfaced as unhealthy.
       test:
         - "CMD-SHELL"
-        - "curl -s -o /dev/null http://localhost/caldav/ || exit 1"
+        - "curl -sf -o /dev/null http://localhost/caldav/healthz || exit 1"
       interval: 2s
       timeout: 3s
       retries: 30
