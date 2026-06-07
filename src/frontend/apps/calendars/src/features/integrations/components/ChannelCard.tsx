@@ -1,5 +1,16 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
+import {
+  Edit,
+  Globe,
+  Key,
+  PlugOn,
+  Puzzle,
+  Trash
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
 
 import type { Channel } from "../types";
 
@@ -9,10 +20,10 @@ type ChannelCardProps = {
   onDelete: (channel: Channel) => void;
 };
 
-const TYPE_ICONS: Record<string, string> = {
-  caldav: "key",
-  "ical-feed": "rss_feed",
-  webhook: "webhook",
+const TYPE_ICONS: Record<string, ReactNode> = {
+  caldav: <Key />,
+  "ical-feed": <Globe />,
+  webhook: <PlugOn />,
 };
 
 export const ChannelCard = ({
@@ -35,11 +46,7 @@ export const ChannelCard = ({
           : " channel-card--inactive"
       }`}
     >
-      <div className="channel-card__icon">
-        <span className="material-icons">
-          {TYPE_ICONS[channel.type] ?? "extension"}
-        </span>
-      </div>
+      <div className="channel-card__icon">{TYPE_ICONS[channel.type] ?? <Puzzle />}</div>
       <div className="channel-card__info">
         <div className="channel-card__name">
           {channel.name}
@@ -69,7 +76,7 @@ export const ChannelCard = ({
           color="neutral"
           size="small"
           icon={
-            <span className="material-icons">edit</span>
+            <Edit />
           }
           onClick={() => onEdit(channel)}
           aria-label={t("integrations.edit.button")}
@@ -78,7 +85,7 @@ export const ChannelCard = ({
           color="error"
           size="small"
           icon={
-            <span className="material-icons">delete</span>
+            <Trash />
           }
           onClick={() => onDelete(channel)}
           aria-label={t("integrations.delete.button")}

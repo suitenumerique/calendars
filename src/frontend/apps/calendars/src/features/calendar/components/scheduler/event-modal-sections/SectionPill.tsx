@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
+
 interface SectionPillProps {
-  icon: string;
+  icon: ReactNode;
   label: string;
   isActive: boolean;
   onClick: () => void;
@@ -18,7 +20,7 @@ export const SectionPill = ({
       onClick={onClick}
       aria-pressed={isActive}
     >
-      <span className="material-icons section-pill__icon">{icon}</span>
+      {icon}
       <span className="section-pill__label">{label}</span>
     </button>
   );

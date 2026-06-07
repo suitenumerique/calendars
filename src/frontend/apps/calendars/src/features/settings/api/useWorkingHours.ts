@@ -1,19 +1,20 @@
 import {
   useMutation,
   useQuery,
-  useQueryClient,
+  useQueryClient
 } from "@tanstack/react-query";
-
 import { useCalendarContext } from "@/features/calendar/contexts/CalendarContext";
-
 import {
   DEFAULT_AVAILABILITY,
-  type AvailabilitySlots,
+  type AvailabilitySlots
 } from "../types";
 import {
   slotsToVCalendar,
-  vCalendarToSlots,
+  vCalendarToSlots
 } from "../availability-ics";
+
+
+
 
 const WORKING_HOURS_KEY = ["working-hours"];
 

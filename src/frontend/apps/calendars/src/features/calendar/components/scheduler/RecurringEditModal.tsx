@@ -4,9 +4,18 @@
  * this occurrence, this and future, or all occurrences.
  */
 
-import { useState, useEffect } from "react";
+import {
+  useState,
+  useEffect
+} from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
+import {
+  Button,
+  Modal,
+  ModalSize
+} from "@gouvfr-lasuite/cunningham-react";
+
+
 
 import type { RecurringEditModalProps, RecurringEditOption } from "./types";
 

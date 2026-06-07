@@ -1,6 +1,13 @@
-import { useCallback, useMemo } from "react";
+import {
+  useCallback,
+  useMemo
+} from "react";
+import {
+  addDays,
+  getWeekStart
+} from "@/utils/date";
+
 import type { CalendarApi } from "../types";
-import { addDays, getWeekStart } from "@/utils/date";
 
 interface UseMobileNavigationProps {
   currentDate: Date;

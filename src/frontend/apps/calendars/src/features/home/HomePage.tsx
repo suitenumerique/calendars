@@ -1,16 +1,30 @@
 import { useTranslation } from "react-i18next";
-import { Hero, Footer, HomeGutter } from "@gouvfr-lasuite/ui-kit";
+import {
+  Hero,
+  Footer,
+  HomeGutter
+} from "@gouvfr-lasuite/ui-kit";
 import { login } from "@/features/auth/Auth";
 import { useEffect } from "react";
-import banner from "@/assets/home/banner.svg";
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "@/features/ui/components/toaster/Toaster";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useThemeCustomization } from "@/hooks/useThemeCustomization";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";
+import { ScienceSvg } from "@/features/ui/icons/inline";
+
+
+
+
+import banner from "@/assets/home/banner.svg";
+
+
+
+
+
 
 export const HomePage = () => {
   const { t } = useTranslation();
@@ -24,7 +38,7 @@ export const HomePage = () => {
     if (failure === "alpha") {
       addToast(
         <ToasterItem type="error">
-          <span className="material-icons">science</span>
+          <ScienceSvg />
           <span>{t("authentication.error.alpha")}</span>
         </ToasterItem>,
       );

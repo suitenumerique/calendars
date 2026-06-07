@@ -14,30 +14,45 @@
 
 import "@event-calendar/core/index.css";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from "react";
 import { MobileToolbar } from "./mobile/MobileToolbar";
 import { WeekDayBar } from "./mobile/WeekDayBar";
 import { FloatingActionButton } from "./mobile/FloatingActionButton";
 import { MobileListView } from "./mobile/MobileListView";
-
 import { useCalendarContext } from "../../contexts/CalendarContext";
 import { useCalendarLocale } from "../../hooks/useCalendarLocale";
-import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
-import type { CalDavExtendedProps } from "../../services/dav/EventCalendarAdapter";
-import type { EventCalendarEvent } from "../../services/dav/types/event-calendar";
 import { useIsMobile } from "@/hooks/useIsMobile";
-
 import { EventModal } from "./EventModal";
 import { RecurringEditModal } from "./RecurringEditModal";
 import { SchedulerToolbar } from "./SchedulerToolbar";
-import type { SchedulerProps, EventModalState, MobileListEvent } from "./types";
 import { useSchedulerHandlers } from "./hooks/useSchedulerHandlers";
 import {
   useSchedulerInit,
-  useSchedulingCapabilitiesCheck,
+  useSchedulingCapabilitiesCheck
 } from "./hooks/useSchedulerInit";
 import { useMobileNavigation } from "./hooks/useMobileNavigation";
+
+
+
+
+
+
+
+import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
+import type { CalDavExtendedProps } from "../../services/dav/EventCalendarAdapter";
+import type { EventCalendarEvent } from "../../services/dav/types/event-calendar";
+
+
+
+
+import type { SchedulerProps, EventModalState, MobileListEvent } from "./types";
+
+
 
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -78,6 +93,13 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
 
   const davCalendarsRef = useRef<CalDavCalendar[]>(davCalendars);
   davCalendarsRef.current = davCalendars;
+
+  // Mirror currentDate into a ref so useSchedulerInit can restore the
+  // viewport on locale/firstDayOfWeek-triggered recreates without
+  // listing currentDate in its dependency array (which would re-create
+  // on every navigation tick).
+  const currentDateRef = useRef<Date>(currentDate);
+  currentDateRef.current = currentDate;
 
   // Initialize calendar URL from context
   useEffect(() => {
@@ -161,6 +183,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     visibleCalendarUrlsRef,
     davCalendarsRef,
     initialView: isMobile ? "timeGridDay" : "timeGridWeek",
+    currentDateRef,
     setCurrentDate: handleDatesSet,
     handleEventClick: handleEventClick as (info: unknown) => void,
     handleEventDrop: handleEventDrop as unknown as (info: unknown) => void,
@@ -206,13 +229,19 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
   }, [isMobile, handleViewChange]);
 
   // Mobile list view events (extracted from ref via effect to avoid ref access during render)
-  const [listEvents, setListEvents] = useState<MobileListEvent[]>([]);
+  // Re-use the same empty-array reference for the "no list view" case
+  // so setListEvents([]) doesn't churn the state with a fresh reference
+  // on every render — that was a contributor to the "Maximum update
+  // depth exceeded" warning observed when the event grid re-rendered
+  // immediately after a save.
+  const EMPTY_LIST = useRef<MobileListEvent[]>([]).current;
+  const [listEvents, setListEvents] = useState<MobileListEvent[]>(EMPTY_LIST);
   const isListView = isMobile && currentView === "listWeek";
   const currentDateMs = currentDate.getTime();
 
   useEffect(() => {
     if (!isListView || !calendarRef.current) {
-      setListEvents([]);
+      setListEvents(EMPTY_LIST);
       return;
     }
 
@@ -240,6 +269,9 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
       extendedProps: e.extendedProps ?? {},
     }));
     setListEvents(parsed);
+    // EMPTY_LIST is a stable ref-created sentinel — listing it here would
+    // never re-fire the effect, so it's intentionally omitted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isListView, currentDateMs, visibleCalendarUrls, eventsLoadedCounter]);
 
   // Mobile navigation

@@ -1,4 +1,5 @@
 import { fetchAPI } from "@/features/api/fetchApi";
+
 import type { MailboxSyncResult } from "./types";
 
 export async function fetchMailboxes(): Promise<MailboxSyncResult> {

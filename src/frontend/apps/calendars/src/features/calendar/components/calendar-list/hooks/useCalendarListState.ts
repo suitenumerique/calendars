@@ -3,7 +3,10 @@
  * Manages state and handlers for the CalendarList component.
  */
 
-import { useState, useCallback } from "react";
+import {
+  useState,
+  useCallback
+} from "react";
 
 import type {
   CalDavCalendar,

@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+
 import type { FloatingActionButtonProps } from "../types";
 
 export const FloatingActionButton = ({ onClick }: FloatingActionButtonProps) => {

@@ -2,11 +2,14 @@ import { useTranslation } from "react-i18next";
 import {
   Button,
   Input,
-  Switch,
+  Switch
 } from "@gouvfr-lasuite/cunningham-react";
+import { ScopeEditor } from "./ScopeEditor";
+import { Retry } from "@gouvfr-lasuite/ui-kit/icons";
+
 
 import type { ChannelScopeValue } from "../types";
-import { ScopeEditor } from "./ScopeEditor";
+
 
 type ChannelFormProps = {
   name: string;
@@ -85,7 +88,7 @@ export const ChannelForm = ({
             onClick={onRegenerate}
             disabled={disabled}
             icon={
-              <span className="material-icons">refresh</span>
+              <Retry />
             }
           >
             {t("integrations.regenerate.button")}

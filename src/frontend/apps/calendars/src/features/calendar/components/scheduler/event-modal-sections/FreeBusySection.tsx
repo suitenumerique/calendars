@@ -1,14 +1,22 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { IcsAttendee } from "ts-ics";
 import { useCalendarContext } from "../../../contexts/CalendarContext";
 import { useFreeBusy } from "../hooks/useFreeBusy";
 import { FreeBusyTimeline } from "../FreeBusyTimeline";
 import { SectionRow } from "./SectionRow";
+import { EventAvailableSvg } from "@/features/ui/icons/inline";
 import {
   formatDateTimeLocal,
-  parseDateTimeLocal,
+  parseDateTimeLocal
 } from "../utils/dateFormatters";
+
+
+import type { IcsAttendee } from "ts-ics";
+
+
+
+
+
 
 interface FreeBusySectionProps {
   attendees: IcsAttendee[];
@@ -77,7 +85,7 @@ export const FreeBusySection = ({
 
   return (
     <SectionRow
-      icon="event_available"
+      icon={<EventAvailableSvg />}
       label={t("scheduling.findATime")}
       alwaysOpen={alwaysOpen}
       iconAlign="flex-start"

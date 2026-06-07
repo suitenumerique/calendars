@@ -2,14 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useTranslation } from "react-i18next";
-
 import { logout } from "@/features/auth/Auth";
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";
 import {
   HeaderIcon,
-  HeaderRight,
+  HeaderRight
 } from "@/features/layouts/components/header/Header";
 import { GenericDisclaimer } from "@/features/ui/components/generic-disclaimer/GenericDisclaimer";
+
+
+
+
+
+
+
 
 const NoAccessPage = () => {
   const { t } = useTranslation();

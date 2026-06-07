@@ -1,17 +1,31 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  useNavigate
+} from "@tanstack/react-router";
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
 import { useEffect } from "react";
-
 import { useAuth } from "@/features/auth/Auth";
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";
 import {
   HeaderIcon,
-  HeaderRight,
+  HeaderRight
 } from "@/features/layouts/components/header/Header";
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
 import { ResourceList } from "@/features/resources/components/ResourceList";
 import { useResourcePrincipals } from "@/features/resources/api/useResourcePrincipals";
-import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
+import {
+  FeatureFlag,
+  useFeatureFlag
+} from "@/hooks/useFeatureFlag";
+
+
+
+
+
+
+
+
+
 
 const ResourcesPage = () => {
   const { user } = useAuth();

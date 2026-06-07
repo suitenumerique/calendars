@@ -3,24 +3,42 @@
  * Wraps the UI Kit ShareModal for managing calendar sharing via CalDAV.
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef
+} from "react";
 import { useTranslation } from "react-i18next";
 import { ShareModal } from "@gouvfr-lasuite/ui-kit";
-import { Alert, VariantType } from "@gouvfr-lasuite/cunningham-react";
-
+import {
+  Alert,
+  VariantType
+} from "@gouvfr-lasuite/cunningham-react";
 import { useCalendarContext } from "../../contexts";
 import { useAuth } from "../../../auth/Auth";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "../../../ui/components/toaster/Toaster";
+import { fetchAPI } from "@/features/api/fetchApi";
+import { Info } from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
+
+
+
+
+
 import type {
   CalDavCalendar,
   CalDavSharee,
   SharePrivilege,
 } from "../../services/dav/types/caldav-service";
-import { fetchAPI } from "@/features/api/fetchApi";
+
 
 interface CalendarShareModalProps {
   isOpen: boolean;
@@ -413,7 +431,7 @@ export const CalendarShareModal = ({
           <Alert
             className="app__alert--small"
             type={VariantType.INFO}
-            icon={<span className="material-icons">info</span>}
+            icon={<Info />}
           >
             {isMailboxAdmin
               ? t("calendar.shareCalendar.mailboxInfoAdmin", { email: mailboxData?.email })

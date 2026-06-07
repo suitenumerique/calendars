@@ -119,5 +119,14 @@ export function buildFreeBusyRequestIcs(request: FreeBusyRequest): string {
     freeBusy: [freeBusy],
   }
 
-  return generateIcsCalendar(fbCalendar)
+  // ts-ics serializes mailto URIs with an uppercase scheme
+  // (``ORGANIZER:MAILTO:user@x``). sabre's Schedule plugin then string-
+  // matches the request's organizer against the principal's
+  // ``calendar-user-address-set``, which we publish as lowercase
+  // ``mailto:`` — so any uppercase variant gets rejected with HTTP 403
+  // "The organizer in the request did not match …". RFC 3986 §3.1 makes
+  // URI schemes case-insensitive, so lowering ``MAILTO:`` to ``mailto:``
+  // here changes only the string sabre compares against, not the
+  // semantics.
+  return generateIcsCalendar(fbCalendar).replace(/MAILTO:/g, 'mailto:')
 }

@@ -1,14 +1,30 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
+import {
+  Button,
+  useModal
+} from "@gouvfr-lasuite/cunningham-react";
 import { useNavigate } from "@tanstack/react-router";
-
-import type { Channel } from "../types";
 import { useChannels } from "../api/useChannels";
 import { ChannelCard } from "./ChannelCard";
 import { ChannelModal } from "./ChannelModal";
 import { DeleteChannelModal } from "./DeleteChannelModal";
+import {
+  ArrowLeft,
+  Plus
+} from "@gouvfr-lasuite/ui-kit/icons";
 
+
+
+
+import type { Channel } from "../types";
+
+
+
+
+
+
+import { Hourglass, Puzzle } from "@gouvfr-lasuite/ui-kit/icons";
 export const ChannelList = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -28,9 +44,7 @@ export const ChannelList = () => {
             color="neutral"
             size="small"
             icon={
-              <span className="material-icons">
-                arrow_back
-              </span>
+              <ArrowLeft />
             }
             onClick={() => void navigate({ to: "/" })}
             aria-label={t("app_title")}
@@ -41,7 +55,7 @@ export const ChannelList = () => {
           color="brand"
           onClick={createModal.open}
           icon={
-            <span className="material-icons">add</span>
+            <Plus />
           }
         >
           {t("integrations.create.button")}
@@ -54,16 +68,12 @@ export const ChannelList = () => {
 
       {isLoading ? (
         <div className="channel-list__loading">
-          <span className="material-icons channel-list__spinner">
-            hourglass_empty
-          </span>
+          <Hourglass />
           <p>{t("integrations.loading")}</p>
         </div>
       ) : !channels || channels.length === 0 ? (
         <div className="channel-list__empty">
-          <span className="material-icons">
-            integration_instructions
-          </span>
+          <Puzzle />
           <p>{t("integrations.empty")}</p>
         </div>
       ) : (

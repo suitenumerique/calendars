@@ -1,9 +1,11 @@
+import type { ReactNode } from "react";
 import { SectionPill } from "./SectionPill";
+
 import type { EventFormSectionId } from "../types";
 
 interface PillConfig {
   id: EventFormSectionId;
-  icon: string;
+  icon: ReactNode;
   label: string;
 }
 

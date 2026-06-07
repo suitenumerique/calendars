@@ -1,6 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { Input } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
+import { Clock } from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
 
 interface DateTimeSectionProps {
   startDateTime: string;
@@ -24,7 +28,7 @@ export const DateTimeSection = ({
   return (
     <div>
       <SectionRow
-        icon="access_time"
+        icon={<Clock />}
         label={t("calendar.event.sections.addDateTime")}
         isEmpty={!startDateTime || !endDateTime}
         alwaysOpen={true}

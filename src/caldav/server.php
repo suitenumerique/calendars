@@ -50,6 +50,28 @@ if (($_SERVER['REQUEST_URI'] ?? '') === '/caldav/healthz') {
 // This ensures sabre/dav generates URLs with the correct proxy path
 $baseUri = getenv('CALDAV_BASE_URI') ?: '/';
 
+// Short-circuit any request whose path is outside the configured base
+// URI with a 404. Without this guard the request progresses all the
+// way to ``Sabre\HTTP\Request::getPath()``, which throws a generic
+// ``LogicException`` ("Requested uri X is out of base uri Y") that
+// becomes a 500 response — leaking the boundary and noising up logs
+// with stack traces. A 404 is the right semantic answer.
+$requestPath = $_SERVER['REQUEST_URI'] ?? '/';
+$queryPos = strpos($requestPath, '?');
+if ($queryPos !== false) {
+    $requestPath = substr($requestPath, 0, $queryPos);
+}
+if ($baseUri !== '/' && strpos($requestPath, $baseUri) !== 0) {
+    http_response_code(404);
+    header('Content-Type: application/xml; charset=utf-8');
+    echo '<?xml version="1.0" encoding="utf-8"?>'
+        . '<d:error xmlns:d="DAV:" xmlns:s="http://sabredav.org/ns">'
+        . '<s:exception>NotFound</s:exception>'
+        . '<s:message>Not found</s:message>'
+        . '</d:error>';
+    exit;
+}
+
 // Database connection from environment variables
 $dbHost = getenv('PGHOST') ?: 'postgresql';
 $dbPort = getenv('PGPORT') ?: '5432';

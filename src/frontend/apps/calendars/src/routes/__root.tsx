@@ -1,4 +1,7 @@
-import { createRootRoute, Outlet } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  Outlet
+} from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { useEffect } from "react";
 import {
@@ -6,27 +9,47 @@ import {
   Query,
   QueryCache,
   QueryClient,
-  QueryClientProvider,
+  QueryClientProvider
 } from "@tanstack/react-query";
 import { CunninghamProvider } from "@gouvfr-lasuite/ui-kit";
 import { useTranslation } from "react-i18next";
-
-import { AppContextProvider, useAppContext } from "@/features/app/AppContext";
+import {
+  AppContextProvider,
+  useAppContext
+} from "@/features/app/AppContext";
 import { AnalyticsProvider } from "@/features/analytics/AnalyticsProvider";
 import { ConfigProvider } from "@/features/config/ConfigProvider";
 import { LeftPanelProvider } from "@/features/layouts/contexts/LeftPanelContext";
-import { APIError, errorToString } from "@/features/api/APIError";
+import {
+  APIError,
+  errorToString
+} from "@/features/api/APIError";
 import { capitalizeRegion } from "@/features/i18n/utils";
 import {
   removeQuotes,
-  useCunninghamTheme,
+  useCunninghamTheme
 } from "@/features/ui/cunningham/useCunninghamTheme";
 import { FeedbackFooterMobile } from "@/features/feedback/Feedback";
 import { useDynamicFavicon } from "@/features/ui/hooks/useDynamicFavicon";
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "@/features/ui/components/toaster/Toaster";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const onError = (error: Error, query: unknown) => {
   if ((query as Query).meta?.noGlobalError) {

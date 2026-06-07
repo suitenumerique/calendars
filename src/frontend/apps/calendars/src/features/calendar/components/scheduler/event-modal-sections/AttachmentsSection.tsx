@@ -1,8 +1,15 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import type { AttachmentMeta } from "../types";
 import { SectionRow } from "./SectionRow";
+import { XMark } from "@gouvfr-lasuite/ui-kit/icons";
+import { AttachFileSvg } from "@/features/ui/icons/inline";
+
+
+
+import type { AttachmentMeta } from "../types";
+
+
 
 interface AttachmentsSectionProps {
   attachments: AttachmentMeta[];
@@ -56,7 +63,7 @@ export const AttachmentsSection = ({
 
   return (
     <SectionRow
-      icon="attach_file"
+      icon={<AttachFileSvg />}
       label={t("calendar.event.sections.addAttachment")}
       summary={summary}
       isEmpty={attachments.length === 0}
@@ -83,7 +90,7 @@ export const AttachmentsSection = ({
               onClick={() => handleRemove(attachment.id)}
               aria-label={t("common.cancel")}
             >
-              <span className="material-icons">close</span>
+              <XMark />
             </button>
           </div>
         ))}

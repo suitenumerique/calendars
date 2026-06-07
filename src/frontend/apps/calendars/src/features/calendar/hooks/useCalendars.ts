@@ -2,8 +2,11 @@
  * React Query hooks for calendar operations.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-
+import {
+  useMutation,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import {
   Channel,
   ChannelError,
@@ -13,8 +16,9 @@ import {
   GetICalFeedResult,
   startImportTask,
   pollImportTask,
-  ImportEventsResult,
+  ImportEventsResult
 } from "../api";
+
 
 /**
  * Result type for useICalFeedChannel hook.

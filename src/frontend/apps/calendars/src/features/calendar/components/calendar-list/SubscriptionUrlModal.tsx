@@ -3,21 +3,31 @@
  * Displays the subscription URL for iCal export with copy and regenerate options.
  */
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState
+} from "react";
 import { useTranslation } from "react-i18next";
+import {
+  ErrorFilled,
+  Warning
+} from "@gouvfr-lasuite/ui-kit/icons";
 import {
   Alert,
   Button,
   Modal,
   ModalSize,
-  VariantType,
+  VariantType
 } from "@gouvfr-lasuite/cunningham-react";
-
 import {
   useCreateICalFeedChannel,
   useDeleteICalFeedChannel,
-  useICalFeedChannel,
+  useICalFeedChannel
 } from "../../hooks/useCalendars";
+
+
+
+
 
 interface SubscriptionUrlModalProps {
   isOpen: boolean;
@@ -151,7 +161,7 @@ export const SubscriptionUrlModal = ({
             <Alert
               className="app__alert--small"
               type={VariantType.ERROR}
-              icon={<span className="material-icons">error</span>}
+              icon={<ErrorFilled />}
             >
               {getErrorMessage()}
             </Alert>
@@ -179,7 +189,7 @@ export const SubscriptionUrlModal = ({
               <Alert
                 className="app__alert--small"
                 type={VariantType.WARNING}
-                icon={<span className="material-icons">warning</span>}
+                icon={<Warning />}
               >
                 {t("calendar.subscription.warning")}
               </Alert>

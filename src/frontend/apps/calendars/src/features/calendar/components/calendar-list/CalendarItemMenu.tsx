@@ -5,10 +5,27 @@
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { DropdownMenu, DropdownMenuOption } from "@gouvfr-lasuite/ui-kit";
+import {
+  DropdownMenu,
+  DropdownMenuOption
+} from "@gouvfr-lasuite/ui-kit";
+import { Button } from "@gouvfr-lasuite/cunningham-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Edit,
+  Link as LinkIcon,
+  MoreVertical,
+  Trash,
+  Upload
+} from "@gouvfr-lasuite/ui-kit/icons";
+import { PersonAddSvg } from "@/features/ui/icons/inline";
+
+
 
 import type { CalendarItemMenuProps } from "./types";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+
+
 
 export const CalendarItemMenu = ({
   isOpen,
@@ -27,7 +44,7 @@ export const CalendarItemMenu = ({
     const items: DropdownMenuOption[] = [
       {
         label: t("calendar.list.edit"),
-        icon: <span className="material-icons">edit</span>,
+        icon: <Edit />,
         callback: onEdit,
       },
     ];
@@ -35,7 +52,7 @@ export const CalendarItemMenu = ({
     if (onShare) {
       items.push({
         label: t("calendar.list.share"),
-        icon: <span className="material-icons">person_add</span>,
+        icon: <PersonAddSvg />,
         callback: onShare,
       });
     }
@@ -43,7 +60,7 @@ export const CalendarItemMenu = ({
     if (onImport) {
       items.push({
         label: t("calendar.list.import"),
-        icon: <span className="material-icons">upload_file</span>,
+        icon: <Upload />,
         callback: onImport,
       });
     }
@@ -51,7 +68,7 @@ export const CalendarItemMenu = ({
     if (onSubscription) {
       items.push({
         label: t("calendar.list.subscription"),
-        icon: <span className="material-icons">link</span>,
+        icon: <LinkIcon />,
         callback: onSubscription,
       });
     }
@@ -59,7 +76,7 @@ export const CalendarItemMenu = ({
     if (onMoveUp) {
       items.push({
         label: t("calendar.list.moveUp"),
-        icon: <span className="material-icons">arrow_upward</span>,
+        icon: <ArrowUp />,
         callback: onMoveUp,
       });
     }
@@ -67,14 +84,14 @@ export const CalendarItemMenu = ({
     if (onMoveDown) {
       items.push({
         label: t("calendar.list.moveDown"),
-        icon: <span className="material-icons">arrow_downward</span>,
+        icon: <ArrowDown />,
         callback: onMoveDown,
       });
     }
 
     items.push({
       label: t("calendar.list.delete"),
-      icon: <span className="material-icons">delete</span>,
+      icon: <Trash />,
       callback: onDelete,
     });
 
@@ -90,7 +107,7 @@ export const CalendarItemMenu = ({
         variant="tertiary"
         size="small"
         onClick={() => onOpenChange(!isOpen)}
-        icon={<span className="material-icons">more_vert</span>}
+        icon={<MoreVertical />}
       />
     </DropdownMenu>
   );

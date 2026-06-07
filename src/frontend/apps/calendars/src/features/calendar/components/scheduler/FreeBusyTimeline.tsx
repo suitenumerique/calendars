@@ -1,8 +1,27 @@
-import { useEffect, useRef, useMemo, useCallback } from "react";
+import {
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback
+} from "react";
 import { useTranslation } from "react-i18next";
-import { createCalendar, destroyCalendar, ResourceTimeline } from "@event-calendar/core";
+import {
+  createCalendar,
+  destroyCalendar,
+  ResourceTimeline
+} from "@event-calendar/core";
+import {
+  ChevronLeft,
+  ChevronRight
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
 import type { FreeBusyResponse } from "../../services/dav/types/caldav-service";
 
+
+
+import { Retry } from "@gouvfr-lasuite/ui-kit/icons";
 interface FreeBusyTimelineProps {
   date: Date;
   attendees: FreeBusyResponse[];
@@ -229,7 +248,7 @@ export const FreeBusyTimeline = ({
           onClick={handlePrev}
           aria-label={t("scheduling.previousDay")}
         >
-          <span className="material-icons">chevron_left</span>
+          <ChevronLeft />
         </button>
         <span className="freebusy-timeline__date">{dateStr}</span>
         <button
@@ -238,13 +257,11 @@ export const FreeBusyTimeline = ({
           onClick={handleNext}
           aria-label={t("scheduling.nextDay")}
         >
-          <span className="material-icons">chevron_right</span>
+          <ChevronRight />
         </button>
         {isLoading && (
           <span className="freebusy-timeline__loading">
-            <span className="material-icons freebusy-timeline__spinner">
-              sync
-            </span>
+            <Retry />
           </span>
         )}
         {!isLoading && eventOnThisDay && (

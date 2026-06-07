@@ -1,8 +1,9 @@
 import {
   slotsToVCalendar,
   vCalendarToSlots,
-  InvalidAvailabilityValueError,
+  InvalidAvailabilityValueError
 } from "../availability-ics";
+
 import type { AvailabilitySlots } from "../types";
 
 describe("availability-ics", () => {

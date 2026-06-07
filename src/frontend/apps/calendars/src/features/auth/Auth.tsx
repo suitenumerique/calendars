@@ -11,6 +11,10 @@ import { baseApiUrl } from "../api/utils";
 import { APIError } from "../api/APIError";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
 
+
+
+
+
 export const logout = () => {
   window.location.replace(new URL("logout/", baseApiUrl()).href);
 };

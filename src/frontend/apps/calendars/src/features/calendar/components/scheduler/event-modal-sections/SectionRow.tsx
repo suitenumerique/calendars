@@ -1,7 +1,12 @@
 import { type ReactNode } from "react";
+import {
+  ChevronDown,
+  ChevronUp
+} from "@gouvfr-lasuite/ui-kit/icons";
+
 
 interface SectionRowProps {
-  icon: string;
+  icon: ReactNode;
   label: string;
   summary?: string;
   isEmpty?: boolean;
@@ -31,9 +36,7 @@ export const SectionRow = ({
   if (alwaysOpen) {
     return (
       <div className={`section-row section-row--always-open ${iconAlignClass}`}>
-        <div className="section-row__icon">
-          <span className="material-icons">{icon}</span>
-        </div>
+        <div className="section-row__icon">{icon}</div>
         <div className="section-row__body">{children}</div>
       </div>
     );
@@ -62,9 +65,7 @@ export const SectionRow = ({
         tabIndex={isClickable ? 0 : undefined}
         aria-expanded={isClickable ? isExpanded : undefined}
       >
-        <div className="section-row__icon">
-          <span className="material-icons">{icon}</span>
-        </div>
+        <div className="section-row__icon">{icon}</div>
         <div className="section-row__label">
           {isEmpty ? label : summary || label}
         </div>
@@ -73,9 +74,7 @@ export const SectionRow = ({
         )}
         {isClickable && (
           <div className="section-row__chevron">
-            <span className="material-icons">
-              {isExpanded ? "expand_less" : "expand_more"}
-            </span>
+            {isExpanded ? <ChevronUp /> : <ChevronDown />}
           </div>
         )}
       </div>

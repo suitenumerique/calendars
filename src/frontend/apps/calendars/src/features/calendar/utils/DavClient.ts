@@ -25,6 +25,7 @@
 import { redirectToLogin } from "@/features/api/fetchApi";
 import { getOrigin } from "@/features/api/utils";
 
+
 export const caldavServerUrl = `${getOrigin()}/caldav/`;
 
 const SHARED_HEADERS: Readonly<Record<string, string>> = {

@@ -4,7 +4,12 @@
  */
 
 import { useTranslation } from "react-i18next";
-import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
+import {
+  Button,
+  Modal,
+  ModalSize
+} from "@gouvfr-lasuite/cunningham-react";
+
 
 import type { DeleteConfirmModalProps } from "./types";
 

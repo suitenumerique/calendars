@@ -1,11 +1,27 @@
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import type { IcsOrganizer } from "ts-ics";
 import { SectionRow } from "./SectionRow";
 import {
+  Checkmark,
+  QuestionMark,
+  XMark
+} from "@gouvfr-lasuite/ui-kit/icons";
+import {
+  EventBusySvg,
+  EventAvailableSvg
+} from "@/features/ui/icons/inline";
+import {
   getBadgeType,
-  getPartstatIcon,
+  getPartstatIcon
 } from "../partstatBadge";
+
+
+import type { IcsOrganizer } from "ts-ics";
+
+
+
+
+
 
 type Partstat = "ACCEPTED" | "TENTATIVE" | "DECLINED" | "NEEDS-ACTION";
 
@@ -45,7 +61,7 @@ export const InvitationResponseSection = ({
 
   return (
     <SectionRow
-      icon="event_available"
+      icon={<EventAvailableSvg />}
       label={t("calendar.event.invitation")}
       alwaysOpen
       iconAlign="flex-start"
@@ -59,7 +75,7 @@ export const InvitationResponseSection = ({
 
         {isCancelled ? (
           <div className="invitation-response__cancelled">
-            <span className="material-icons">event_busy</span>
+            <EventBusySvg />
             {t("calendar.event.cancelledNotice")}
           </div>
         ) : (
@@ -70,7 +86,7 @@ export const InvitationResponseSection = ({
                 color={currentStatus === "ACCEPTED" ? "success" : "neutral"}
                 onClick={() => onRespond("ACCEPTED")}
                 disabled={isLoading || currentStatus === "ACCEPTED"}
-                icon={<span className="material-icons">check</span>}
+                icon={<Checkmark />}
               >
                 {t("calendar.event.accept")}
               </Button>
@@ -79,7 +95,7 @@ export const InvitationResponseSection = ({
                 color={currentStatus === "TENTATIVE" ? "warning" : "neutral"}
                 onClick={() => onRespond("TENTATIVE")}
                 disabled={isLoading || currentStatus === "TENTATIVE"}
-                icon={<span className="material-icons">help_outline</span>}
+                icon={<QuestionMark />}
               >
                 {t("calendar.event.maybe")}
               </Button>
@@ -88,7 +104,7 @@ export const InvitationResponseSection = ({
                 color={currentStatus === "DECLINED" ? "error" : "neutral"}
                 onClick={() => onRespond("DECLINED")}
                 disabled={isLoading || currentStatus === "DECLINED"}
-                icon={<span className="material-icons">close</span>}
+                icon={<XMark />}
               >
                 {t("calendar.event.decline")}
               </Button>
@@ -97,7 +113,7 @@ export const InvitationResponseSection = ({
             <div
               className={`invitation-response__status invitation-response__status--${badgeType}`}
             >
-              <span className="material-icons">{partstatIcon}</span>
+              {partstatIcon}
               <span>
                 {t("calendar.event.yourResponse")}:{" "}
                 <strong>{t(statusLabelKey(currentStatus))}</strong>

@@ -3,18 +3,36 @@ import {
   useCallback,
   useRef,
   useEffect,
-  type KeyboardEvent,
+  type KeyboardEvent
 } from "react";
 import { Input } from "@gouvfr-lasuite/cunningham-react";
 import { Badge } from "@gouvfr-lasuite/ui-kit";
 import { useTranslation } from "react-i18next";
-import type { IcsAttendee, IcsOrganizer } from "ts-ics";
 import {
   useUserSearch,
-  type UserSearchResult,
+  type UserSearchResult
 } from "@/features/users/hooks/useUserSearch";
-import { filterSuggestions, isValidEmail } from "./attendees-utils";
-import { getBadgeType, getPartstatIcon } from "./partstatBadge";
+import {
+  filterSuggestions,
+  isValidEmail
+} from "./attendees-utils";
+import {
+  getBadgeType,
+  getPartstatIcon
+} from "./partstatBadge";
+import {
+  CircleCheck,
+  XMark
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
+
+import type { IcsAttendee, IcsOrganizer } from "ts-ics";
+
+
+
+
 
 interface AttendeesInputProps {
   attendees: IcsAttendee[];
@@ -226,7 +244,7 @@ export function AttendeesInput({
       <div className="attendees-input__pills">
         {organizer && attendees.length > 0 && (
           <Badge type={"success"} className="attendees-input__pill">
-            <span className="material-icons">check_circle</span>
+            <CircleCheck />
             {organizer.email}
             <span className="attendees-input__organizer-label">
               ({t("calendar.attendees.organizer")})
@@ -239,9 +257,7 @@ export function AttendeesInput({
             type={getBadgeType(attendee.partstat)}
             className="attendees-input__pill"
           >
-            <span className="material-icons">
-              {getPartstatIcon(attendee.partstat)}
-            </span>
+            {getPartstatIcon(attendee.partstat)}
             {attendee.email}
             <button
               type="button"
@@ -249,7 +265,7 @@ export function AttendeesInput({
               onClick={() => removeAttendee(attendee.email)}
               aria-label={t("calendar.attendees.remove")}
             >
-              <span className="material-icons">close</span>
+              <XMark />
             </button>
           </Badge>
         ))}

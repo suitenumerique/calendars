@@ -1,12 +1,15 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-
+import { XMark } from "@gouvfr-lasuite/ui-kit/icons";
 import {
   DAYS_OF_WEEK,
   type AvailabilitySlot,
   type AvailabilityWhen,
-  type DayOfWeek,
+  type DayOfWeek
 } from "../types";
+
+
+
 
 interface AvailabilityRowProps {
   slot: AvailabilitySlot;
@@ -95,7 +98,7 @@ export const AvailabilityRow = ({
         onClick={() => onDelete(slot.id)}
         aria-label={t("settings.workingHours.removeAvailability")}
       >
-        <span className="material-icons">close</span>
+        <XMark />
       </button>
     </div>
   );

@@ -1,4 +1,10 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  Key,
+  PlugOn
+} from "@gouvfr-lasuite/ui-kit/icons";
+
 
 export type ChannelPickerType = "caldav" | "webhook";
 
@@ -6,7 +12,7 @@ type ChannelTypeMetadata = {
   type: ChannelPickerType;
   titleKey: string;
   descriptionKey: string;
-  icon: string;
+  icon: ReactNode;
   disabled?: boolean;
 };
 
@@ -18,13 +24,13 @@ const CHANNEL_TYPE_METADATA: Record<
     type: "caldav",
     titleKey: "integrations.types.caldav.title",
     descriptionKey: "integrations.types.caldav.description",
-    icon: "key",
+    icon: <Key />,
   },
   webhook: {
     type: "webhook",
     titleKey: "integrations.types.webhook.title",
     descriptionKey: "integrations.types.webhook.description",
-    icon: "webhook",
+    icon: <PlugOn />,
     disabled: true,
   },
 };
@@ -32,7 +38,7 @@ const CHANNEL_TYPE_METADATA: Record<
 type ChannelTypeCardProps = {
   title: string;
   description: string;
-  icon: string;
+  icon: ReactNode;
   disabled?: boolean;
   comingSoonLabel: string;
   onClick: () => void;
@@ -59,9 +65,7 @@ const ChannelTypeCard = ({
         {comingSoonLabel}
       </span>
     )}
-    <div className="channel-type-card__icon">
-      <span className="material-icons">{icon}</span>
-    </div>
+    <div className="channel-type-card__icon">{icon}</div>
     <div className="channel-type-card__content">
       <h3 className="channel-type-card__title">{title}</h3>
       <p className="channel-type-card__description">

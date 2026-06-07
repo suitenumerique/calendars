@@ -1,11 +1,17 @@
 import { useTranslation } from "react-i18next";
-import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
-
+import {
+  Button,
+  Modal,
+  ModalSize
+} from "@gouvfr-lasuite/cunningham-react";
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "@/features/ui/components/toaster/Toaster";
 import { useDeleteResource } from "../api/useResources";
+
+
+
 
 type DeleteResourceModalProps = {
   isOpen: boolean;

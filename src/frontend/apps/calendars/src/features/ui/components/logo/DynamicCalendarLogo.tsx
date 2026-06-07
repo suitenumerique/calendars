@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState
+} from "react";
 import { useTranslation } from "react-i18next";
+
 
 interface DynamicCalendarLogoProps {
   variant?: "header" | "icon";

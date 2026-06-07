@@ -2,6 +2,8 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/Auth";
 import { useConfig } from "../config/ConfigProvider";
 
+
+
 /**
  * Hook that opens the feedback widget
  */

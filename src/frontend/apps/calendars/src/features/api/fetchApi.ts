@@ -1,5 +1,9 @@
-import { baseApiUrl, isJson } from "./utils";
+import {
+  baseApiUrl,
+  isJson
+} from "./utils";
 import { APIError } from "./APIError";
+
 
 /**
  * Retrieves the CSRF token from the document's cookies.

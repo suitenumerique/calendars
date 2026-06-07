@@ -1,32 +1,44 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Button,
   Modal,
-  ModalSize,
+  ModalSize
 } from "@gouvfr-lasuite/cunningham-react";
-
+import { useAuth } from "@/features/auth/Auth";
+import { caldavServerUrl } from "@/features/calendar/utils/DavClient";
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "@/features/ui/components/toaster/Toaster";
 import {
   useCreateChannel,
   useRegenerateToken,
-  useUpdateChannel,
+  useUpdateChannel
 } from "../api/useChannels";
+import { ChannelForm } from "./ChannelForm";
+import {
+  ChannelTypePicker,
+  getChannelTypeTitleKey,
+  type ChannelPickerType
+} from "./ChannelTypePicker";
+import { TokenRevealModal } from "./TokenRevealModal";
+
+
+
+
+
+
 import type {
   Channel,
   ChannelScopeValue,
   ChannelType,
 } from "../types";
-import { ChannelForm } from "./ChannelForm";
-import {
-  ChannelTypePicker,
-  getChannelTypeTitleKey,
-  type ChannelPickerType,
-} from "./ChannelTypePicker";
-import { TokenRevealModal } from "./TokenRevealModal";
+
+
 
 type ChannelModalProps = {
   isOpen: boolean;
@@ -46,6 +58,7 @@ export const ChannelModal = ({
   onClose,
 }: ChannelModalProps) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const isEdit = channel !== undefined;
 
   const createChannel = useCreateChannel();
@@ -170,18 +183,37 @@ export const ChannelModal = ({
   };
 
   if (revealedPassword) {
-    const tokenTitleKey = isEdit
-      ? "integrations.regenerate.tokenTitle"
-      : "integrations.create.tokenTitle";
+    // For CalDAV channels we know how the credentials get consumed
+    // (URL + email + password Basic Auth), so we mirror the dialog
+    // title to "CalDAV credentials" and surface every piece the user
+    // needs in one place. For other channel types (future webhooks
+    // etc.) we keep the generic "Integration token" framing.
+    const channelType = isEdit ? channel.type : selectedType;
+    const isCaldav = channelType === "caldav";
+    const tokenTitleKey = isCaldav
+      ? "integrations.types.caldav.title"
+      : isEdit
+        ? "integrations.regenerate.tokenTitle"
+        : "integrations.create.tokenTitle";
     const tokenWarningKey = isEdit
       ? "integrations.regenerate.tokenWarning"
       : "integrations.create.tokenWarning";
+    // Reuse the exact base URL the in-app CalDAV client targets
+    // (``getOrigin()`` honours NEXT_PUBLIC_API_ORIGIN, so this points at
+    // the backend that actually serves /caldav, not the SPA origin).
+    // Using ``window.location.origin`` here would hand external clients
+    // the frontend host, which only serves the SPA in split-origin
+    // deployments (and in local dev).
+    const caldavUrl = isCaldav ? caldavServerUrl : undefined;
+    const caldavUsername = isCaldav ? user?.email : undefined;
     return (
       <TokenRevealModal
         isOpen={isOpen}
         title={t(tokenTitleKey)}
         warning={t(tokenWarningKey)}
         token={revealedPassword}
+        caldavUrl={caldavUrl}
+        caldavUsername={caldavUsername}
         onClose={onClose}
       />
     );

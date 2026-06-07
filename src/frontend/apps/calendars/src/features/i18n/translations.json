@@ -50,7 +50,8 @@
           "addAvailability": "Add availability",
           "removeAvailability": "Remove",
           "save": "Save",
-          "saved": "Working hours saved"
+          "saved": "Working hours saved",
+          "invalidRange": "End time must be after start time"
         }
       },
       "api": {
@@ -162,6 +163,7 @@
           "descriptionPlaceholder": "Description",
           "start": "Start",
           "end": "End",
+          "endBeforeStart": "End time must be after start time",
           "allDay": "All day",
           "organizer": "Organizer",
           "attendees": "Attendees",
@@ -293,7 +295,8 @@
         },
         "miniCalendar": {
           "previousMonth": "Previous month",
-          "nextMonth": "Next month"
+          "nextMonth": "Next month",
+          "weekAbbrev": "wk"
         },
         "recurrence": {
           "label": "Repeat",
@@ -626,6 +629,11 @@
         "token": {
           "copy": "Copy token",
           "copied": "Token copied to clipboard."
+        },
+        "caldav": {
+          "serverUrl": "Server URL",
+          "username": "Username",
+          "password": "Password"
         }
       },
       "scheduling": {
@@ -728,7 +736,8 @@
           "addAvailability": "Ajouter une disponibilité",
           "removeAvailability": "Supprimer",
           "save": "Enregistrer",
-          "saved": "Heures de travail enregistrées"
+          "saved": "Heures de travail enregistrées",
+          "invalidRange": "L'heure de fin doit être après l'heure de début"
         }
       },
       "api": {
@@ -1104,6 +1113,7 @@
           "descriptionPlaceholder": "Description",
           "start": "Début",
           "end": "Fin",
+          "endBeforeStart": "L'heure de fin doit être après l'heure de début",
           "allDay": "Toute la journée",
           "organizer": "Organisateur",
           "attendees": "Participants",
@@ -1235,7 +1245,8 @@
         },
         "miniCalendar": {
           "previousMonth": "Mois précédent",
-          "nextMonth": "Mois suivant"
+          "nextMonth": "Mois suivant",
+          "weekAbbrev": "sem."
         },
         "recurrence": {
           "label": "Répéter",
@@ -1568,6 +1579,11 @@
         "token": {
           "copy": "Copier le jeton",
           "copied": "Jeton copié dans le presse-papiers."
+        },
+        "caldav": {
+          "serverUrl": "URL du serveur",
+          "username": "Identifiant",
+          "password": "Mot de passe"
         }
       },
       "scheduling": {
@@ -1665,7 +1681,8 @@
           "addAvailability": "Beschikbaarheid toevoegen",
           "removeAvailability": "Verwijderen",
           "save": "Opslaan",
-          "saved": "Werkuren opgeslagen"
+          "saved": "Werkuren opgeslagen",
+          "invalidRange": "Eindtijd moet na starttijd zijn"
         }
       },
       "api": {
@@ -1788,6 +1805,7 @@
           "descriptionPlaceholder": "Beschrijving",
           "start": "Start",
           "end": "Einde",
+          "endBeforeStart": "Eindtijd moet na starttijd zijn",
           "allDay": "Hele dag",
           "organizer": "Organisator",
           "attendees": "Deelnemers",
@@ -1919,7 +1937,8 @@
         },
         "miniCalendar": {
           "previousMonth": "Vorige maand",
-          "nextMonth": "Volgende maand"
+          "nextMonth": "Volgende maand",
+          "weekAbbrev": "wk"
         },
         "recurrence": {
           "label": "Herhalen",
@@ -2252,6 +2271,11 @@
         "token": {
           "copy": "Token kopiëren",
           "copied": "Token gekopieerd naar klembord."
+        },
+        "caldav": {
+          "serverUrl": "Server-URL",
+          "username": "Gebruikersnaam",
+          "password": "Wachtwoord"
         }
       },
       "scheduling": {

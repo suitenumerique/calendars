@@ -1,4 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from "react";
+import { cleanEventForDisplay } from "../utils/eventDisplayRules";
+import {
+  formatDateTimeLocal,
+  formatDateLocal,
+  parseDateTimeLocal,
+  parseDateLocal
+} from "../utils/dateFormatters";
+
 import type {
   IcsEvent,
   IcsAttendee,
@@ -12,13 +25,7 @@ import type {
 import type { EventCalendarAdapter } from "../../../services/dav/EventCalendarAdapter";
 import type { ResourcePrincipal } from "@/features/resources/api/useResourcePrincipals";
 import type { AttachmentMeta, EventFormSectionId } from "../types";
-import { cleanEventForDisplay } from "../utils/eventDisplayRules";
-import {
-  formatDateTimeLocal,
-  formatDateLocal,
-  parseDateTimeLocal,
-  parseDateLocal,
-} from "../utils/dateFormatters";
+
 
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 

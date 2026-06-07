@@ -1,3 +1,11 @@
+import type { ReactNode } from "react";
+import {
+  CircleCheck,
+  Clock,
+  QuestionMark,
+  XMark
+} from "@gouvfr-lasuite/ui-kit/icons";
+
 export type PartstatBadgeType =
   | "accent"
   | "neutral"
@@ -19,15 +27,15 @@ export const getBadgeType = (partstat?: string): PartstatBadgeType => {
   }
 };
 
-export const getPartstatIcon = (partstat?: string): string => {
+export const getPartstatIcon = (partstat?: string): ReactNode => {
   switch (partstat) {
     case "ACCEPTED":
-      return "check_circle";
+      return <CircleCheck />;
     case "DECLINED":
-      return "cancel";
+      return <XMark />;
     case "TENTATIVE":
-      return "help";
+      return <QuestionMark />;
     default:
-      return "schedule";
+      return <Clock />;
   }
 };

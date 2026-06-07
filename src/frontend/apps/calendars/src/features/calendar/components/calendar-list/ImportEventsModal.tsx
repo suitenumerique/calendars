@@ -3,19 +3,34 @@
  * Allows users to import events from an ICS file into a calendar.
  */
 
-import { useRef, useState } from "react";
+import {
+  useRef,
+  useState
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
   Modal,
   ModalSize,
-  VariantType,
+  VariantType
 } from "@gouvfr-lasuite/cunningham-react";
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
-
 import { useImportEvents } from "../../hooks/useCalendars";
+import {
+  CircleCheck,
+  Copy,
+  ErrorFilled,
+  Upload,
+  Warning
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
+
+
 import type { ImportEventsResult } from "../../api";
+
 
 interface ImportEventsModalProps {
   isOpen: boolean;
@@ -117,7 +132,7 @@ export const ImportEventsModal = ({
               color="neutral"
               onClick={() => fileInputRef.current?.click()}
               icon={
-                <span className="material-icons">upload_file</span>
+                <Upload />
               }
             >
               {t("calendar.importEvents.selectFile")}
@@ -134,7 +149,7 @@ export const ImportEventsModal = ({
           <Alert
             className="app__alert--small"
             type={VariantType.ERROR}
-            icon={<span className="material-icons">error</span>}
+            icon={<ErrorFilled />}
           >
             {t("calendar.importEvents.error")}
           </Alert>
@@ -148,19 +163,19 @@ export const ImportEventsModal = ({
             <ul className="import-events-modal__stats">
               {result.imported_count > 0 && (
                 <li className="import-events-modal__stat import-events-modal__stat--success">
-                  <span className="material-icons">check_circle</span>
+                  <CircleCheck />
                   <span><strong>{result.imported_count}</strong> {t("calendar.importEvents.imported")}</span>
                 </li>
               )}
               {result.duplicate_count > 0 && (
                 <li className="import-events-modal__stat import-events-modal__stat--neutral">
-                  <span className="material-icons">content_copy</span>
+                  <Copy />
                   <span><strong>{result.duplicate_count}</strong> {t("calendar.importEvents.duplicates")}</span>
                 </li>
               )}
               {result.skipped_count > 0 && (
                 <li className="import-events-modal__stat import-events-modal__stat--warning">
-                  <span className="material-icons">warning_amber</span>
+                  <Warning />
                   <span><strong>{result.skipped_count}</strong> {t("calendar.importEvents.skipped")}</span>
                 </li>
               )}

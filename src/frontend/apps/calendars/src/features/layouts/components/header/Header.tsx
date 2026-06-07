@@ -3,11 +3,14 @@ import {
   Icon,
   IconType,
   LanguagePicker,
-  useResponsive,
+  useResponsive
 } from "@gouvfr-lasuite/ui-kit";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useAuth } from "@/features/auth/Auth";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "@tanstack/react-router";
 import { fetchAPI } from "@/features/api/fetchApi";
@@ -15,7 +18,21 @@ import { Feedback } from "@/features/feedback/Feedback";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
-import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
+import {
+  FeatureFlag,
+  useFeatureFlag
+} from "@/hooks/useFeatureFlag";
+
+
+
+
+
+
+
+
+
+
+
 
 export const HeaderIcon = () => {
   const navigate = useNavigate();

@@ -3,13 +3,27 @@
  * Replaces the native toolbar with React components using Cunningham design system.
  */
 
-import { useMemo, useState, useCallback } from "react";
-
+import {
+  useMemo,
+  useState,
+  useCallback
+} from "react";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import { DropdownMenu, type DropdownMenuOption } from "@gouvfr-lasuite/ui-kit";
+import {
+  DropdownMenu,
+  type DropdownMenuOption
+} from "@gouvfr-lasuite/ui-kit";
 import { useTranslation } from "react-i18next";
+import {
+  ChevronLeft,
+  ChevronRight
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
 
 import type { SchedulerToolbarProps } from "./types";
+
 
 export const SchedulerToolbar = ({
   calendarRef,
@@ -89,7 +103,7 @@ export const SchedulerToolbar = ({
             color="neutral"
             variant="tertiary"
             onClick={handlePrev}
-            icon={<span className="material-icons">chevron_left</span>}
+            icon={<ChevronLeft />}
             aria-label={t("calendar.navigation.previous")}
           />
 
@@ -97,7 +111,7 @@ export const SchedulerToolbar = ({
             color="neutral"
             variant="tertiary"
             onClick={handleNext}
-            icon={<span className="material-icons">chevron_right</span>}
+            icon={<ChevronRight />}
             aria-label={t("calendar.navigation.next")}
           />
         </div>

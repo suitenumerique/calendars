@@ -1,6 +1,13 @@
 import { Button } from "@gouvfr-lasuite/cunningham-react";
+import {
+  ToastContainer,
+  ToastContentProps,
+  toast
+} from "react-toastify";
+import { XMark } from "@gouvfr-lasuite/ui-kit/icons";
+
 import clsx from "clsx";
-import { ToastContainer, ToastContentProps, toast } from "react-toastify";
+
 
 export const Toaster = () => {
   return <ToastContainer />;
@@ -35,7 +42,7 @@ export const ToasterItem = ({
           onClick={closeToast}
           variant="tertiary"
           size="small"
-          icon={<span className="material-icons">close</span>}
+          icon={<XMark />}
         ></Button>
       )}
     </div>

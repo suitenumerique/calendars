@@ -1,10 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Checkbox } from "@gouvfr-lasuite/cunningham-react";
-
 import {
   CHANNEL_SCOPES,
-  type ChannelScopeValue,
+  type ChannelScopeValue
 } from "../types";
+
+
 
 type ScopeEditorProps = {
   scopes: ChannelScopeValue[];

@@ -1,11 +1,18 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-
+import {
+  Checkmark,
+  Copy
+} from "@gouvfr-lasuite/ui-kit/icons";
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "@/features/ui/components/toaster/Toaster";
+
+
+
+
 
 type TokenRevealBoxProps = {
   token: string;
@@ -36,11 +43,7 @@ export const TokenRevealBox = ({
       <Button
         color="brand"
         size="small"
-        icon={
-          <span className="material-icons">
-            {copied ? "check" : "content_copy"}
-          </span>
-        }
+        icon={copied ? <Checkmark /> : <Copy />}
         onClick={() => void handleCopy()}
         aria-label={t("integrations.token.copy")}
       />

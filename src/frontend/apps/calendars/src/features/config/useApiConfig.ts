@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { ApiConfig } from "@/features/api/types";
 
+
+
 export function useApiConfig() {
   return useQuery({
     queryKey: ["config"],

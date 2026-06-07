@@ -1,10 +1,13 @@
 import { LaGaufreV2 } from "@gouvfr-lasuite/ui-kit";
 import {
   removeQuotes,
-  useCunninghamTheme,
+  useCunninghamTheme
 } from "../../cunningham/useCunninghamTheme";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useAppContext } from "@/features/app/AppContext";
+
+
+
 
 export const Gaufre = () => {
   const { config } = useConfig();

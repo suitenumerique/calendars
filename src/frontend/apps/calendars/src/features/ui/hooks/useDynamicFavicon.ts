@@ -1,4 +1,7 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState
+} from "react";
 
 const FAVICON_SIZE = 64;
 // TODO: This path and the app icon/logo paths in DynamicCalendarLogo should

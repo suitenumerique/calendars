@@ -2,9 +2,19 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Select } from "@gouvfr-lasuite/cunningham-react";
 import { Badge } from "@gouvfr-lasuite/ui-kit";
+import { SectionRow } from "./SectionRow";
+import {
+  Building,
+  Computer,
+  XMark
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
 
 import type { ResourcePrincipal } from "@/features/resources/api/useResourcePrincipals";
-import { SectionRow } from "./SectionRow";
+
+
 
 interface ResourcesSectionProps {
   resources: ResourcePrincipal[];
@@ -24,8 +34,8 @@ type BadgeType =
   | "warning"
   | "info";
 
-const getResourceIcon = (resourceType: string): string =>
-  resourceType === "ROOM" ? "meeting_room" : "devices";
+const getResourceIcon = (resourceType: string) =>
+  resourceType === "ROOM" ? <Building /> : <Computer />;
 
 const getPartstatBadgeType = (
   email: string | undefined,
@@ -86,7 +96,7 @@ export const ResourcesSection = ({
 
   return (
     <SectionRow
-      icon="meeting_room"
+      icon={<Building />}
       label={t("calendar.event.sections.addResources")}
       isEmpty={selectedResources.length === 0}
       alwaysOpen={alwaysOpen}
@@ -122,9 +132,7 @@ export const ResourcesSection = ({
                 type={getPartstatBadgeType(resource.email, eventAttendees)}
                 className="attendees-input__pill"
               >
-                <span className="material-icons">
-                  {getResourceIcon(resource.resourceType)}
-                </span>
+                {getResourceIcon(resource.resourceType)}
                 {resource.name}
                 <button
                   type="button"
@@ -132,7 +140,7 @@ export const ResourcesSection = ({
                   onClick={() => handleRemove(resource.id)}
                   aria-label={t("calendar.resources.remove")}
                 >
-                  <span className="material-icons">close</span>
+                  <XMark />
                 </button>
               </Badge>
             ))}

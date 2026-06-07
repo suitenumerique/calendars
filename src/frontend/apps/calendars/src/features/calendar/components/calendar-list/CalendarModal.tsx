@@ -5,7 +5,11 @@
  * Can be used in onboarding mode (isOnboarding=true) for first-time users.
  */
 
-import { useState, useEffect, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -14,16 +18,32 @@ import {
   Modal,
   ModalSize,
   Select,
-  VariantType,
+  VariantType
 } from "@gouvfr-lasuite/cunningham-react";
 import { errorToString } from "@/features/api/APIError";
 import { useAuth } from "@/features/auth/Auth";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
-
-import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
+import {
+  FeatureFlag,
+  useFeatureFlag
+} from "@/hooks/useFeatureFlag";
 import { DEFAULT_COLORS } from "./constants";
+import {
+  ErrorFilled,
+  Mail
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
+
+
+
+
+
+
 import type { CalendarModalProps } from "./types";
+
 
 const NO_MAILBOX_VALUE = "__none__";
 
@@ -106,7 +126,10 @@ export const CalendarModal = ({
           setName(defaultMailbox.name || "");
         } else {
           setSelectedMailbox(NO_MAILBOX_VALUE);
-          setName(t("calendar.createCalendar.defaultName"));
+          // Leave name empty so the default acts as a placeholder, avoiding
+          // accidental concatenation when the user types without first
+          // clearing the field. Empty submission falls back to the default.
+          setName("");
         }
       }
       setError(null);
@@ -114,7 +137,9 @@ export const CalendarModal = ({
   }, [isOpen, mode, calendar, defaultMailbox, t]);
 
   const handleSave = async () => {
-    if (!name?.trim()) {
+    const effectiveName =
+      name?.trim() || t("calendar.createCalendar.defaultName");
+    if (!effectiveName) {
       setError(t("calendar.createCalendar.nameRequired"));
       return;
     }
@@ -124,7 +149,7 @@ export const CalendarModal = ({
     try {
       const mailboxEmail =
         selectedMailbox !== NO_MAILBOX_VALUE ? selectedMailbox : undefined;
-      await onSave(name.trim(), color, mailboxEmail, includeInAvailability);
+      await onSave(effectiveName, color, mailboxEmail, includeInAvailability);
       if (!isOnboarding) {
         onClose();
       }
@@ -176,7 +201,7 @@ export const CalendarModal = ({
           <Button
             color="brand"
             onClick={handleSave}
-            disabled={isLoading || !name?.trim()}
+            disabled={isLoading}
           >
             {isLoading ? "..." : saveLabel}
           </Button>
@@ -196,7 +221,7 @@ export const CalendarModal = ({
           <Alert
             className="app__alert--small"
             type={VariantType.ERROR}
-            icon={<span className="material-icons">error</span>}
+            icon={<ErrorFilled />}
           >
             {error}
           </Alert>
@@ -221,7 +246,7 @@ export const CalendarModal = ({
                   );
                   setName(mb?.name || value);
                 } else {
-                  setName(t("calendar.createCalendar.defaultName"));
+                  setName("");
                 }
               }}
               fullWidth
@@ -251,7 +276,7 @@ export const CalendarModal = ({
           <Alert
             className="app__alert--small"
             type={VariantType.INFO}
-            icon={<span className="material-icons">mail</span>}
+            icon={<Mail />}
           >
             {t("calendar.editCalendar.linkedMailbox", { email: calendar.mailboxEmail })}
           </Alert>
@@ -259,6 +284,7 @@ export const CalendarModal = ({
 
         <Input
           label={t("calendar.createCalendar.name")}
+          placeholder={t("calendar.createCalendar.defaultName")}
           value={name}
           onChange={(e) => setName(e.target.value)}
           fullWidth

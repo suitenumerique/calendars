@@ -5,14 +5,18 @@ import {
   Input,
   Modal,
   ModalSize,
-  Select,
+  Select
 } from "@gouvfr-lasuite/cunningham-react";
-
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "@/features/ui/components/toaster/Toaster";
 import { useCreateResource } from "../api/useResources";
+
+
+
+
+
 import type { ResourceType } from "../types";
 
 type CreateResourceModalProps = {

@@ -3,6 +3,16 @@ import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
 import { generateVisioRoomId } from "./generateVisioRoomId";
 import { sanitizeIcsUrl } from "../../../services/dav/EventCalendarAdapter";
+import {
+  XMark,
+  Meet
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
+
+
+
 
 interface VideoConferenceSectionProps {
   url: string;
@@ -43,7 +53,7 @@ export const VideoConferenceSection = ({
 
   return (
     <SectionRow
-      icon="videocam"
+      icon={<Meet />}
       label={t("calendar.event.sections.addVideoConference")}
       isEmpty={!url}
       alwaysOpen={alwaysOpen}
@@ -64,7 +74,7 @@ export const VideoConferenceSection = ({
             size="small"
             color="neutral"
             variant="tertiary"
-            icon={<span className="material-icons">close</span>}
+            icon={<XMark />}
             onClick={handleRemove}
             aria-label={t("calendar.event.sections.removeVisio")}
           />

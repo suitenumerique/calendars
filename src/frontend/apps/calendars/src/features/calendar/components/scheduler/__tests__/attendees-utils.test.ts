@@ -1,4 +1,8 @@
-import { filterSuggestions, isValidEmail } from "../attendees-utils";
+import {
+  filterSuggestions,
+  isValidEmail
+} from "../attendees-utils";
+
 import type { UserSearchResult } from "@/features/users/hooks/useUserSearch";
 import type { IcsAttendee } from "ts-ics";
 

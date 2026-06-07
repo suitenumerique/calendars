@@ -1,7 +1,16 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  isSameDay,
+  isToday
+} from "@/utils/date";
+import { ChevronRight } from "@gouvfr-lasuite/ui-kit/icons";
+import { EventBusySvg } from "@/features/ui/icons/inline";
+
+
 import type { MobileListViewProps, MobileListEvent } from "../types";
-import { isSameDay, isToday } from "@/utils/date";
+
+
 
 function groupEventsByDay(
   events: MobileListEvent[],
@@ -86,9 +95,7 @@ export const MobileListView = ({
 
             {dayEvents.length === 0 ? (
               <div className="mobile-list__empty">
-                <span className="material-icons mobile-list__empty-icon">
-                  event_busy
-                </span>
+                <EventBusySvg />
                 <span className="mobile-list__empty-text">
                   {t("calendar.views.mobile.noEvents")}
                 </span>
@@ -118,9 +125,7 @@ export const MobileListView = ({
                           : `${timeFormatter.format(event.start)} - ${timeFormatter.format(event.end)}`}
                       </span>
                     </div>
-                    <span className="material-icons mobile-list__chevron">
-                      chevron_right
-                    </span>
+                    <ChevronRight />
                   </button>
                 ))}
               </div>

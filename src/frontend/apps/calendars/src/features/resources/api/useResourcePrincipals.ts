@@ -1,10 +1,14 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import { useCallback } from "react";
-
 import {
   caldavServerUrl,
-  davRequest,
+  davRequest
 } from "@/features/calendar/utils/DavClient";
+
+
 
 import type { ResourceType } from "../types";
 

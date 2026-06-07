@@ -6,10 +6,11 @@ import {
   createRouter,
   parseSearchWith,
   RouterProvider,
-  stringifySearchWith,
+  stringifySearchWith
 } from "@tanstack/react-router";
-
 import { routeTree } from "./routes.gen";
+
+
 
 // Default TSR encoding JSON-wraps every search value (`?key=1` → `?key=%221%22`).
 // The rest of the app builds URLs via `URLSearchParams.toString()` and the

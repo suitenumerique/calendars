@@ -3,7 +3,11 @@
  * Handles calendar initialization and configuration.
  */
 
-import { useEffect, useRef, MutableRefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  MutableRefObject
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   createCalendar,
@@ -11,16 +15,22 @@ import {
   TimeGrid,
   DayGrid,
   List,
-  Interaction,
+  Interaction
 } from "@event-calendar/core";
-
 import { useCalendarLocale } from "../../../hooks/useCalendarLocale";
+import {
+  createEventContent,
+  type EventContentInfo
+} from "../utils/eventContent";
+
+
+
+
 import type { EventCalendarAdapter, CalDavExtendedProps } from "../../../services/dav/EventCalendarAdapter";
 import type { CalDavService } from "../../../services/dav/CalDavService";
 import type { CalDavCalendar } from "../../../services/dav/types/caldav-service";
 import type { EventCalendarEvent, EventCalendarFetchInfo } from "../../../services/dav/types/event-calendar";
 import type { CalendarApi } from "../types";
-import { createEventContent, type EventContentInfo } from "../utils/eventContent";
 
 type ECEvent = EventCalendarEvent;
 
@@ -34,6 +44,13 @@ interface UseSchedulerInitProps {
   visibleCalendarUrlsRef: MutableRefObject<Set<string>>;
   davCalendarsRef: MutableRefObject<CalDavCalendar[]>;
   initialView?: string;
+  /**
+   * Date the calendar should land on when (re)created. Stored in a ref
+   * by the caller so locale / first-day changes that trigger a recreate
+   * still restore the user's previous viewport instead of snapping
+   * back to today.
+   */
+  currentDateRef?: MutableRefObject<Date>;
   setCurrentDate: (info: { start: Date; end: Date }) => void;
   handleEventClick: (info: unknown) => void;
   handleEventDrop: (info: unknown) => void;
@@ -59,6 +76,7 @@ export const useSchedulerInit = ({
   visibleCalendarUrlsRef,
   davCalendarsRef,
   initialView = "timeGridWeek",
+  currentDateRef,
   setCurrentDate,
   handleEventClick,
   handleEventDrop,
@@ -107,6 +125,12 @@ export const useSchedulerInit = ({
       {
         // View configuration
         view: initialView,
+        // Recreating the calendar (e.g. on locale / firstDayOfWeek
+        // change) would otherwise snap back to today and yank the user
+        // out of whatever week or month they were inspecting.
+        ...(currentDateRef?.current
+          ? { date: currentDateRef.current }
+          : {}),
         // Native toolbar disabled - using custom React toolbar (SchedulerToolbar)
         headerToolbar: false,
 
@@ -130,6 +154,12 @@ export const useSchedulerInit = ({
         slotDuration: "00:30",
         scrollTime: initialScrollTimeRef.current,
         displayEventEnd: true,
+        // @event-calendar/core renders the all-day lane label from the
+        // ``allDayContent`` option (a string or content fn); when it's
+        // undefined it falls back to the hardcoded English "all-day".
+        // (NB: there is no ``allDayText`` option — an earlier attempt to
+        // use that name was silently ignored.)
+        allDayContent: t("calendar.event.allDay"),
 
         // Interactive features
         editable: true,

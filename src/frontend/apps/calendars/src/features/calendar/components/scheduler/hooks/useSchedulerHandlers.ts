@@ -3,15 +3,27 @@
  * Provides all event handlers for the Scheduler component.
  */
 
-import { useCallback, useState, MutableRefObject } from "react";
-import { IcsEvent, IcsDateObject } from "ts-ics";
-
+import {
+  useCallback,
+  useState,
+  MutableRefObject
+} from "react";
+import {
+  IcsEvent,
+  IcsDateObject
+} from "ts-ics";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/features/auth/Auth";
 import {
   addErrorToast,
-  addSuccessToast,
+  addSuccessToast
 } from "@/features/ui/components/toaster/Toaster";
+import { getCalendarUrlFromEventUrl } from "../../../services/dav/caldav-helpers";
+
+
+
+
+
 import type {
   EventCalendarEvent,
   EventCalendarSelectInfo,
@@ -22,7 +34,7 @@ import type {
 } from "../../../services/dav/types/event-calendar";
 import type { EventCalendarAdapter, CalDavExtendedProps } from "../../../services/dav/EventCalendarAdapter";
 import type { CalDavService } from "../../../services/dav/CalDavService";
-import { getCalendarUrlFromEventUrl } from "../../../services/dav/caldav-helpers";
+
 import type { CalDavResponse } from "../../../services/dav/types/caldav-service";
 import type {
   EventModalState,

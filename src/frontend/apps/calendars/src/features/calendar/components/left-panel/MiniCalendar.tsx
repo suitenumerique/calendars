@@ -2,8 +2,11 @@
  * MiniCalendar component - A small month calendar for date navigation.
  */
 
-import { useEffect, useMemo, useState } from "react";
-
+import {
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import {
   addMonths,
@@ -16,13 +19,25 @@ import {
   isSameMonth,
   startOfMonth,
   startOfWeek,
-  subMonths,
+  subMonths
 } from "date-fns";
 import { useTranslation } from "react-i18next";
 import { useCalendarContext } from "../../contexts";
 import { useCalendarLocale } from "../../hooks/useCalendarLocale";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
+import {
+  ChevronLeft,
+  ChevronRight
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
+
+
+
+
+
 
 interface MiniCalendarProps {
   selectedDate: Date;
@@ -120,7 +135,7 @@ export const MiniCalendar = ({
             size="small"
             color="neutral"
             onClick={handlePrevMonth}
-            icon={<span className="material-icons">chevron_left</span>}
+            icon={<ChevronLeft />}
             aria-label={t("calendar.miniCalendar.previousMonth")}
           />
 
@@ -129,7 +144,7 @@ export const MiniCalendar = ({
             size="small"
             color="neutral"
             onClick={handleNextMonth}
-            icon={<span className="material-icons">chevron_right</span>}
+            icon={<ChevronRight />}
             aria-label={t("calendar.miniCalendar.nextMonth")}
           />
         </div>
@@ -139,7 +154,7 @@ export const MiniCalendar = ({
         {/* Header row with week number column and days */}
         <div className="mini-calendar__weekdays">
           <div className="mini-calendar__weekday mini-calendar__weekday--week-num">
-            Sem.
+            {t("calendar.miniCalendar.weekAbbrev")}
           </div>
           {weekDays.map((day, index) => (
             <div key={index} className="mini-calendar__weekday">

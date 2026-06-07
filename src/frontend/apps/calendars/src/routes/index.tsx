@@ -1,9 +1,14 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  useNavigate
+} from "@tanstack/react-router";
 import { MainLayout } from "@gouvfr-lasuite/ui-kit";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-
-import { Auth, useAuth } from "@/features/auth/Auth";
+import {
+  Auth,
+  useAuth
+} from "@/features/auth/Auth";
 import { SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL } from "@/features/api/fetchApi";
 import { CalendarContextProvider } from "@/features/calendar/contexts";
 import { LeftPanel } from "@/features/calendar/components";
@@ -11,13 +16,28 @@ import { Scheduler } from "@/features/calendar/components/scheduler/Scheduler";
 import { HomePage } from "@/features/home/HomePage";
 import {
   HeaderIcon,
-  HeaderRight,
+  HeaderRight
 } from "@/features/layouts/components/header/Header";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
 import { LeftPanelMobile } from "@/features/layouts/components/left-panel/LeftPanelMobile";
 import { MailboxContextProvider } from "@/features/mailbox/MailboxContext";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
 import { Toaster } from "@/features/ui/components/toaster/Toaster";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function AuthenticatedView() {
   const { user } = useAuth();

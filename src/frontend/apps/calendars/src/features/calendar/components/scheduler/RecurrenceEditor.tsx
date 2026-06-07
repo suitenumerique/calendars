@@ -2,13 +2,21 @@ import {
   Alert,
   Input,
   Select,
-  VariantType,
+  VariantType
 } from "@gouvfr-lasuite/cunningham-react";
-import { useState, useMemo } from "react";
+import {
+  useState,
+  useMemo
+} from "react";
 import { useTranslation } from "react-i18next";
+import { FOREVER_YEARS_THRESHOLD } from "../../services/dav/constants";
+import { Warning } from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
 import type { IcsRecurrenceRule, IcsWeekDay } from "ts-ics";
 
-import { FOREVER_YEARS_THRESHOLD } from "../../services/dav/constants";
+
 
 const SECONDS_PER_YEAR = 86400 * 365;
 const FOREVER_THRESHOLD_SECS = FOREVER_YEARS_THRESHOLD * SECONDS_PER_YEAR;
@@ -349,7 +357,7 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
         <Alert
           className="app__alert--small"
           type={VariantType.WARNING}
-          icon={<span className="material-icons">warning</span>}
+          icon={<Warning />}
         >
           {t("calendar.recurrence.advancedPropertiesWarning")}
         </Alert>
@@ -368,10 +376,12 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
               type="number"
               variant="classic"
               min={1}
+              max={999}
               value={value?.interval || 1}
-              onChange={(e) =>
-                handleChange({ interval: parseInt(e.target.value) || 1 })
-              }
+              onChange={(e) => {
+                const n = parseInt(e.target.value) || 1;
+                handleChange({ interval: Math.min(Math.max(1, n), 999) });
+              }}
             />
             <Select
               label=""
@@ -468,7 +478,7 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
                 <Alert
                   className="app__alert--small"
                   type={VariantType.WARNING}
-                  icon={<span className="material-icons">warning</span>}
+                  icon={<Warning />}
                 >
                   {dateWarning}
                 </Alert>
@@ -520,10 +530,12 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
                   type="number"
                   variant="classic"
                   min={1}
+                  max={9999}
                   value={value?.count ?? 10}
-                  onChange={(e) =>
-                    handleChange({ count: parseInt(e.target.value) || 1 })
-                  }
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value) || 1;
+                    handleChange({ count: Math.min(Math.max(1, n), 9999) });
+                  }}
                 />
                 <span>{t("calendar.recurrence.occurrences")}</span>
               </div>

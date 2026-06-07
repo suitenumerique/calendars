@@ -1,7 +1,14 @@
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
+import {
+  Building,
+  Computer,
+  Trash
+} from "@gouvfr-lasuite/ui-kit/icons";
+
 
 import type { ResourceType } from "../types";
+
 
 type ResourceCardProps = {
   name: string;
@@ -20,12 +27,10 @@ export const ResourceCard = ({
 }: ResourceCardProps) => {
   const { t } = useTranslation();
 
-  const icon = resourceType === "ROOM" ? "meeting_room" : "devices";
-
   return (
     <div className="resource-card">
       <div className="resource-card__icon">
-        <span className="material-icons">{icon}</span>
+        {resourceType === "ROOM" ? <Building /> : <Computer />}
       </div>
       <div className="resource-card__info">
         <div className="resource-card__name">{name}</div>
@@ -41,7 +46,7 @@ export const ResourceCard = ({
             color="error"
             size="small"
             icon={
-              <span className="material-icons">delete</span>
+              <Trash />
             }
             onClick={() => onDelete(id)}
             aria-label={t("resources.delete.button")}

@@ -1,11 +1,15 @@
 import { useTranslation } from "react-i18next";
 import { Select } from "@gouvfr-lasuite/cunningham-react";
+import { SectionRow } from "./SectionRow";
+import { Info2 } from "@gouvfr-lasuite/ui-kit/icons";
+
+
 import type {
   IcsClassType,
   IcsEventStatusType,
   IcsTimeTransparentType,
 } from "ts-ics";
-import { SectionRow } from "./SectionRow";
+
 
 interface StatusSectionProps {
   status: IcsEventStatusType;
@@ -43,7 +47,7 @@ export const StatusSection = ({
 
   return (
     <SectionRow
-      icon="info_outline"
+      icon={<Info2 />}
       label={t("calendar.event.sections.moreOptions")}
       summary={summary}
       isExpanded={isExpanded}

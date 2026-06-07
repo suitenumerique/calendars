@@ -3,7 +3,7 @@ import {
   useContext,
   useMemo,
   useState,
-  type ReactNode,
+  type ReactNode
 } from "react";
 
 interface LeftPanelContextType {

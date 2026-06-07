@@ -6,23 +6,29 @@ import {
   useState,
   useEffect,
   useCallback,
-  type ReactNode,
+  type ReactNode
 } from "react";
 import { useTranslation } from "react-i18next";
 import { CalDavService } from "../services/dav/CalDavService";
 import { EventCalendarAdapter } from "../services/dav/EventCalendarAdapter";
 import { caldavServerUrl } from "../utils/DavClient";
+import {
+  addToast,
+  ToasterItem
+} from "@/features/ui/components/toaster/Toaster";
+import { useAuth } from "@/features/auth/Auth";
+
+
+
+
+
 import type {
   CalDavCalendar,
   CalDavCalendarCreate,
   SharePrivilege,
 } from "../services/dav/types/caldav-service";
 import type { CalendarApi } from "../components/scheduler/types";
-import {
-  addToast,
-  ToasterItem,
-} from "@/features/ui/components/toaster/Toaster";
-import { useAuth } from "@/features/auth/Auth";
+
 
 const HIDDEN_CALENDARS_KEY = "calendar-hidden-urls";
 

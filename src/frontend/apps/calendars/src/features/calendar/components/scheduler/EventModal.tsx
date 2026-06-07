@@ -1,16 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 import { useTranslation } from "react-i18next";
-import type { IcsEvent, IcsOrganizer } from "ts-ics";
 import {
   Button,
   Input,
   Modal,
-  ModalSize,
+  ModalSize
 } from "@gouvfr-lasuite/cunningham-react";
 import { CalendarSelect } from "./CalendarSelect";
-
 import { useAuth } from "@/features/auth/Auth";
-import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import {
+  addToast,
+  ToasterItem
+} from "@/features/ui/components/toaster/Toaster";
 import { DeleteEventModal } from "./DeleteEventModal";
 import { RecurringEditModal } from "./RecurringEditModal";
 import { useEventForm } from "./hooks/useEventForm";
@@ -27,13 +32,56 @@ import { SectionPills } from "./event-modal-sections/SectionPills";
 import { useResourcePrincipals } from "@/features/resources/api/useResourcePrincipals";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useConfig } from "@/features/config/ConfigProvider";
-import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
+import {
+  FeatureFlag,
+  useFeatureFlag
+} from "@/hooks/useFeatureFlag";
+import { SectionRow } from "./event-modal-sections/SectionRow";
+import {
+  Building,
+  Meet,
+  Pin,
+  Calendar,
+  Edit
+} from "@gouvfr-lasuite/ui-kit/icons";
+import {
+  EventAvailableSvg,
+  GroupSvg,
+  NotesSvg,
+  RepeatSvg
+} from "@/features/ui/icons/inline";
+
+
+import type { IcsEvent, IcsOrganizer } from "ts-ics";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import type {
   EventModalProps,
   RecurringDeleteOption,
   RecurringEditOption,
 } from "./types";
-import { SectionRow } from "./event-modal-sections/SectionRow";
+
+
+
 
 export const EventModal = ({
   isOpen,
@@ -119,7 +167,14 @@ export const EventModal = ({
     if (!currentIsValid) {
       form.setSelectedCalendarUrl(calendars[0].url);
     }
-  }, [isOpen, calendars, calendarUrl, form]);
+    // Depend on the specific form fields used inside this effect rather
+    // than the whole ``form`` object — useEventForm returns a new object
+    // reference on every render, so listing ``form`` here would re-run
+    // (and re-evaluate the state-setting branch) on every render and
+    // could amplify into a "Maximum update depth" loop together with
+    // any sibling effect that also setState's on render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, calendars, calendarUrl, form.selectedCalendarUrl, form.setSelectedCalendarUrl]);
 
   // Check if current user is invited.
   // We deliberately exclude:
@@ -159,6 +214,15 @@ export const EventModal = ({
 
   const isRecurringEvent =
     mode === "edit" && !!(event?.recurrenceRule || event?.recurrenceId);
+
+  // `startDateTime` / `endDateTime` are local form strings
+  // ("YYYY-MM-DDTHH:mm" or "YYYY-MM-DD" for all-day). They are sortable
+  // lexicographically, which is enough to flag end-before-start without
+  // pulling in timezone parsing here.
+  const hasInvalidDateRange = useMemo(() => {
+    if (!form.startDateTime || !form.endDateTime) return false;
+    return form.endDateTime < form.startDateTime;
+  }, [form.startDateTime, form.endDateTime]);
 
   const doSave = async (option?: RecurringEditOption) => {
     setIsLoading(true);
@@ -270,36 +334,36 @@ export const EventModal = ({
         ? [
             {
               id: "videoConference" as const,
-              icon: "videocam",
+              icon: <Meet />,
               label: t("calendar.event.sections.addVideoConference"),
             },
           ]
         : []),
       {
         id: "location" as const,
-        icon: "place",
+        icon: <Pin />,
         label: t("calendar.event.location"),
       },
       {
         id: "description" as const,
-        icon: "notes",
+        icon: <NotesSvg />,
         label: t("calendar.event.description"),
       },
       {
         id: "recurrence" as const,
-        icon: "repeat",
+        icon: <RepeatSvg />,
         label: t("calendar.recurrence.label"),
       },
       {
         id: "attendees" as const,
-        icon: "group",
+        icon: <GroupSvg />,
         label: t("calendar.event.attendees"),
       },
       ...(availableResources.length > 0
         ? [
             {
               id: "resources" as const,
-              icon: "meeting_room",
+              icon: <Building />,
               label: t("calendar.event.sections.addResources"),
             },
           ]
@@ -308,7 +372,7 @@ export const EventModal = ({
         ? [
             {
               id: "scheduling" as const,
-              icon: "event_available",
+              icon: <EventAvailableSvg />,
               label: t("scheduling.findATime"),
             },
           ]
@@ -347,7 +411,12 @@ export const EventModal = ({
             <Button
               color="brand"
               onClick={handleSave}
-              disabled={isLoading || !form.title.trim() || !form.selectedCalendarUrl}
+              disabled={
+                isLoading ||
+                !form.title.trim() ||
+                !form.selectedCalendarUrl ||
+                hasInvalidDateRange
+              }
             >
               {isLoading ? "..." : t("calendar.event.save")}
             </Button>
@@ -356,7 +425,7 @@ export const EventModal = ({
       >
         <div className="event-modal__content">
           <SectionRow
-            icon="edit"
+            icon={<Edit />}
             label={t("calendar.event.calendar")}
             alwaysOpen={true}
           >
@@ -375,7 +444,7 @@ export const EventModal = ({
             />
           </SectionRow>
           <SectionRow
-            icon="event"
+            icon={<Calendar />}
             label={t("calendar.event.calendar")}
             alwaysOpen={true}
           >
@@ -393,6 +462,18 @@ export const EventModal = ({
             onEndChange={form.setEndDateTime}
             onAllDayChange={form.handleAllDayChange}
           />
+          {hasInvalidDateRange && (
+            <p
+              role="alert"
+              style={{
+                color: "var(--c--theme--colors--danger-600, #d2212f)",
+                fontSize: "0.8125rem",
+                margin: "-4px 0 8px 36px",
+              }}
+            >
+              {t("calendar.event.endBeforeStart")}
+            </p>
+          )}
           {form.isSectionExpanded("recurrence") && (
             <RecurrenceSection
               recurrence={form.recurrence}

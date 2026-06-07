@@ -1,13 +1,15 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
-import LanguageDetector from "i18next-browser-languagedetector";
-
 import {
   BASE_LANGUAGE,
   IS_LANGUAGE_FORCED,
   LANGUAGES_ALLOWED,
-  LANGUAGE_LOCAL_STORAGE,
+  LANGUAGE_LOCAL_STORAGE
 } from "./conf";
+
+import LanguageDetector from "i18next-browser-languagedetector";
+
+
 import resources from "./translations.json";
 
 /**

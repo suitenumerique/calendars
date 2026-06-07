@@ -3,7 +3,7 @@ import type { IcsRecurrenceRule } from "ts-ics";
 import {
   getEndType,
   isForeverCount,
-  isForeverUntil,
+  isForeverUntil
 } from "../RecurrenceEditor";
 
 function rule(overrides: Partial<IcsRecurrenceRule>): IcsRecurrenceRule {

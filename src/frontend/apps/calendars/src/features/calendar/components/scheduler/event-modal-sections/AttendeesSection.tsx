@@ -1,7 +1,11 @@
 import { useTranslation } from "react-i18next";
-import type { IcsAttendee, IcsOrganizer } from "ts-ics";
 import { AttendeesInput } from "../AttendeesInput";
 import { SectionRow } from "./SectionRow";
+import { GroupSvg } from "@/features/ui/icons/inline";
+
+import type { IcsAttendee, IcsOrganizer } from "ts-ics";
+
+
 
 interface AttendeesSectionProps {
   attendees: IcsAttendee[];
@@ -26,7 +30,7 @@ export const AttendeesSection = ({
 
   return (
     <SectionRow
-      icon="group"
+      icon={<GroupSvg />}
       label={t("calendar.event.sections.addAttendees")}
       isEmpty={attendees.length === 0}
       alwaysOpen={alwaysOpen}

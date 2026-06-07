@@ -1,15 +1,22 @@
-import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
+import {
+  Icon,
+  IconType
+} from "@gouvfr-lasuite/ui-kit";
 import {
   Button,
   ButtonProps,
   Modal,
   ModalSize,
-  useModal,
+  useModal
 } from "@gouvfr-lasuite/cunningham-react";
-import React, { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useConfig } from "../config/ConfigProvider";
 import { useMessagesWidget } from "./useMessagesWidget";
+
+
+import React, { useMemo } from "react";
+
+
 
 export const Feedback = (props: { buttonProps?: Partial<ButtonProps> }) => {
   const { t } = useTranslation();

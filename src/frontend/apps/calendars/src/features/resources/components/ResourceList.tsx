@@ -1,14 +1,36 @@
-import { useState, useCallback } from "react";
+import {
+  useState,
+  useCallback
+} from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input, useModal } from "@gouvfr-lasuite/cunningham-react";
+import {
+  Button,
+  Input,
+  useModal
+} from "@gouvfr-lasuite/cunningham-react";
 import { useNavigate } from "@tanstack/react-router";
-
 import { useAuth } from "@/features/auth/Auth";
 import { ResourceCard } from "./ResourceCard";
 import { CreateResourceModal } from "./CreateResourceModal";
 import { DeleteResourceModal } from "./DeleteResourceModal";
+import {
+  ArrowLeft,
+  Building,
+  Plus
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
+
+
+
+
+
 import type { ResourceType } from "../types";
 
+
+
+import { Hourglass } from "@gouvfr-lasuite/ui-kit/icons";
 type ResourcePrincipal = {
   id: string;
   name: string;
@@ -67,7 +89,7 @@ export const ResourceList = ({
           <Button
             color="neutral"
             size="small"
-            icon={<span className="material-icons">arrow_back</span>}
+            icon={<ArrowLeft />}
             onClick={() => void navigate({ to: "/" })}
             aria-label={t("app_title")}
           />
@@ -77,7 +99,7 @@ export const ResourceList = ({
           <Button
             color="brand"
             onClick={createModal.open}
-            icon={<span className="material-icons">add</span>}
+            icon={<Plus />}
           >
             {t("resources.create.button")}
           </Button>
@@ -122,14 +144,12 @@ export const ResourceList = ({
 
       {isLoading ? (
         <div className="resource-list__loading">
-          <span className="material-icons resource-list__spinner">
-            hourglass_empty
-          </span>
+          <Hourglass />
           <p>{t("resources.loading")}</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="resource-list__empty">
-          <span className="material-icons">meeting_room</span>
+          <Building />
           <p>
             {search || typeFilter !== "ALL"
               ? t("resources.noResults")

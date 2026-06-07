@@ -2,14 +2,16 @@ import { useTranslation } from "react-i18next";
 import {
   Button,
   Modal,
-  ModalSize,
+  ModalSize
 } from "@gouvfr-lasuite/cunningham-react";
-
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "@/features/ui/components/toaster/Toaster";
 import { useDeleteChannel } from "../api/useChannels";
+
+
+
 
 type DeleteChannelModalProps = {
   isOpen: boolean;

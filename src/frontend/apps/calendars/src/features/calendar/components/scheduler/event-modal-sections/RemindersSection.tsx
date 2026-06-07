@@ -1,7 +1,18 @@
 import { useTranslation } from "react-i18next";
-import { Button, Select } from "@gouvfr-lasuite/cunningham-react";
-import type { IcsAlarm } from "ts-ics";
+import {
+  Button,
+  Select
+} from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
+import {
+  XMark,
+  Bell
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+import type { IcsAlarm } from "ts-ics";
+
+
 
 interface RemindersSectionProps {
   alarms: IcsAlarm[];
@@ -79,7 +90,7 @@ export const RemindersSection = ({
 
   return (
     <SectionRow
-      icon="notifications"
+      icon={<Bell />}
       label={t("calendar.event.sections.addReminder")}
       isEmpty={alarms.length === 0}
       alwaysOpen={alwaysOpen}
@@ -102,7 +113,7 @@ export const RemindersSection = ({
               onClick={() => handleRemove(index)}
               aria-label={t("common.cancel")}
             >
-              <span className="material-icons">close</span>
+              <XMark />
             </button>
           </div>
         ))}

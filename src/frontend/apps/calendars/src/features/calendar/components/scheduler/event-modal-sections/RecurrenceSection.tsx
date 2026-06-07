@@ -1,7 +1,11 @@
 import { useTranslation } from "react-i18next";
-import type { IcsRecurrenceRule } from "ts-ics";
 import { RecurrenceEditor } from "../RecurrenceEditor";
 import { SectionRow } from "./SectionRow";
+import { RepeatSvg } from "@/features/ui/icons/inline";
+
+import type { IcsRecurrenceRule } from "ts-ics";
+
+
 
 interface RecurrenceSectionProps {
   recurrence: IcsRecurrenceRule | undefined;
@@ -22,7 +26,7 @@ export const RecurrenceSection = ({
 
   return (
     <SectionRow
-      icon="repeat"
+      icon={<RepeatSvg />}
       label={t("calendar.event.sections.addRecurrence")}
       isEmpty={!recurrence}
       alwaysOpen={alwaysOpen}

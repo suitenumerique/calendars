@@ -3,16 +3,17 @@
  * Shows onboarding modal when user has no calendars.
  */
 
-import { useState, useCallback } from "react";
+import {
+  useState,
+  useCallback
+} from "react";
 import { useTranslation } from "react-i18next";
-
 import { useCalendarContext } from "../../contexts";
 import { setupCalendar } from "@/features/mailbox/api";
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "@/features/ui/components/toaster/Toaster";
-
 import { CalendarModal } from "./CalendarModal";
 import { CalendarShareModal } from "./CalendarShareModal";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
@@ -20,8 +21,22 @@ import { ImportEventsModal } from "./ImportEventsModal";
 import { SubscriptionUrlModal } from "./SubscriptionUrlModal";
 import { CalendarListItem } from "./CalendarListItem";
 import { useCalendarListState } from "./hooks/useCalendarListState";
-import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
 import { extractCaldavPath } from "./utils";
+import { Plus } from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
+
+
+
+
+
+
+
+
+
+import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
+
 
 export const CalendarList = () => {
   const { t } = useTranslation();
@@ -195,7 +210,7 @@ export const CalendarList = () => {
               onClick={handleOpenCreateModal}
               title={t("calendar.createCalendar.title")}
             >
-              <span className="material-icons">add</span>
+              <Plus />
             </button>
           </div>
           {isMyCalendarsExpanded && (

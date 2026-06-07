@@ -2,16 +2,29 @@
  * LeftPanel component - Calendar sidebar with mini calendar and calendar list.
  */
 
-import { useCallback, useMemo } from "react";
+import {
+  useCallback,
+  useMemo
+} from "react";
 import { useTranslation } from "react-i18next";
-import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
+import {
+  Button,
+  useModal
+} from "@gouvfr-lasuite/cunningham-react";
+import { useNavigate } from "@tanstack/react-router";
 import { IcsEvent } from "ts-ics";
-
+import { useAuth } from "@/features/auth/Auth";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import {
+  FeatureFlag,
+  useFeatureFlag
+} from "@/hooks/useFeatureFlag";
 import { CalendarList } from "../calendar-list";
 import { MiniCalendar } from "./MiniCalendar";
 import { EventModal } from "../scheduler/EventModal";
 import { useCalendarContext } from "../../contexts";
-
+import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
+import { Building, Clock, Plus, Puzzle } from "@gouvfr-lasuite/ui-kit/icons";
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**
@@ -33,6 +46,16 @@ const getDefaultEventTimes = () => {
 export const LeftPanel = () => {
   const { t } = useTranslation();
   const modal = useModal();
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const { user } = useAuth();
+  const { setIsLeftPanelOpen } = useLeftPanel();
+
+  const isResourcesEnabled = useFeatureFlag(FeatureFlag.ADMIN_RESOURCES);
+  const isChannelsEnabled = useFeatureFlag(FeatureFlag.ADMIN_CHANNELS);
+  const isAvailabilitiesEnabled = useFeatureFlag(
+    FeatureFlag.ADMIN_AVAILABILITIES,
+  );
 
   const {
     selectedDate,
@@ -118,13 +141,47 @@ export const LeftPanel = () => {
     modal.close();
   }, [modal]);
 
+  // On mobile, the desktop top-bar (Settings dropdown, user menu) is
+  // hidden, so the only way to reach Working Hours / Resources /
+  // Integrations is via the drawer. Mirror those links here so mobile
+  // users aren't trapped on the calendar grid.
+  const mobileNavItems = [
+    ...(isAvailabilitiesEnabled
+      ? [
+          {
+            label: t("settings.workingHours.title"),
+            icon: <Clock />,
+            to: "/availabilities" as const,
+          },
+        ]
+      : []),
+    ...(user?.can_admin && isResourcesEnabled
+      ? [
+          {
+            label: t("resources.title"),
+            icon: <Building />,
+            to: "/resources" as const,
+          },
+        ]
+      : []),
+    ...(user?.can_admin && isChannelsEnabled
+      ? [
+          {
+            label: t("integrations.title"),
+            icon: <Puzzle />,
+            to: "/integrations" as const,
+          },
+        ]
+      : []),
+  ];
+
   return (
     <>
       <div className="calendar-left-panel">
         <div className="calendar-left-panel__create">
           <Button
             onClick={modal.open}
-            icon={<span className="material-icons">add</span>}
+            icon={<Plus />}
           >
             {t("calendar.leftPanel.newEvent")}
           </Button>
@@ -138,6 +195,28 @@ export const LeftPanel = () => {
         <div className="calendar-left-panel__divider" />
 
         <CalendarList />
+
+        {isMobile && mobileNavItems.length > 0 && (
+          <>
+            <div className="calendar-left-panel__divider" />
+            <nav className="calendar-left-panel__mobile-nav">
+              {mobileNavItems.map((item) => (
+                <button
+                  key={item.to}
+                  type="button"
+                  className="calendar-left-panel__mobile-nav-item"
+                  onClick={() => {
+                    setIsLeftPanelOpen(false);
+                    void navigate({ to: item.to });
+                  }}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+          </>
+        )}
       </div>
 
       {modal.isOpen && (

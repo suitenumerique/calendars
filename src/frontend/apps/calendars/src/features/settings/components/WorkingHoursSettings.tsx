@@ -1,20 +1,35 @@
-import { useCallback, useState } from "react";
+import {
+  useCallback,
+  useState
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useNavigate } from "@tanstack/react-router";
-
 import {
   addToast,
-  ToasterItem,
+  ToasterItem
 } from "@/features/ui/components/toaster/Toaster";
-
 import { useWorkingHours } from "../api/useWorkingHours";
 import {
   type AvailabilitySlot,
   type AvailabilitySlots,
-  generateSlotId,
+  generateSlotId
 } from "../types";
 import { AvailabilityRow } from "./AvailabilityRow";
+import { Hourglass } from "@gouvfr-lasuite/ui-kit/icons";
+import {
+  ArrowLeft,
+  Plus
+} from "@gouvfr-lasuite/ui-kit/icons";
+
+
+
+
+
+
+
+
+
 
 interface AvailabilityFormProps {
   initialSlots: AvailabilitySlots;
@@ -57,7 +72,20 @@ const AvailabilityForm = ({
     [],
   );
 
+  // Returns true when every slot has end strictly after start. Times are
+  // "HH:mm" strings so lexicographic comparison agrees with chronological
+  // ordering within a single day.
+  const hasInvalidSlot = slots.some((s) => s.end <= s.start);
+
   const handleSave = async () => {
+    if (hasInvalidSlot) {
+      addToast(
+        <ToasterItem type="error">
+          <span>{t("settings.workingHours.invalidRange")}</span>
+        </ToasterItem>,
+      );
+      return;
+    }
     try {
       await onSave(slots);
       addToast(
@@ -82,7 +110,7 @@ const AvailabilityForm = ({
             color="neutral"
             size="small"
             icon={
-              <span className="material-icons">arrow_back</span>
+              <ArrowLeft />
             }
             onClick={() => void navigate({ to: "/" })}
             aria-label={t("app_title")}
@@ -117,7 +145,7 @@ const AvailabilityForm = ({
         <Button
           color="neutral"
           size="small"
-          icon={<span className="material-icons">add</span>}
+          icon={<Plus />}
           onClick={addSlot}
         >
           {t("settings.workingHours.addAvailability")}
@@ -128,7 +156,7 @@ const AvailabilityForm = ({
         <Button
           color="brand"
           onClick={() => void handleSave()}
-          disabled={isSaving}
+          disabled={isSaving || hasInvalidSlot}
         >
           {t("settings.workingHours.save")}
         </Button>
@@ -143,9 +171,7 @@ export const WorkingHoursSettings = () => {
   if (isLoading) {
     return (
       <div className="working-hours__loading">
-        <span className="material-icons working-hours__spinner">
-          hourglass_empty
-        </span>
+        <Hourglass />
       </div>
     );
   }

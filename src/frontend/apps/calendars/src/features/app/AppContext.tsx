@@ -2,7 +2,7 @@ import {
   createContext,
   useContext,
   useState,
-  type PropsWithChildren,
+  type PropsWithChildren
 } from "react";
 
 export interface AppContextType {
