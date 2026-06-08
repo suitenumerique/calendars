@@ -295,6 +295,17 @@ export const CalendarModal = ({
           placeholder={t("calendar.createCalendar.defaultName")}
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              // Submit on Enter, mirroring the Save button's guard
+              // (create mode always has a default-name fallback; edit
+              // mode requires a non-empty name).
+              if (!isLoading && !(mode === "edit" && !name.trim())) {
+                void handleSave();
+              }
+            }
+          }}
           fullWidth
         />
 
