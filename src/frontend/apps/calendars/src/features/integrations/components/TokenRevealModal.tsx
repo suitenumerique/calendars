@@ -34,7 +34,12 @@ export const TokenRevealModal = ({
   onClose,
 }: TokenRevealModalProps) => {
   const { t } = useTranslation();
-  const isCaldav = !!(caldavUrl && caldavUsername);
+  // Drive the CalDAV credential block off the URL alone: the server URL
+  // is the load-bearing piece a user needs, so don't hide it just because
+  // the username (the signed-in email) hasn't resolved yet. The username
+  // field is rendered conditionally below.
+  const hasCaldavUrl = Boolean(caldavUrl);
+  const hasCaldavUsername = Boolean(caldavUsername);
 
   return (
     <Modal
@@ -50,16 +55,20 @@ export const TokenRevealModal = ({
     >
       <div className="channel-edit-modal">
         <p>{warning}</p>
-        {isCaldav && (
+        {hasCaldavUrl && (
           <>
             <label className="token-reveal-box__label">
               {t("integrations.caldav.serverUrl")}
             </label>
-            <TokenRevealBox token={caldavUrl} />
-            <label className="token-reveal-box__label">
-              {t("integrations.caldav.username")}
-            </label>
-            <TokenRevealBox token={caldavUsername} />
+            <TokenRevealBox token={caldavUrl!} />
+            {hasCaldavUsername && (
+              <>
+                <label className="token-reveal-box__label">
+                  {t("integrations.caldav.username")}
+                </label>
+                <TokenRevealBox token={caldavUsername!} />
+              </>
+            )}
             <label className="token-reveal-box__label">
               {t("integrations.caldav.password")}
             </label>

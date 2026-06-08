@@ -2,8 +2,8 @@ import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
-import { XMark } from "@gouvfr-lasuite/ui-kit/icons";
-import { AttachFileSvg } from "@/features/ui/icons/inline";
+import { Plus, XMark } from "@gouvfr-lasuite/ui-kit/icons";
+import { AttachFileSvg, NotesSvg } from "@/features/ui/icons/inline";
 
 
 
@@ -73,9 +73,7 @@ export const AttachmentsSection = ({
       <div className="attachments-section">
         {attachments.map((attachment) => (
           <div key={attachment.id} className="attachments-section__item">
-            <span className="material-icons" style={{ fontSize: 18 }}>
-              description
-            </span>
+            <NotesSvg />
             <div className="attachments-section__info">
               <span className="attachments-section__name">
                 {attachment.name}
@@ -106,9 +104,7 @@ export const AttachmentsSection = ({
           color="neutral"
           onClick={() => fileInputRef.current?.click()}
         >
-          <span className="material-icons" style={{ fontSize: 16 }}>
-            add
-          </span>
+          <Plus />
           {t("calendar.event.sections.addAttachment")}
         </Button>
       </div>

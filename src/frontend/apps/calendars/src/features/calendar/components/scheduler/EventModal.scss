@@ -5,6 +5,12 @@
     gap: 2px;
   }
 
+  &__error {
+    color: var(--c--theme--colors--danger-600, #d2212f);
+    font-size: 0.8125rem;
+    margin: -4px 0 8px 36px;
+  }
+
   &__more-options {
     border-top: 1px solid #f1f3f4;
     padding-top: 0.5rem;

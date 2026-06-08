@@ -542,6 +542,30 @@ class CalendarSanitizerPlugin extends ServerPlugin
                 }
             }
 
+            // Strip RDATE;VALUE=PERIOD. vobject's recurrence expander
+            // (RRuleIterator / RDateIterator) throws InvalidDataException
+            // when it hits a PERIOD-valued RDATE, which 500s EVERY
+            // calendar-query `expand` REPORT over the affected range —
+            // and the frontend renders its grid via those REPORTs, so a
+            // single such event blanks the entire calendar view (and the
+            // user can't see the event in-app to delete it). PERIOD
+            // RDATEs are rare and RFC-valid but unsupported by our
+            // expand path; drop just those properties so the DTSTART
+            // occurrence (and any DATE/DATE-TIME RDATEs) survive.
+            if (isset($component->RDATE)) {
+                $toRemove = [];
+                foreach ($component->select('RDATE') as $rdate) {
+                    $valueParam = $rdate->offsetGet('VALUE');
+                    if ($valueParam && strtoupper((string) $valueParam) === 'PERIOD') {
+                        $toRemove[] = $rdate;
+                    }
+                }
+                foreach ($toRemove as $rdate) {
+                    $component->remove($rdate);
+                    $wasModified = true;
+                }
+            }
+
             // Truncate oversized long text properties (DESCRIPTION,
             // X-ALT-DESC, COMMENT). Uses ``mb_strcut`` so a
             // truncation that lands inside a multi-byte UTF-8
@@ -593,6 +617,19 @@ class CalendarSanitizerPlugin extends ServerPlugin
                         continue;
                     }
 
+                    // RFC 5545 §3.3.10: COUNT and UNTIL MUST NOT both
+                    // appear in one RRULE. Some clients emit both;
+                    // vobject stores them verbatim and strict downstream
+                    // clients (and re-importers) then reject the event.
+                    // Keep COUNT — it's the deterministic occurrence
+                    // bound — and drop the redundant UNTIL.
+                    if (isset($parts['COUNT']) && isset($parts['UNTIL'])) {
+                        unset($parts['UNTIL']);
+                        $rrule->setParts($parts);
+                        $parts = $rrule->getParts();
+                        $wasModified = true;
+                    }
+
                     $cap = $this->rruleCaps[$freq] ?? null;
                     if ($cap === null) {
                         continue;
@@ -634,7 +671,72 @@ class CalendarSanitizerPlugin extends ServerPlugin
             }
         }
 
+        // Final pass: defuse recurrence sets that expand to ZERO
+        // instances. Must run after the per-component RRULE/RDATE work
+        // above so it sees the already-bounded rules.
+        if ($this->defuseEmptyRecurrenceSets($vcalendar)) {
+            $wasModified = true;
+        }
+
         return $wasModified;
+    }
+
+    /**
+     * Strip the recurrence from any VEVENT/VTODO/VJOURNAL whose rule set
+     * produces no instances at all (e.g. every occurrence EXDATE'd, or an
+     * UNTIL that precedes DTSTART).
+     *
+     * vobject's ``EventIterator`` throws ``NoInstancesException`` the
+     * moment such an event is iterated — which happens during CalDAV
+     * validation on PUT (→ HTTP 500, leaking the exception class) and on
+     * every subsequent expand REPORT (→ 500, blanking the calendar). We
+     * can't store an event nobody can read, so we reduce it to its master
+     * occurrence by dropping RRULE/RDATE/EXDATE/EXRULE. The DTSTART event
+     * survives as a one-off rather than 500-ing the collection.
+     *
+     * @return bool True if any component was modified.
+     */
+    private function defuseEmptyRecurrenceSets(VCalendar $vcalendar): bool
+    {
+        $modified = false;
+        foreach ($vcalendar->getComponents() as $component) {
+            if (!in_array($component->name, ['VEVENT', 'VTODO', 'VJOURNAL'], true)) {
+                continue;
+            }
+            // Only recurring masters can yield an empty set. A bare
+            // RECURRENCE-ID override (no RRULE/RDATE) is a single instance
+            // and is never empty.
+            if (!isset($component->RRULE) && !isset($component->RDATE)) {
+                continue;
+            }
+            if (!isset($component->UID)) {
+                continue;
+            }
+            $uid = (string) $component->UID;
+
+            try {
+                // Constructing + touching the iterator forces vobject to
+                // evaluate the recurrence set; an empty set throws here.
+                $it = new \Sabre\VObject\Recur\EventIterator($vcalendar, $uid);
+                $it->getDtStart();
+            } catch (\Sabre\VObject\Recur\NoInstancesException $e) {
+                foreach (['RRULE', 'RDATE', 'EXDATE', 'EXRULE'] as $prop) {
+                    while (isset($component->{$prop})) {
+                        $component->remove($component->{$prop});
+                    }
+                }
+                $modified = true;
+                error_log(
+                    "[CalendarSanitizerPlugin] recurrence for UID {$uid} "
+                    . "produced no instances; stripped to single occurrence"
+                );
+            } catch (\Exception $e) {
+                // Any other error here is not ours to mask — leave the
+                // component untouched so genuine problems still surface
+                // downstream rather than being silently mangled.
+            }
+        }
+        return $modified;
     }
 
     /**

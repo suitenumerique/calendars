@@ -1172,6 +1172,21 @@ class InternalApiPlugin extends ServerPlugin
                         $uid = \Sabre\DAV\UUIDUtil::getUUID();
                     }
 
+                    // Skip recurring events whose rule set yields zero
+                    // instances (e.g. every occurrence EXDATE'd). On bulk
+                    // import these are no-ops the user excluded entirely,
+                    // so we drop them silently rather than materialize a
+                    // surprise one-off. We must check this BEFORE
+                    // sanitizeAndCheckSize: the CalendarSanitizer strips a
+                    // dead recurrence down to its master occurrence (the
+                    // right call for a live PUT/sync client, which must
+                    // not 500), which would otherwise turn this skip into
+                    // an import.
+                    if ($this->recurrenceSetIsEmpty($splitVcal)) {
+                        $skippedCount++;
+                        continue;
+                    }
+
                     // Sanitize event data (strip attachments, truncate descriptions)
                     $this->sanitizeAndCheckSize($splitVcal);
 
@@ -1275,6 +1290,45 @@ class InternalApiPlugin extends ServerPlugin
         if ($sanitizer) {
             $sanitizer->sanitizeVCalendar($vcal);
             $sanitizer->checkResourceSize($vcal);
+        }
+    }
+
+    /**
+     * True if the calendar's recurring master expands to zero instances
+     * (e.g. every occurrence EXDATE'd). vobject's EventIterator throws
+     * NoInstancesException for such a set; we use that as the signal.
+     *
+     * Non-recurring events, and any case we can't evaluate, return false
+     * (i.e. "not known-empty") so the normal import path runs.
+     */
+    private function recurrenceSetIsEmpty(VObject\Component\VCalendar $vcal): bool
+    {
+        if (!isset($vcal->VEVENT)) {
+            return false;
+        }
+        $uid = null;
+        $hasRecurrence = false;
+        foreach ($vcal->VEVENT as $vevent) {
+            if (isset($vevent->RRULE) || isset($vevent->RDATE)) {
+                $hasRecurrence = true;
+            }
+            if ($uid === null && isset($vevent->UID)) {
+                $uid = (string)$vevent->UID;
+            }
+        }
+        if (!$hasRecurrence || $uid === null) {
+            return false;
+        }
+        try {
+            $it = new VObject\Recur\EventIterator($vcal, $uid);
+            $it->getDtStart();
+            return false;
+        } catch (VObject\Recur\NoInstancesException $e) {
+            return true;
+        } catch (\Exception $e) {
+            // Can't evaluate (malformed, missing DTSTART, …) — let the
+            // normal import path handle/skip it.
+            return false;
         }
     }
 

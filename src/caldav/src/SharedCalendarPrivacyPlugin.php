@@ -271,9 +271,15 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
                 continue;
             }
 
+            // Trim before comparing: vobject preserves leading/trailing
+            // whitespace in property values, and some clients emit
+            // ``CLASS: PRIVATE`` (stray space after the colon). Without
+            // the trim, '" PRIVATE"' !== 'PRIVATE' would fall through to
+            // the PUBLIC default and leak a private event's full details
+            // to everyone the calendar is shared with.
             $class = $freebusy
                 ? 'CONFIDENTIAL'
-                : (isset($component->CLASS) ? strtoupper((string)$component->CLASS) : 'PUBLIC');
+                : (isset($component->CLASS) ? strtoupper(trim((string)$component->CLASS)) : 'PUBLIC');
 
             if ($class === 'PRIVATE') {
                 $toRemove[] = $component;

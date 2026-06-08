@@ -13,6 +13,7 @@ import {
   DropdownMenu,
   type DropdownMenuOption
 } from "@gouvfr-lasuite/ui-kit";
+import { ChevronDown } from "@gouvfr-lasuite/ui-kit/icons";
 import { useTranslation } from "react-i18next";
 import {
   ChevronLeft,
@@ -135,11 +136,9 @@ export const SchedulerToolbar = ({
             onClick={() => setIsViewDropdownOpen(!isViewDropdownOpen)}
             aria-expanded={isViewDropdownOpen}
             icon={
-              <span
-                className={`material-icons scheduler-toolbar__view-arrow ${isViewDropdownOpen ? "scheduler-toolbar__view-arrow--open" : ""}`}
-              >
-                expand_more
-              </span>
+              <ChevronDown
+                className={`scheduler-toolbar__view-arrow ${isViewDropdownOpen ? "scheduler-toolbar__view-arrow--open" : ""}`}
+              />
             }
             aria-haspopup="listbox"
           >

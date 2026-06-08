@@ -53,7 +53,9 @@
       background-color: var(--c--theme--colors--greyscale-100);
     }
 
-    .material-icons {
+    // The mobile-nav items render ui-kit SVG icons (<Clock/>, <Building/>,
+    // <Puzzle/>), not the material-icons font glyph — target the <svg>.
+    svg {
       font-size: 1.25rem;
       color: var(--c--theme--colors--greyscale-600);
     }

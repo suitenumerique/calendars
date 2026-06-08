@@ -209,6 +209,7 @@ export const CalendarList = () => {
               className="calendar-list__add-btn"
               onClick={handleOpenCreateModal}
               title={t("calendar.createCalendar.title")}
+              aria-label={t("calendar.createCalendar.title")}
             >
               <Plus />
             </button>

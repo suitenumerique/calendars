@@ -137,8 +137,15 @@ export const CalendarModal = ({
   }, [isOpen, mode, calendar, defaultMailbox, t]);
 
   const handleSave = async () => {
+    const trimmedName = name?.trim() ?? "";
+    // Create mode falls back to the default name when the field is left
+    // empty (the default is shown as a placeholder). Edit mode requires
+    // an explicit non-empty name so clearing the field can't silently
+    // rename the calendar back to the default.
     const effectiveName =
-      name?.trim() || t("calendar.createCalendar.defaultName");
+      mode === "create"
+        ? trimmedName || t("calendar.createCalendar.defaultName")
+        : trimmedName;
     if (!effectiveName) {
       setError(t("calendar.createCalendar.nameRequired"));
       return;
@@ -201,7 +208,7 @@ export const CalendarModal = ({
           <Button
             color="brand"
             onClick={handleSave}
-            disabled={isLoading}
+            disabled={isLoading || (mode === "edit" && !name?.trim())}
           >
             {isLoading ? "..." : saveLabel}
           </Button>

@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   type DropdownMenuOption
 } from "@gouvfr-lasuite/ui-kit";
+import { ChevronDown } from "@gouvfr-lasuite/ui-kit/icons";
 import { useTranslation } from "react-i18next";
 import { useCalendarLocale } from "../../../hooks/useCalendarLocale";
 import {
@@ -137,13 +138,11 @@ export const MobileToolbar = ({
               aria-haspopup="listbox"
             >
               <span>{currentViewLabel}</span>
-              <span
-                className={`material-icons mobile-toolbar__view-arrow ${
+              <ChevronDown
+                className={`mobile-toolbar__view-arrow ${
                   isViewDropdownOpen ? "mobile-toolbar__view-arrow--open" : ""
                 }`}
-              >
-                expand_more
-              </span>
+              />
             </button>
           </DropdownMenu>
         </div>

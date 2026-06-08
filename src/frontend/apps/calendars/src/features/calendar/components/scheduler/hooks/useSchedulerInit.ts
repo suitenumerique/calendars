@@ -3,11 +3,8 @@
  * Handles calendar initialization and configuration.
  */
 
-import {
-  useEffect,
-  useRef,
-  MutableRefObject
-} from "react";
+import { useEffect, useRef } from "react";
+import type { MutableRefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
   createCalendar,

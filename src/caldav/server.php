@@ -56,12 +56,46 @@ $baseUri = getenv('CALDAV_BASE_URI') ?: '/';
 // ``LogicException`` ("Requested uri X is out of base uri Y") that
 // becomes a 500 response — leaking the boundary and noising up logs
 // with stack traces. A 404 is the right semantic answer.
+//
+// Decode + normalize before the prefix check so the comparison happens
+// on the same canonical form the DAV layer resolves the request to:
+//   - rawurldecode() so a percent-encoded slash (`%2F`) is seen as a
+//     path separator, not a literal that would dodge the prefix check;
+//   - collapse repeated slashes and resolve `.` / `..` segments so a
+//     traversal path like `/caldav/../secret` normalizes to `/secret`
+//     and is correctly rejected (the raw prefix check would have let it
+//     through because it literally starts with `/caldav/`).
+$normalizePath = static function (string $path): string {
+    // Collapse runs of slashes, then resolve . / .. segments.
+    $path = preg_replace('#/+#', '/', $path);
+    $out = [];
+    foreach (explode('/', $path) as $seg) {
+        if ($seg === '' || $seg === '.') {
+            continue;
+        }
+        if ($seg === '..') {
+            array_pop($out);
+            continue;
+        }
+        $out[] = $seg;
+    }
+    $normalized = '/' . implode('/', $out);
+    // explode() drops a trailing slash; restore it so "/caldav/" and
+    // "/caldav" stay distinguishable for the prefix compare below.
+    if ($normalized !== '/' && substr($path, -1) === '/') {
+        $normalized .= '/';
+    }
+    return $normalized;
+};
+
 $requestPath = $_SERVER['REQUEST_URI'] ?? '/';
 $queryPos = strpos($requestPath, '?');
 if ($queryPos !== false) {
     $requestPath = substr($requestPath, 0, $queryPos);
 }
-if ($baseUri !== '/' && strpos($requestPath, $baseUri) !== 0) {
+$normalizedRequestPath = $normalizePath(rawurldecode($requestPath));
+$normalizedBaseUri = $normalizePath($baseUri);
+if ($baseUri !== '/' && strpos($normalizedRequestPath, $normalizedBaseUri) !== 0) {
     http_response_code(404);
     header('Content-Type: application/xml; charset=utf-8');
     echo '<?xml version="1.0" encoding="utf-8"?>'
@@ -237,18 +271,21 @@ $server->addPlugin(new ShareAccessPlugin($pdo));
 //     }
 // }, 50);
 
-// Log unhandled exceptions, and mask any raw internal-error message so
-// the client never sees database internals (SQL state, table names,
-// PDO parameter values…). SabreDAV's error renderer uses
-// $e->getMessage() directly when building the multistatus body and
-// has no extension point to override the message, so we mutate the
-// protected `Exception::$message` field via reflection. SabreDAV's
-// own DAV exceptions are passed through unchanged — they're safe by
-// design (NotFound, Forbidden, BadRequest, ServerError, etc.).
+// Log unhandled exceptions, and make sure the client never sees raw
+// internal-error details. SabreDAV's error renderer builds the
+// multistatus body from BOTH `$e->getMessage()` (which can carry
+// database internals — SQL state, table names, PDO parameter values…)
+// AND `get_class($e)` in the `<s:exception>` element (which leaks the
+// internal library/class, e.g. `Sabre\VObject\Recur\NoInstancesException`).
 //
-// FAIL-CLOSED: if reflection fails for any reason we MUST NOT let
-// SabreDAV render the original message. We write a generic 500
-// response directly and exit, bypassing the entire renderer.
+// SabreDAV's own DAV exceptions are safe by design (NotFound, Forbidden,
+// BadRequest, ServerError, …) — their class names and messages are part
+// of the protocol contract — so we pass those through unchanged.
+//
+// For every OTHER (non-DAV) exception we bypass SabreDAV's renderer
+// entirely and emit a single generic 500. This is strictly fail-closed:
+// neither the original message nor the concrete exception class can
+// reach the client, with no dependence on reflection succeeding.
 $server->on('exception', function ($e) {
     error_log("[sabre/dav] Exception: " . get_class($e) . " - " . $e->getMessage());
     error_log("[sabre/dav] Exception trace: " . $e->getTraceAsString());
@@ -256,22 +293,7 @@ $server->on('exception', function ($e) {
     if ($e instanceof \Sabre\DAV\Exception) {
         return;
     }
-    try {
-        $reflClass = new \ReflectionClass(\Exception::class);
-        $reflMessage = $reflClass->getProperty('message');
-        $reflMessage->setAccessible(true);
-        $reflMessage->setValue($e, 'Internal server error');
-        return;
-    } catch (\Throwable $reflFailure) {
-        error_log(
-            "[sabre/dav] Reflection-based message masking failed: "
-            . $reflFailure->getMessage()
-            . " — emitting hardcoded 500 to avoid leaking original error"
-        );
-    }
 
-    // Reflection failed. Bypass SabreDAV's renderer entirely so the
-    // raw exception message can never reach the client.
     if (!headers_sent()) {
         http_response_code(500);
         header('Content-Type: application/xml; charset=utf-8');

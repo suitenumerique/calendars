@@ -5,8 +5,9 @@ import {
 } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
 import {
-  XMark,
-  Bell
+  Bell,
+  Plus,
+  XMark
 } from "@gouvfr-lasuite/ui-kit/icons";
 
 
@@ -118,9 +119,7 @@ export const RemindersSection = ({
           </div>
         ))}
         <Button size="small" color="neutral" onClick={handleAdd}>
-          <span className="material-icons" style={{ fontSize: 16 }}>
-            add
-          </span>
+          <Plus />
           {t("calendar.event.sections.addReminder")}
         </Button>
       </div>

@@ -463,14 +463,7 @@ export const EventModal = ({
             onAllDayChange={form.handleAllDayChange}
           />
           {hasInvalidDateRange && (
-            <p
-              role="alert"
-              style={{
-                color: "var(--c--theme--colors--danger-600, #d2212f)",
-                fontSize: "0.8125rem",
-                margin: "-4px 0 8px 36px",
-              }}
-            >
+            <p role="alert" className="event-modal__error">
               {t("calendar.event.endBeforeStart")}
             </p>
           )}
