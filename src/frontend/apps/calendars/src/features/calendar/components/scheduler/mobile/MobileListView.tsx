@@ -5,7 +5,7 @@ import {
   isToday
 } from "@/utils/date";
 import { ChevronRight } from "@gouvfr-lasuite/ui-kit/icons";
-import { EventBusySvg } from "@/features/ui/icons/inline";
+import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 
 
 import type { MobileListViewProps, MobileListEvent } from "../types";
@@ -95,7 +95,7 @@ export const MobileListView = ({
 
             {dayEvents.length === 0 ? (
               <div className="mobile-list__empty">
-                <EventBusySvg />
+                <Icon name="event_busy" type={IconType.OUTLINED} aria-hidden />
                 <span className="mobile-list__empty-text">
                   {t("calendar.views.mobile.noEvents")}
                 </span>

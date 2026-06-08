@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { TextArea } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
-import { NotesSvg } from "@/features/ui/icons/inline";
+import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 
 
 
@@ -25,7 +25,7 @@ export const DescriptionSection = ({
 
   return (
     <SectionRow
-      icon={<NotesSvg />}
+      icon={<Icon name="notes" type={IconType.OUTLINED} aria-hidden />}
       label={t("calendar.event.sections.addDescription")}
       isEmpty={!description}
       alwaysOpen={alwaysOpen}

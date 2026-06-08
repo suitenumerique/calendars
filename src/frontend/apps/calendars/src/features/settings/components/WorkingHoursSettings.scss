@@ -115,8 +115,9 @@
       color: var(--c--contextuals--content--semantic--danger--primary);
     }
 
-    .material-icons {
-      font-size: 18px;
+    svg {
+      width: 18px;
+      height: 18px;
     }
   }
 
@@ -138,8 +139,9 @@
     padding: var(--c--globals--spacings--xl) 0;
     color: var(--c--contextuals--content--semantic--neutral--tertiary);
 
-    .material-icons {
-      font-size: 48px;
+    svg {
+      width: 48px;
+      height: 48px;
       margin-bottom: var(--c--globals--spacings--sm);
     }
   }

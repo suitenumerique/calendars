@@ -54,10 +54,18 @@
     justify-content: center;
     width: 36px;
     flex-shrink: 0;
+    color: #5f6368;
+
+    // Icons here come from ui-kit SVG icons (Edit/Calendar/Clock…) and
+    // ui-kit's font-based <Icon> (.material-icons spans). Size both to a
+    // single value so every section row's icon matches.
+    svg {
+      width: 20px;
+      height: 20px;
+    }
 
     .material-icons {
       font-size: 20px;
-      color: #5f6368;
     }
   }
 
@@ -84,10 +92,11 @@
     display: flex;
     align-items: center;
     flex-shrink: 0;
+    color: #5f6368;
 
-    .material-icons {
-      font-size: 20px;
-      color: #5f6368;
+    svg {
+      width: 20px;
+      height: 20px;
     }
   }
 

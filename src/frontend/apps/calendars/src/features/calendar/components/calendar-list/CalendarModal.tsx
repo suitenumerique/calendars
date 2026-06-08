@@ -121,15 +121,16 @@ export const CalendarModal = ({
         setSelectedMailbox(NO_MAILBOX_VALUE);
       } else {
         setColor(DEFAULT_COLORS[0]);
+        // Pre-fill the name with a sensible default so the field is never
+        // blank — creating an unnamed calendar is nonsense. A mailbox's own
+        // name takes precedence when one is pre-selected. The save handler
+        // still falls back to the default if the user clears the field.
         if (defaultMailbox) {
           setSelectedMailbox(defaultMailbox.email);
-          setName(defaultMailbox.name || "");
+          setName(defaultMailbox.name || t("calendar.createCalendar.defaultName"));
         } else {
           setSelectedMailbox(NO_MAILBOX_VALUE);
-          // Leave name empty so the default acts as a placeholder, avoiding
-          // accidental concatenation when the user types without first
-          // clearing the field. Empty submission falls back to the default.
-          setName("");
+          setName(t("calendar.createCalendar.defaultName"));
         }
       }
       setError(null);
@@ -253,7 +254,7 @@ export const CalendarModal = ({
                   );
                   setName(mb?.name || value);
                 } else {
-                  setName("");
+                  setName(t("calendar.createCalendar.defaultName"));
                 }
               }}
               fullWidth

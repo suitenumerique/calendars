@@ -38,18 +38,15 @@ import {
 } from "@/hooks/useFeatureFlag";
 import { SectionRow } from "./event-modal-sections/SectionRow";
 import {
-  Building,
+  Icon,
+  IconType
+} from "@gouvfr-lasuite/ui-kit";
+import {
   Meet,
   Pin,
   Calendar,
   Edit
 } from "@gouvfr-lasuite/ui-kit/icons";
-import {
-  EventAvailableSvg,
-  GroupSvg,
-  NotesSvg,
-  RepeatSvg
-} from "@/features/ui/icons/inline";
 
 
 import type { IcsEvent, IcsOrganizer } from "ts-ics";
@@ -346,24 +343,24 @@ export const EventModal = ({
       },
       {
         id: "description" as const,
-        icon: <NotesSvg />,
+        icon: <Icon name="notes" type={IconType.OUTLINED} aria-hidden />,
         label: t("calendar.event.description"),
       },
       {
         id: "recurrence" as const,
-        icon: <RepeatSvg />,
+        icon: <Icon name="repeat" type={IconType.OUTLINED} aria-hidden />,
         label: t("calendar.recurrence.label"),
       },
       {
         id: "attendees" as const,
-        icon: <GroupSvg />,
+        icon: <Icon name="group" type={IconType.OUTLINED} aria-hidden />,
         label: t("calendar.event.attendees"),
       },
       ...(availableResources.length > 0
         ? [
             {
               id: "resources" as const,
-              icon: <Building />,
+              icon: <Icon name="meeting_room" type={IconType.OUTLINED} aria-hidden />,
               label: t("calendar.event.sections.addResources"),
             },
           ]
@@ -372,7 +369,7 @@ export const EventModal = ({
         ? [
             {
               id: "scheduling" as const,
-              icon: <EventAvailableSvg />,
+              icon: <Icon name="event_available" type={IconType.OUTLINED} aria-hidden />,
               label: t("scheduling.findATime"),
             },
           ]
@@ -436,7 +433,17 @@ export const EventModal = ({
               value={form.title}
               onChange={(e) => form.setTitle(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") e.preventDefault();
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  // Submit on Enter, mirroring the Save button's guard so
+                  // we never create an invalid event.
+                  const canSave =
+                    !isLoading &&
+                    form.title.trim() &&
+                    form.selectedCalendarUrl &&
+                    !hasInvalidDateRange;
+                  if (canSave) handleSave();
+                }
               }}
               fullWidth
               placeholder={t("calendar.event.titlePlaceholder")}

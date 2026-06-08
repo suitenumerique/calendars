@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
 import { Plus, XMark } from "@gouvfr-lasuite/ui-kit/icons";
-import { AttachFileSvg, NotesSvg } from "@/features/ui/icons/inline";
+import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 
 
 
@@ -63,7 +63,7 @@ export const AttachmentsSection = ({
 
   return (
     <SectionRow
-      icon={<AttachFileSvg />}
+      icon={<Icon name="attach_file" type={IconType.OUTLINED} aria-hidden />}
       label={t("calendar.event.sections.addAttachment")}
       summary={summary}
       isEmpty={attachments.length === 0}
@@ -73,7 +73,7 @@ export const AttachmentsSection = ({
       <div className="attachments-section">
         {attachments.map((attachment) => (
           <div key={attachment.id} className="attachments-section__item">
-            <NotesSvg />
+            <Icon name="notes" type={IconType.OUTLINED} aria-hidden />
             <div className="attachments-section__info">
               <span className="attachments-section__name">
                 {attachment.name}

@@ -2,7 +2,9 @@ import { useTranslation } from "react-i18next";
 import {
   Hero,
   Footer,
-  HomeGutter
+  HomeGutter,
+  Icon,
+  IconType
 } from "@gouvfr-lasuite/ui-kit";
 import { login } from "@/features/auth/Auth";
 import { useEffect } from "react";
@@ -14,7 +16,6 @@ import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useThemeCustomization } from "@/hooks/useThemeCustomization";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";
-import { ScienceSvg } from "@/features/ui/icons/inline";
 
 
 
@@ -38,7 +39,7 @@ export const HomePage = () => {
     if (failure === "alpha") {
       addToast(
         <ToasterItem type="error">
-          <ScienceSvg />
+          <Icon name="science" type={IconType.OUTLINED} aria-hidden />
           <span>{t("authentication.error.alpha")}</span>
         </ToasterItem>,
       );

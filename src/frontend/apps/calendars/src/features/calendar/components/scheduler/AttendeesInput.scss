@@ -33,8 +33,9 @@
       border-color: var(--c--theme--colors--greyscale-400);
     }
 
-    .material-icons {
-      font-size: 1.25rem;
+    svg {
+      width: 1.25rem;
+      height: 1.25rem;
     }
   }
 
@@ -102,8 +103,9 @@
     gap: 0.25rem;
     cursor: default;
 
-    .material-icons {
-      font-size: 14px;
+    svg {
+      width: 14px;
+      height: 14px;
     }
   }
 
@@ -130,8 +132,9 @@
       opacity: 1;
     }
 
-    .material-icons {
-      font-size: 14px;
+    svg {
+      width: 14px;
+      height: 14px;
     }
   }
 }

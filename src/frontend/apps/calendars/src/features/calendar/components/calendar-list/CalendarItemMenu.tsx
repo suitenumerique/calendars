@@ -7,7 +7,9 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   DropdownMenu,
-  DropdownMenuOption
+  DropdownMenuOption,
+  Icon,
+  IconType
 } from "@gouvfr-lasuite/ui-kit";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import {
@@ -19,7 +21,6 @@ import {
   Trash,
   Upload
 } from "@gouvfr-lasuite/ui-kit/icons";
-import { PersonAddSvg } from "@/features/ui/icons/inline";
 
 
 
@@ -52,7 +53,7 @@ export const CalendarItemMenu = ({
     if (onShare) {
       items.push({
         label: t("calendar.list.share"),
-        icon: <PersonAddSvg />,
+        icon: <Icon name="person_add" type={IconType.OUTLINED} aria-hidden />,
         callback: onShare,
       });
     }

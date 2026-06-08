@@ -4,7 +4,7 @@ import { useCalendarContext } from "../../../contexts/CalendarContext";
 import { useFreeBusy } from "../hooks/useFreeBusy";
 import { FreeBusyTimeline } from "../FreeBusyTimeline";
 import { SectionRow } from "./SectionRow";
-import { EventAvailableSvg } from "@/features/ui/icons/inline";
+import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 import {
   formatDateTimeLocal,
   parseDateTimeLocal
@@ -85,7 +85,7 @@ export const FreeBusySection = ({
 
   return (
     <SectionRow
-      icon={<EventAvailableSvg />}
+      icon={<Icon name="event_available" type={IconType.OUTLINED} aria-hidden />}
       label={t("scheduling.findATime")}
       alwaysOpen={alwaysOpen}
       iconAlign="flex-start"

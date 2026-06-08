@@ -62,6 +62,10 @@ export interface CalendarContextType {
   davCalendars: CalDavCalendar[];
   ownedCalendars: CalDavCalendar[];
   sharedCalendars: CalDavCalendar[];
+  // Owned then shared, each sorted by `order` — the exact order shown in
+  // the sidebar. Use this (not raw `davCalendars`) anywhere a flat,
+  // sidebar-consistent calendar list is needed (e.g. the event modal).
+  orderedCalendars: CalDavCalendar[];
   visibleCalendarUrls: Set<string>;
   isLoading: boolean;
   isConnected: boolean;
@@ -160,6 +164,12 @@ export const CalendarContextProvider = ({
     shared.sort(byOrder);
     return { ownedCalendars: owned, sharedCalendars: shared };
   }, [davCalendars, caldavService]);
+
+  // Flat, sidebar-consistent ordering (owned then shared).
+  const orderedCalendars = useMemo(
+    () => [...ownedCalendars, ...sharedCalendars],
+    [ownedCalendars, sharedCalendars],
+  );
 
   const refreshCalendars = useCallback(async () => {
     try {
@@ -478,6 +488,7 @@ export const CalendarContextProvider = ({
     davCalendars,
     ownedCalendars,
     sharedCalendars,
+    orderedCalendars,
     visibleCalendarUrls,
     isLoading,
     isConnected,

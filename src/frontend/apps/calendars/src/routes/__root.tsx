@@ -2,7 +2,6 @@ import {
   createRootRoute,
   Outlet
 } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { useEffect } from "react";
 import {
   MutationCache,
@@ -117,9 +116,6 @@ const RootShell = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {import.meta.env.DEV && (
-        <TanStackRouterDevtools position="bottom-right" />
-      )}
       <CunninghamProvider
         currentLocale={capitalizeRegion(i18n.language)}
         theme={theme}

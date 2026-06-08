@@ -50,8 +50,9 @@
     padding: var(--c--globals--spacings--xl) 0;
     color: var(--c--contextuals--content--semantic--neutral--tertiary);
 
-    .material-icons {
-      font-size: 48px;
+    svg {
+      width: 48px;
+      height: 48px;
       margin-bottom: var(--c--globals--spacings--sm);
     }
   }
@@ -85,8 +86,9 @@
     color: white;
     flex-shrink: 0;
 
-    .material-icons {
-      font-size: 20px;
+    svg {
+      width: 20px;
+      height: 20px;
     }
   }
 

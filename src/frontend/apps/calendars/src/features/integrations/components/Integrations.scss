@@ -43,8 +43,9 @@
     padding: var(--c--globals--spacings--xl) 0;
     color: var(--c--contextuals--content--semantic--neutral--tertiary);
 
-    .material-icons {
-      font-size: 48px;
+    svg {
+      width: 48px;
+      height: 48px;
       margin-bottom: var(--c--globals--spacings--sm);
     }
   }
@@ -93,8 +94,9 @@
     color: white;
     flex-shrink: 0;
 
-    .material-icons {
-      font-size: 20px;
+    svg {
+      width: 20px;
+      height: 20px;
     }
   }
 
@@ -256,8 +258,9 @@
     background: var(--c--contextuals--background--semantic--brand--primary);
     color: white;
 
-    .material-icons {
-      font-size: 22px;
+    svg {
+      width: 22px;
+      height: 22px;
     }
   }
 

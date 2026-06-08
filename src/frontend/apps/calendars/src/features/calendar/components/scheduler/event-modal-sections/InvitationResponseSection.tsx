@@ -6,10 +6,7 @@ import {
   QuestionMark,
   XMark
 } from "@gouvfr-lasuite/ui-kit/icons";
-import {
-  EventBusySvg,
-  EventAvailableSvg
-} from "@/features/ui/icons/inline";
+import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 import {
   getBadgeType,
   getPartstatIcon
@@ -61,7 +58,7 @@ export const InvitationResponseSection = ({
 
   return (
     <SectionRow
-      icon={<EventAvailableSvg />}
+      icon={<Icon name="event_available" type={IconType.OUTLINED} aria-hidden />}
       label={t("calendar.event.invitation")}
       alwaysOpen
       iconAlign="flex-start"
@@ -75,7 +72,7 @@ export const InvitationResponseSection = ({
 
         {isCancelled ? (
           <div className="invitation-response__cancelled">
-            <EventBusySvg />
+            <Icon name="event_busy" type={IconType.OUTLINED} aria-hidden />
             {t("calendar.event.cancelledNotice")}
           </div>
         ) : (

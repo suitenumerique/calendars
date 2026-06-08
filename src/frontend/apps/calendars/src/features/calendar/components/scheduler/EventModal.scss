@@ -31,8 +31,9 @@
       background-color: #f8f9fa;
     }
 
-    .material-icons {
-      font-size: 20px;
+    svg {
+      width: 20px;
+      height: 20px;
     }
   }
 
@@ -62,7 +63,9 @@
   &__arrow {
     align-self: center;
     margin: 0 8px;
-    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
     color: #888;
   }
 
@@ -121,8 +124,9 @@
       background-color: #f1f3f4;
     }
 
-    .material-icons {
-      font-size: 18px;
+    svg {
+      width: 18px;
+      height: 18px;
     }
   }
 }
@@ -156,8 +160,9 @@
       background-color: #f1f3f4;
     }
 
-    .material-icons {
-      font-size: 18px;
+    svg {
+      width: 18px;
+      height: 18px;
     }
   }
 }
@@ -176,6 +181,22 @@
     background: #f8f9fa;
     border-radius: 4px;
     font-size: 0.8125rem;
+
+    // The leading file icon — keep it in line with other list-item
+    // icons rather than the default 24px. Covers both a ui-kit SVG and
+    // a font-based <Icon> (.material-icons span).
+    > svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      color: #5f6368;
+    }
+
+    > .material-icons {
+      font-size: 20px;
+      flex-shrink: 0;
+      color: #5f6368;
+    }
   }
 
   &__info {
@@ -214,8 +235,9 @@
       background-color: #e8eaeb;
     }
 
-    .material-icons {
-      font-size: 16px;
+    svg {
+      width: 16px;
+      height: 16px;
     }
   }
 }

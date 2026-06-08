@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Input } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
-import { Clock } from "@gouvfr-lasuite/ui-kit/icons";
+import { Clock, ArrowRight } from "@gouvfr-lasuite/ui-kit/icons";
 
 
 
@@ -45,12 +45,10 @@ export const DateTimeSection = ({
               hideLabel
               variant="classic"
             />
-            <span
-              className="material-icons datetime-section__arrow"
+            <ArrowRight
+              className="datetime-section__arrow"
               aria-hidden="true"
-            >
-              arrow_forward
-            </span>
+            />
             <Input
               type={isAllDay ? "date" : "datetime-local"}
               label={t("calendar.event.end")}

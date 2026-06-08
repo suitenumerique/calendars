@@ -61,6 +61,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     caldavService,
     adapter,
     davCalendars,
+    orderedCalendars,
     visibleCalendarUrls,
     isConnected,
     calendarRef: contextCalendarRef,
@@ -103,11 +104,13 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
 
   // Initialize calendar URL from context
   useEffect(() => {
-    if (davCalendars.length > 0 && !calendarUrl) {
-      const firstCalendar = davCalendars[0];
+    if (orderedCalendars.length > 0 && !calendarUrl) {
+      // Default to the first calendar in the displayed order (top of the
+      // sidebar), not the raw server order.
+      const firstCalendar = orderedCalendars[0];
       setCalendarUrl(defaultCalendarUrl || firstCalendar.url);
     }
-  }, [davCalendars, defaultCalendarUrl, calendarUrl]);
+  }, [orderedCalendars, defaultCalendarUrl, calendarUrl]);
 
   // Check scheduling capabilities on mount
   useSchedulingCapabilitiesCheck(isConnected, caldavService);
@@ -295,7 +298,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     const endDate = new Date(startDate);
     endDate.setHours(startDate.getHours() + 1);
 
-    const defaultUrl = calendarUrl || davCalendars[0]?.url || "";
+    const defaultUrl = calendarUrl || orderedCalendars[0]?.url || "";
 
     setModalState({
       isOpen: true,
@@ -404,7 +407,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
         mode={modalState.mode}
         event={modalState.event}
         calendarUrl={modalState.calendarUrl}
-        calendars={davCalendars}
+        calendars={orderedCalendars}
         adapter={adapter}
         onSave={handleModalSave}
         onDelete={modalState.mode === "edit" ? handleModalDelete : undefined}

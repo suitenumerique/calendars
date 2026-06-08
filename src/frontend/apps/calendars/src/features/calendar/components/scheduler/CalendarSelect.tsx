@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Select } from "@gouvfr-lasuite/cunningham-react";
+import { Mail } from "@gouvfr-lasuite/ui-kit/icons";
 
 
 
@@ -29,12 +30,10 @@ function CalendarOption({
       />
       {name}
       {mailboxEmail && (
-        <span
-          className="material-icons calendar-list__mailbox-icon"
-          title={mailboxEmail}
-        >
-          mail
-        </span>
+        <Mail
+          className="calendar-list__mailbox-icon"
+          aria-label={mailboxEmail}
+        />
       )}
     </span>
   );

@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Plus } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { FloatingActionButtonProps } from "../types";
 
@@ -11,7 +12,7 @@ export const FloatingActionButton = ({ onClick }: FloatingActionButtonProps) => 
       type="button"
       aria-label={t("calendar.leftPanel.newEvent")}
     >
-      <span className="material-icons fab-create-event__icon" aria-hidden="true">add</span>
+      <Plus className="fab-create-event__icon" aria-hidden="true" />
     </button>
   );
 };

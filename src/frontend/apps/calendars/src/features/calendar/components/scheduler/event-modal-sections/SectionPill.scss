@@ -27,8 +27,20 @@
     color: var(--c--contextuals--content--semantic--neutral--tertiary);
   }
 
-  &__icon {
-    font-size: 16px;
+  // Icons are rendered as direct children of the pill from several
+  // sources (ui-kit SVG icons hardcode width="24"; our inline SVGs use
+  // width="24"; ui-kit's font-based <Icon> renders a .material-icons
+  // span). Pin an explicit size on each so every pill icon is identical
+  // regardless of origin.
+  > svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  > .material-icons {
+    font-size: 18px;
+    flex-shrink: 0;
   }
 
   &__label {

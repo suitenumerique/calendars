@@ -5,6 +5,7 @@
 
 import { useTranslation } from "react-i18next";
 import { Checkbox } from "@gouvfr-lasuite/cunningham-react";
+import { Mail } from "@gouvfr-lasuite/ui-kit/icons";
 import { CalendarItemMenu } from "./CalendarItemMenu";
 
 
@@ -59,13 +60,10 @@ export const CalendarListItem = ({
           {calendar.displayName || t("calendar.list.unnamed")}
         </span>
         {mailboxEmail && (
-          <span
-            className="material-icons calendar-list__mailbox-icon"
-            title={t("calendar.list.mailboxCalendar", { email: mailboxEmail })}
+          <Mail
+            className="calendar-list__mailbox-icon"
             aria-label={t("calendar.list.mailboxCalendar", { email: mailboxEmail })}
-          >
-            mail
-          </span>
+          />
         )}
       </div>
       <div className="calendar-list__item-actions">

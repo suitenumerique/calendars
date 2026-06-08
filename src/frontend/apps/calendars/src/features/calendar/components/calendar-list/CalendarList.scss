@@ -29,7 +29,9 @@
   }
 
   &__toggle-icon {
-    font-size: 1.25rem;
+    width: 1.125rem;
+    height: 1.125rem;
+    flex-shrink: 0;
     color: var(--c--theme--colors--greyscale-600);
     transition: transform 0.2s ease;
     transform: rotate(-90deg);
@@ -66,8 +68,9 @@
       color: var(--c--theme--colors--primary-500);
     }
 
-    .material-icons {
-      font-size: 1.125rem;
+    svg {
+      width: 1.125rem;
+      height: 1.125rem;
     }
   }
 
@@ -146,7 +149,8 @@
   }
 
   &__mailbox-icon {
-    font-size: 0.875rem;
+    width: 0.875rem;
+    height: 0.875rem;
     color: var(--c--theme--colors--greyscale-500, #9ca3af);
     flex-shrink: 0;
     cursor: help;
@@ -202,8 +206,9 @@
       background-color: var(--c--theme--colors--greyscale-50);
     }
 
-    .material-icons {
-      font-size: 1rem;
+    svg {
+      width: 1rem;
+      height: 1rem;
     }
 
     &--danger {
@@ -250,8 +255,9 @@
     font-size: 0.875rem;
     color: #374151;
 
-    .material-icons {
-      font-size: 1.125rem;
+    svg {
+      width: 1.125rem;
+      height: 1.125rem;
       color: var(--c--theme--colors--greyscale-500);
     }
   }
@@ -312,8 +318,9 @@
     min-height: 1.25rem;
   }
 
-  .material-icons {
-    font-size: 1.125rem;
+  svg {
+    width: 1.125rem;
+    height: 1.125rem;
   }
 }
 
@@ -440,8 +447,9 @@
     align-items: center;
     gap: 0.5rem;
 
-    .material-icons {
-      font-size: 1.125rem;
+    svg {
+      width: 1.125rem;
+      height: 1.125rem;
     }
 
     &--success {

@@ -60,14 +60,14 @@ export const LeftPanel = () => {
   const {
     selectedDate,
     setSelectedDate,
-    davCalendars,
+    orderedCalendars,
     caldavService,
     adapter,
     calendarRef,
   } = useCalendarContext();
 
-  // Get default calendar URL
-  const defaultCalendarUrl = davCalendars[0]?.url || "";
+  // Get default calendar URL — first in the displayed order (sidebar top).
+  const defaultCalendarUrl = orderedCalendars[0]?.url || "";
 
   // Create default event with rounded times
   const defaultEvent = useMemo(() => {
@@ -225,7 +225,7 @@ export const LeftPanel = () => {
           mode="create"
           event={defaultEvent}
           calendarUrl={defaultCalendarUrl}
-          calendars={davCalendars}
+          calendars={orderedCalendars}
           adapter={adapter}
           onSave={handleSave}
           onClose={handleClose}

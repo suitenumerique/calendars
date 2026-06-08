@@ -42,7 +42,6 @@
   },
   "devDependencies": {
     "@gouvfr-lasuite/cunningham-tokens": "3.1.0",
-    "@tanstack/react-router-devtools": "1.167.0",
     "@tanstack/router-cli": "1.167.13",
     "@tanstack/router-plugin": "1.168.11",
     "@types/node": "24.12.0",

@@ -22,7 +22,7 @@ import { SubscriptionUrlModal } from "./SubscriptionUrlModal";
 import { CalendarListItem } from "./CalendarListItem";
 import { useCalendarListState } from "./hooks/useCalendarListState";
 import { extractCaldavPath } from "./utils";
-import { Plus } from "@gouvfr-lasuite/ui-kit/icons";
+import { Plus, ChevronDown } from "@gouvfr-lasuite/ui-kit/icons";
 
 
 
@@ -192,15 +192,13 @@ export const CalendarList = () => {
               onClick={handleToggleMyCalendars}
               aria-expanded={isMyCalendarsExpanded}
             >
-              <span
-                className={`material-icons calendar-list__toggle-icon ${
+              <ChevronDown
+                className={`calendar-list__toggle-icon ${
                   isMyCalendarsExpanded
                     ? "calendar-list__toggle-icon--expanded"
                     : ""
                 }`}
-              >
-                expand_more
-              </span>
+              />
               <span className="calendar-list__section-title">
                 {t("calendar.list.myCalendars")}
               </span>
@@ -249,15 +247,13 @@ export const CalendarList = () => {
                 onClick={handleToggleSharedCalendars}
                 aria-expanded={isSharedCalendarsExpanded}
               >
-                <span
-                  className={`material-icons calendar-list__toggle-icon ${
+                <ChevronDown
+                  className={`calendar-list__toggle-icon ${
                     isSharedCalendarsExpanded
                       ? "calendar-list__toggle-icon--expanded"
                       : ""
                   }`}
-                >
-                  expand_more
-                </span>
+                />
                 <span className="calendar-list__section-title">
                   {t("calendar.list.sharedCalendars")}
                 </span>

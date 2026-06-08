@@ -1,10 +1,14 @@
-// Replaces ``@gouvfr-lasuite/ui-kit/sass/fonts`` so we don't pull in
-// ``@fontsource/material-icons``. Our app uses ui-kit SVG icons + a
-// handful of inline SVG fallbacks (see ``src/features/ui/icons``)
-// instead of the Material Icons font, which saves ~310 KB of woff/
-// woff2 assets in production.
+// We deliberately avoid ``@gouvfr-lasuite/ui-kit/sass/fonts`` (the full
+// ui-kit font bundle, ~310 KB) and instead pull only the fonts we need:
+//  - Marianne (text)
+//  - Material Icons Outlined (via cunningham, used by our own UI)
+//  - Material Icons (filled) — REQUIRED by ui-kit's own components
+//    (e.g. ``UserMenu``) which emit ``.material-icons.icon--filled``
+//    spans. Without it those glyphs fall back to literal ligature text
+//    ("arrow_drop_down", "logout", …). It's a single woff2.
 @use "@gouvfr-lasuite/ui-kit/fonts/Marianne";
 @use "@gouvfr-lasuite/cunningham-react/sass/icons";
+@use "@fontsource/material-icons";
 @use "@gouvfr-lasuite/ui-kit/style";
 @use "./cunningham-tokens.css";
 @use "./../features/layouts/components/global/GlobalLayout";
