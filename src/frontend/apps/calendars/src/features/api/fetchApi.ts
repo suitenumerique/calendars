@@ -1,9 +1,5 @@
-import {
-  baseApiUrl,
-  isJson
-} from "./utils";
+import { baseApiUrl, isJson } from "./utils";
 import { APIError } from "./APIError";
-
 
 /**
  * Retrieves the CSRF token from the document's cookies.
@@ -18,8 +14,7 @@ function getCSRFToken() {
     .pop();
 }
 
-export const SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL =
-  "redirect_after_login_url";
+export const SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL = "redirect_after_login_url";
 
 /**
  * Redirect to the login page, saving the current URL for post-login redirect.
@@ -41,10 +36,7 @@ export function redirectToLogin() {
   // after login" — never let it suppress the actual navigation, which
   // is what unsticks the session.
   try {
-    sessionStorage.setItem(
-      SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL,
-      window.location.href,
-    );
+    sessionStorage.setItem(SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL, window.location.href);
   } catch {
     // intentionally swallow — the redirect itself is what matters.
   }

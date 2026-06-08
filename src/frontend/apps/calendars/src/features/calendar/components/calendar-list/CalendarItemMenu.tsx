@@ -5,12 +5,7 @@
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  DropdownMenu,
-  DropdownMenuOption,
-  Icon,
-  IconType
-} from "@gouvfr-lasuite/ui-kit";
+import { DropdownMenu, DropdownMenuOption, Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import {
   ArrowDown,
@@ -19,14 +14,10 @@ import {
   Link as LinkIcon,
   MoreVertical,
   Trash,
-  Upload
+  Upload,
 } from "@gouvfr-lasuite/ui-kit/icons";
 
-
-
 import type { CalendarItemMenuProps } from "./types";
-
-
 
 export const CalendarItemMenu = ({
   isOpen,

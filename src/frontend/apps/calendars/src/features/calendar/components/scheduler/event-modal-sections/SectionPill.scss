@@ -19,11 +19,8 @@
   color: var(--c--contextuals--content--semantic--neutral--primary);
 
   &--active {
-    border: 1px solid
-      var(--c--contextuals--border--semantic--contextual--primary);
-    background-color: var(
-      --c--contextuals--background--semantic--neutral--tertiary
-    );
+    border: 1px solid var(--c--contextuals--border--semantic--contextual--primary);
+    background-color: var(--c--contextuals--background--semantic--neutral--tertiary);
     color: var(--c--contextuals--content--semantic--neutral--tertiary);
   }
 

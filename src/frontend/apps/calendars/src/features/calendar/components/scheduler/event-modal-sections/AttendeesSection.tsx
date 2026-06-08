@@ -5,8 +5,6 @@ import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 
 import type { IcsAttendee, IcsOrganizer } from "ts-ics";
 
-
-
 interface AttendeesSectionProps {
   attendees: IcsAttendee[];
   onChange: (attendees: IcsAttendee[]) => void;

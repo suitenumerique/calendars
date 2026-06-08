@@ -5,11 +5,8 @@ import {
   DAYS_OF_WEEK,
   type AvailabilitySlot,
   type AvailabilityWhen,
-  type DayOfWeek
+  type DayOfWeek,
 } from "../types";
-
-
-
 
 interface AvailabilityRowProps {
   slot: AvailabilitySlot;
@@ -26,8 +23,7 @@ export const AvailabilityRow = ({
 }: AvailabilityRowProps) => {
   const { t } = useTranslation();
 
-  const selectValue =
-    slot.when.type === "recurring" ? slot.when.day : "specific";
+  const selectValue = slot.when.type === "recurring" ? slot.when.day : "specific";
 
   const handleWhenChange = useCallback(
     (value: string) => {
@@ -55,66 +51,60 @@ export const AvailabilityRow = ({
 
   return (
     <>
-    <div
-      className={`working-hours__row${
-        isInvalid ? " working-hours__row--invalid" : ""
-      }`}
-    >
-      <div className="working-hours__row-when">
-        <select
-          className="working-hours__select"
-          value={selectValue}
-          onChange={(e) => handleWhenChange(e.target.value)}
+      <div className={`working-hours__row${isInvalid ? " working-hours__row--invalid" : ""}`}>
+        <div className="working-hours__row-when">
+          <select
+            className="working-hours__select"
+            value={selectValue}
+            onChange={(e) => handleWhenChange(e.target.value)}
+          >
+            {DAYS_OF_WEEK.map((day) => (
+              <option key={day} value={day}>
+                {t(`settings.workingHours.every${day.charAt(0).toUpperCase() + day.slice(1)}`)}
+              </option>
+            ))}
+            <option value="specific">{t("settings.workingHours.specificDate")}</option>
+          </select>
+          {slot.when.type === "specific" && (
+            <input
+              type="date"
+              className="working-hours__date-input"
+              value={slot.when.date}
+              onChange={(e) => handleDateChange(e.target.value)}
+            />
+          )}
+        </div>
+
+        <input
+          type="time"
+          className="working-hours__row-time"
+          value={slot.start}
+          aria-invalid={isInvalid || undefined}
+          onChange={(e) => onChange(slot.id, { start: e.target.value })}
+        />
+
+        <input
+          type="time"
+          className="working-hours__row-time"
+          value={slot.end}
+          aria-invalid={isInvalid || undefined}
+          onChange={(e) => onChange(slot.id, { end: e.target.value })}
+        />
+
+        <button
+          type="button"
+          className="working-hours__row-delete"
+          onClick={() => onDelete(slot.id)}
+          aria-label={t("settings.workingHours.removeAvailability")}
         >
-          {DAYS_OF_WEEK.map((day) => (
-            <option key={day} value={day}>
-              {t(`settings.workingHours.every${day.charAt(0).toUpperCase() + day.slice(1)}`)}
-            </option>
-          ))}
-          <option value="specific">
-            {t("settings.workingHours.specificDate")}
-          </option>
-        </select>
-        {slot.when.type === "specific" && (
-          <input
-            type="date"
-            className="working-hours__date-input"
-            value={slot.when.date}
-            onChange={(e) => handleDateChange(e.target.value)}
-          />
-        )}
+          <XMark />
+        </button>
       </div>
-
-      <input
-        type="time"
-        className="working-hours__row-time"
-        value={slot.start}
-        aria-invalid={isInvalid || undefined}
-        onChange={(e) => onChange(slot.id, { start: e.target.value })}
-      />
-
-      <input
-        type="time"
-        className="working-hours__row-time"
-        value={slot.end}
-        aria-invalid={isInvalid || undefined}
-        onChange={(e) => onChange(slot.id, { end: e.target.value })}
-      />
-
-      <button
-        type="button"
-        className="working-hours__row-delete"
-        onClick={() => onDelete(slot.id)}
-        aria-label={t("settings.workingHours.removeAvailability")}
-      >
-        <XMark />
-      </button>
-    </div>
-    {isInvalid && (
-      <p className="working-hours__row-error" role="alert">
-        {t("settings.workingHours.invalidRange")}
-      </p>
-    )}
+      {isInvalid && (
+        <p className="working-hours__row-error" role="alert">
+          {t("settings.workingHours.invalidRange")}
+        </p>
+      )}
     </>
   );
 };

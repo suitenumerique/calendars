@@ -114,23 +114,17 @@
     // }
 
     &:hover {
-      background-color: var(
-        --c--contextuals--background--semantic--neutral--tertiary
-      );
+      background-color: var(--c--contextuals--background--semantic--neutral--tertiary);
     }
 
     &--selected {
-      background-color: var(
-        --c--contextuals--background--semantic--brand--primary
-      );
+      background-color: var(--c--contextuals--background--semantic--brand--primary);
       color: white;
       font-weight: 600;
       border-radius: 4px;
 
       &:hover {
-        background-color: var(
-          --c--contextuals--background--semantic--brand--primary-hover
-        );
+        background-color: var(--c--contextuals--background--semantic--brand--primary-hover);
       }
     }
   }

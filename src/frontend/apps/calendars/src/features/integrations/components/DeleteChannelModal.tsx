@@ -1,17 +1,7 @@
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  Modal,
-  ModalSize
-} from "@gouvfr-lasuite/cunningham-react";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
+import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useDeleteChannel } from "../api/useChannels";
-
-
-
 
 type DeleteChannelModalProps = {
   isOpen: boolean;
@@ -20,12 +10,7 @@ type DeleteChannelModalProps = {
   onClose: () => void;
 };
 
-export const DeleteChannelModal = ({
-  isOpen,
-  id,
-  name,
-  onClose,
-}: DeleteChannelModalProps) => {
+export const DeleteChannelModal = ({ isOpen, id, name, onClose }: DeleteChannelModalProps) => {
   const { t } = useTranslation();
   const deleteChannel = useDeleteChannel();
 
@@ -68,9 +53,7 @@ export const DeleteChannelModal = ({
         </>
       }
     >
-      <p>
-        {t("integrations.delete.message", { name })}
-      </p>
+      <p>{t("integrations.delete.message", { name })}</p>
     </Modal>
   );
 };

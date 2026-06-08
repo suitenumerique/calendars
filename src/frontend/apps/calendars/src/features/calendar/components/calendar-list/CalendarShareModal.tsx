@@ -3,42 +3,22 @@
  * Wraps the UI Kit ShareModal for managing calendar sharing via CalDAV.
  */
 
-import {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef
-} from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ShareModal } from "@gouvfr-lasuite/ui-kit";
-import {
-  Alert,
-  VariantType
-} from "@gouvfr-lasuite/cunningham-react";
+import { Alert, VariantType } from "@gouvfr-lasuite/cunningham-react";
 import { useCalendarContext } from "../../contexts";
 import { useAuth } from "../../../auth/Auth";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
-import {
-  addToast,
-  ToasterItem
-} from "../../../ui/components/toaster/Toaster";
+import { addToast, ToasterItem } from "../../../ui/components/toaster/Toaster";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { Info } from "@gouvfr-lasuite/ui-kit/icons";
-
-
-
-
-
-
-
 
 import type {
   CalDavCalendar,
   CalDavSharee,
   SharePrivilege,
 } from "../../services/dav/types/caldav-service";
-
 
 interface CalendarShareModalProps {
   isOpen: boolean;
@@ -61,12 +41,7 @@ type ShareAccess = {
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const SHARE_ROLES: SharePrivilege[] = [
-  "freebusy",
-  "read",
-  "read-write",
-  "admin",
-];
+const SHARE_ROLES: SharePrivilege[] = ["freebusy", "read", "read-write", "admin"];
 
 const ROLE_KEYS: Record<string, string> = {
   freebusy: "roles.freebusy",
@@ -76,11 +51,7 @@ const ROLE_KEYS: Record<string, string> = {
   owner: "roles.owner",
 };
 
-export const CalendarShareModal = ({
-  isOpen,
-  calendar,
-  onClose,
-}: CalendarShareModalProps) => {
+export const CalendarShareModal = ({ isOpen, calendar, onClose }: CalendarShareModalProps) => {
   const { t } = useTranslation();
   const { caldavService, shareCalendar } = useCalendarContext();
   const { user } = useAuth();
@@ -142,9 +113,7 @@ export const CalendarShareModal = ({
   // marking sync-managed entries as non-deletable.
   const accesses: ShareAccess[] = useMemo(() => {
     const shareeAccesses = rawSharees
-      .filter(
-        (sharee) => !(isMailbox && (sharee.privilege as string) === "owner"),
-      )
+      .filter((sharee) => !(isMailbox && (sharee.privilege as string) === "owner"))
       .map((sharee) => {
         const email = sharee.href.replace(/^mailto:/, "");
         const isSyncManaged = isMailbox && mailboxUsers.has(email);
@@ -176,65 +145,56 @@ export const CalendarShareModal = ({
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const handleSearchUsers = useCallback(
-    (query: string) => {
-      clearTimeout(searchTimerRef.current);
-      const trimmed = query.trim();
+  const handleSearchUsers = useCallback((query: string) => {
+    clearTimeout(searchTimerRef.current);
+    const trimmed = query.trim();
 
-      if (trimmed.length < 3) {
-        // For very short queries, fall back to email-only matching
+    if (trimmed.length < 3) {
+      // For very short queries, fall back to email-only matching
+      if (EMAIL_REGEX.test(trimmed)) {
+        setSearchResults([{ id: trimmed, email: trimmed, full_name: trimmed }]);
+      } else {
+        setSearchResults([]);
+      }
+      return;
+    }
+
+    // Debounce the API call
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        const response = await fetchAPI("users/", {
+          params: { q: trimmed },
+        });
+        const data = await response.json();
+        const results: ShareUser[] = (data.results ?? []).map(
+          (u: { id: string; email: string; full_name: string }) => ({
+            id: u.id,
+            email: u.email,
+            full_name: u.full_name || u.email,
+          }),
+        );
+        // Always allow raw email entry too
+        if (
+          EMAIL_REGEX.test(trimmed) &&
+          !results.some((r) => r.email.toLowerCase() === trimmed.toLowerCase())
+        ) {
+          results.push({
+            id: trimmed,
+            email: trimmed,
+            full_name: trimmed,
+          });
+        }
+        setSearchResults(results);
+      } catch {
+        // Fallback to email-only on API error
         if (EMAIL_REGEX.test(trimmed)) {
-          setSearchResults([
-            { id: trimmed, email: trimmed, full_name: trimmed },
-          ]);
+          setSearchResults([{ id: trimmed, email: trimmed, full_name: trimmed }]);
         } else {
           setSearchResults([]);
         }
-        return;
       }
-
-      // Debounce the API call
-      searchTimerRef.current = setTimeout(async () => {
-        try {
-          const response = await fetchAPI("users/", {
-            params: { q: trimmed },
-          });
-          const data = await response.json();
-          const results: ShareUser[] = (data.results ?? []).map(
-            (u: { id: string; email: string; full_name: string }) => ({
-              id: u.id,
-              email: u.email,
-              full_name: u.full_name || u.email,
-            }),
-          );
-          // Always allow raw email entry too
-          if (
-            EMAIL_REGEX.test(trimmed) &&
-            !results.some(
-              (r) => r.email.toLowerCase() === trimmed.toLowerCase(),
-            )
-          ) {
-            results.push({
-              id: trimmed,
-              email: trimmed,
-              full_name: trimmed,
-            });
-          }
-          setSearchResults(results);
-        } catch {
-          // Fallback to email-only on API error
-          if (EMAIL_REGEX.test(trimmed)) {
-            setSearchResults([
-              { id: trimmed, email: trimmed, full_name: trimmed },
-            ]);
-          } else {
-            setSearchResults([]);
-          }
-        }
-      }, 300);
-    },
-    [],
-  );
+    }, 300);
+  }, []);
 
   const handleInviteUser = useCallback(
     async (users: ShareUser[], role: string) => {
@@ -246,11 +206,7 @@ export const CalendarShareModal = ({
         const privilege = (
           SHARE_ROLES.includes(role as SharePrivilege) ? role : "read-write"
         ) as SharePrivilege;
-        const result = await shareCalendar(
-          calendar.url,
-          invitedUser.email,
-          privilege,
-        );
+        const result = await shareCalendar(calendar.url, invitedUser.email, privilege);
         if (result.success) {
           addToast(
             <ToasterItem>
@@ -268,11 +224,7 @@ export const CalendarShareModal = ({
           );
         }
       } catch {
-        addToast(
-          <ToasterItem type="error">
-            {t("calendar.shareCalendar.error")}
-          </ToasterItem>,
-        );
+        addToast(<ToasterItem type="error">{t("calendar.shareCalendar.error")}</ToasterItem>);
       } finally {
         setLoading(false);
         setSearchResults([]);
@@ -290,9 +242,7 @@ export const CalendarShareModal = ({
       // ShareModal still fires onChange and we'd POST a CS:share that
       // the MailboxPlugin rightfully rejects with 403 (mailbox
       // calendars cannot be granted write access via manual sharing).
-      if (
-        (access as ShareAccess & { is_sync_managed?: boolean }).is_sync_managed
-      ) {
+      if ((access as ShareAccess & { is_sync_managed?: boolean }).is_sync_managed) {
         return;
       }
       // Clicking the same role on a non-sync-managed entry is also a
@@ -318,11 +268,7 @@ export const CalendarShareModal = ({
           );
         }
       } catch {
-        addToast(
-          <ToasterItem type="error">
-            {t("calendar.shareCalendar.error")}
-          </ToasterItem>,
-        );
+        addToast(<ToasterItem type="error">{t("calendar.shareCalendar.error")}</ToasterItem>);
       } finally {
         setLoading(false);
       }
@@ -337,9 +283,7 @@ export const CalendarShareModal = ({
       // Same guard as handleUpdateAccess: sync-managed rows belong to
       // Messages and must never be touched from this modal, even if a
       // delete handler somehow makes it through the per-row UI gates.
-      if (
-        (access as ShareAccess & { is_sync_managed?: boolean }).is_sync_managed
-      ) {
+      if ((access as ShareAccess & { is_sync_managed?: boolean }).is_sync_managed) {
         return;
       }
 
@@ -348,10 +292,7 @@ export const CalendarShareModal = ({
         const shareeHref = access.id.startsWith("mailto:")
           ? access.id
           : `mailto:${access.user.email}`;
-        const result = await caldavService.unshareCalendar(
-          calendar.url,
-          shareeHref,
-        );
+        const result = await caldavService.unshareCalendar(calendar.url, shareeHref);
         if (result.success) {
           await refreshSharees();
         } else {
@@ -362,11 +303,7 @@ export const CalendarShareModal = ({
           );
         }
       } catch {
-        addToast(
-          <ToasterItem type="error">
-            {t("calendar.shareCalendar.error")}
-          </ToasterItem>,
-        );
+        addToast(<ToasterItem type="error">{t("calendar.shareCalendar.error")}</ToasterItem>);
       } finally {
         setLoading(false);
       }
@@ -428,14 +365,14 @@ export const CalendarShareModal = ({
     >
       {isMailbox && (
         <div style={{ margin: "0 16px 12px" }}>
-          <Alert
-            className="app__alert--small"
-            type={VariantType.INFO}
-            icon={<Info />}
-          >
+          <Alert className="app__alert--small" type={VariantType.INFO} icon={<Info />}>
             {isMailboxAdmin
-              ? t("calendar.shareCalendar.mailboxInfoAdmin", { email: mailboxData?.email })
-              : t("calendar.shareCalendar.mailboxInfoReadonly", { email: mailboxData?.email })}
+              ? t("calendar.shareCalendar.mailboxInfoAdmin", {
+                  email: mailboxData?.email,
+                })
+              : t("calendar.shareCalendar.mailboxInfoReadonly", {
+                  email: mailboxData?.email,
+                })}
           </Alert>
         </div>
       )}

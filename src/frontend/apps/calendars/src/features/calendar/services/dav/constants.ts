@@ -1,19 +1,19 @@
 export const attendeeRoleTypes = [
-  'CHAIR',
-  'REQ-PARTICIPANT',
-  'OPT-PARTICIPANT',
-  'NON-PARTICIPANT',
-] as const
+  "CHAIR",
+  "REQ-PARTICIPANT",
+  "OPT-PARTICIPANT",
+  "NON-PARTICIPANT",
+] as const;
 
 export const availableViews = [
-  'timeGridDay',
-  'timeGridWeek',
-  'dayGridMonth',
-  'listDay',
-  'listWeek',
-  'listMonth',
-  'listYear',
-] as const
+  "timeGridDay",
+  "timeGridWeek",
+  "dayGridMonth",
+  "listDay",
+  "listWeek",
+  "listMonth",
+  "listYear",
+] as const;
 
 /**
  * UI threshold for treating a recurrence as "no end date".
@@ -30,4 +30,4 @@ export const availableViews = [
  * forever without the frontend having to hard-code the server's
  * per-FREQ cap values.
  */
-export const FOREVER_YEARS_THRESHOLD = 15
+export const FOREVER_YEARS_THRESHOLD = 15;

@@ -1,17 +1,7 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchAPI } from "@/features/api/fetchApi";
 
-
-import type {
-  Channel,
-  ChannelCreateRequest,
-  ChannelScopeValue,
-  ChannelWithToken,
-} from "../types";
+import type { Channel, ChannelCreateRequest, ChannelScopeValue, ChannelWithToken } from "../types";
 
 const CHANNELS_QUERY_KEY = ["channels"];
 
@@ -20,9 +10,7 @@ async function fetchChannels(): Promise<Channel[]> {
   return response.json();
 }
 
-async function createChannel(
-  data: ChannelCreateRequest,
-): Promise<ChannelWithToken> {
+async function createChannel(data: ChannelCreateRequest): Promise<ChannelWithToken> {
   const response = await fetchAPI("channels/", {
     method: "POST",
     body: JSON.stringify(data),
@@ -36,13 +24,10 @@ async function deleteChannel(id: string): Promise<void> {
   });
 }
 
-async function regenerateToken(
-  id: string,
-): Promise<ChannelWithToken> {
-  const response = await fetchAPI(
-    `channels/${id}/regenerate-token/`,
-    { method: "POST" },
-  );
+async function regenerateToken(id: string): Promise<ChannelWithToken> {
+  const response = await fetchAPI(`channels/${id}/regenerate-token/`, {
+    method: "POST",
+  });
   return response.json();
 }
 
@@ -52,10 +37,7 @@ type ChannelUpdate = {
   scopes?: ChannelScopeValue[];
 };
 
-async function updateChannel(
-  id: string,
-  patch: ChannelUpdate,
-): Promise<Channel> {
+async function updateChannel(id: string, patch: ChannelUpdate): Promise<Channel> {
   const response = await fetchAPI(`channels/${id}/`, {
     method: "PATCH",
     body: JSON.stringify(patch),
@@ -106,11 +88,7 @@ export const useUpdateChannel = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      id,
-      ...patch
-    }: { id: string } & ChannelUpdate) =>
-      updateChannel(id, patch),
+    mutationFn: ({ id, ...patch }: { id: string } & ChannelUpdate) => updateChannel(id, patch),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: CHANNELS_QUERY_KEY,

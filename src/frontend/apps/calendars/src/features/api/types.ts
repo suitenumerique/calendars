@@ -34,4 +34,3 @@ export interface LocalizedRecord {
   default?: Record<string, unknown>;
   [languageCode: string]: Record<string, unknown> | undefined;
 }
-

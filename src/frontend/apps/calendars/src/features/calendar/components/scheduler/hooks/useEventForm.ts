@@ -1,15 +1,10 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cleanEventForDisplay } from "../utils/eventDisplayRules";
 import {
   formatDateTimeLocal,
   formatDateLocal,
   parseDateTimeLocal,
-  parseDateLocal
+  parseDateLocal,
 } from "../utils/dateFormatters";
 
 import type {
@@ -25,7 +20,6 @@ import type {
 import type { EventCalendarAdapter } from "../../../services/dav/EventCalendarAdapter";
 import type { ResourcePrincipal } from "@/features/resources/api/useResourcePrincipals";
 import type { AttachmentMeta, EventFormSectionId } from "../types";
-
 
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -57,19 +51,14 @@ export const useEventForm = ({
   const [isAllDay, setIsAllDay] = useState(event?.start?.type === "DATE");
   const [attendees, setAttendees] = useState<IcsAttendee[]>([]);
   const [resources, setResources] = useState<ResourcePrincipal[]>([]);
-  const [recurrence, setRecurrence] = useState<IcsRecurrenceRule | undefined>(
-    undefined,
-  );
+  const [recurrence, setRecurrence] = useState<IcsRecurrenceRule | undefined>(undefined);
   const [alarms, setAlarms] = useState<IcsAlarm[]>([]);
   const [videoConferenceUrl, setVideoConferenceUrl] = useState("");
   const [attachments, setAttachments] = useState<AttachmentMeta[]>([]);
   const [status, setStatus] = useState<IcsEventStatusType>("CONFIRMED");
   const [visibility, setVisibility] = useState<IcsClassType>("PUBLIC");
-  const [availability, setAvailability] =
-    useState<IcsTimeTransparentType>("OPAQUE");
-  const [expandedSections, setExpandedSections] = useState<
-    Set<EventFormSectionId>
-  >(new Set());
+  const [availability, setAvailability] = useState<IcsTimeTransparentType>("OPAQUE");
+  const [expandedSections, setExpandedSections] = useState<Set<EventFormSectionId>>(new Set());
 
   // Reset form when event changes
   useEffect(() => {
@@ -116,10 +105,7 @@ export const useEventForm = ({
     if (mode === "create") {
       initialExpanded.add("attendees");
     } else if (
-      event?.attendees?.some(
-        (att) =>
-          att.email.toLowerCase() !== organizer?.email?.toLowerCase(),
-      )
+      event?.attendees?.some((att) => att.email.toLowerCase() !== organizer?.email?.toLowerCase())
     ) {
       initialExpanded.add("attendees");
     }
@@ -132,9 +118,7 @@ export const useEventForm = ({
 
     if (event?.start?.date) {
       const startDate =
-        event.start.date instanceof Date
-          ? event.start.date
-          : new Date(event.start.date);
+        event.start.date instanceof Date ? event.start.date : new Date(event.start.date);
       const isFakeUtc = Boolean(event.start.local?.timezone);
 
       if (eventIsAllDay) {
@@ -151,10 +135,7 @@ export const useEventForm = ({
     }
 
     if (event?.end?.date) {
-      const endDate =
-        event.end.date instanceof Date
-          ? event.end.date
-          : new Date(event.end.date);
+      const endDate = event.end.date instanceof Date ? event.end.date : new Date(event.end.date);
       const isFakeUtc = Boolean(event.end.local?.timezone);
 
       if (eventIsAllDay) {
@@ -190,18 +171,14 @@ export const useEventForm = ({
   useEffect(() => {
     if (event?.attendees && event.attendees.length > 0) {
       const resourceEmails = new Set(
-        availableResources
-          .filter((r) => r.email)
-          .map((r) => r.email!.toLowerCase()),
+        availableResources.filter((r) => r.email).map((r) => r.email!.toLowerCase()),
       );
       const peopleAttendees: IcsAttendee[] = [];
       const matchedResources: ResourcePrincipal[] = [];
 
       for (const att of event.attendees) {
         const email = att.email.toLowerCase();
-        const resource = availableResources.find(
-          (r) => r.email && r.email.toLowerCase() === email,
-        );
+        const resource = availableResources.find((r) => r.email && r.email.toLowerCase() === email);
         if (resource && resourceEmails.has(email)) {
           matchedResources.push(resource);
         } else {
@@ -313,23 +290,14 @@ export const useEventForm = ({
       });
     const allAttendees = [...attendees, ...resourceAttendees];
 
-
     if (isAllDay) {
       const startDate = parseDateLocal(startDateTime);
       const endDate = parseDateLocal(endDateTime);
       const utcStart = new Date(
-        Date.UTC(
-          startDate.getFullYear(),
-          startDate.getMonth(),
-          startDate.getDate(),
-        ),
+        Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()),
       );
       const utcEnd = new Date(
-        Date.UTC(
-          endDate.getFullYear(),
-          endDate.getMonth(),
-          endDate.getDate() + 1,
-        ),
+        Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1),
       );
 
       return {

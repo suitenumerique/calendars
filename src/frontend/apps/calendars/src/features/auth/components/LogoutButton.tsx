@@ -2,8 +2,6 @@ import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { logout } from "../Auth";
 import { useTranslation } from "react-i18next";
 
-
-
 export const LogoutButton = () => {
   const { t } = useTranslation();
   return (

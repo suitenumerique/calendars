@@ -1,13 +1,7 @@
 import { LaGaufreV2 } from "@gouvfr-lasuite/ui-kit";
-import {
-  removeQuotes,
-  useCunninghamTheme
-} from "../../cunningham/useCunninghamTheme";
+import { removeQuotes, useCunninghamTheme } from "../../cunningham/useCunninghamTheme";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useAppContext } from "@/features/app/AppContext";
-
-
-
 
 export const Gaufre = () => {
   const { config } = useConfig();
@@ -15,11 +9,9 @@ export const Gaufre = () => {
   const isEnabled = config?.FRONTEND_LAGAUFRE_ENABLED ?? false;
   const theme = useCunninghamTheme();
   const widgetPath =
-    config?.FRONTEND_LAGAUFRE_WIDGET_PATH ||
-    removeQuotes(theme.components.gaufre.widgetPath);
+    config?.FRONTEND_LAGAUFRE_WIDGET_PATH || removeQuotes(theme.components.gaufre.widgetPath);
   const apiUrl =
-    config?.FRONTEND_LAGAUFRE_WIDGET_API_URL ||
-    removeQuotes(theme.components.gaufre.apiUrl);
+    config?.FRONTEND_LAGAUFRE_WIDGET_API_URL || removeQuotes(theme.components.gaufre.apiUrl);
 
   if (!isEnabled) {
     return null;

@@ -25,7 +25,6 @@
 import { redirectToLogin } from "@/features/api/fetchApi";
 import { getOrigin } from "@/features/api/utils";
 
-
 export const caldavServerUrl = `${getOrigin()}/caldav/`;
 
 const SHARED_HEADERS: Readonly<Record<string, string>> = {
@@ -128,10 +127,7 @@ export type DavRequestResult = {
   responseHeaders?: Headers;
 };
 
-const MULTISTATUS_VERBS: ReadonlySet<DavMethod> = new Set([
-  "PROPFIND",
-  "REPORT",
-]);
+const MULTISTATUS_VERBS: ReadonlySet<DavMethod> = new Set(["PROPFIND", "REPORT"]);
 
 function isAuthFailure(status: number | undefined): boolean {
   return status === 401;
@@ -158,8 +154,7 @@ function isAuthFailure(status: number | undefined): boolean {
 // hardening for the SabreDAV traffic we control end-to-end.
 
 const XML_PARSE_TYPE = "application/xml" as const;
-const PARSERERROR_NS =
-  "http://www.mozilla.org/newlayout/xml/parsererror.xml";
+const PARSERERROR_NS = "http://www.mozilla.org/newlayout/xml/parsererror.xml";
 const DAV_NS = "DAV:";
 const SABREDAV_NS = "http://sabredav.org/ns";
 
@@ -188,9 +183,7 @@ function safeParseXml(xml: string): Document | undefined {
 export function parseDavErrorMessage(xmlBody: string): string | undefined {
   const doc = safeParseXml(xmlBody);
   if (!doc) return undefined;
-  const text = doc
-    .getElementsByTagNameNS(SABREDAV_NS, "message")[0]
-    ?.textContent?.trim();
+  const text = doc.getElementsByTagNameNS(SABREDAV_NS, "message")[0]?.textContent?.trim();
   return text ? text : undefined;
 }
 
@@ -299,14 +292,10 @@ export function parseMultistatus(xml: string): DavResponseEntry[] {
   const root = doc.documentElement;
   if (!root || root.localName !== "multistatus") return [];
 
-  const responses = Array.from(
-    root.getElementsByTagNameNS(DAV_NS, "response"),
-  );
+  const responses = Array.from(root.getElementsByTagNameNS(DAV_NS, "response"));
 
   return responses.map((resp): DavResponseEntry => {
-    const href =
-      resp.getElementsByTagNameNS(DAV_NS, "href")[0]?.textContent?.trim() ??
-      undefined;
+    const href = resp.getElementsByTagNameNS(DAV_NS, "href")[0]?.textContent?.trim() ?? undefined;
 
     // Only look at *direct* propstat children — `<d:error>` nesting can
     // legally contain its own `<d:status>` and we don't want to pull
@@ -344,8 +333,7 @@ export function parseMultistatus(xml: string): DavResponseEntry[] {
 
     // RFC 4918 §11.5
     const respDescEl = Array.from(resp.children).find(
-      (c) =>
-        c.namespaceURI === DAV_NS && c.localName === "responsedescription",
+      (c) => c.namespaceURI === DAV_NS && c.localName === "responsedescription",
     );
     const responseDescription = respDescEl?.textContent?.trim() || undefined;
 
@@ -367,9 +355,7 @@ export function parseMultistatus(xml: string): DavResponseEntry[] {
   });
 }
 
-export async function davRequest(
-  params: DavRequestParams,
-): Promise<DavRequestResult> {
+export async function davRequest(params: DavRequestParams): Promise<DavRequestResult> {
   const mergedFetchOptions: RequestInit = {
     ...SHARED_FETCH_OPTIONS,
     ...params.fetchOptions,
@@ -381,17 +367,14 @@ export async function davRequest(
 
   const requestHeaders: Record<string, string> = { ...mergedHeaders };
   if (params.method !== "GET") {
-    requestHeaders["Content-Type"] =
-      params.contentType ?? "application/xml; charset=utf-8";
+    requestHeaders["Content-Type"] = params.contentType ?? "application/xml; charset=utf-8";
   }
   if (params.depth) {
     requestHeaders.Depth = params.depth;
   }
 
   const body =
-    params.method === "PROPFIND" && params.props
-      ? buildPropfindBody(params.props)
-      : params.body;
+    params.method === "PROPFIND" && params.props ? buildPropfindBody(params.props) : params.body;
 
   try {
     const response = await fetch(params.url, {
@@ -421,9 +404,7 @@ export async function davRequest(
     // 204 No Content has no body; everything else (GET ICS, POST
     // schedule-response, multistatus, etc.) may carry payload.
     const responseBody =
-      response.status === 204
-        ? undefined
-        : await response.text().catch(() => undefined);
+      response.status === 204 ? undefined : await response.text().catch(() => undefined);
 
     // Defensive: only attempt multistatus parsing if the server actually
     // sent XML. A misconfigured backend that returns `text/html` with a

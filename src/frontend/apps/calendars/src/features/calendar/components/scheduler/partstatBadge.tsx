@@ -1,18 +1,7 @@
 import type { ReactNode } from "react";
-import {
-  CircleCheck,
-  Clock,
-  QuestionMark,
-  XMark
-} from "@gouvfr-lasuite/ui-kit/icons";
+import { CircleCheck, Clock, QuestionMark, XMark } from "@gouvfr-lasuite/ui-kit/icons";
 
-export type PartstatBadgeType =
-  | "accent"
-  | "neutral"
-  | "danger"
-  | "success"
-  | "warning"
-  | "info";
+export type PartstatBadgeType = "accent" | "neutral" | "danger" | "success" | "warning" | "info";
 
 export const getBadgeType = (partstat?: string): PartstatBadgeType => {
   switch (partstat) {

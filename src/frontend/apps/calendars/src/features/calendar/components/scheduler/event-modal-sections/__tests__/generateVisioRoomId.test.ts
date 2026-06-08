@@ -7,9 +7,7 @@ describe("generateVisioRoomId", () => {
   });
 
   it("generates different IDs on subsequent calls", () => {
-    const ids = new Set(
-      Array.from({ length: 20 }, () => generateVisioRoomId()),
-    );
+    const ids = new Set(Array.from({ length: 20 }, () => generateVisioRoomId()));
     expect(ids.size).toBeGreaterThan(1);
   });
 

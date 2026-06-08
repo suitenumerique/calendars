@@ -7,12 +7,7 @@ interface SectionPillProps {
   onClick: () => void;
 }
 
-export const SectionPill = ({
-  icon,
-  label,
-  isActive,
-  onClick,
-}: SectionPillProps) => {
+export const SectionPill = ({ icon, label, isActive, onClick }: SectionPillProps) => {
   return (
     <button
       type="button"

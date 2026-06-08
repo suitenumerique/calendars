@@ -1,25 +1,9 @@
-import {
-  useEffect,
-  useRef,
-  useMemo,
-  useCallback
-} from "react";
+import { useEffect, useRef, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  createCalendar,
-  destroyCalendar,
-  ResourceTimeline
-} from "@event-calendar/core";
-import {
-  ChevronLeft,
-  ChevronRight
-} from "@gouvfr-lasuite/ui-kit/icons";
-
-
+import { createCalendar, destroyCalendar, ResourceTimeline } from "@event-calendar/core";
+import { ChevronLeft, ChevronRight } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { FreeBusyResponse } from "../../services/dav/types/caldav-service";
-
-
 
 import { Retry } from "@gouvfr-lasuite/ui-kit/icons";
 interface FreeBusyTimelineProps {
@@ -114,9 +98,8 @@ export const FreeBusyTimeline = ({
     eventEnd.toDateString() === date.toDateString() ||
     (eventStart < date && eventEnd > date);
   const conflictCount = eventOnThisDay
-    ? attendees.filter((a) =>
-        a.periods.some((p) => p.start < eventEnd && p.end > eventStart),
-      ).length
+    ? attendees.filter((a) => a.periods.some((p) => p.start < eventEnd && p.end > eventStart))
+        .length
     : 0;
 
   // Create / destroy calendar instance
@@ -150,12 +133,8 @@ export const FreeBusyTimeline = ({
     requestAnimationFrame(() => {
       if (!containerRef.current) return;
       // Structure: .ec-main > .ec-header, .ec-main > .ec-body
-      const header = containerRef.current.querySelector(
-        ".ec-header",
-      ) as HTMLElement | null;
-      const body = containerRef.current.querySelector(
-        ".ec-body",
-      ) as HTMLElement | null;
+      const header = containerRef.current.querySelector(".ec-header") as HTMLElement | null;
+      const body = containerRef.current.querySelector(".ec-body") as HTMLElement | null;
       if (!header || !body) return;
 
       // The grid inside header/body holds the time slots
@@ -192,9 +171,7 @@ export const FreeBusyTimeline = ({
         const startH = startsOnDay
           ? eventStart.getHours() + eventStart.getMinutes() / 60
           : SLOT_MIN;
-        const endH = endsOnDay
-          ? eventEnd.getHours() + eventEnd.getMinutes() / 60
-          : SLOT_MAX;
+        const endH = endsOnDay ? eventEnd.getHours() + eventEnd.getMinutes() / 60 : SLOT_MAX;
         const leftPct = ((Math.max(startH, SLOT_MIN) - SLOT_MIN) / totalHours) * 100;
         const rightPct = ((Math.min(endH, SLOT_MAX) - SLOT_MIN) / totalHours) * 100;
 

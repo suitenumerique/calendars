@@ -1,0 +1,9 @@
+{
+  "printWidth": 100,
+  "ignorePatterns": [
+    "dist/**",
+    "src/routes.gen.ts",
+    "src/styles/cunningham-tokens.ts",
+    "src/styles/cunningham-tokens-sass.scss"
+  ]
+}

@@ -168,9 +168,13 @@ analyze-back: ## lint all back-end python sources with pylint
 	@$(COMPOSE_RUN_APP_NO_DEPS) pylint .
 .PHONY: analyze-back
 
-lint-front: ## run the frontend linter
+lint-front: ## run the frontend linter (oxlint)
 	@$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npm run lint"
 .PHONY: lint-front
+
+format-front: ## format front-end sources with oxfmt
+	@$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npm run format"
+.PHONY: format-front
 
 typecheck-front: ## run the frontend type checker
 	@$(COMPOSE) run --rm frontend-dev sh -c "cd apps/calendars && npm run ts:check"

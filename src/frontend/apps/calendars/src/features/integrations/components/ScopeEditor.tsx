@@ -1,11 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Checkbox } from "@gouvfr-lasuite/cunningham-react";
-import {
-  CHANNEL_SCOPES,
-  type ChannelScopeValue
-} from "../types";
-
-
+import { CHANNEL_SCOPES, type ChannelScopeValue } from "../types";
 
 type ScopeEditorProps = {
   scopes: ChannelScopeValue[];
@@ -13,11 +8,7 @@ type ScopeEditorProps = {
   disabled?: boolean;
 };
 
-export const ScopeEditor = ({
-  scopes,
-  onChange,
-  disabled = false,
-}: ScopeEditorProps) => {
+export const ScopeEditor = ({ scopes, onChange, disabled = false }: ScopeEditorProps) => {
   const { t } = useTranslation();
 
   const toggle = (scope: ChannelScopeValue) => {
@@ -33,9 +24,7 @@ export const ScopeEditor = ({
       {CHANNEL_SCOPES.map((scope) => (
         <Checkbox
           key={scope}
-          label={t(
-            `integrations.scopes.${scope.replace(":", "_")}`,
-          )}
+          label={t(`integrations.scopes.${scope.replace(":", "_")}`)}
           checked={scopes.includes(scope)}
           onChange={() => toggle(scope)}
           disabled={disabled}

@@ -4,11 +4,10 @@ import {
   BASE_LANGUAGE,
   IS_LANGUAGE_FORCED,
   LANGUAGES_ALLOWED,
-  LANGUAGE_LOCAL_STORAGE
+  LANGUAGE_LOCAL_STORAGE,
 } from "./conf";
 
 import LanguageDetector from "i18next-browser-languagedetector";
-
 
 import resources from "./translations.json";
 

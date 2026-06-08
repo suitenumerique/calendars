@@ -11,7 +11,11 @@ export async function setupCalendar(
   name: string,
   mailboxEmail?: string,
   color?: string,
-): Promise<{ calendar_path: string; principal_uri: string; mailbox_email?: string }> {
+): Promise<{
+  calendar_path: string;
+  principal_uri: string;
+  mailbox_email?: string;
+}> {
   const body: Record<string, string> = { name };
   if (mailboxEmail) body.mailbox_email = mailboxEmail;
   if (color) body.color = color;

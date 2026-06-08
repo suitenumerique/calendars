@@ -5,11 +5,6 @@ import { Toaster } from "@/features/ui/components/toaster/Toaster";
 import { LeftPanelMobile } from "@/features/layouts/components/left-panel/LeftPanelMobile";
 import { useLeftPanel } from "../../contexts/LeftPanelContext";
 
-
-
-
-
-
 export const getSimpleLayout = (page: React.ReactElement) => {
   return <SimpleLayout>{page}</SimpleLayout>;
 };

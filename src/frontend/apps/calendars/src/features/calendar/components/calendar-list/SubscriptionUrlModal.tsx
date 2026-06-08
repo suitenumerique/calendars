@@ -3,31 +3,15 @@
  * Displays the subscription URL for iCal export with copy and regenerate options.
  */
 
-import {
-  useEffect,
-  useState
-} from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  ErrorFilled,
-  Warning
-} from "@gouvfr-lasuite/ui-kit/icons";
-import {
-  Alert,
-  Button,
-  Modal,
-  ModalSize,
-  VariantType
-} from "@gouvfr-lasuite/cunningham-react";
+import { ErrorFilled, Warning } from "@gouvfr-lasuite/ui-kit/icons";
+import { Alert, Button, Modal, ModalSize, VariantType } from "@gouvfr-lasuite/cunningham-react";
 import {
   useCreateICalFeedChannel,
   useDeleteICalFeedChannel,
-  useICalFeedChannel
+  useICalFeedChannel,
 } from "../../hooks/useCalendars";
-
-
-
-
 
 interface SubscriptionUrlModalProps {
   isOpen: boolean;
@@ -55,10 +39,8 @@ export const SubscriptionUrlModal = ({
   const displayChannel = channel || createChannel.data;
   const displayUrl = displayChannel?.url;
   // Show error from channel fetch or from creation failure
-  const hasRealError =
-    channelError || (createChannel.error && hasTriedCreate);
-  const isRegenerating =
-    deleteChannelMutation.isPending || createChannel.isPending;
+  const hasRealError = channelError || (createChannel.error && hasTriedCreate);
+  const isRegenerating = deleteChannelMutation.isPending || createChannel.isPending;
   const showLoading = isLoading || createChannel.isPending;
 
   // Get appropriate error message based on error type
@@ -87,25 +69,11 @@ export const SubscriptionUrlModal = ({
 
   // Create channel on first open if none exists (only try once)
   useEffect(() => {
-    if (
-      isOpen &&
-      !channel &&
-      !isLoading &&
-      !createChannel.isPending &&
-      !hasTriedCreate
-    ) {
+    if (isOpen && !channel && !isLoading && !createChannel.isPending && !hasTriedCreate) {
       setHasTriedCreate(true);
       createChannel.mutate({ caldavPath, calendarName });
     }
-  }, [
-    isOpen,
-    channel,
-    isLoading,
-    createChannel,
-    caldavPath,
-    calendarName,
-    hasTriedCreate,
-  ]);
+  }, [isOpen, channel, isLoading, createChannel, caldavPath, calendarName, hasTriedCreate]);
 
   const handleCopy = async () => {
     if (!displayUrl) return;
@@ -154,15 +122,9 @@ export const SubscriptionUrlModal = ({
           </p>
 
           {showLoading ? (
-            <div className="subscription-modal__loading">
-              {t("calendar.subscription.loading")}
-            </div>
+            <div className="subscription-modal__loading">{t("calendar.subscription.loading")}</div>
           ) : hasRealError && !displayUrl ? (
-            <Alert
-              className="app__alert--small"
-              type={VariantType.ERROR}
-              icon={<ErrorFilled />}
-            >
+            <Alert className="app__alert--small" type={VariantType.ERROR} icon={<ErrorFilled />}>
               {getErrorMessage()}
             </Alert>
           ) : displayUrl ? (
@@ -175,22 +137,12 @@ export const SubscriptionUrlModal = ({
                   className="subscription-modal__url-input"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
                 />
-                <Button
-                  color="brand"
-                  onClick={handleCopy}
-                  disabled={isRegenerating}
-                >
-                  {copied
-                    ? t("calendar.subscription.copied")
-                    : t("calendar.subscription.copy")}
+                <Button color="brand" onClick={handleCopy} disabled={isRegenerating}>
+                  {copied ? t("calendar.subscription.copied") : t("calendar.subscription.copy")}
                 </Button>
               </div>
 
-              <Alert
-                className="app__alert--small"
-                type={VariantType.WARNING}
-                icon={<Warning />}
-              >
+              <Alert className="app__alert--small" type={VariantType.WARNING} icon={<Warning />}>
                 {t("calendar.subscription.warning")}
               </Alert>
 
@@ -223,14 +175,8 @@ export const SubscriptionUrlModal = ({
             >
               {t("calendar.event.cancel")}
             </Button>
-            <Button
-              color="error"
-              onClick={handleRegenerate}
-              disabled={isRegenerating}
-            >
-              {isRegenerating
-                ? "..."
-                : t("calendar.subscription.regenerateConfirm.confirm")}
+            <Button color="error" onClick={handleRegenerate} disabled={isRegenerating}>
+              {isRegenerating ? "..." : t("calendar.subscription.regenerateConfirm.confirm")}
             </Button>
           </>
         }

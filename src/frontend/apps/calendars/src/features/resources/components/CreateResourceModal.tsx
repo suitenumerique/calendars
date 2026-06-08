@@ -1,21 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  Input,
-  Modal,
-  ModalSize,
-  Select
-} from "@gouvfr-lasuite/cunningham-react";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
+import { Button, Input, Modal, ModalSize, Select } from "@gouvfr-lasuite/cunningham-react";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useCreateResource } from "../api/useResources";
-
-
-
-
 
 import type { ResourceType } from "../types";
 
@@ -25,20 +12,14 @@ type CreateResourceModalProps = {
   onSuccess: () => void;
 };
 
-export const CreateResourceModal = ({
-  isOpen,
-  onClose,
-  onSuccess,
-}: CreateResourceModalProps) => {
+export const CreateResourceModal = ({ isOpen, onClose, onSuccess }: CreateResourceModalProps) => {
   const { t } = useTranslation();
   const createResource = useCreateResource();
 
   const [name, setName] = useState("");
   const [resourceType, setResourceType] = useState<ResourceType>("ROOM");
 
-  const canSubmit =
-    name.trim().length > 0 &&
-    !createResource.isPending;
+  const canSubmit = name.trim().length > 0 && !createResource.isPending;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -87,11 +68,7 @@ export const CreateResourceModal = ({
           <Button color="neutral" onClick={handleClose}>
             {t("common.cancel")}
           </Button>
-          <Button
-            color="brand"
-            onClick={() => void handleSubmit()}
-            disabled={!canSubmit}
-          >
+          <Button color="brand" onClick={() => void handleSubmit()} disabled={!canSubmit}>
             {t("resources.create.submit")}
           </Button>
         </>
@@ -101,22 +78,14 @@ export const CreateResourceModal = ({
         <Input
           label={t("resources.create.nameLabel")}
           value={name}
-          onChange={(e) =>
-            setName(
-              (e.target as HTMLInputElement).value,
-            )
-          }
+          onChange={(e) => setName((e.target as HTMLInputElement).value)}
           fullWidth
         />
         <Select
           label={t("resources.create.typeLabel")}
           options={typeOptions}
           value={resourceType}
-          onChange={(e) =>
-            setResourceType(
-              (e.target as HTMLSelectElement).value as ResourceType,
-            )
-          }
+          onChange={(e) => setResourceType((e.target as HTMLSelectElement).value as ResourceType)}
           fullWidth
         />
       </div>

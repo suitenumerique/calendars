@@ -1,22 +1,10 @@
-import {
-  Alert,
-  Input,
-  Select,
-  VariantType
-} from "@gouvfr-lasuite/cunningham-react";
-import {
-  useState,
-  useMemo
-} from "react";
+import { Alert, Input, Select, VariantType } from "@gouvfr-lasuite/cunningham-react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { FOREVER_YEARS_THRESHOLD } from "../../services/dav/constants";
 import { Warning } from "@gouvfr-lasuite/ui-kit/icons";
 
-
-
 import type { IcsRecurrenceRule, IcsWeekDay } from "ts-ics";
-
-
 
 const SECONDS_PER_YEAR = 86400 * 365;
 const FOREVER_THRESHOLD_SECS = FOREVER_YEARS_THRESHOLD * SECONDS_PER_YEAR;
@@ -51,22 +39,14 @@ const MONTHS = [
   { value: 12, key: "december" },
 ];
 
-const ADVANCED_RRULE_KEYS: (keyof IcsRecurrenceRule)[] = [
-  "bySetPos",
-  "byYearday",
-  "byWeekNo",
-];
+const ADVANCED_RRULE_KEYS: (keyof IcsRecurrenceRule)[] = ["bySetPos", "byYearday", "byWeekNo"];
 
 function hasAdvancedProperties(rule?: IcsRecurrenceRule): boolean {
   if (!rule) return false;
-  return ADVANCED_RRULE_KEYS.some(
-    (key) => rule[key] !== undefined && rule[key] !== null,
-  );
+  return ADVANCED_RRULE_KEYS.some((key) => rule[key] !== undefined && rule[key] !== null);
 }
 
-function getAdvancedProperties(
-  rule?: IcsRecurrenceRule,
-): Partial<IcsRecurrenceRule> {
+function getAdvancedProperties(rule?: IcsRecurrenceRule): Partial<IcsRecurrenceRule> {
   if (!rule) return {};
   const result: Partial<IcsRecurrenceRule> = {};
   for (const key of ADVANCED_RRULE_KEYS) {
@@ -98,11 +78,7 @@ interface RecurrenceEditorProps {
 // references a single month — so doing this properly requires a new
 // set of monthly-specific copy keys, not just reusing the existing
 // ones.
-function getDateWarning(
-  t: (key: string) => string,
-  day: number,
-  month?: number,
-): string | null {
+function getDateWarning(t: (key: string) => string, day: number, month?: number): string | null {
   if (!month) return null;
 
   if (month === 2 && day > 29) {
@@ -134,9 +110,7 @@ export function isForeverCount(rule: IcsRecurrenceRule): boolean {
 // the authoritative wall-clock instant; otherwise fall back to
 // `date`. Used by every UNTIL-reading path so classification and
 // rendering agree on the same resolved Date.
-export function getResolvedUntilDate(
-  rule: IcsRecurrenceRule,
-): Date | undefined {
+export function getResolvedUntilDate(rule: IcsRecurrenceRule): Date | undefined {
   const date = rule.until?.local?.date ?? rule.until?.date;
   return date instanceof Date ? date : undefined;
 }
@@ -162,10 +136,8 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
 
   const [isCustom, setIsCustom] = useState(() => {
     if (!value) return false;
-    const userCount =
-      value.count && !isForeverCount(value) ? value.count : undefined;
-    const userUntil =
-      value.until && !isForeverUntil(value) ? value.until : undefined;
+    const userCount = value.count && !isForeverCount(value) ? value.count : undefined;
+    const userUntil = value.until && !isForeverUntil(value) ? value.until : undefined;
     return !!(
       value.interval !== 1 ||
       value.byDay?.length ||
@@ -221,16 +193,16 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
 
     const interval = value.interval || 1;
     const freq = value.frequency;
-    const freqLabel = t(`calendar.recurrence.${freq === "DAILY" ? "days" : freq === "WEEKLY" ? "weeks" : freq === "MONTHLY" ? "months" : "years"}`);
+    const freqLabel = t(
+      `calendar.recurrence.${freq === "DAILY" ? "days" : freq === "WEEKLY" ? "weeks" : freq === "MONTHLY" ? "months" : "years"}`,
+    );
 
     let result = `${t("calendar.recurrence.everyLabel")} ${interval > 1 ? `${interval} ` : ""}${freqLabel}`;
 
     if (freq === "WEEKLY" && value.byDay?.length) {
       const dayLabels = value.byDay.map((d) => {
         const dayKey = typeof d === "string" ? d : d.day;
-        return t(
-          `calendar.recurrence.weekdays.${dayKey.toLowerCase()}`,
-        );
+        return t(`calendar.recurrence.weekdays.${dayKey.toLowerCase()}`);
       });
       result += ` · ${dayLabels.join(", ")}`;
     }
@@ -297,9 +269,7 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
 
   const getSelectedDays = (): IcsWeekDay[] => {
     if (!value?.byDay) return [];
-    return value.byDay.map((d) =>
-      typeof d === "string" ? (d as IcsWeekDay) : d.day,
-    );
+    return value.byDay.map((d) => (typeof d === "string" ? (d as IcsWeekDay) : d.day));
   };
 
   const isDaySelected = (day: IcsWeekDay): boolean => {
@@ -338,7 +308,6 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
       ? getDateWarning(t, monthDay, parseInt(getMonth()))
       : null;
 
-
   const showAdvancedWarning = hasAdvancedProperties(value);
 
   return (
@@ -354,20 +323,14 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
       />
 
       {showAdvancedWarning && (
-        <Alert
-          className="app__alert--small"
-          type={VariantType.WARNING}
-          icon={<Warning />}
-        >
+        <Alert className="app__alert--small" type={VariantType.WARNING} icon={<Warning />}>
           {t("calendar.recurrence.advancedPropertiesWarning")}
         </Alert>
       )}
 
       {isCustom && (
         <div className="recurrence-editor__card">
-          {summary && (
-            <div className="recurrence-editor__summary">{summary}</div>
-          )}
+          {summary && <div className="recurrence-editor__summary">{summary}</div>}
 
           <div className="recurrence-editor__interval">
             <span>{t("calendar.recurrence.everyLabel")}</span>
@@ -390,9 +353,7 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
               options={frequencyOptions}
               onChange={(e) =>
                 handleChange({
-                  frequency: String(
-                    e.target.value ?? "",
-                  ) as RecurrenceFrequency,
+                  frequency: String(e.target.value ?? "") as RecurrenceFrequency,
                 })
               }
             />
@@ -455,9 +416,7 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
                   value={getMonth()}
                   variant="classic"
                   options={monthOptions}
-                  onChange={(e) =>
-                    handleMonthChange(parseInt(String(e.target.value)) || 1)
-                  }
+                  onChange={(e) => handleMonthChange(parseInt(String(e.target.value)) || 1)}
                 />
                 <Input
                   label=""
@@ -475,11 +434,7 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
                 />
               </div>
               {dateWarning && (
-                <Alert
-                  className="app__alert--small"
-                  type={VariantType.WARNING}
-                  icon={<Warning />}
-                >
+                <Alert className="app__alert--small" type={VariantType.WARNING} icon={<Warning />}>
                   {dateWarning}
                 </Alert>
               )}
@@ -494,18 +449,14 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
               <button
                 type="button"
                 className={`recurrence-editor__end-btn ${endType === "never" ? "recurrence-editor__end-btn--active" : ""}`}
-                onClick={() =>
-                  handleChange({ count: undefined, until: undefined })
-                }
+                onClick={() => handleChange({ count: undefined, until: undefined })}
               >
                 {t("calendar.recurrence.never")}
               </button>
               <button
                 type="button"
                 className={`recurrence-editor__end-btn ${endType === "count" ? "recurrence-editor__end-btn--active" : ""}`}
-                onClick={() =>
-                  handleChange({ count: 10, until: undefined })
-                }
+                onClick={() => handleChange({ count: 10, until: undefined })}
               >
                 {t("calendar.recurrence.after")}...
               </button>
@@ -548,12 +499,8 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
                   type="date"
                   variant="classic"
                   value={(() => {
-                    const untilDate = value
-                      ? getResolvedUntilDate(value)
-                      : undefined;
-                    return untilDate
-                      ? untilDate.toISOString().split("T")[0]
-                      : "";
+                    const untilDate = value ? getResolvedUntilDate(value) : undefined;
+                    return untilDate ? untilDate.toISOString().split("T")[0] : "";
                   })()}
                   onChange={(e) =>
                     handleChange({

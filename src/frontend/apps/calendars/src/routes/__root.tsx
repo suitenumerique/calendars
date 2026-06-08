@@ -1,54 +1,24 @@
-import {
-  createRootRoute,
-  Outlet
-} from "@tanstack/react-router";
+import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { useEffect } from "react";
 import {
   MutationCache,
   Query,
   QueryCache,
   QueryClient,
-  QueryClientProvider
+  QueryClientProvider,
 } from "@tanstack/react-query";
 import { CunninghamProvider } from "@gouvfr-lasuite/ui-kit";
 import { useTranslation } from "react-i18next";
-import {
-  AppContextProvider,
-  useAppContext
-} from "@/features/app/AppContext";
+import { AppContextProvider, useAppContext } from "@/features/app/AppContext";
 import { AnalyticsProvider } from "@/features/analytics/AnalyticsProvider";
 import { ConfigProvider } from "@/features/config/ConfigProvider";
 import { LeftPanelProvider } from "@/features/layouts/contexts/LeftPanelContext";
-import {
-  APIError,
-  errorToString
-} from "@/features/api/APIError";
+import { APIError, errorToString } from "@/features/api/APIError";
 import { capitalizeRegion } from "@/features/i18n/utils";
-import {
-  removeQuotes,
-  useCunninghamTheme
-} from "@/features/ui/cunningham/useCunninghamTheme";
+import { removeQuotes, useCunninghamTheme } from "@/features/ui/cunningham/useCunninghamTheme";
 import { FeedbackFooterMobile } from "@/features/feedback/Feedback";
 import { useDynamicFavicon } from "@/features/ui/hooks/useDynamicFavicon";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 
 const onError = (error: Error, query: unknown) => {
   if ((query as Query).meta?.noGlobalError) {
@@ -74,8 +44,7 @@ const onError = (error: Error, query: unknown) => {
 
 const queryClient = new QueryClient({
   mutationCache: new MutationCache({
-    onError: (error, _variables, _context, mutation) =>
-      onError(error, mutation),
+    onError: (error, _variables, _context, mutation) => onError(error, mutation),
   }),
   queryCache: new QueryCache({
     onError: (error, query) => onError(error, query),
@@ -103,8 +72,7 @@ const RootShell = () => {
   const { theme } = useAppContext();
   const themeTokens = useCunninghamTheme();
   const dynamicFavicon = useDynamicFavicon();
-  const faviconHref =
-    dynamicFavicon || removeQuotes(themeTokens.components.favicon.src);
+  const faviconHref = dynamicFavicon || removeQuotes(themeTokens.components.favicon.src);
 
   useEffect(() => {
     document.title = t("app_title");
@@ -116,10 +84,7 @@ const RootShell = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <CunninghamProvider
-        currentLocale={capitalizeRegion(i18n.language)}
-        theme={theme}
-      >
+      <CunninghamProvider currentLocale={capitalizeRegion(i18n.language)} theme={theme}>
         <ConfigProvider>
           <AnalyticsProvider>
             <LeftPanelProvider>

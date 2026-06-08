@@ -3,34 +3,14 @@
  * Allows users to import events from an ICS file into a calendar.
  */
 
-import {
-  useRef,
-  useState
-} from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Alert,
-  Button,
-  Modal,
-  ModalSize,
-  VariantType
-} from "@gouvfr-lasuite/cunningham-react";
+import { Alert, Button, Modal, ModalSize, VariantType } from "@gouvfr-lasuite/cunningham-react";
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
 import { useImportEvents } from "../../hooks/useCalendars";
-import {
-  CircleCheck,
-  Copy,
-  ErrorFilled,
-  Upload,
-  Warning
-} from "@gouvfr-lasuite/ui-kit/icons";
-
-
-
-
+import { CircleCheck, Copy, ErrorFilled, Upload, Warning } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { ImportEventsResult } from "../../api";
-
 
 interface ImportEventsModalProps {
   isOpen: boolean;
@@ -106,9 +86,7 @@ export const ImportEventsModal = ({
               onClick={handleImport}
               disabled={!selectedFile || importMutation.isPending}
             >
-              {importMutation.isPending
-                ? <Spinner size="sm" />
-                : t("calendar.importEvents.import")}
+              {importMutation.isPending ? <Spinner size="sm" /> : t("calendar.importEvents.import")}
             </Button>
           </>
         )
@@ -128,29 +106,17 @@ export const ImportEventsModal = ({
               onChange={handleFileChange}
               style={{ display: "none" }}
             />
-            <Button
-              color="neutral"
-              onClick={() => fileInputRef.current?.click()}
-              icon={
-                <Upload />
-              }
-            >
+            <Button color="neutral" onClick={() => fileInputRef.current?.click()} icon={<Upload />}>
               {t("calendar.importEvents.selectFile")}
             </Button>
             {selectedFile && (
-              <span className="import-events-modal__filename">
-                {selectedFile.name}
-              </span>
+              <span className="import-events-modal__filename">{selectedFile.name}</span>
             )}
           </div>
         )}
 
         {importMutation.isError && !hasResult && (
-          <Alert
-            className="app__alert--small"
-            type={VariantType.ERROR}
-            icon={<ErrorFilled />}
-          >
+          <Alert className="app__alert--small" type={VariantType.ERROR} icon={<ErrorFilled />}>
             {t("calendar.importEvents.error")}
           </Alert>
         )}
@@ -164,19 +130,26 @@ export const ImportEventsModal = ({
               {result.imported_count > 0 && (
                 <li className="import-events-modal__stat import-events-modal__stat--success">
                   <CircleCheck />
-                  <span><strong>{result.imported_count}</strong> {t("calendar.importEvents.imported")}</span>
+                  <span>
+                    <strong>{result.imported_count}</strong> {t("calendar.importEvents.imported")}
+                  </span>
                 </li>
               )}
               {result.duplicate_count > 0 && (
                 <li className="import-events-modal__stat import-events-modal__stat--neutral">
                   <Copy />
-                  <span><strong>{result.duplicate_count}</strong> {t("calendar.importEvents.duplicates")}</span>
+                  <span>
+                    <strong>{result.duplicate_count}</strong>{" "}
+                    {t("calendar.importEvents.duplicates")}
+                  </span>
                 </li>
               )}
               {result.skipped_count > 0 && (
                 <li className="import-events-modal__stat import-events-modal__stat--warning">
                   <Warning />
-                  <span><strong>{result.skipped_count}</strong> {t("calendar.importEvents.skipped")}</span>
+                  <span>
+                    <strong>{result.skipped_count}</strong> {t("calendar.importEvents.skipped")}
+                  </span>
                 </li>
               )}
             </ul>

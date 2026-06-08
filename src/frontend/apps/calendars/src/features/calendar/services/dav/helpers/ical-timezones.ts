@@ -23,7 +23,7 @@ END:STANDARD
 END:VTIMEZONE`,
 
   // Europe
-  'Europe/Paris': `BEGIN:VTIMEZONE
+  "Europe/Paris": `BEGIN:VTIMEZONE
 TZID:Europe/Paris
 X-LIC-LOCATION:Europe/Paris
 BEGIN:DAYLIGHT
@@ -42,7 +42,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/London': `BEGIN:VTIMEZONE
+  "Europe/London": `BEGIN:VTIMEZONE
 TZID:Europe/London
 X-LIC-LOCATION:Europe/London
 BEGIN:DAYLIGHT
@@ -61,7 +61,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Berlin': `BEGIN:VTIMEZONE
+  "Europe/Berlin": `BEGIN:VTIMEZONE
 TZID:Europe/Berlin
 X-LIC-LOCATION:Europe/Berlin
 BEGIN:DAYLIGHT
@@ -80,7 +80,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Rome': `BEGIN:VTIMEZONE
+  "Europe/Rome": `BEGIN:VTIMEZONE
 TZID:Europe/Rome
 X-LIC-LOCATION:Europe/Rome
 BEGIN:DAYLIGHT
@@ -99,7 +99,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Madrid': `BEGIN:VTIMEZONE
+  "Europe/Madrid": `BEGIN:VTIMEZONE
 TZID:Europe/Madrid
 X-LIC-LOCATION:Europe/Madrid
 BEGIN:DAYLIGHT
@@ -118,7 +118,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Amsterdam': `BEGIN:VTIMEZONE
+  "Europe/Amsterdam": `BEGIN:VTIMEZONE
 TZID:Europe/Amsterdam
 X-LIC-LOCATION:Europe/Amsterdam
 BEGIN:DAYLIGHT
@@ -137,7 +137,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Brussels': `BEGIN:VTIMEZONE
+  "Europe/Brussels": `BEGIN:VTIMEZONE
 TZID:Europe/Brussels
 X-LIC-LOCATION:Europe/Brussels
 BEGIN:DAYLIGHT
@@ -156,7 +156,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Vienna': `BEGIN:VTIMEZONE
+  "Europe/Vienna": `BEGIN:VTIMEZONE
 TZID:Europe/Vienna
 X-LIC-LOCATION:Europe/Vienna
 BEGIN:DAYLIGHT
@@ -175,7 +175,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Warsaw': `BEGIN:VTIMEZONE
+  "Europe/Warsaw": `BEGIN:VTIMEZONE
 TZID:Europe/Warsaw
 X-LIC-LOCATION:Europe/Warsaw
 BEGIN:DAYLIGHT
@@ -194,7 +194,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Prague': `BEGIN:VTIMEZONE
+  "Europe/Prague": `BEGIN:VTIMEZONE
 TZID:Europe/Prague
 X-LIC-LOCATION:Europe/Prague
 BEGIN:DAYLIGHT
@@ -213,7 +213,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Budapest': `BEGIN:VTIMEZONE
+  "Europe/Budapest": `BEGIN:VTIMEZONE
 TZID:Europe/Budapest
 X-LIC-LOCATION:Europe/Budapest
 BEGIN:DAYLIGHT
@@ -232,7 +232,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Athens': `BEGIN:VTIMEZONE
+  "Europe/Athens": `BEGIN:VTIMEZONE
 TZID:Europe/Athens
 X-LIC-LOCATION:Europe/Athens
 BEGIN:DAYLIGHT
@@ -251,7 +251,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Helsinki': `BEGIN:VTIMEZONE
+  "Europe/Helsinki": `BEGIN:VTIMEZONE
 TZID:Europe/Helsinki
 X-LIC-LOCATION:Europe/Helsinki
 BEGIN:DAYLIGHT
@@ -270,7 +270,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Stockholm': `BEGIN:VTIMEZONE
+  "Europe/Stockholm": `BEGIN:VTIMEZONE
 TZID:Europe/Stockholm
 X-LIC-LOCATION:Europe/Stockholm
 BEGIN:DAYLIGHT
@@ -289,7 +289,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Oslo': `BEGIN:VTIMEZONE
+  "Europe/Oslo": `BEGIN:VTIMEZONE
 TZID:Europe/Oslo
 X-LIC-LOCATION:Europe/Oslo
 BEGIN:DAYLIGHT
@@ -308,7 +308,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Copenhagen': `BEGIN:VTIMEZONE
+  "Europe/Copenhagen": `BEGIN:VTIMEZONE
 TZID:Europe/Copenhagen
 X-LIC-LOCATION:Europe/Copenhagen
 BEGIN:DAYLIGHT
@@ -327,7 +327,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Dublin': `BEGIN:VTIMEZONE
+  "Europe/Dublin": `BEGIN:VTIMEZONE
 TZID:Europe/Dublin
 X-LIC-LOCATION:Europe/Dublin
 BEGIN:STANDARD
@@ -346,7 +346,7 @@ RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
 END:DAYLIGHT
 END:VTIMEZONE`,
 
-  'Europe/Lisbon': `BEGIN:VTIMEZONE
+  "Europe/Lisbon": `BEGIN:VTIMEZONE
 TZID:Europe/Lisbon
 X-LIC-LOCATION:Europe/Lisbon
 BEGIN:DAYLIGHT
@@ -365,7 +365,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Zurich': `BEGIN:VTIMEZONE
+  "Europe/Zurich": `BEGIN:VTIMEZONE
 TZID:Europe/Zurich
 X-LIC-LOCATION:Europe/Zurich
 BEGIN:DAYLIGHT
@@ -384,7 +384,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Europe/Moscow': `BEGIN:VTIMEZONE
+  "Europe/Moscow": `BEGIN:VTIMEZONE
 TZID:Europe/Moscow
 X-LIC-LOCATION:Europe/Moscow
 BEGIN:STANDARD
@@ -396,7 +396,7 @@ END:STANDARD
 END:VTIMEZONE`,
 
   // Americas
-  'America/New_York': `BEGIN:VTIMEZONE
+  "America/New_York": `BEGIN:VTIMEZONE
 TZID:America/New_York
 X-LIC-LOCATION:America/New_York
 BEGIN:DAYLIGHT
@@ -415,7 +415,7 @@ RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Los_Angeles': `BEGIN:VTIMEZONE
+  "America/Los_Angeles": `BEGIN:VTIMEZONE
 TZID:America/Los_Angeles
 X-LIC-LOCATION:America/Los_Angeles
 BEGIN:DAYLIGHT
@@ -434,7 +434,7 @@ RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Chicago': `BEGIN:VTIMEZONE
+  "America/Chicago": `BEGIN:VTIMEZONE
 TZID:America/Chicago
 X-LIC-LOCATION:America/Chicago
 BEGIN:DAYLIGHT
@@ -453,7 +453,7 @@ RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Denver': `BEGIN:VTIMEZONE
+  "America/Denver": `BEGIN:VTIMEZONE
 TZID:America/Denver
 X-LIC-LOCATION:America/Denver
 BEGIN:DAYLIGHT
@@ -472,7 +472,7 @@ RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Toronto': `BEGIN:VTIMEZONE
+  "America/Toronto": `BEGIN:VTIMEZONE
 TZID:America/Toronto
 X-LIC-LOCATION:America/Toronto
 BEGIN:DAYLIGHT
@@ -491,7 +491,7 @@ RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Vancouver': `BEGIN:VTIMEZONE
+  "America/Vancouver": `BEGIN:VTIMEZONE
 TZID:America/Vancouver
 X-LIC-LOCATION:America/Vancouver
 BEGIN:DAYLIGHT
@@ -510,7 +510,7 @@ RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Mexico_City': `BEGIN:VTIMEZONE
+  "America/Mexico_City": `BEGIN:VTIMEZONE
 TZID:America/Mexico_City
 X-LIC-LOCATION:America/Mexico_City
 BEGIN:STANDARD
@@ -521,7 +521,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Sao_Paulo': `BEGIN:VTIMEZONE
+  "America/Sao_Paulo": `BEGIN:VTIMEZONE
 TZID:America/Sao_Paulo
 X-LIC-LOCATION:America/Sao_Paulo
 BEGIN:STANDARD
@@ -532,7 +532,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Buenos_Aires': `BEGIN:VTIMEZONE
+  "America/Buenos_Aires": `BEGIN:VTIMEZONE
 TZID:America/Buenos_Aires
 X-LIC-LOCATION:America/Buenos_Aires
 BEGIN:STANDARD
@@ -544,7 +544,7 @@ END:STANDARD
 END:VTIMEZONE`,
 
   // Asia
-  'Asia/Tokyo': `BEGIN:VTIMEZONE
+  "Asia/Tokyo": `BEGIN:VTIMEZONE
 TZID:Asia/Tokyo
 X-LIC-LOCATION:Asia/Tokyo
 BEGIN:STANDARD
@@ -555,7 +555,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Asia/Shanghai': `BEGIN:VTIMEZONE
+  "Asia/Shanghai": `BEGIN:VTIMEZONE
 TZID:Asia/Shanghai
 X-LIC-LOCATION:Asia/Shanghai
 BEGIN:STANDARD
@@ -566,7 +566,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Asia/Hong_Kong': `BEGIN:VTIMEZONE
+  "Asia/Hong_Kong": `BEGIN:VTIMEZONE
 TZID:Asia/Hong_Kong
 X-LIC-LOCATION:Asia/Hong_Kong
 BEGIN:STANDARD
@@ -577,7 +577,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Asia/Singapore': `BEGIN:VTIMEZONE
+  "Asia/Singapore": `BEGIN:VTIMEZONE
 TZID:Asia/Singapore
 X-LIC-LOCATION:Asia/Singapore
 BEGIN:STANDARD
@@ -588,7 +588,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Asia/Seoul': `BEGIN:VTIMEZONE
+  "Asia/Seoul": `BEGIN:VTIMEZONE
 TZID:Asia/Seoul
 X-LIC-LOCATION:Asia/Seoul
 BEGIN:STANDARD
@@ -599,7 +599,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Asia/Bangkok': `BEGIN:VTIMEZONE
+  "Asia/Bangkok": `BEGIN:VTIMEZONE
 TZID:Asia/Bangkok
 X-LIC-LOCATION:Asia/Bangkok
 BEGIN:STANDARD
@@ -610,7 +610,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Asia/Dubai': `BEGIN:VTIMEZONE
+  "Asia/Dubai": `BEGIN:VTIMEZONE
 TZID:Asia/Dubai
 X-LIC-LOCATION:Asia/Dubai
 BEGIN:STANDARD
@@ -621,7 +621,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Asia/Kolkata': `BEGIN:VTIMEZONE
+  "Asia/Kolkata": `BEGIN:VTIMEZONE
 TZID:Asia/Kolkata
 X-LIC-LOCATION:Asia/Kolkata
 BEGIN:STANDARD
@@ -632,7 +632,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Asia/Jakarta': `BEGIN:VTIMEZONE
+  "Asia/Jakarta": `BEGIN:VTIMEZONE
 TZID:Asia/Jakarta
 X-LIC-LOCATION:Asia/Jakarta
 BEGIN:STANDARD
@@ -643,7 +643,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Asia/Manila': `BEGIN:VTIMEZONE
+  "Asia/Manila": `BEGIN:VTIMEZONE
 TZID:Asia/Manila
 X-LIC-LOCATION:Asia/Manila
 BEGIN:STANDARD
@@ -655,7 +655,7 @@ END:STANDARD
 END:VTIMEZONE`,
 
   // Australia
-  'Australia/Sydney': `BEGIN:VTIMEZONE
+  "Australia/Sydney": `BEGIN:VTIMEZONE
 TZID:Australia/Sydney
 X-LIC-LOCATION:Australia/Sydney
 BEGIN:STANDARD
@@ -674,7 +674,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
 END:DAYLIGHT
 END:VTIMEZONE`,
 
-  'Australia/Melbourne': `BEGIN:VTIMEZONE
+  "Australia/Melbourne": `BEGIN:VTIMEZONE
 TZID:Australia/Melbourne
 X-LIC-LOCATION:Australia/Melbourne
 BEGIN:STANDARD
@@ -693,7 +693,7 @@ RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
 END:DAYLIGHT
 END:VTIMEZONE`,
 
-  'Australia/Perth': `BEGIN:VTIMEZONE
+  "Australia/Perth": `BEGIN:VTIMEZONE
 TZID:Australia/Perth
 X-LIC-LOCATION:Australia/Perth
 BEGIN:STANDARD
@@ -705,7 +705,7 @@ END:STANDARD
 END:VTIMEZONE`,
 
   // Africa
-  'Africa/Cairo': `BEGIN:VTIMEZONE
+  "Africa/Cairo": `BEGIN:VTIMEZONE
 TZID:Africa/Cairo
 X-LIC-LOCATION:Africa/Cairo
 BEGIN:STANDARD
@@ -716,7 +716,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Africa/Johannesburg': `BEGIN:VTIMEZONE
+  "Africa/Johannesburg": `BEGIN:VTIMEZONE
 TZID:Africa/Johannesburg
 X-LIC-LOCATION:Africa/Johannesburg
 BEGIN:STANDARD
@@ -727,7 +727,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Africa/Lagos': `BEGIN:VTIMEZONE
+  "Africa/Lagos": `BEGIN:VTIMEZONE
 TZID:Africa/Lagos
 X-LIC-LOCATION:Africa/Lagos
 BEGIN:STANDARD
@@ -738,7 +738,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Africa/Casablanca': `BEGIN:VTIMEZONE
+  "Africa/Casablanca": `BEGIN:VTIMEZONE
 TZID:Africa/Casablanca
 X-LIC-LOCATION:Africa/Casablanca
 BEGIN:STANDARD
@@ -750,7 +750,7 @@ END:STANDARD
 END:VTIMEZONE`,
 
   // Pacific
-  'Pacific/Auckland': `BEGIN:VTIMEZONE
+  "Pacific/Auckland": `BEGIN:VTIMEZONE
 TZID:Pacific/Auckland
 X-LIC-LOCATION:Pacific/Auckland
 BEGIN:DAYLIGHT
@@ -769,7 +769,7 @@ RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Pacific/Honolulu': `BEGIN:VTIMEZONE
+  "Pacific/Honolulu": `BEGIN:VTIMEZONE
 TZID:Pacific/Honolulu
 X-LIC-LOCATION:Pacific/Honolulu
 BEGIN:STANDARD
@@ -781,7 +781,7 @@ END:STANDARD
 END:VTIMEZONE`,
 
   // Indian Ocean
-  'Indian/Mauritius': `BEGIN:VTIMEZONE
+  "Indian/Mauritius": `BEGIN:VTIMEZONE
 TZID:Indian/Mauritius
 X-LIC-LOCATION:Indian/Mauritius
 BEGIN:STANDARD
@@ -793,7 +793,7 @@ END:STANDARD
 END:VTIMEZONE`,
 
   // Atlantic
-  'Atlantic/Reykjavik': `BEGIN:VTIMEZONE
+  "Atlantic/Reykjavik": `BEGIN:VTIMEZONE
 TZID:Atlantic/Reykjavik
 X-LIC-LOCATION:Atlantic/Reykjavik
 BEGIN:STANDARD
@@ -805,7 +805,7 @@ END:STANDARD
 END:VTIMEZONE`,
 
   // French Overseas Territories
-  'America/Martinique': `BEGIN:VTIMEZONE
+  "America/Martinique": `BEGIN:VTIMEZONE
 TZID:America/Martinique
 X-LIC-LOCATION:America/Martinique
 BEGIN:STANDARD
@@ -816,7 +816,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Guadeloupe': `BEGIN:VTIMEZONE
+  "America/Guadeloupe": `BEGIN:VTIMEZONE
 TZID:America/Guadeloupe
 X-LIC-LOCATION:America/Guadeloupe
 BEGIN:STANDARD
@@ -827,7 +827,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Cayenne': `BEGIN:VTIMEZONE
+  "America/Cayenne": `BEGIN:VTIMEZONE
 TZID:America/Cayenne
 X-LIC-LOCATION:America/Cayenne
 BEGIN:STANDARD
@@ -838,7 +838,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Indian/Reunion': `BEGIN:VTIMEZONE
+  "Indian/Reunion": `BEGIN:VTIMEZONE
 TZID:Indian/Reunion
 X-LIC-LOCATION:Indian/Reunion
 BEGIN:STANDARD
@@ -849,7 +849,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Indian/Mayotte': `BEGIN:VTIMEZONE
+  "Indian/Mayotte": `BEGIN:VTIMEZONE
 TZID:Indian/Mayotte
 X-LIC-LOCATION:Indian/Mayotte
 BEGIN:STANDARD
@@ -860,7 +860,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Pacific/Noumea': `BEGIN:VTIMEZONE
+  "Pacific/Noumea": `BEGIN:VTIMEZONE
 TZID:Pacific/Noumea
 X-LIC-LOCATION:Pacific/Noumea
 BEGIN:STANDARD
@@ -871,7 +871,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Pacific/Tahiti': `BEGIN:VTIMEZONE
+  "Pacific/Tahiti": `BEGIN:VTIMEZONE
 TZID:Pacific/Tahiti
 X-LIC-LOCATION:Pacific/Tahiti
 BEGIN:STANDARD
@@ -882,7 +882,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'Pacific/Wallis': `BEGIN:VTIMEZONE
+  "Pacific/Wallis": `BEGIN:VTIMEZONE
 TZID:Pacific/Wallis
 X-LIC-LOCATION:Pacific/Wallis
 BEGIN:STANDARD
@@ -893,7 +893,7 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`,
 
-  'America/Miquelon': `BEGIN:VTIMEZONE
+  "America/Miquelon": `BEGIN:VTIMEZONE
 TZID:America/Miquelon
 X-LIC-LOCATION:America/Miquelon
 BEGIN:DAYLIGHT
@@ -911,39 +911,39 @@ DTSTART:19701101T020000
 RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
 END:STANDARD
 END:VTIMEZONE`,
-}
+};
 
 // Timezone aliases (link common aliases to their canonical names)
 const TIMEZONE_ALIASES: Record<string, string> = {
-  'Etc/UTC': 'UTC',
-  'Etc/GMT': 'UTC',
-  GMT: 'UTC',
-  'Europe/Luxembourg': 'Europe/Brussels',
-  'Europe/Monaco': 'Europe/Paris',
-  'Europe/Vatican': 'Europe/Rome',
-  'Europe/San_Marino': 'Europe/Rome',
-  'Europe/Bratislava': 'Europe/Prague',
-  'Europe/Ljubljana': 'Europe/Budapest',
-  'Europe/Zagreb': 'Europe/Budapest',
-  'Europe/Sarajevo': 'Europe/Budapest',
-  'Europe/Skopje': 'Europe/Budapest',
-  'Europe/Podgorica': 'Europe/Budapest',
-  'Asia/Calcutta': 'Asia/Kolkata',
-  'Asia/Saigon': 'Asia/Bangkok',
-  'Australia/Brisbane': 'Australia/Sydney',
-  'Australia/Canberra': 'Australia/Sydney',
-  'Australia/Hobart': 'Australia/Sydney',
-  'Australia/Adelaide': 'Australia/Sydney',
-  'Australia/Darwin': 'Australia/Perth',
-  'America/Montreal': 'America/Toronto',
-  'America/Indianapolis': 'America/New_York',
-  'America/Phoenix': 'America/Denver',
-  'America/Anchorage': 'America/Los_Angeles',
-  'US/Eastern': 'America/New_York',
-  'US/Pacific': 'America/Los_Angeles',
-  'US/Central': 'America/Chicago',
-  'US/Mountain': 'America/Denver',
-}
+  "Etc/UTC": "UTC",
+  "Etc/GMT": "UTC",
+  GMT: "UTC",
+  "Europe/Luxembourg": "Europe/Brussels",
+  "Europe/Monaco": "Europe/Paris",
+  "Europe/Vatican": "Europe/Rome",
+  "Europe/San_Marino": "Europe/Rome",
+  "Europe/Bratislava": "Europe/Prague",
+  "Europe/Ljubljana": "Europe/Budapest",
+  "Europe/Zagreb": "Europe/Budapest",
+  "Europe/Sarajevo": "Europe/Budapest",
+  "Europe/Skopje": "Europe/Budapest",
+  "Europe/Podgorica": "Europe/Budapest",
+  "Asia/Calcutta": "Asia/Kolkata",
+  "Asia/Saigon": "Asia/Bangkok",
+  "Australia/Brisbane": "Australia/Sydney",
+  "Australia/Canberra": "Australia/Sydney",
+  "Australia/Hobart": "Australia/Sydney",
+  "Australia/Adelaide": "Australia/Sydney",
+  "Australia/Darwin": "Australia/Perth",
+  "America/Montreal": "America/Toronto",
+  "America/Indianapolis": "America/New_York",
+  "America/Phoenix": "America/Denver",
+  "America/Anchorage": "America/Los_Angeles",
+  "US/Eastern": "America/New_York",
+  "US/Pacific": "America/Los_Angeles",
+  "US/Central": "America/Chicago",
+  "US/Mountain": "America/Denver",
+};
 
 /**
  * Get the VTIMEZONE block for a given IANA timezone ID
@@ -959,37 +959,37 @@ const TIMEZONE_ALIASES: Record<string, string> = {
  */
 export function getIcalTimezoneBlock(tzid: string): [string] | [] {
   // Resolve alias to canonical name
-  const canonicalTzid = TIMEZONE_ALIASES[tzid] ?? tzid
+  const canonicalTzid = TIMEZONE_ALIASES[tzid] ?? tzid;
 
-  const block = TIMEZONE_DATA[canonicalTzid]
+  const block = TIMEZONE_DATA[canonicalTzid];
   if (block) {
     // If we used an alias, update the TZID in the block
     if (canonicalTzid !== tzid) {
-      return [block.replace(`TZID:${canonicalTzid}`, `TZID:${tzid}`)]
+      return [block.replace(`TZID:${canonicalTzid}`, `TZID:${tzid}`)];
     }
-    return [block]
+    return [block];
   }
 
   // Fallback: generate a simple VTIMEZONE for unknown timezones
   // This uses the browser's Intl API to get the UTC offset
   try {
-    const now = new Date()
-    const formatter = new Intl.DateTimeFormat('en-US', {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: tzid,
-      timeZoneName: 'shortOffset',
-    })
-    const parts = formatter.formatToParts(now)
-    const offsetPart = parts.find((p) => p.type === 'timeZoneName')
-    const offsetStr = offsetPart?.value ?? 'UTC'
+      timeZoneName: "shortOffset",
+    });
+    const parts = formatter.formatToParts(now);
+    const offsetPart = parts.find((p) => p.type === "timeZoneName");
+    const offsetStr = offsetPart?.value ?? "UTC";
 
     // Parse offset like "GMT+2" or "GMT-5:30"
-    const offsetMatch = offsetStr.match(/GMT([+-]?)(\d{1,2})(?::(\d{2}))?/)
-    let offsetFormatted = '+0000'
+    const offsetMatch = offsetStr.match(/GMT([+-]?)(\d{1,2})(?::(\d{2}))?/);
+    let offsetFormatted = "+0000";
     if (offsetMatch) {
-      const sign = offsetMatch[1] || '+'
-      const hours = offsetMatch[2].padStart(2, '0')
-      const minutes = offsetMatch[3] || '00'
-      offsetFormatted = `${sign}${hours}${minutes}`
+      const sign = offsetMatch[1] || "+";
+      const hours = offsetMatch[2].padStart(2, "0");
+      const minutes = offsetMatch[3] || "00";
+      offsetFormatted = `${sign}${hours}${minutes}`;
     }
 
     const fallbackBlock = `BEGIN:VTIMEZONE
@@ -1001,13 +1001,13 @@ TZOFFSETTO:${offsetFormatted}
 TZNAME:${offsetStr}
 DTSTART:19700101T000000
 END:STANDARD
-END:VTIMEZONE`
+END:VTIMEZONE`;
 
-    console.warn(`[ical-timezones] Using fallback VTIMEZONE for unknown timezone: ${tzid}`)
-    return [fallbackBlock]
+    console.warn(`[ical-timezones] Using fallback VTIMEZONE for unknown timezone: ${tzid}`);
+    return [fallbackBlock];
   } catch {
-    console.error(`[ical-timezones] Failed to generate VTIMEZONE for timezone: ${tzid}`)
-    return []
+    console.error(`[ical-timezones] Failed to generate VTIMEZONE for timezone: ${tzid}`);
+    return [];
   }
 }
 
@@ -1015,13 +1015,13 @@ END:VTIMEZONE`
  * Check if a timezone is supported
  */
 export function isTimezoneSupported(tzid: string): boolean {
-  const canonicalTzid = TIMEZONE_ALIASES[tzid] ?? tzid
-  return canonicalTzid in TIMEZONE_DATA
+  const canonicalTzid = TIMEZONE_ALIASES[tzid] ?? tzid;
+  return canonicalTzid in TIMEZONE_DATA;
 }
 
 /**
  * Get list of all supported timezone IDs
  */
 export function getSupportedTimezones(): string[] {
-  return Object.keys(TIMEZONE_DATA)
+  return Object.keys(TIMEZONE_DATA);
 }

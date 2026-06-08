@@ -1,24 +1,14 @@
 import { Spinner } from "@gouvfr-lasuite/ui-kit";
 import { useApiConfig } from "./useApiConfig";
 import { ApiConfig } from "@/features/api/types";
-import {
-  createContext,
-  useContext,
-  useEffect
-} from "react";
+import { createContext, useContext, useEffect } from "react";
 import { useAppContext } from "@/features/app/AppContext";
-
-
-
-
 
 export interface ConfigContextType {
   config: ApiConfig;
 }
 
-export const ConfigContext = createContext<ConfigContextType | undefined>(
-  undefined
-);
+export const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
 export const useConfig = () => {
   const context = useContext(ConfigContext);
@@ -46,9 +36,5 @@ export const ConfigProvider = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  return (
-    <ConfigContext.Provider value={{ config }}>
-      {children}
-    </ConfigContext.Provider>
-  );
+  return <ConfigContext.Provider value={{ config }}>{children}</ConfigContext.Provider>;
 };

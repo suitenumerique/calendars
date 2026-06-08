@@ -3,8 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Select } from "@gouvfr-lasuite/cunningham-react";
 import { Mail } from "@gouvfr-lasuite/ui-kit/icons";
 
-
-
 import type { CalDavCalendar } from "@/features/calendar/services/dav/types/caldav-service";
 
 interface CalendarSelectProps {
@@ -24,26 +22,14 @@ function CalendarOption({
 }) {
   return (
     <span className="calendar-select__option">
-      <span
-        className="calendar-select__color"
-        style={{ backgroundColor: color }}
-      />
+      <span className="calendar-select__color" style={{ backgroundColor: color }} />
       {name}
-      {mailboxEmail && (
-        <Mail
-          className="calendar-list__mailbox-icon"
-          aria-label={mailboxEmail}
-        />
-      )}
+      {mailboxEmail && <Mail className="calendar-list__mailbox-icon" aria-label={mailboxEmail} />}
     </span>
   );
 }
 
-export function CalendarSelect({
-  calendars,
-  value,
-  onChange,
-}: CalendarSelectProps) {
+export function CalendarSelect({ calendars, value, onChange }: CalendarSelectProps) {
   const { t } = useTranslation();
 
   const options = useMemo(
@@ -52,11 +38,7 @@ export function CalendarSelect({
         const name = cal.displayName || cal.url;
         const color = cal.color || "#3788d8";
         const optionJsx = (
-          <CalendarOption
-            name={name}
-            color={color}
-            mailboxEmail={cal.mailboxEmail}
-          />
+          <CalendarOption name={name} color={color} mailboxEmail={cal.mailboxEmail} />
         );
         return {
           value: cal.url,

@@ -17,12 +17,12 @@ import type { EventCalendarAdapter } from "../../services/dav/EventCalendarAdapt
 /**
  * Options for deleting recurring events.
  */
-export type RecurringDeleteOption = 'this' | 'future' | 'all';
+export type RecurringDeleteOption = "this" | "future" | "all";
 
 /**
  * Options for editing recurring events.
  */
-export type RecurringEditOption = 'this' | 'future' | 'all';
+export type RecurringEditOption = "this" | "future" | "all";
 
 /**
  * Props for the EventModal component.
@@ -34,19 +34,15 @@ export interface EventModalProps {
   calendarUrl: string;
   calendars: CalDavCalendar[];
   adapter: EventCalendarAdapter;
-  onSave: (
-    event: IcsEvent,
-    calendarUrl: string,
-    option?: RecurringEditOption,
-  ) => Promise<void>;
+  onSave: (event: IcsEvent, calendarUrl: string, option?: RecurringEditOption) => Promise<void>;
   onDelete?: (
     event: IcsEvent,
     calendarUrl: string,
-    option?: RecurringDeleteOption
+    option?: RecurringDeleteOption,
   ) => Promise<void>;
   onRespondToInvitation?: (
     event: IcsEvent,
-    status: 'ACCEPTED' | 'TENTATIVE' | 'DECLINED',
+    status: "ACCEPTED" | "TENTATIVE" | "DECLINED",
     option?: RecurringEditOption,
   ) => Promise<void>;
   onClose: () => void;
@@ -145,7 +141,12 @@ export interface EventFormState {
 export interface CalendarApi {
   setOption: (name: string, value: unknown) => void;
   getOption: (name: string) => unknown;
-  getView: () => { type: string; title: string; currentStart: Date; currentEnd: Date };
+  getView: () => {
+    type: string;
+    title: string;
+    currentStart: Date;
+    currentEnd: Date;
+  };
   prev: () => void;
   next: () => void;
   updateEvent: (event: unknown) => void;

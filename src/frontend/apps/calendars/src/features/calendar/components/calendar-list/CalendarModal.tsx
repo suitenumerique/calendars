@@ -5,11 +5,7 @@
  * Can be used in onboarding mode (isOnboarding=true) for first-time users.
  */
 
-import {
-  useState,
-  useEffect,
-  useMemo
-} from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -18,32 +14,17 @@ import {
   Modal,
   ModalSize,
   Select,
-  VariantType
+  VariantType,
 } from "@gouvfr-lasuite/cunningham-react";
 import { errorToString } from "@/features/api/APIError";
 import { useAuth } from "@/features/auth/Auth";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
-import {
-  FeatureFlag,
-  useFeatureFlag
-} from "@/hooks/useFeatureFlag";
+import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { DEFAULT_COLORS } from "./constants";
-import {
-  ErrorFilled,
-  Mail
-} from "@gouvfr-lasuite/ui-kit/icons";
-
-
-
-
-
-
-
-
+import { ErrorFilled, Mail } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { CalendarModalProps } from "./types";
-
 
 const NO_MAILBOX_VALUE = "__none__";
 
@@ -74,10 +55,7 @@ export const CalendarModal = ({
   // the user has sender/admin role; other mailboxes must be filtered out from
   // every code path so the select value can never reference a hidden option.
   const sendCapableMailboxes = useMemo(
-    () =>
-      availableMailboxes.filter(
-        (mb) => mb.role === "sender" || mb.role === "admin",
-      ),
+    () => availableMailboxes.filter((mb) => mb.role === "sender" || mb.role === "admin"),
     [availableMailboxes],
   );
 
@@ -90,10 +68,7 @@ export const CalendarModal = ({
   const defaultMailbox = useMemo(() => {
     if (!user?.email) return null;
     const target = user.email.toLowerCase();
-    return (
-      sendCapableMailboxes.find((mb) => mb.email.toLowerCase() === target) ??
-      null
-    );
+    return sendCapableMailboxes.find((mb) => mb.email.toLowerCase() === target) ?? null;
   }, [sendCapableMailboxes, user?.email]);
 
   // Build mailbox options for the select
@@ -147,9 +122,7 @@ export const CalendarModal = ({
     // an explicit non-empty name so clearing the field can't silently
     // rename the calendar back to the default.
     const effectiveName =
-      mode === "create"
-        ? trimmedName || t("calendar.createCalendar.defaultName")
-        : trimmedName;
+      mode === "create" ? trimmedName || t("calendar.createCalendar.defaultName") : trimmedName;
     if (!effectiveName) {
       setError(t("calendar.createCalendar.nameRequired"));
       return;
@@ -158,8 +131,7 @@ export const CalendarModal = ({
     setIsLoading(true);
     setError(null);
     try {
-      const mailboxEmail =
-        selectedMailbox !== NO_MAILBOX_VALUE ? selectedMailbox : undefined;
+      const mailboxEmail = selectedMailbox !== NO_MAILBOX_VALUE ? selectedMailbox : undefined;
       await onSave(effectiveName, color, mailboxEmail, includeInAvailability);
       if (!isOnboarding) {
         onClose();
@@ -191,9 +163,7 @@ export const CalendarModal = ({
       : t("calendar.editCalendar.title");
 
   const saveLabel =
-    mode === "create"
-      ? t("calendar.createCalendar.create")
-      : t("calendar.editCalendar.save");
+    mode === "create" ? t("calendar.createCalendar.create") : t("calendar.editCalendar.save");
 
   return (
     <Modal
@@ -230,11 +200,7 @@ export const CalendarModal = ({
         )}
 
         {error && (
-          <Alert
-            className="app__alert--small"
-            type={VariantType.ERROR}
-            icon={<ErrorFilled />}
-          >
+          <Alert className="app__alert--small" type={VariantType.ERROR} icon={<ErrorFilled />}>
             {error}
           </Alert>
         )}
@@ -249,13 +215,10 @@ export const CalendarModal = ({
                 // Cunningham's Select emits undefined when the user
                 // clicks "Clear selection" — treat that as NO_MAILBOX.
                 const raw = e.target.value;
-                const value =
-                  typeof raw === "string" && raw ? raw : NO_MAILBOX_VALUE;
+                const value = typeof raw === "string" && raw ? raw : NO_MAILBOX_VALUE;
                 setSelectedMailbox(value);
                 if (value !== NO_MAILBOX_VALUE) {
-                  const mb = sendCapableMailboxes.find(
-                    (m) => m.email === value,
-                  );
+                  const mb = sendCapableMailboxes.find((m) => m.email === value);
                   setName(mb?.name || value);
                 } else {
                   setName(t("calendar.createCalendar.defaultName"));
@@ -285,12 +248,10 @@ export const CalendarModal = ({
         )}
 
         {mode === "edit" && calendar?.mailboxEmail && (
-          <Alert
-            className="app__alert--small"
-            type={VariantType.INFO}
-            icon={<Mail />}
-          >
-            {t("calendar.editCalendar.linkedMailbox", { email: calendar.mailboxEmail })}
+          <Alert className="app__alert--small" type={VariantType.INFO} icon={<Mail />}>
+            {t("calendar.editCalendar.linkedMailbox", {
+              email: calendar.mailboxEmail,
+            })}
           </Alert>
         )}
 
@@ -319,9 +280,7 @@ export const CalendarModal = ({
         />
 
         <div className="calendar-modal__field">
-          <label className="calendar-modal__label">
-            {t("calendar.createCalendar.color")}
-          </label>
+          <label className="calendar-modal__label">{t("calendar.createCalendar.color")}</label>
           <div className="calendar-modal__colors">
             {DEFAULT_COLORS.map((c) => (
               <button
@@ -339,7 +298,15 @@ export const CalendarModal = ({
         </div>
 
         {mode === "edit" && availabilitiesEnabled && (
-          <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 0", cursor: "pointer" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 0",
+              cursor: "pointer",
+            }}
+          >
             <input
               type="checkbox"
               checked={includeInAvailability}

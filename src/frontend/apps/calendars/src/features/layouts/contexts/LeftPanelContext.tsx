@@ -1,26 +1,16 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode
-} from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 interface LeftPanelContextType {
   isLeftPanelOpen: boolean;
   setIsLeftPanelOpen: (open: boolean) => void;
 }
 
-const LeftPanelContext = createContext<LeftPanelContextType | undefined>(
-  undefined,
-);
+const LeftPanelContext = createContext<LeftPanelContextType | undefined>(undefined);
 
 export const useLeftPanel = () => {
   const context = useContext(LeftPanelContext);
   if (!context) {
-    throw new Error(
-      "useLeftPanel must be used within a LeftPanelProvider",
-    );
+    throw new Error("useLeftPanel must be used within a LeftPanelProvider");
   }
   return context;
 };
@@ -37,9 +27,5 @@ export const LeftPanelProvider = ({ children }: LeftPanelProviderProps) => {
     [isLeftPanelOpen, setIsLeftPanelOpen],
   );
 
-  return (
-    <LeftPanelContext.Provider value={value}>
-      {children}
-    </LeftPanelContext.Provider>
-  );
+  return <LeftPanelContext.Provider value={value}>{children}</LeftPanelContext.Provider>;
 };

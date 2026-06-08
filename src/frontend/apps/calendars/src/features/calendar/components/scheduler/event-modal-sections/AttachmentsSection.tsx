@@ -5,11 +5,7 @@ import { SectionRow } from "./SectionRow";
 import { Plus, XMark } from "@gouvfr-lasuite/ui-kit/icons";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 
-
-
 import type { AttachmentMeta } from "../types";
-
-
 
 interface AttachmentsSectionProps {
   attachments: AttachmentMeta[];
@@ -75,12 +71,8 @@ export const AttachmentsSection = ({
           <div key={attachment.id} className="attachments-section__item">
             <Icon name="notes" type={IconType.OUTLINED} aria-hidden />
             <div className="attachments-section__info">
-              <span className="attachments-section__name">
-                {attachment.name}
-              </span>
-              <span className="attachments-section__size">
-                {formatFileSize(attachment.size)}
-              </span>
+              <span className="attachments-section__name">{attachment.name}</span>
+              <span className="attachments-section__size">{formatFileSize(attachment.size)}</span>
             </div>
             <button
               type="button"
@@ -99,11 +91,7 @@ export const AttachmentsSection = ({
           onChange={handleFileSelect}
           style={{ display: "none" }}
         />
-        <Button
-          size="small"
-          color="neutral"
-          onClick={() => fileInputRef.current?.click()}
-        >
+        <Button size="small" color="neutral" onClick={() => fileInputRef.current?.click()}>
           <Plus />
           {t("calendar.event.sections.addAttachment")}
         </Button>

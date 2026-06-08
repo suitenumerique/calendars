@@ -1,15 +1,9 @@
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  Input,
-  Switch
-} from "@gouvfr-lasuite/cunningham-react";
+import { Button, Input, Switch } from "@gouvfr-lasuite/cunningham-react";
 import { ScopeEditor } from "./ScopeEditor";
 import { Retry } from "@gouvfr-lasuite/ui-kit/icons";
 
-
 import type { ChannelScopeValue } from "../types";
-
 
 type ChannelFormProps = {
   name: string;
@@ -39,17 +33,14 @@ export const ChannelForm = ({
   disabled = false,
 }: ChannelFormProps) => {
   const { t } = useTranslation();
-  const showActive =
-    isActive !== undefined && onIsActiveChange !== undefined;
+  const showActive = isActive !== undefined && onIsActiveChange !== undefined;
 
   return (
     <div className="channel-edit-modal">
       <Input
         label={t("integrations.create.nameLabel")}
         value={name}
-        onChange={(e) =>
-          onNameChange((e.target as HTMLInputElement).value)
-        }
+        onChange={(e) => onNameChange((e.target as HTMLInputElement).value)}
         fullWidth
         disabled={disabled}
       />
@@ -57,21 +48,11 @@ export const ChannelForm = ({
         <Switch
           label={t("integrations.edit.activeLabel")}
           checked={isActive}
-          onChange={(e) =>
-            onIsActiveChange(
-              (e.target as HTMLInputElement).checked,
-            )
-          }
+          onChange={(e) => onIsActiveChange((e.target as HTMLInputElement).checked)}
           disabled={disabled}
         />
       )}
-      {showScopes && (
-        <ScopeEditor
-          scopes={scopes}
-          onChange={onScopesChange}
-          disabled={disabled}
-        />
-      )}
+      {showScopes && <ScopeEditor scopes={scopes} onChange={onScopesChange} disabled={disabled} />}
       {onRegenerate && (
         <div className="channel-edit-modal__regenerate">
           <div>
@@ -87,9 +68,7 @@ export const ChannelForm = ({
             size="small"
             onClick={onRegenerate}
             disabled={disabled}
-            icon={
-              <Retry />
-            }
+            icon={<Retry />}
           >
             {t("integrations.regenerate.button")}
           </Button>

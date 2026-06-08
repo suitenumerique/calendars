@@ -9,24 +9,16 @@ export const extractCaldavPath = (calendarUrl: string): string | null => {
     const url = new URL(calendarUrl);
     const pathParts = url.pathname.split("/").filter(Boolean);
 
-    const calendarsIndex = pathParts.findIndex(
-      (part) => part === "calendars",
-    );
+    const calendarsIndex = pathParts.findIndex((part) => part === "calendars");
 
     if (calendarsIndex === -1) {
-      console.error(
-        "Invalid calendar URL format - 'calendars' segment not found:",
-        calendarUrl,
-      );
+      console.error("Invalid calendar URL format - 'calendars' segment not found:", calendarUrl);
       return null;
     }
 
     const remainingParts = pathParts.slice(calendarsIndex);
     if (remainingParts.length < 3) {
-      console.error(
-        "Invalid calendar URL format - incomplete path:",
-        calendarUrl,
-      );
+      console.error("Invalid calendar URL format - incomplete path:", calendarUrl);
       return null;
     }
 

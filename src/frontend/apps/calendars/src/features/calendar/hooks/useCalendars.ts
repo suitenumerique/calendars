@@ -2,11 +2,7 @@
  * React Query hooks for calendar operations.
  */
 
-import {
-  useMutation,
-  useQuery,
-  useQueryClient
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Channel,
   ChannelError,
@@ -16,9 +12,8 @@ import {
   GetICalFeedResult,
   startImportTask,
   pollImportTask,
-  ImportEventsResult
+  ImportEventsResult,
 } from "../api";
-
 
 /**
  * Result type for useICalFeedChannel hook.
@@ -33,9 +28,7 @@ export interface UseICalFeedChannelResult {
 /**
  * Hook to get the ical-feed channel for a calendar by CalDAV path.
  */
-export const useICalFeedChannel = (
-  caldavPath: string,
-): UseICalFeedChannelResult => {
+export const useICalFeedChannel = (caldavPath: string): UseICalFeedChannelResult => {
   const query = useQuery<GetICalFeedResult>({
     queryKey: ["ical-feed-channel", caldavPath],
     queryFn: () => getICalFeedChannel(caldavPath),
@@ -99,11 +92,7 @@ export const useDeleteICalFeedChannel = () => {
  * Hook to import events from an ICS file.
  */
 export const useImportEvents = () => {
-  return useMutation<
-    ImportEventsResult,
-    Error,
-    { caldavPath: string; file: File }
-  >({
+  return useMutation<ImportEventsResult, Error, { caldavPath: string; file: File }>({
     mutationFn: async ({ caldavPath, file }) => {
       const taskId = await startImportTask(caldavPath, file);
       return pollImportTask(taskId);

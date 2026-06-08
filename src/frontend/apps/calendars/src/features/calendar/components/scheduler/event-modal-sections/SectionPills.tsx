@@ -15,11 +15,7 @@ interface SectionPillsProps {
   onToggle: (id: EventFormSectionId) => void;
 }
 
-export const SectionPills = ({
-  pills,
-  isSectionExpanded,
-  onToggle,
-}: SectionPillsProps) => {
+export const SectionPills = ({ pills, isSectionExpanded, onToggle }: SectionPillsProps) => {
   return (
     <div className="section-pills">
       {pills.map((pill) => (

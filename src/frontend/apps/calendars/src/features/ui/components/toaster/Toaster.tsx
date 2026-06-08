@@ -1,13 +1,8 @@
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import {
-  ToastContainer,
-  ToastContentProps,
-  toast
-} from "react-toastify";
+import { ToastContainer, ToastContentProps, toast } from "react-toastify";
 import { XMark } from "@gouvfr-lasuite/ui-kit/icons";
 
 import clsx from "clsx";
-
 
 export const Toaster = () => {
   return <ToastContainer />;
@@ -30,29 +25,17 @@ export const ToasterItem = ({
   return (
     <div
       onDrop={(event) => onDrop?.(event)}
-      className={clsx(
-        "suite__toaster__item",
-        "suite__toaster__item--" + type,
-        className
-      )}
+      className={clsx("suite__toaster__item", "suite__toaster__item--" + type, className)}
     >
       <div className="suite__toaster__item__content">{children}</div>
       {closeButton && (
-        <Button
-          onClick={closeToast}
-          variant="tertiary"
-          size="small"
-          icon={<XMark />}
-        ></Button>
+        <Button onClick={closeToast} variant="tertiary" size="small" icon={<XMark />}></Button>
       )}
     </div>
   );
 };
 
-export const addToast = (
-  children: React.ReactNode,
-  options: Parameters<typeof toast>[1] = {}
-) => {
+export const addToast = (children: React.ReactNode, options: Parameters<typeof toast>[1] = {}) => {
   return toast(children, {
     position: "bottom-center",
     closeButton: false,

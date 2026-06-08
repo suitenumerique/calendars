@@ -3,9 +3,6 @@ import { TextArea } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 
-
-
-
 interface DescriptionSectionProps {
   description: string;
   onChange: (value: string) => void;

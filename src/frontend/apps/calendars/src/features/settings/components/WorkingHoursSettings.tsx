@@ -1,35 +1,13 @@
-import {
-  useCallback,
-  useState
-} from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useWorkingHours } from "../api/useWorkingHours";
-import {
-  type AvailabilitySlot,
-  type AvailabilitySlots,
-  generateSlotId
-} from "../types";
+import { type AvailabilitySlot, type AvailabilitySlots, generateSlotId } from "../types";
 import { AvailabilityRow } from "./AvailabilityRow";
 import { Hourglass } from "@gouvfr-lasuite/ui-kit/icons";
-import {
-  ArrowLeft,
-  Plus
-} from "@gouvfr-lasuite/ui-kit/icons";
-
-
-
-
-
-
-
-
-
+import { ArrowLeft, Plus } from "@gouvfr-lasuite/ui-kit/icons";
 
 interface AvailabilityFormProps {
   initialSlots: AvailabilitySlots;
@@ -37,11 +15,7 @@ interface AvailabilityFormProps {
   isSaving: boolean;
 }
 
-const AvailabilityForm = ({
-  initialSlots,
-  onSave,
-  isSaving,
-}: AvailabilityFormProps) => {
+const AvailabilityForm = ({ initialSlots, onSave, isSaving }: AvailabilityFormProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -63,14 +37,9 @@ const AvailabilityForm = ({
     setSlots((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
-  const updateSlot = useCallback(
-    (id: string, updates: Partial<AvailabilitySlot>) => {
-      setSlots((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, ...updates } : s)),
-      );
-    },
-    [],
-  );
+  const updateSlot = useCallback((id: string, updates: Partial<AvailabilitySlot>) => {
+    setSlots((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+  }, []);
 
   // Returns true when every slot has end strictly after start. Times are
   // "HH:mm" strings so lexicographic comparison agrees with chronological
@@ -109,9 +78,7 @@ const AvailabilityForm = ({
           <Button
             color="neutral"
             size="small"
-            icon={
-              <ArrowLeft />
-            }
+            icon={<ArrowLeft />}
             onClick={() => void navigate({ to: "/" })}
             aria-label={t("app_title")}
           />
@@ -119,9 +86,7 @@ const AvailabilityForm = ({
         </div>
       </div>
 
-      <p className="working-hours__description">
-        {t("settings.workingHours.description")}
-      </p>
+      <p className="working-hours__description">{t("settings.workingHours.description")}</p>
 
       <div className="working-hours__grid">
         <div className="working-hours__grid-header">
@@ -143,12 +108,7 @@ const AvailabilityForm = ({
       </div>
 
       <div className="working-hours__add-row">
-        <Button
-          color="neutral"
-          size="small"
-          icon={<Plus />}
-          onClick={addSlot}
-        >
+        <Button color="neutral" size="small" icon={<Plus />} onClick={addSlot}>
           {t("settings.workingHours.addAvailability")}
         </Button>
       </div>

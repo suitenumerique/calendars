@@ -1,11 +1,5 @@
-import {
-  useCallback,
-  useMemo
-} from "react";
-import {
-  addDays,
-  getWeekStart
-} from "@/utils/date";
+import { useCallback, useMemo } from "react";
+import { addDays, getWeekStart } from "@/utils/date";
 
 import type { CalendarApi } from "../types";
 

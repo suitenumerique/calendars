@@ -1,12 +1,8 @@
 @mixin toaster-theme($color) {
-  background-color: var(
-    --c--contextuals--background--semantic--#{$color}--tertiary
-  );
+  background-color: var(--c--contextuals--background--semantic--#{$color}--tertiary);
   border: 1px solid var(--c--contextuals--border--semantic--#{$color}--tertiary);
   color: var(--c--contextuals--content--semantic--#{$color}--primary);
-  --toastify-color-progress-light: var(
-    --c--contextuals--content--semantic--#{$color}--tertiary
-  );
+  --toastify-color-progress-light: var(--c--contextuals--content--semantic--#{$color}--tertiary);
 }
 
 .suite__toaster {

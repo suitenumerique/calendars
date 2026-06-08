@@ -1,20 +1,7 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCalendarContext } from "@/features/calendar/contexts/CalendarContext";
-import {
-  DEFAULT_AVAILABILITY,
-  type AvailabilitySlots
-} from "../types";
-import {
-  slotsToVCalendar,
-  vCalendarToSlots
-} from "../availability-ics";
-
-
-
+import { DEFAULT_AVAILABILITY, type AvailabilitySlots } from "../types";
+import { slotsToVCalendar, vCalendarToSlots } from "../availability-ics";
 
 const WORKING_HOURS_KEY = ["working-hours"];
 
@@ -44,9 +31,7 @@ export const useWorkingHours = () => {
       const vcalendar = slotsToVCalendar(slots);
       const result = await caldavService.setAvailability(vcalendar);
       if (!result.success) {
-        throw new Error(
-          result.error ?? "Failed to save availability",
-        );
+        throw new Error(result.error ?? "Failed to save availability");
       }
     },
     onSuccess: () => {

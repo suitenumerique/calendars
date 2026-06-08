@@ -14,12 +14,7 @@
 
 import "@event-calendar/core/index.css";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MobileToolbar } from "./mobile/MobileToolbar";
 import { WeekDayBar } from "./mobile/WeekDayBar";
 import { FloatingActionButton } from "./mobile/FloatingActionButton";
@@ -31,28 +26,14 @@ import { EventModal } from "./EventModal";
 import { RecurringEditModal } from "./RecurringEditModal";
 import { SchedulerToolbar } from "./SchedulerToolbar";
 import { useSchedulerHandlers } from "./hooks/useSchedulerHandlers";
-import {
-  useSchedulerInit,
-  useSchedulingCapabilitiesCheck
-} from "./hooks/useSchedulerInit";
+import { useSchedulerInit, useSchedulingCapabilitiesCheck } from "./hooks/useSchedulerInit";
 import { useMobileNavigation } from "./hooks/useMobileNavigation";
-
-
-
-
-
-
 
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
 import type { CalDavExtendedProps } from "../../services/dav/EventCalendarAdapter";
 import type { EventCalendarEvent } from "../../services/dav/types/event-calendar";
 
-
-
-
 import type { SchedulerProps, EventModalState, MobileListEvent } from "./types";
-
-
 
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -140,11 +121,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
 
   // Callback to update toolbar state when calendar dates/view changes
   const handleDatesSet = useCallback(
-    (info: {
-      start: Date;
-      end: Date;
-      view?: { type: string; title: string };
-    }) => {
+    (info: { start: Date; end: Date; view?: { type: string; title: string } }) => {
       // Update current date for MiniCalendar sync
       // Use start for short views (day, 2-day) to avoid mid-point drift,
       // use midpoint for longer views (week, month) for better centering
@@ -278,17 +255,12 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
   }, [isListView, currentDateMs, visibleCalendarUrls, eventsLoadedCounter]);
 
   // Mobile navigation
-  const {
-    weekDays,
-    handleWeekPrev,
-    handleWeekNext,
-    handleDayClick,
-    handleTodayClick,
-  } = useMobileNavigation({
-    currentDate,
-    firstDayOfWeek,
-    calendarRef,
-  });
+  const { weekDays, handleWeekPrev, handleWeekNext, handleDayClick, handleTodayClick } =
+    useMobileNavigation({
+      currentDate,
+      firstDayOfWeek,
+      calendarRef,
+    });
 
   // FAB click: open create modal with current date/time
   const handleFabClick = useCallback(() => {
@@ -342,9 +314,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
   // shows a 7-day strip with the visible window highlighted — is kept for
   // the single-day grid (where it doubles as a day picker) and for the
   // list view (where it anchors the current day).
-  const showWeekDayBar =
-    isMobile &&
-    (currentView === "timeGridDay" || currentView === "listWeek");
+  const showWeekDayBar = isMobile && (currentView === "timeGridDay" || currentView === "listWeek");
 
   return (
     <div className="scheduler" data-view={currentView}>

@@ -3,17 +3,11 @@
  * Shows onboarding modal when user has no calendars.
  */
 
-import {
-  useState,
-  useCallback
-} from "react";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useCalendarContext } from "../../contexts";
 import { setupCalendar } from "@/features/mailbox/api";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { CalendarModal } from "./CalendarModal";
 import { CalendarShareModal } from "./CalendarShareModal";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
@@ -24,19 +18,7 @@ import { useCalendarListState } from "./hooks/useCalendarListState";
 import { extractCaldavPath } from "./utils";
 import { Plus, ChevronDown } from "@gouvfr-lasuite/ui-kit/icons";
 
-
-
-
-
-
-
-
-
-
-
-
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
-
 
 export const CalendarList = () => {
   const { t } = useTranslation();
@@ -194,14 +176,10 @@ export const CalendarList = () => {
             >
               <ChevronDown
                 className={`calendar-list__toggle-icon ${
-                  isMyCalendarsExpanded
-                    ? "calendar-list__toggle-icon--expanded"
-                    : ""
+                  isMyCalendarsExpanded ? "calendar-list__toggle-icon--expanded" : ""
                 }`}
               />
-              <span className="calendar-list__section-title">
-                {t("calendar.list.myCalendars")}
-              </span>
+              <span className="calendar-list__section-title">{t("calendar.list.myCalendars")}</span>
             </button>
             <button
               className="calendar-list__add-btn"
@@ -229,9 +207,7 @@ export const CalendarList = () => {
                   onImport={handleOpenImportModal}
                   onSubscription={handleOpenSubscriptionModal}
                   onMoveUp={idx > 0 ? handleMoveUp : undefined}
-                  onMoveDown={
-                    idx < ownedCalendars.length - 1 ? handleMoveDown : undefined
-                  }
+                  onMoveDown={idx < ownedCalendars.length - 1 ? handleMoveDown : undefined}
                   onCloseMenu={handleCloseMenu}
                 />
               ))}
@@ -249,9 +225,7 @@ export const CalendarList = () => {
               >
                 <ChevronDown
                   className={`calendar-list__toggle-icon ${
-                    isSharedCalendarsExpanded
-                      ? "calendar-list__toggle-icon--expanded"
-                      : ""
+                    isSharedCalendarsExpanded ? "calendar-list__toggle-icon--expanded" : ""
                   }`}
                 />
                 <span className="calendar-list__section-title">
@@ -275,11 +249,7 @@ export const CalendarList = () => {
                     onImport={handleOpenImportModal}
                     onSubscription={handleOpenSubscriptionModal}
                     onMoveUp={idx > 0 ? handleMoveUp : undefined}
-                    onMoveDown={
-                      idx < sharedCalendars.length - 1
-                        ? handleMoveDown
-                        : undefined
-                    }
+                    onMoveDown={idx < sharedCalendars.length - 1 ? handleMoveDown : undefined}
                     onCloseMenu={handleCloseMenu}
                   />
                 ))}

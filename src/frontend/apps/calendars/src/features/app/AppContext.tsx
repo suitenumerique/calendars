@@ -1,9 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  type PropsWithChildren
-} from "react";
+import { createContext, useContext, useState, type PropsWithChildren } from "react";
 
 export interface AppContextType {
   theme: string;
@@ -22,9 +17,5 @@ export const useAppContext = () => {
 
 export const AppContextProvider = ({ children }: PropsWithChildren) => {
   const [theme, setTheme] = useState<string>("default");
-  return (
-    <AppContext.Provider value={{ theme, setTheme }}>
-      {children}
-    </AppContext.Provider>
-  );
+  return <AppContext.Provider value={{ theme, setTheme }}>{children}</AppContext.Provider>;
 };

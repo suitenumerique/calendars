@@ -1,26 +1,14 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
-import {
-  Checkmark,
-  Copy
-} from "@gouvfr-lasuite/ui-kit/icons";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
-
-
-
-
+import { Checkmark, Copy } from "@gouvfr-lasuite/ui-kit/icons";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 
 type TokenRevealBoxProps = {
   token: string;
 };
 
-export const TokenRevealBox = ({
-  token,
-}: TokenRevealBoxProps) => {
+export const TokenRevealBox = ({ token }: TokenRevealBoxProps) => {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
@@ -37,9 +25,7 @@ export const TokenRevealBox = ({
 
   return (
     <div className="token-reveal-box">
-      <code className="token-reveal-box__token">
-        {token}
-      </code>
+      <code className="token-reveal-box__token">{token}</code>
       <Button
         color="brand"
         size="small"

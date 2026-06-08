@@ -18,8 +18,17 @@
  * ```
  */
 
-import type { IcsCalendar, IcsClassType, IcsDateObject, IcsEvent, IcsRecurrenceRule, IcsAttendee, IcsOrganizer, IcsDuration } from 'ts-ics'
-import type { CalDavCalendar, CalDavEvent } from './types/caldav-service'
+import type {
+  IcsCalendar,
+  IcsClassType,
+  IcsDateObject,
+  IcsEvent,
+  IcsRecurrenceRule,
+  IcsAttendee,
+  IcsOrganizer,
+  IcsDuration,
+} from "ts-ics";
+import type { CalDavCalendar, CalDavEvent } from "./types/caldav-service";
 import type {
   EventCalendarEvent,
   EventCalendarEventInput,
@@ -27,22 +36,22 @@ import type {
   EventCalendarDuration,
   CalDavToEventCalendarOptions,
   EventCalendarToCalDavOptions,
-} from './types/event-calendar'
+} from "./types/event-calendar";
 
 // Extended attendee/organizer types for UI display (has displayName instead of name)
 type ExtendedAttendee = {
-  email: string
-  displayName?: string
-  role?: IcsAttendee['role']
-  status?: string
-  rsvp?: boolean
-  cutype?: string
-}
+  email: string;
+  displayName?: string;
+  role?: IcsAttendee["role"];
+  status?: string;
+  rsvp?: boolean;
+  cutype?: string;
+};
 
 type ExtendedOrganizer = {
-  email: string
-  displayName?: string
-}
+  email: string;
+  displayName?: string;
+};
 
 /**
  * URL schemes we are willing to render in the UI.
@@ -56,7 +65,7 @@ type ExtendedOrganizer = {
  * (``calendar_invitation_service.py``) here so the property is sanitized
  * once at the data boundary and every UI consumer is safe by default.
  */
-const SAFE_URL_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:'])
+const SAFE_URL_SCHEMES = new Set(["http:", "https:", "mailto:", "tel:"]);
 
 /**
  * Return ``raw`` only if it parses as a URL with a safe scheme.
@@ -70,21 +79,21 @@ const SAFE_URL_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:'])
  * accept the raw ``icsEvent.url`` value anywhere downstream.
  */
 export function sanitizeIcsUrl(raw: string | undefined | null): string | undefined {
-  if (!raw) return undefined
-  const trimmed = String(raw).trim()
-  if (!trimmed) return undefined
-  let parsed: URL
+  if (!raw) return undefined;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return undefined;
+  let parsed: URL;
   try {
     // Use a base so relative paths fail closed (we want absolute URLs only).
     // The base origin is irrelevant — we only inspect the *original* protocol.
-    parsed = new URL(trimmed)
+    parsed = new URL(trimmed);
   } catch {
-    return undefined
+    return undefined;
   }
   if (!SAFE_URL_SCHEMES.has(parsed.protocol.toLowerCase())) {
-    return undefined
+    return undefined;
   }
-  return trimmed
+  return trimmed;
 }
 
 // ============================================================================
@@ -97,13 +106,13 @@ export function sanitizeIcsUrl(raw: string | undefined | null): string | undefin
  * to local time components in any IANA timezone.
  */
 export type DateComponents = {
-  year: number
-  month: number   // 1-12 (not 0-11 like JS Date)
-  day: number
-  hours: number
-  minutes: number
-  seconds: number
-}
+  year: number;
+  month: number; // 1-12 (not 0-11 like JS Date)
+  day: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+};
 
 // ============================================================================
 // Extended Types for conversion metadata
@@ -115,48 +124,48 @@ export type DateComponents = {
  */
 export type CalDavExtendedProps = {
   /** Original ICS UID */
-  uid: string
+  uid: string;
   /** Calendar URL this event belongs to */
-  calendarUrl: string
+  calendarUrl: string;
   /** Event URL for updates/deletes */
-  eventUrl?: string
+  eventUrl?: string;
   /** ETag for optimistic concurrency */
-  etag?: string
+  etag?: string;
   /** Original recurrence rule */
-  recurrenceRule?: IcsRecurrenceRule
+  recurrenceRule?: IcsRecurrenceRule;
   /** Recurrence ID for recurring event instances */
-  recurrenceId?: Date
+  recurrenceId?: Date;
   /** Is this a recurring event instance */
-  isRecurringInstance?: boolean
+  isRecurringInstance?: boolean;
   /** Original timezone */
-  timezone?: string
+  timezone?: string;
   /** Event sequence number */
-  sequence?: number
+  sequence?: number;
   /** Event status */
-  status?: string
+  status?: string;
   /** Event visibility / CLASS (PUBLIC | PRIVATE | CONFIDENTIAL | …) */
-  class?: IcsClassType
+  class?: IcsClassType;
   /** Event location */
-  location?: string
+  location?: string;
   /** Event description */
-  description?: string
+  description?: string;
   /** Event organizer */
-  organizer?: ExtendedOrganizer
+  organizer?: ExtendedOrganizer;
   /** Event attendees */
-  attendees?: ExtendedAttendee[]
+  attendees?: ExtendedAttendee[];
   /** Event categories/tags */
-  categories?: string[]
+  categories?: string[];
   /** Event priority (1-9, 1 highest) */
-  priority?: number
+  priority?: number;
   /** Event URL */
-  url?: string
+  url?: string;
   /** Creation timestamp */
-  created?: Date
+  created?: Date;
   /** Last modified timestamp */
-  lastModified?: Date
+  lastModified?: Date;
   /** Custom X-properties */
-  customProperties?: Record<string, string>
-}
+  customProperties?: Record<string, string>;
+};
 
 // ============================================================================
 // EventCalendarAdapter Class
@@ -164,14 +173,14 @@ export type CalDavExtendedProps = {
 
 export class EventCalendarAdapter {
   private defaultOptions: CalDavToEventCalendarOptions = {
-    defaultEventColor: '#3788d8',
-    defaultTextColor: '#ffffff',
+    defaultEventColor: "#3788d8",
+    defaultTextColor: "#ffffff",
     includeRecurringInstances: true,
-  }
+  };
 
-  private static readonly FORMATTER_CACHE_MAX_SIZE = 50
-  private dateComponentsFormatterCache = new Map<string, Intl.DateTimeFormat>()
-  private offsetFormatterCache = new Map<string, Intl.DateTimeFormat>()
+  private static readonly FORMATTER_CACHE_MAX_SIZE = 50;
+  private dateComponentsFormatterCache = new Map<string, Intl.DateTimeFormat>();
+  private offsetFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
   // ============================================================================
   // CalDAV -> EventCalendar Conversions
@@ -182,54 +191,54 @@ export class EventCalendarAdapter {
    */
   public toEventCalendarEvents(
     caldavEvents: CalDavEvent[],
-    options?: CalDavToEventCalendarOptions
+    options?: CalDavToEventCalendarOptions,
   ): EventCalendarEvent[] {
-    const opts = { ...this.defaultOptions, ...options }
-    const events: EventCalendarEvent[] = []
+    const opts = { ...this.defaultOptions, ...options };
+    const events: EventCalendarEvent[] = [];
 
     for (const caldavEvent of caldavEvents) {
-      const icsEvents = caldavEvent.data.events ?? []
+      const icsEvents = caldavEvent.data.events ?? [];
 
       // Build a map of source events (with recurrenceRule) by UID
-      const sourceEventRules = new Map<string, IcsRecurrenceRule>()
+      const sourceEventRules = new Map<string, IcsRecurrenceRule>();
       for (const icsEvent of icsEvents) {
         if (icsEvent.recurrenceRule && !icsEvent.recurrenceId) {
-          sourceEventRules.set(icsEvent.uid, icsEvent.recurrenceRule)
+          sourceEventRules.set(icsEvent.uid, icsEvent.recurrenceRule);
         }
       }
 
       // Build a set of occurrence dates that have overrides (RECURRENCE-ID),
       // so we can skip duplicate expanded instances for the same date.
-      const overriddenDates = new Set<string>()
+      const overriddenDates = new Set<string>();
       for (const icsEvent of icsEvents) {
         if (icsEvent.recurrenceId) {
-          const key = `${icsEvent.uid}_${icsEvent.recurrenceId.value.date.getTime()}`
-          overriddenDates.add(key)
+          const key = `${icsEvent.uid}_${icsEvent.recurrenceId.value.date.getTime()}`;
+          overriddenDates.add(key);
         }
       }
 
       for (const icsEvent of icsEvents) {
         // Skip recurring source events if we only want instances
         if (icsEvent.recurrenceRule && !icsEvent.recurrenceId && !opts.includeRecurringInstances) {
-          continue
+          continue;
         }
 
         // Skip expanded instances when an override exists for the same occurrence date.
         // This prevents duplicates when CalDAV returns both the expanded original and
         // the override VEVENT for the same occurrence.
         if (!icsEvent.recurrenceId && sourceEventRules.has(icsEvent.uid)) {
-          const key = `${icsEvent.uid}_${icsEvent.start.date.getTime()}`
+          const key = `${icsEvent.uid}_${icsEvent.start.date.getTime()}`;
           if (overriddenDates.has(key)) {
-            continue
+            continue;
           }
         }
 
         // If this is a recurring instance without recurrenceRule, copy it from source
-        const enrichedEvent = { ...icsEvent }
+        const enrichedEvent = { ...icsEvent };
         if (icsEvent.recurrenceId && !icsEvent.recurrenceRule) {
-          const sourceRule = sourceEventRules.get(icsEvent.uid)
+          const sourceRule = sourceEventRules.get(icsEvent.uid);
           if (sourceRule) {
-            enrichedEvent.recurrenceRule = sourceRule
+            enrichedEvent.recurrenceRule = sourceRule;
           }
         }
 
@@ -238,14 +247,14 @@ export class EventCalendarAdapter {
           caldavEvent.calendarUrl,
           caldavEvent.url,
           caldavEvent.etag,
-          opts
-        )
+          opts,
+        );
 
-        events.push(ecEvent)
+        events.push(ecEvent);
       }
     }
 
-    return events
+    return events;
   }
 
   /**
@@ -256,30 +265,30 @@ export class EventCalendarAdapter {
     calendarUrl: string,
     eventUrl?: string,
     etag?: string,
-    options?: CalDavToEventCalendarOptions
+    options?: CalDavToEventCalendarOptions,
   ): EventCalendarEvent {
-    const opts = { ...this.defaultOptions, ...options }
+    const opts = { ...this.defaultOptions, ...options };
 
     // Generate unique ID
     const id = opts.eventIdGenerator
       ? opts.eventIdGenerator(icsEvent, calendarUrl)
-      : this.generateEventId(icsEvent)
+      : this.generateEventId(icsEvent);
 
     // Determine colors
-    const calendarColor = opts.calendarColors?.get(calendarUrl)
-    const backgroundColor = calendarColor ?? opts.defaultEventColor
-    const textColor = opts.defaultTextColor
+    const calendarColor = opts.calendarColors?.get(calendarUrl);
+    const backgroundColor = calendarColor ?? opts.defaultEventColor;
+    const textColor = opts.defaultTextColor;
 
     // Convert dates
-    const start = this.icsDateToJsDate(icsEvent.start)
+    const start = this.icsDateToJsDate(icsEvent.start);
     const end = icsEvent.end
       ? this.icsDateToJsDate(icsEvent.end)
       : icsEvent.duration
         ? this.addIcsDurationToDate(start, icsEvent.duration)
-        : start
+        : start;
 
     // Determine if all-day event
-    const allDay = icsEvent.start.type === 'DATE'
+    const allDay = icsEvent.start.type === "DATE";
 
     // EventCalendar expects ISO strings but interprets them in browser local time
     // We need to create ISO strings that preserve the local time components
@@ -306,14 +315,16 @@ export class EventCalendarAdapter {
             displayName: icsEvent.organizer.name,
           }
         : undefined,
-      attendees: this.deduplicateAttendees(icsEvent.attendees?.map((att) => ({
-        email: att.email,
-        displayName: att.name,
-        role: att.role as ExtendedAttendee['role'],
-        status: att.partstat as ExtendedAttendee['status'],
-        rsvp: att.rsvp,
-        cutype: att.cutype,
-      }))),
+      attendees: this.deduplicateAttendees(
+        icsEvent.attendees?.map((att) => ({
+          email: att.email,
+          displayName: att.name,
+          role: att.role as ExtendedAttendee["role"],
+          status: att.partstat as ExtendedAttendee["status"],
+          rsvp: att.rsvp,
+          cutype: att.cutype,
+        })),
+      ),
       categories: icsEvent.categories,
       priority: icsEvent.priority != null ? Number(icsEvent.priority) : undefined,
       // SECURITY: scheme-allowlist the ICS URL property at the data boundary
@@ -323,11 +334,11 @@ export class EventCalendarAdapter {
       url: sanitizeIcsUrl(icsEvent.url),
       created: icsEvent.created ? this.icsDateToJsDate(icsEvent.created) : undefined,
       lastModified: icsEvent.lastModified ? this.icsDateToJsDate(icsEvent.lastModified) : undefined,
-    }
+    };
 
     // Add any custom extended props
     if (opts.extendedPropsExtractor) {
-      Object.assign(extendedProps, opts.extendedPropsExtractor(icsEvent))
+      Object.assign(extendedProps, opts.extendedPropsExtractor(icsEvent));
     }
 
     return {
@@ -337,12 +348,12 @@ export class EventCalendarAdapter {
       allDay,
       resourceId: calendarUrl,
       resourceIds: [calendarUrl],
-      title: icsEvent.summary ?? '',
+      title: icsEvent.summary ?? "",
       backgroundColor,
       textColor,
       editable: true,
       extendedProps,
-    }
+    };
   }
 
   /**
@@ -350,11 +361,11 @@ export class EventCalendarAdapter {
    * For all-day events, use UTC components since the Date is UTC midnight
    */
   private dateToDateOnlyString(date: Date): string {
-    const pad = (n: number) => n.toString().padStart(2, '0')
-    const year = date.getUTCFullYear()
-    const month = pad(date.getUTCMonth() + 1)
-    const day = pad(date.getUTCDate())
-    return `${year}-${month}-${day}`
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const year = date.getUTCFullYear();
+    const month = pad(date.getUTCMonth() + 1);
+    const day = pad(date.getUTCDate());
+    return `${year}-${month}-${day}`;
   }
 
   /**
@@ -362,16 +373,16 @@ export class EventCalendarAdapter {
    * Unlike toISOString() which converts to UTC, this preserves the browser's local time
    */
   private dateToLocalISOString(date: Date): string {
-    const pad = (n: number) => n.toString().padStart(2, '0')
-    const year = date.getFullYear()
-    const month = pad(date.getMonth() + 1)
-    const day = pad(date.getDate())
-    const hours = pad(date.getHours())
-    const minutes = pad(date.getMinutes())
-    const seconds = pad(date.getSeconds())
-    const ms = date.getMilliseconds().toString().padStart(3, '0')
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    const seconds = pad(date.getSeconds());
+    const ms = date.getMilliseconds().toString().padStart(3, "0");
 
-    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}`
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${ms}`;
   }
 
   /**
@@ -380,7 +391,7 @@ export class EventCalendarAdapter {
   public toEventCalendarResources(calendars: CalDavCalendar[]): EventCalendarResource[] {
     return calendars.map((cal) => ({
       id: cal.url,
-      title: cal.displayName || 'Unnamed Calendar',
+      title: cal.displayName || "Unnamed Calendar",
       eventBackgroundColor: cal.color,
       extendedProps: {
         description: cal.description,
@@ -389,7 +400,7 @@ export class EventCalendarAdapter {
         syncToken: cal.syncToken,
         components: cal.components,
       },
-    }))
+    }));
   }
 
   // ============================================================================
@@ -401,41 +412,39 @@ export class EventCalendarAdapter {
    */
   public toIcsEvent(
     ecEvent: EventCalendarEvent | EventCalendarEventInput,
-    options?: EventCalendarToCalDavOptions
+    options?: EventCalendarToCalDavOptions,
   ): IcsEvent {
-    const opts = options ?? {}
-    const extProps = (ecEvent.extendedProps ?? {}) as Partial<CalDavExtendedProps>
+    const opts = options ?? {};
+    const extProps = (ecEvent.extendedProps ?? {}) as Partial<CalDavExtendedProps>;
 
     // Get or generate UID
-    const uid = extProps.uid ?? opts.uidGenerator?.() ?? crypto.randomUUID()
+    const uid = extProps.uid ?? opts.uidGenerator?.() ?? crypto.randomUUID();
 
     // Convert dates
     // For all-day events, parse date strings carefully to avoid timezone issues
     const parseDate = (dateValue: Date | string, isAllDay: boolean): Date => {
       if (dateValue instanceof Date) {
-        return dateValue
+        return dateValue;
       }
 
       // If all-day and string format is YYYY-MM-DD, parse components directly as UTC
       // All-day events in ICS are stored as UTC midnight
-      if (isAllDay && typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-        const [year, month, day] = dateValue.split('-').map(Number)
-        const result = new Date(Date.UTC(year, month - 1, day))
-        return result
+      if (isAllDay && typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+        const [year, month, day] = dateValue.split("-").map(Number);
+        const result = new Date(Date.UTC(year, month - 1, day));
+        return result;
       }
 
-      return new Date(dateValue)
-    }
+      return new Date(dateValue);
+    };
 
-    const isAllDay = ecEvent.allDay ?? false
+    const isAllDay = ecEvent.allDay ?? false;
 
-    const startDate = parseDate(ecEvent.start, isAllDay)
-    const endDate = ecEvent.end
-      ? parseDate(ecEvent.end, isAllDay)
-      : startDate
+    const startDate = parseDate(ecEvent.start, isAllDay);
+    const endDate = ecEvent.end ? parseDate(ecEvent.end, isAllDay) : startDate;
 
     // Determine timezone
-    const timezone = extProps.timezone ?? opts.defaultTimezone
+    const timezone = extProps.timezone ?? opts.defaultTimezone;
 
     // Build IcsEvent
     // jsDateToIcsDate uses Intl.DateTimeFormat to convert the date to the
@@ -446,71 +455,74 @@ export class EventCalendarAdapter {
       stamp: { date: new Date() },
       start: this.jsDateToIcsDate(startDate, isAllDay, timezone),
       end: this.jsDateToIcsDate(endDate, isAllDay, timezone),
-      summary: typeof ecEvent.title === 'string' ? ecEvent.title : '',
+      summary: typeof ecEvent.title === "string" ? ecEvent.title : "",
       sequence: (extProps.sequence ?? 0) + 1,
-    }
+    };
 
     // Add optional properties from extended props
-    if (extProps.location) icsEvent.location = extProps.location
-    if (extProps.description) icsEvent.description = extProps.description
+    if (extProps.location) icsEvent.location = extProps.location;
+    if (extProps.description) icsEvent.description = extProps.description;
     if (extProps.status && this.isValidStatus(extProps.status)) {
-      icsEvent.status = extProps.status
+      icsEvent.status = extProps.status;
     }
     // Carry CLASS (visibility) back so editing an event preserves its
     // PRIVATE/CONFIDENTIAL setting instead of silently resetting it.
-    if (extProps.class) icsEvent.class = extProps.class
-    if (extProps.categories) icsEvent.categories = extProps.categories
-    if (extProps.priority != null) icsEvent.priority = String(extProps.priority)
+    if (extProps.class) icsEvent.class = extProps.class;
+    if (extProps.categories) icsEvent.categories = extProps.categories;
+    if (extProps.priority != null) icsEvent.priority = String(extProps.priority);
     // SECURITY: re-sanitize on the way out too. The forward path
     // (toEventCalendarEvent) sanitizes inbound data so this should
     // always be safe; this guard exists so that ANY future code path
     // that constructs an extProps with a hand-built URL still gets
     // filtered before the bytes are written back to CalDAV.
     if (extProps.url) {
-      const safeOutbound = sanitizeIcsUrl(extProps.url)
-      if (safeOutbound) icsEvent.url = safeOutbound
+      const safeOutbound = sanitizeIcsUrl(extProps.url);
+      if (safeOutbound) icsEvent.url = safeOutbound;
     }
-    if (extProps.created) icsEvent.created = this.jsDateToIcsDate(extProps.created, false, timezone)
-    if (extProps.recurrenceRule) icsEvent.recurrenceRule = extProps.recurrenceRule
+    if (extProps.created)
+      icsEvent.created = this.jsDateToIcsDate(extProps.created, false, timezone);
+    if (extProps.recurrenceRule) icsEvent.recurrenceRule = extProps.recurrenceRule;
 
     // Convert recurrence ID for recurring instances
     if (extProps.recurrenceId) {
       icsEvent.recurrenceId = {
         value: this.jsDateToIcsDate(extProps.recurrenceId, ecEvent.allDay ?? false, timezone),
-      }
+      };
     }
 
     // Convert organizer
     if (extProps.organizer) {
       const organizer: IcsOrganizer = {
         email: extProps.organizer.email,
-      }
+      };
       if (extProps.organizer.displayName) {
-        organizer.name = extProps.organizer.displayName
+        organizer.name = extProps.organizer.displayName;
       }
-      icsEvent.organizer = organizer
+      icsEvent.organizer = organizer;
     }
 
     // Convert attendees
     if (extProps.attendees && extProps.attendees.length > 0) {
-      icsEvent.attendees = extProps.attendees.map((att): IcsAttendee => ({
-        email: att.email,
-        name: att.displayName,
-        role: att.role,
-        partstat: (att.status as IcsAttendee['partstat']) ?? 'NEEDS-ACTION',
-        rsvp: att.rsvp,
-        cutype: att.cutype,
-      }))
+      icsEvent.attendees = extProps.attendees.map(
+        (att): IcsAttendee => ({
+          email: att.email,
+          name: att.displayName,
+          role: att.role,
+          partstat: (att.status as IcsAttendee["partstat"]) ?? "NEEDS-ACTION",
+          rsvp: att.rsvp,
+          cutype: att.cutype,
+        }),
+      );
     }
 
-    return icsEvent
+    return icsEvent;
   }
 
   /**
    * Check if a status string is a valid ICS event status
    */
-  private isValidStatus(status: string): status is 'TENTATIVE' | 'CONFIRMED' | 'CANCELLED' {
-    return ['TENTATIVE', 'CONFIRMED', 'CANCELLED'].includes(status)
+  private isValidStatus(status: string): status is "TENTATIVE" | "CONFIRMED" | "CANCELLED" {
+    return ["TENTATIVE", "CONFIRMED", "CANCELLED"].includes(status);
   }
 
   /**
@@ -518,55 +530,58 @@ export class EventCalendarAdapter {
    */
   public toIcsCalendar(
     ecEvent: EventCalendarEvent | EventCalendarEventInput,
-    options?: EventCalendarToCalDavOptions
+    options?: EventCalendarToCalDavOptions,
   ): IcsCalendar {
-    const icsEvent = this.toIcsEvent(ecEvent, options)
+    const icsEvent = this.toIcsEvent(ecEvent, options);
 
     return {
-      prodId: '-//EventCalendarAdapter//NONSGML v1.0//EN',
-      version: '2.0',
+      prodId: "-//EventCalendarAdapter//NONSGML v1.0//EN",
+      version: "2.0",
       events: [icsEvent],
-    }
+    };
   }
 
   /**
    * Get the calendar URL from an EventCalendar event
    */
-  public getCalendarUrl(ecEvent: EventCalendarEvent, defaultCalendarUrl?: string): string | undefined {
-    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined
-    return extProps?.calendarUrl ?? defaultCalendarUrl
+  public getCalendarUrl(
+    ecEvent: EventCalendarEvent,
+    defaultCalendarUrl?: string,
+  ): string | undefined {
+    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined;
+    return extProps?.calendarUrl ?? defaultCalendarUrl;
   }
 
   /**
    * Get the event URL from an EventCalendar event
    */
   public getEventUrl(ecEvent: EventCalendarEvent): string | undefined {
-    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined
-    return extProps?.eventUrl
+    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined;
+    return extProps?.eventUrl;
   }
 
   /**
    * Get the ETag from an EventCalendar event
    */
   public getEtag(ecEvent: EventCalendarEvent): string | undefined {
-    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined
-    return extProps?.etag
+    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined;
+    return extProps?.etag;
   }
 
   /**
    * Check if an EventCalendar event is a recurring instance
    */
   public isRecurringInstance(ecEvent: EventCalendarEvent): boolean {
-    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined
-    return extProps?.isRecurringInstance ?? false
+    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined;
+    return extProps?.isRecurringInstance ?? false;
   }
 
   /**
    * Check if an EventCalendar event has recurrence rule
    */
   public hasRecurrenceRule(ecEvent: EventCalendarEvent): boolean {
-    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined
-    return !!extProps?.recurrenceRule
+    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined;
+    return !!extProps?.recurrenceRule;
   }
 
   // ============================================================================
@@ -577,35 +592,35 @@ export class EventCalendarAdapter {
    * Convert EventCalendar duration to seconds
    */
   public durationToSeconds(duration: EventCalendarDuration): number {
-    let seconds = 0
-    if (duration.years) seconds += duration.years * 365.25 * 24 * 60 * 60
-    if (duration.months) seconds += duration.months * 30.44 * 24 * 60 * 60
-    if (duration.weeks) seconds += duration.weeks * 7 * 24 * 60 * 60
-    if (duration.days) seconds += duration.days * 24 * 60 * 60
-    if (duration.hours) seconds += duration.hours * 60 * 60
-    if (duration.minutes) seconds += duration.minutes * 60
-    if (duration.seconds) seconds += duration.seconds
-    return Math.round(seconds)
+    let seconds = 0;
+    if (duration.years) seconds += duration.years * 365.25 * 24 * 60 * 60;
+    if (duration.months) seconds += duration.months * 30.44 * 24 * 60 * 60;
+    if (duration.weeks) seconds += duration.weeks * 7 * 24 * 60 * 60;
+    if (duration.days) seconds += duration.days * 24 * 60 * 60;
+    if (duration.hours) seconds += duration.hours * 60 * 60;
+    if (duration.minutes) seconds += duration.minutes * 60;
+    if (duration.seconds) seconds += duration.seconds;
+    return Math.round(seconds);
   }
 
   /**
    * Convert seconds to EventCalendar duration
    */
   public secondsToDuration(totalSeconds: number): EventCalendarDuration {
-    const days = Math.floor(totalSeconds / (24 * 60 * 60))
-    const remainingAfterDays = totalSeconds % (24 * 60 * 60)
-    const hours = Math.floor(remainingAfterDays / (60 * 60))
-    const remainingAfterHours = remainingAfterDays % (60 * 60)
-    const minutes = Math.floor(remainingAfterHours / 60)
-    const seconds = remainingAfterHours % 60
+    const days = Math.floor(totalSeconds / (24 * 60 * 60));
+    const remainingAfterDays = totalSeconds % (24 * 60 * 60);
+    const hours = Math.floor(remainingAfterDays / (60 * 60));
+    const remainingAfterHours = remainingAfterDays % (60 * 60);
+    const minutes = Math.floor(remainingAfterHours / 60);
+    const seconds = remainingAfterHours % 60;
 
-    const duration: EventCalendarDuration = {}
-    if (days) duration.days = days
-    if (hours) duration.hours = hours
-    if (minutes) duration.minutes = minutes
-    if (seconds) duration.seconds = seconds
+    const duration: EventCalendarDuration = {};
+    if (days) duration.days = days;
+    if (hours) duration.hours = hours;
+    if (minutes) duration.minutes = minutes;
+    if (seconds) duration.seconds = seconds;
 
-    return duration
+    return duration;
   }
 
   /**
@@ -613,20 +628,20 @@ export class EventCalendarAdapter {
    */
   public calculateDelta(
     oldEvent: EventCalendarEvent,
-    newEvent: EventCalendarEvent
+    newEvent: EventCalendarEvent,
   ): { startDelta: EventCalendarDuration; endDelta: EventCalendarDuration } {
-    const oldStart = oldEvent.start instanceof Date ? oldEvent.start : new Date(oldEvent.start)
-    const newStart = newEvent.start instanceof Date ? newEvent.start : new Date(newEvent.start)
-    const oldEnd = oldEvent.end instanceof Date ? oldEvent.end : new Date(oldEvent.end ?? oldStart)
-    const newEnd = newEvent.end instanceof Date ? newEvent.end : new Date(newEvent.end ?? newStart)
+    const oldStart = oldEvent.start instanceof Date ? oldEvent.start : new Date(oldEvent.start);
+    const newStart = newEvent.start instanceof Date ? newEvent.start : new Date(newEvent.start);
+    const oldEnd = oldEvent.end instanceof Date ? oldEvent.end : new Date(oldEvent.end ?? oldStart);
+    const newEnd = newEvent.end instanceof Date ? newEvent.end : new Date(newEvent.end ?? newStart);
 
-    const startDeltaMs = newStart.getTime() - oldStart.getTime()
-    const endDeltaMs = newEnd.getTime() - oldEnd.getTime()
+    const startDeltaMs = newStart.getTime() - oldStart.getTime();
+    const endDeltaMs = newEnd.getTime() - oldEnd.getTime();
 
     return {
       startDelta: this.secondsToDuration(Math.round(startDeltaMs / 1000)),
       endDelta: this.secondsToDuration(Math.round(endDeltaMs / 1000)),
-    }
+    };
   }
 
   // ============================================================================
@@ -637,16 +652,16 @@ export class EventCalendarAdapter {
    * Get attendees from an EventCalendar event
    */
   public getAttendees(ecEvent: EventCalendarEvent): ExtendedAttendee[] {
-    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined
-    return extProps?.attendees ?? []
+    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined;
+    return extProps?.attendees ?? [];
   }
 
   /**
    * Get organizer from an EventCalendar event
    */
   public getOrganizer(ecEvent: EventCalendarEvent): ExtendedOrganizer | undefined {
-    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined
-    return extProps?.organizer
+    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined;
+    return extProps?.organizer;
   }
 
   /**
@@ -654,7 +669,7 @@ export class EventCalendarAdapter {
    */
   public setAttendees(
     ecEvent: EventCalendarEvent,
-    attendees: ExtendedAttendee[]
+    attendees: ExtendedAttendee[],
   ): EventCalendarEvent {
     return {
       ...ecEvent,
@@ -662,7 +677,7 @@ export class EventCalendarAdapter {
         ...(ecEvent.extendedProps ?? {}),
         attendees,
       },
-    }
+    };
   }
 
   /**
@@ -670,7 +685,7 @@ export class EventCalendarAdapter {
    */
   public setOrganizer(
     ecEvent: EventCalendarEvent,
-    organizer: ExtendedOrganizer
+    organizer: ExtendedOrganizer,
   ): EventCalendarEvent {
     return {
       ...ecEvent,
@@ -678,7 +693,7 @@ export class EventCalendarAdapter {
         ...(ecEvent.extendedProps ?? {}),
         organizer,
       },
-    }
+    };
   }
 
   // ============================================================================
@@ -689,16 +704,16 @@ export class EventCalendarAdapter {
    * Get location from an EventCalendar event
    */
   public getLocation(ecEvent: EventCalendarEvent): string | undefined {
-    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined
-    return extProps?.location
+    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined;
+    return extProps?.location;
   }
 
   /**
    * Get description from an EventCalendar event
    */
   public getDescription(ecEvent: EventCalendarEvent): string | undefined {
-    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined
-    return extProps?.description
+    const extProps = ecEvent.extendedProps as Partial<CalDavExtendedProps> | undefined;
+    return extProps?.description;
   }
 
   /**
@@ -711,7 +726,7 @@ export class EventCalendarAdapter {
         ...(ecEvent.extendedProps ?? {}),
         location,
       },
-    }
+    };
   }
 
   /**
@@ -724,7 +739,7 @@ export class EventCalendarAdapter {
         ...(ecEvent.extendedProps ?? {}),
         description,
       },
-    }
+    };
   }
 
   // ============================================================================
@@ -735,13 +750,13 @@ export class EventCalendarAdapter {
    * Create a color map from calendars
    */
   public createCalendarColorMap(calendars: CalDavCalendar[]): Map<string, string> {
-    const colorMap = new Map<string, string>()
+    const colorMap = new Map<string, string>();
     for (const cal of calendars) {
       if (cal.color) {
-        colorMap.set(cal.url, cal.color)
+        colorMap.set(cal.url, cal.color);
       }
     }
-    return colorMap
+    return colorMap;
   }
 
   /**
@@ -749,18 +764,18 @@ export class EventCalendarAdapter {
    */
   public applyCalendarColors(
     events: EventCalendarEvent[],
-    calendarColors: Map<string, string>
+    calendarColors: Map<string, string>,
   ): EventCalendarEvent[] {
     return events.map((event) => {
-      const calendarUrl = this.getCalendarUrl(event)
+      const calendarUrl = this.getCalendarUrl(event);
       if (calendarUrl && calendarColors.has(calendarUrl)) {
         return {
           ...event,
           backgroundColor: calendarColors.get(calendarUrl),
-        }
+        };
       }
-      return event
-    })
+      return event;
+    });
   }
 
   // ============================================================================
@@ -777,48 +792,52 @@ export class EventCalendarAdapter {
    */
   private deduplicateAttendees(attendees?: ExtendedAttendee[]): ExtendedAttendee[] | undefined {
     if (!attendees || attendees.length === 0) {
-      return attendees
+      return attendees;
     }
 
     // Status priority map (higher = more definitive response)
     const statusPriority: Record<string, number> = {
-      'ACCEPTED': 4,
-      'TENTATIVE': 3,
-      'DECLINED': 2,
-      'NEEDS-ACTION': 1,
-    }
+      ACCEPTED: 4,
+      TENTATIVE: 3,
+      DECLINED: 2,
+      "NEEDS-ACTION": 1,
+    };
 
     const getStatusPriority = (status?: string): number => {
-      return statusPriority[status ?? 'NEEDS-ACTION'] ?? 0
-    }
+      return statusPriority[status ?? "NEEDS-ACTION"] ?? 0;
+    };
 
     // Group by normalized email (lowercase)
-    const byEmail = new Map<string, ExtendedAttendee>()
+    const byEmail = new Map<string, ExtendedAttendee>();
 
     for (const attendee of attendees) {
-      const normalizedEmail = attendee.email.toLowerCase().trim()
-      const existing = byEmail.get(normalizedEmail)
+      const normalizedEmail = attendee.email.toLowerCase().trim();
+      const existing = byEmail.get(normalizedEmail);
 
       if (!existing) {
         // First occurrence of this email
-        byEmail.set(normalizedEmail, attendee)
+        byEmail.set(normalizedEmail, attendee);
       } else {
         // Duplicate found - keep the one with higher status priority
-        const existingPriority = getStatusPriority(existing.status)
-        const newPriority = getStatusPriority(attendee.status)
+        const existingPriority = getStatusPriority(existing.status);
+        const newPriority = getStatusPriority(attendee.status);
 
         if (newPriority > existingPriority) {
           // New attendee has more definitive status - replace
-          byEmail.set(normalizedEmail, attendee)
-        } else if (newPriority === existingPriority && attendee.displayName && !existing.displayName) {
+          byEmail.set(normalizedEmail, attendee);
+        } else if (
+          newPriority === existingPriority &&
+          attendee.displayName &&
+          !existing.displayName
+        ) {
           // Same status but new one has display name - prefer it
-          byEmail.set(normalizedEmail, attendee)
+          byEmail.set(normalizedEmail, attendee);
         }
         // Otherwise keep existing
       }
     }
 
-    return Array.from(byEmail.values())
+    return Array.from(byEmail.values());
   }
 
   /**
@@ -826,9 +845,9 @@ export class EventCalendarAdapter {
    */
   private generateEventId(icsEvent: IcsEvent): string {
     if (icsEvent.recurrenceId) {
-      return `${icsEvent.uid}_${icsEvent.recurrenceId.value.date.getTime()}`
+      return `${icsEvent.uid}_${icsEvent.recurrenceId.value.date.getTime()}`;
     }
-    return icsEvent.uid
+    return icsEvent.uid;
   }
 
   /**
@@ -842,7 +861,7 @@ export class EventCalendarAdapter {
    * with getHours() in dateToLocalISOString().
    */
   private icsDateToJsDate(icsDate: IcsDateObject): Date {
-    return icsDate.date
+    return icsDate.date;
   }
 
   /**
@@ -864,47 +883,45 @@ export class EventCalendarAdapter {
     if (allDay) {
       // For all-day events, use DATE type (no time component)
       // Extract date components in browser local time
-      const utcDate = new Date(Date.UTC(
-        date.getFullYear(),
-        date.getMonth(),
-        date.getDate()
-      ))
+      const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
       return {
-        type: 'DATE',
+        type: "DATE",
         date: utcDate,
-      }
+      };
     }
 
     // Resolve the target timezone
-    const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+    const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     // Extract date/time components in the target timezone using Intl API.
     // This correctly handles cross-timezone events (e.g., NY event viewed from Paris)
     // and DST transitions.
-    const components = this.getDateComponentsInTimezone(date, tz)
+    const components = this.getDateComponentsInTimezone(date, tz);
 
     // Create a "fake UTC" date where UTC components = target timezone components.
     // ts-ics uses getUTCHours() to generate ICS, so this ensures correct output.
-    const fakeUtcDate = new Date(Date.UTC(
-      components.year,
-      components.month - 1, // DateComponents uses 1-12, Date.UTC uses 0-11
-      components.day,
-      components.hours,
-      components.minutes,
-      components.seconds
-    ))
+    const fakeUtcDate = new Date(
+      Date.UTC(
+        components.year,
+        components.month - 1, // DateComponents uses 1-12, Date.UTC uses 0-11
+        components.day,
+        components.hours,
+        components.minutes,
+        components.seconds,
+      ),
+    );
 
-    const tzOffset = this.getTimezoneOffset(date, tz)
+    const tzOffset = this.getTimezoneOffset(date, tz);
 
     return {
-      type: 'DATE-TIME',
+      type: "DATE-TIME",
       date: fakeUtcDate,
       local: {
         date: fakeUtcDate,
         timezone: tz,
         tzoffset: tzOffset,
       },
-    }
+    };
   }
 
   /**
@@ -918,39 +935,39 @@ export class EventCalendarAdapter {
    * @returns DateComponents with year, month (1-12), day, hours, minutes, seconds in the target timezone
    */
   public getDateComponentsInTimezone(date: Date, timezone: string): DateComponents {
-    let formatter = this.dateComponentsFormatterCache.get(timezone)
+    let formatter = this.dateComponentsFormatterCache.get(timezone);
     if (!formatter) {
       if (this.dateComponentsFormatterCache.size >= EventCalendarAdapter.FORMATTER_CACHE_MAX_SIZE) {
-        const firstKey = this.dateComponentsFormatterCache.keys().next().value
-        this.dateComponentsFormatterCache.delete(firstKey as string)
+        const firstKey = this.dateComponentsFormatterCache.keys().next().value;
+        this.dateComponentsFormatterCache.delete(firstKey as string);
       }
-      formatter = new Intl.DateTimeFormat('en-US', {
+      formatter = new Intl.DateTimeFormat("en-US", {
         timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
         hour12: false,
-      })
-      this.dateComponentsFormatterCache.set(timezone, formatter)
+      });
+      this.dateComponentsFormatterCache.set(timezone, formatter);
     }
-    const parts = formatter.formatToParts(date)
+    const parts = formatter.formatToParts(date);
 
     const get = (type: Intl.DateTimeFormatPartTypes): number => {
-      const part = parts.find((p) => p.type === type)
-      return part ? parseInt(part.value, 10) : 0
-    }
+      const part = parts.find((p) => p.type === type);
+      return part ? parseInt(part.value, 10) : 0;
+    };
 
     return {
-      year: get('year'),
-      month: get('month'),
-      day: get('day'),
-      hours: get('hour') === 24 ? 0 : get('hour'), // Intl may return 24 for midnight
-      minutes: get('minute'),
-      seconds: get('second'),
-    }
+      year: get("year"),
+      month: get("month"),
+      day: get("day"),
+      hours: get("hour") === 24 ? 0 : get("hour"), // Intl may return 24 for midnight
+      minutes: get("minute"),
+      seconds: get("second"),
+    };
   }
 
   /**
@@ -959,34 +976,34 @@ export class EventCalendarAdapter {
    */
   public getTimezoneOffset(date: Date, timezone: string): string {
     try {
-      let formatter = this.offsetFormatterCache.get(timezone)
+      let formatter = this.offsetFormatterCache.get(timezone);
       if (!formatter) {
         if (this.offsetFormatterCache.size >= EventCalendarAdapter.FORMATTER_CACHE_MAX_SIZE) {
-          const firstKey = this.offsetFormatterCache.keys().next().value
-          this.offsetFormatterCache.delete(firstKey as string)
+          const firstKey = this.offsetFormatterCache.keys().next().value;
+          this.offsetFormatterCache.delete(firstKey as string);
         }
-        formatter = new Intl.DateTimeFormat('en-US', {
+        formatter = new Intl.DateTimeFormat("en-US", {
           timeZone: timezone,
-          timeZoneName: 'longOffset',
-        })
-        this.offsetFormatterCache.set(timezone, formatter)
+          timeZoneName: "longOffset",
+        });
+        this.offsetFormatterCache.set(timezone, formatter);
       }
-      const parts = formatter.formatToParts(date)
-      const tzPart = parts.find((p) => p.type === 'timeZoneName')
+      const parts = formatter.formatToParts(date);
+      const tzPart = parts.find((p) => p.type === "timeZoneName");
 
       if (tzPart?.value) {
         // Convert "GMT+02:00" to "+0200"
-        const match = tzPart.value.match(/GMT([+-])(\d{1,2}):?(\d{2})?/)
+        const match = tzPart.value.match(/GMT([+-])(\d{1,2}):?(\d{2})?/);
         if (match) {
-          const sign = match[1]
-          const hours = match[2].padStart(2, '0')
-          const minutes = (match[3] || '00').padStart(2, '0')
-          return `${sign}${hours}${minutes}`
+          const sign = match[1];
+          const hours = match[2].padStart(2, "0");
+          const minutes = (match[3] || "00").padStart(2, "0");
+          return `${sign}${hours}${minutes}`;
         }
       }
-      return '+0000'
+      return "+0000";
     } catch {
-      return '+0000'
+      return "+0000";
     }
   }
 
@@ -994,40 +1011,39 @@ export class EventCalendarAdapter {
    * Add ICS duration object to a date
    */
   private addIcsDurationToDate(date: Date, duration: IcsDuration): Date {
-    const result = new Date(date)
+    const result = new Date(date);
 
-    if (duration.weeks) result.setDate(result.getDate() + duration.weeks * 7)
-    if (duration.days) result.setDate(result.getDate() + duration.days)
-    if (duration.hours) result.setHours(result.getHours() + duration.hours)
-    if (duration.minutes) result.setMinutes(result.getMinutes() + duration.minutes)
-    if (duration.seconds) result.setSeconds(result.getSeconds() + duration.seconds)
+    if (duration.weeks) result.setDate(result.getDate() + duration.weeks * 7);
+    if (duration.days) result.setDate(result.getDate() + duration.days);
+    if (duration.hours) result.setHours(result.getHours() + duration.hours);
+    if (duration.minutes) result.setMinutes(result.getMinutes() + duration.minutes);
+    if (duration.seconds) result.setSeconds(result.getSeconds() + duration.seconds);
 
-    return result
+    return result;
   }
-
 }
 
 // ============================================================================
 // Factory & Singleton
 // ============================================================================
 
-let _adapterInstance: EventCalendarAdapter | null = null
+let _adapterInstance: EventCalendarAdapter | null = null;
 
 /**
  * Get or create a singleton adapter instance
  */
 export function getEventCalendarAdapter(): EventCalendarAdapter {
   if (!_adapterInstance) {
-    _adapterInstance = new EventCalendarAdapter()
+    _adapterInstance = new EventCalendarAdapter();
   }
-  return _adapterInstance
+  return _adapterInstance;
 }
 
 /**
  * Create a new adapter instance
  */
 export function createEventCalendarAdapter(): EventCalendarAdapter {
-  return new EventCalendarAdapter()
+  return new EventCalendarAdapter();
 }
 
 // ============================================================================
@@ -1039,9 +1055,9 @@ export function createEventCalendarAdapter(): EventCalendarAdapter {
  */
 export function caldavToEventCalendar(
   caldavEvents: CalDavEvent[],
-  options?: CalDavToEventCalendarOptions
+  options?: CalDavToEventCalendarOptions,
 ): EventCalendarEvent[] {
-  return getEventCalendarAdapter().toEventCalendarEvents(caldavEvents, options)
+  return getEventCalendarAdapter().toEventCalendarEvents(caldavEvents, options);
 }
 
 /**
@@ -1049,9 +1065,9 @@ export function caldavToEventCalendar(
  */
 export function eventCalendarToIcs(
   ecEvent: EventCalendarEvent | EventCalendarEventInput,
-  options?: EventCalendarToCalDavOptions
+  options?: EventCalendarToCalDavOptions,
 ): IcsEvent {
-  return getEventCalendarAdapter().toIcsEvent(ecEvent, options)
+  return getEventCalendarAdapter().toIcsEvent(ecEvent, options);
 }
 
 /**
@@ -1059,14 +1075,14 @@ export function eventCalendarToIcs(
  */
 export function eventCalendarToIcsCalendar(
   ecEvent: EventCalendarEvent | EventCalendarEventInput,
-  options?: EventCalendarToCalDavOptions
+  options?: EventCalendarToCalDavOptions,
 ): IcsCalendar {
-  return getEventCalendarAdapter().toIcsCalendar(ecEvent, options)
+  return getEventCalendarAdapter().toIcsCalendar(ecEvent, options);
 }
 
 /**
  * Quick conversion from CalDAV calendars to EventCalendar resources
  */
 export function calendarsToResources(calendars: CalDavCalendar[]): EventCalendarResource[] {
-  return getEventCalendarAdapter().toEventCalendarResources(calendars)
+  return getEventCalendarAdapter().toEventCalendarResources(calendars);
 }

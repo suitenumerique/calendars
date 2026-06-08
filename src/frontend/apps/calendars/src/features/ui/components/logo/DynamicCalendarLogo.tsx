@@ -1,11 +1,7 @@
 "use client";
 
-import {
-  useEffect,
-  useState
-} from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-
 
 interface DynamicCalendarLogoProps {
   variant?: "header" | "icon";
@@ -31,11 +27,7 @@ export const DynamicCalendarLogo = ({
       className={`calendars__dynamic-logo ${isIcon ? "calendars__dynamic-logo--icon" : "calendars__dynamic-logo--header"} ${className ?? ""}`}
     >
       <img
-        src={
-          isIcon
-            ? "/cal_icon_no_number.svg"
-            : "/cal_logotype_text_no_number.svg"
-        }
+        src={isIcon ? "/cal_icon_no_number.svg" : "/cal_logotype_text_no_number.svg"}
         alt={t("app_title")}
         className="calendars__dynamic-logo__img"
       />

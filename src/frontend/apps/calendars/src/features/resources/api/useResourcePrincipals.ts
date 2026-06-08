@@ -1,14 +1,6 @@
-import {
-  useQuery,
-  useQueryClient
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import {
-  caldavServerUrl,
-  davRequest
-} from "@/features/calendar/utils/DavClient";
-
-
+import { caldavServerUrl, davRequest } from "@/features/calendar/utils/DavClient";
 
 import type { ResourceType } from "../types";
 
@@ -54,17 +46,14 @@ async function fetchResourcePrincipals(): Promise<ResourcePrincipal[]> {
     if (!id) continue;
 
     const props = item.props || {};
-    const displayName =
-      props.displayname?._cdata ?? props.displayname ?? id;
-    const rawCutype =
-      props.calendarUserType || props["calendar-user-type"] || "ROOM";
+    const displayName = props.displayname?._cdata ?? props.displayname ?? id;
+    const rawCutype = props.calendarUserType || props["calendar-user-type"] || "ROOM";
     const calendarUserType: ResourceType =
       rawCutype === "ROOM" || rawCutype === "RESOURCE" ? rawCutype : "ROOM";
 
     // Extract email from calendar-user-address-set
     let email: string | undefined;
-    const addressSet =
-      props.calendarUserAddressSet || props["calendar-user-address-set"];
+    const addressSet = props.calendarUserAddressSet || props["calendar-user-address-set"];
     if (addressSet) {
       const hrefValue = addressSet.href;
       const hrefs = Array.isArray(hrefValue) ? hrefValue : [hrefValue];

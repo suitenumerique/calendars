@@ -1,44 +1,19 @@
-import {
-  useEffect,
-  useState
-} from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  Modal,
-  ModalSize
-} from "@gouvfr-lasuite/cunningham-react";
+import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
 import { useAuth } from "@/features/auth/Auth";
 import { caldavServerUrl } from "@/features/calendar/utils/DavClient";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
-import {
-  useCreateChannel,
-  useRegenerateToken,
-  useUpdateChannel
-} from "../api/useChannels";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import { useCreateChannel, useRegenerateToken, useUpdateChannel } from "../api/useChannels";
 import { ChannelForm } from "./ChannelForm";
 import {
   ChannelTypePicker,
   getChannelTypeTitleKey,
-  type ChannelPickerType
+  type ChannelPickerType,
 } from "./ChannelTypePicker";
 import { TokenRevealModal } from "./TokenRevealModal";
 
-
-
-
-
-
-import type {
-  Channel,
-  ChannelScopeValue,
-  ChannelType,
-} from "../types";
-
-
+import type { Channel, ChannelScopeValue, ChannelType } from "../types";
 
 type ChannelModalProps = {
   isOpen: boolean;
@@ -47,16 +22,9 @@ type ChannelModalProps = {
   onClose: () => void;
 };
 
-const DEFAULT_SCOPES: ChannelScopeValue[] = [
-  "calendars:read",
-  "events:read",
-];
+const DEFAULT_SCOPES: ChannelScopeValue[] = ["calendars:read", "events:read"];
 
-export const ChannelModal = ({
-  isOpen,
-  channel,
-  onClose,
-}: ChannelModalProps) => {
+export const ChannelModal = ({ isOpen, channel, onClose }: ChannelModalProps) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const isEdit = channel !== undefined;
@@ -65,17 +33,11 @@ export const ChannelModal = ({
   const updateChannel = useUpdateChannel();
   const regenerateToken = useRegenerateToken();
 
-  const [selectedType, setSelectedType] =
-    useState<ChannelPickerType | null>(null);
+  const [selectedType, setSelectedType] = useState<ChannelPickerType | null>(null);
   const [name, setName] = useState(channel?.name ?? "");
-  const [isActive, setIsActive] = useState(
-    channel?.is_active ?? true,
-  );
-  const [scopes, setScopes] = useState<ChannelScopeValue[]>(
-    channel?.scopes ?? DEFAULT_SCOPES,
-  );
-  const [revealedPassword, setRevealedPassword] =
-    useState<string | null>(null);
+  const [isActive, setIsActive] = useState(channel?.is_active ?? true);
+  const [scopes, setScopes] = useState<ChannelScopeValue[]>(channel?.scopes ?? DEFAULT_SCOPES);
+  const [revealedPassword, setRevealedPassword] = useState<string | null>(null);
 
   // Re-initialize when the parent opens a different target (or clears
   // it), so state from a previous channel doesn't leak into the next
@@ -95,14 +57,8 @@ export const ChannelModal = ({
   // case.
   const showScopes = channel?.type !== "ical-feed";
 
-  const isPending =
-    createChannel.isPending ||
-    updateChannel.isPending ||
-    regenerateToken.isPending;
-  const canSubmit =
-    name.trim().length > 0 &&
-    scopes.length > 0 &&
-    !isPending;
+  const isPending = createChannel.isPending || updateChannel.isPending || regenerateToken.isPending;
+  const canSubmit = name.trim().length > 0 && scopes.length > 0 && !isPending;
 
   const handleCreate = async () => {
     if (!canSubmit || !selectedType) return;
@@ -160,23 +116,17 @@ export const ChannelModal = ({
   const handleRegenerate = async () => {
     if (!channel) return;
     try {
-      const result = await regenerateToken.mutateAsync(
-        channel.id,
-      );
+      const result = await regenerateToken.mutateAsync(channel.id);
       setRevealedPassword(result.password);
       addToast(
         <ToasterItem type="info">
-          <span>
-            {t("integrations.regenerate.success")}
-          </span>
+          <span>{t("integrations.regenerate.success")}</span>
         </ToasterItem>,
       );
     } catch {
       addToast(
         <ToasterItem type="error">
-          <span>
-            {t("integrations.regenerate.error")}
-          </span>
+          <span>{t("integrations.regenerate.error")}</span>
         </ToasterItem>,
       );
     }
@@ -244,27 +194,16 @@ export const ChannelModal = ({
       <Button color="neutral" onClick={onClose}>
         {t("common.cancel")}
       </Button>
-      <Button
-        color="brand"
-        onClick={() => void handleSave()}
-        disabled={!canSubmit}
-      >
+      <Button color="brand" onClick={() => void handleSave()} disabled={!canSubmit}>
         {t("common.save")}
       </Button>
     </>
   ) : (
     <>
-      <Button
-        color="neutral"
-        onClick={() => setSelectedType(null)}
-      >
+      <Button color="neutral" onClick={() => setSelectedType(null)}>
         {t("common.back")}
       </Button>
-      <Button
-        color="brand"
-        onClick={() => void handleCreate()}
-        disabled={!canSubmit}
-      >
+      <Button color="brand" onClick={() => void handleCreate()} disabled={!canSubmit}>
         {t("integrations.create.submit")}
       </Button>
     </>
@@ -285,9 +224,7 @@ export const ChannelModal = ({
         onScopesChange={setScopes}
         isActive={isEdit ? isActive : undefined}
         onIsActiveChange={isEdit ? setIsActive : undefined}
-        onRegenerate={
-          isEdit ? () => void handleRegenerate() : undefined
-        }
+        onRegenerate={isEdit ? () => void handleRegenerate() : undefined}
         showScopes={showScopes}
         disabled={isPending}
       />

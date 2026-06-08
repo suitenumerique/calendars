@@ -2,8 +2,6 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth/Auth";
 import { useConfig } from "../config/ConfigProvider";
 
-
-
 /**
  * Hook that opens the feedback widget
  */
@@ -26,7 +24,7 @@ export const useMessagesWidget = () => {
   const showWidget = () => {
     if (!channel || !apiUrl || !widgetPath) {
       throw new Error(
-        "FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL, FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH or FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL is not set"
+        "FRONTEND_FEEDBACK_MESSAGES_WIDGET_API_URL, FRONTEND_FEEDBACK_MESSAGES_WIDGET_PATH or FRONTEND_FEEDBACK_MESSAGES_WIDGET_CHANNEL is not set",
       );
     }
 

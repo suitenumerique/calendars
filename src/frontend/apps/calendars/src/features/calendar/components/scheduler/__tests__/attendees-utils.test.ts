@@ -1,7 +1,4 @@
-import {
-  filterSuggestions,
-  isValidEmail
-} from "../attendees-utils";
+import { filterSuggestions, isValidEmail } from "../attendees-utils";
 
 import type { UserSearchResult } from "@/features/users/hooks/useUserSearch";
 import type { IcsAttendee } from "ts-ics";
@@ -30,10 +27,7 @@ describe("attendees-utils", () => {
   });
 
   describe("filterSuggestions", () => {
-    const makeUser = (
-      email: string,
-      name = "Test User",
-    ): UserSearchResult => ({
+    const makeUser = (email: string, name = "Test User"): UserSearchResult => ({
       id: email,
       email,
       full_name: name,
@@ -47,10 +41,7 @@ describe("attendees-utils", () => {
     });
 
     it("returns all suggestions when no attendees or organizer", () => {
-      const results = [
-        makeUser("alice@org.com", "Alice"),
-        makeUser("bob@org.com", "Bob"),
-      ];
+      const results = [makeUser("alice@org.com", "Alice"), makeUser("bob@org.com", "Bob")];
       expect(filterSuggestions(results, [])).toEqual(results);
     });
 
@@ -63,10 +54,7 @@ describe("attendees-utils", () => {
       const attendees = [makeAttendee("alice@org.com")];
       const filtered = filterSuggestions(results, attendees);
       expect(filtered).toHaveLength(2);
-      expect(filtered.map((u) => u.email)).toEqual([
-        "bob@org.com",
-        "carol@org.com",
-      ]);
+      expect(filtered.map((u) => u.email)).toEqual(["bob@org.com", "carol@org.com"]);
     });
 
     it("filters case-insensitively", () => {
@@ -76,26 +64,15 @@ describe("attendees-utils", () => {
     });
 
     it("filters out the organizer email", () => {
-      const results = [
-        makeUser("organizer@org.com"),
-        makeUser("other@org.com"),
-      ];
-      const filtered = filterSuggestions(
-        results,
-        [],
-        "organizer@org.com",
-      );
+      const results = [makeUser("organizer@org.com"), makeUser("other@org.com")];
+      const filtered = filterSuggestions(results, [], "organizer@org.com");
       expect(filtered).toHaveLength(1);
       expect(filtered[0].email).toBe("other@org.com");
     });
 
     it("filters organizer case-insensitively", () => {
       const results = [makeUser("Organizer@Org.COM")];
-      const filtered = filterSuggestions(
-        results,
-        [],
-        "organizer@org.com",
-      );
+      const filtered = filterSuggestions(results, [], "organizer@org.com");
       expect(filtered).toHaveLength(0);
     });
 
@@ -106,11 +83,7 @@ describe("attendees-utils", () => {
         makeUser("available@org.com"),
       ];
       const attendees = [makeAttendee("attendee@org.com")];
-      const filtered = filterSuggestions(
-        results,
-        attendees,
-        "organizer@org.com",
-      );
+      const filtered = filterSuggestions(results, attendees, "organizer@org.com");
       expect(filtered).toHaveLength(1);
       expect(filtered[0].email).toBe("available@org.com");
     });

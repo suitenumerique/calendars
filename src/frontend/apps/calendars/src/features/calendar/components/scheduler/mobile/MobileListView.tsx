@@ -1,16 +1,10 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  isSameDay,
-  isToday
-} from "@/utils/date";
+import { isSameDay, isToday } from "@/utils/date";
 import { ChevronRight } from "@gouvfr-lasuite/ui-kit/icons";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 
-
 import type { MobileListViewProps, MobileListEvent } from "../types";
-
-
 
 function groupEventsByDay(
   events: MobileListEvent[],
@@ -44,10 +38,7 @@ export const MobileListView = ({
 }: MobileListViewProps) => {
   const { t } = useTranslation();
 
-  const eventsByDay = useMemo(
-    () => groupEventsByDay(events, weekDays),
-    [events, weekDays],
-  );
+  const eventsByDay = useMemo(() => groupEventsByDay(events, weekDays), [events, weekDays]);
 
   const dayHeaderFormatter = useMemo(
     () =>
@@ -83,13 +74,9 @@ export const MobileListView = ({
                   dayIsToday ? "mobile-list__day-dot--today" : ""
                 }`}
               />
-              <span className="mobile-list__day-title">
-                {dayHeaderFormatter.format(day)}
-              </span>
+              <span className="mobile-list__day-title">{dayHeaderFormatter.format(day)}</span>
               {dayIsToday && (
-                <span className="mobile-list__today-tag">
-                  {t("calendar.views.today")}
-                </span>
+                <span className="mobile-list__today-tag">{t("calendar.views.today")}</span>
               )}
             </div>
 
@@ -106,9 +93,7 @@ export const MobileListView = ({
                   <button
                     key={String(event.id)}
                     className="mobile-list__event-card"
-                    onClick={() =>
-                      onEventClick(String(event.id), event.extendedProps)
-                    }
+                    onClick={() => onEventClick(String(event.id), event.extendedProps)}
                     type="button"
                   >
                     <span

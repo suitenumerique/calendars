@@ -1,38 +1,13 @@
-import {
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-  type KeyboardEvent
-} from "react";
+import { useState, useCallback, useRef, useEffect, type KeyboardEvent } from "react";
 import { Input } from "@gouvfr-lasuite/cunningham-react";
 import { Badge } from "@gouvfr-lasuite/ui-kit";
 import { useTranslation } from "react-i18next";
-import {
-  useUserSearch,
-  type UserSearchResult
-} from "@/features/users/hooks/useUserSearch";
-import {
-  filterSuggestions,
-  isValidEmail
-} from "./attendees-utils";
-import {
-  getBadgeType,
-  getPartstatIcon
-} from "./partstatBadge";
-import {
-  CircleCheck,
-  XMark
-} from "@gouvfr-lasuite/ui-kit/icons";
-
-
-
+import { useUserSearch, type UserSearchResult } from "@/features/users/hooks/useUserSearch";
+import { filterSuggestions, isValidEmail } from "./attendees-utils";
+import { getBadgeType, getPartstatIcon } from "./partstatBadge";
+import { CircleCheck, XMark } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { IcsAttendee, IcsOrganizer } from "ts-ics";
-
-
-
-
 
 interface AttendeesInputProps {
   attendees: IcsAttendee[];
@@ -54,32 +29,21 @@ export function AttendeesInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data: searchResults, isLoading: isSearching } =
-    useUserSearch(inputValue);
+  const { data: searchResults, isLoading: isSearching } = useUserSearch(inputValue);
 
   // Filter out already-added attendees and the organizer
-  const suggestions = filterSuggestions(
-    searchResults ?? [],
-    attendees,
-    organizerEmail,
-  );
+  const suggestions = filterSuggestions(searchResults ?? [], attendees, organizerEmail);
 
   // Show suggestions when we have results or are searching with enough chars
   const trimmedInput = inputValue.trim();
-  const shouldShowDropdown =
-    showSuggestions && trimmedInput.length >= 3 && !isSearching;
+  const shouldShowDropdown = showSuggestions && trimmedInput.length >= 3 && !isSearching;
   const hasNoResults =
-    shouldShowDropdown &&
-    suggestions.length === 0 &&
-    searchResults !== undefined;
+    shouldShowDropdown && suggestions.length === 0 && searchResults !== undefined;
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
       }
     };
@@ -163,11 +127,7 @@ export function AttendeesInput({
 
       if (e.key === "Enter") {
         e.preventDefault();
-        if (
-          shouldShowDropdown &&
-          highlightedIndex >= 0 &&
-          highlightedIndex < suggestions.length
-        ) {
+        if (shouldShowDropdown && highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
           selectSuggestion(suggestions[highlightedIndex]);
         } else {
           addAttendeeByEmail(inputValue);
@@ -214,9 +174,7 @@ export function AttendeesInput({
                 role="option"
                 aria-selected={index === highlightedIndex}
                 className={`attendees-input__suggestion${
-                  index === highlightedIndex
-                    ? " attendees-input__suggestion--highlighted"
-                    : ""
+                  index === highlightedIndex ? " attendees-input__suggestion--highlighted" : ""
                 }`}
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -224,12 +182,8 @@ export function AttendeesInput({
                 }}
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
-                <span className="attendees-input__suggestion-name">
-                  {user.full_name}
-                </span>
-                <span className="attendees-input__suggestion-email">
-                  {user.email}
-                </span>
+                <span className="attendees-input__suggestion-name">{user.full_name}</span>
+                <span className="attendees-input__suggestion-email">{user.email}</span>
               </li>
             ))}
             {hasNoResults && (

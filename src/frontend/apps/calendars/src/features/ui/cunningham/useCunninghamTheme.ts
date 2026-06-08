@@ -1,7 +1,6 @@
 import { useAppContext } from "@/features/app/AppContext";
 import { tokens } from "@/styles/cunningham-tokens";
 
-
 type Theme = (typeof tokens.themes)["default"];
 
 export const useCunninghamTheme = (): Theme => {

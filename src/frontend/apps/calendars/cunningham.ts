@@ -80,8 +80,7 @@ const themesGaufre = {
 const getComponents = (theme: keyof typeof themesImages) => {
   return {
     datagrid: {
-      "body--background-color-hover":
-        "ref(contextuals.background.semantic.contextual.primary)",
+      "body--background-color-hover": "ref(contextuals.background.semantic.contextual.primary)",
     },
     gaufre: {
       widgetPath: `'${themesGaufre[theme].widgetPath}'`,

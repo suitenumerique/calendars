@@ -3,16 +3,7 @@ import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
 import { generateVisioRoomId } from "./generateVisioRoomId";
 import { sanitizeIcsUrl } from "../../../services/dav/EventCalendarAdapter";
-import {
-  XMark,
-  Meet
-} from "@gouvfr-lasuite/ui-kit/icons";
-
-
-
-
-
-
+import { XMark, Meet } from "@gouvfr-lasuite/ui-kit/icons";
 
 interface VideoConferenceSectionProps {
   url: string;
@@ -80,12 +71,7 @@ export const VideoConferenceSection = ({
           />
         </div>
       ) : (
-        <Button
-          size="small"
-          color="neutral"
-          variant="tertiary"
-          onClick={handleCreateVisio}
-        >
+        <Button size="small" color="neutral" variant="tertiary" onClick={handleCreateVisio}>
           {t("calendar.event.sections.createVisio")}
         </Button>
       )}

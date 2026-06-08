@@ -9,9 +9,7 @@
 // ---------------------------------------------------------------------------
 
 /** Prefixes stripped from the Location field (case-insensitive). */
-const LOCATION_PREFIXES_TO_STRIP = [
-  'Pour participer à la visioconférence, cliquez sur ce lien : ',
-];
+const LOCATION_PREFIXES_TO_STRIP = ["Pour participer à la visioconférence, cliquez sur ce lien : "];
 
 /**
  * Embedded conference block delimited by ~:~ markers.
@@ -46,9 +44,7 @@ export type EventDisplayFields = {
  *  4. Deduplicate: desc==location → empty desc,
  *     location==url → empty location, desc==url → empty desc
  */
-export const cleanEventForDisplay = (
-  raw: EventDisplayFields,
-): EventDisplayFields => {
+export const cleanEventForDisplay = (raw: EventDisplayFields): EventDisplayFields => {
   let description = raw.description.trim();
   let location = stripLocationPrefixes(raw.location.trim());
   let url = raw.url.trim();
@@ -63,9 +59,9 @@ export const cleanEventForDisplay = (
   }
 
   // Deduplicate across fields
-  if (description && description === location) description = '';
-  if (location && location === url) location = '';
-  if (description && description === url) description = '';
+  if (description && description === location) description = "";
+  if (location && location === url) location = "";
+  if (description && description === url) description = "";
 
   return { description, location, url };
 };
@@ -91,13 +87,11 @@ const stripLocationPrefixes = (value: string): string => {
   return value;
 };
 
-const extractConferenceBlock = (
-  text: string,
-): { description: string; url: string | null } => {
+const extractConferenceBlock = (text: string): { description: string; url: string | null } => {
   const match = text.match(CONFERENCE_BLOCK_RE);
   if (!match) return { description: text, url: null };
   return {
-    description: text.replace(match[0], '').trim(),
+    description: text.replace(match[0], "").trim(),
     url: match[1] ?? null,
   };
 };

@@ -1,16 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "types": [
-      "vite/client",
-      "vitest/globals",
-      "node"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "types": ["vite/client", "vitest/globals", "node"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -23,20 +15,9 @@
     "jsx": "react-jsx",
     "incremental": true,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"]
     }
   },
-  "include": [
-    "svg.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    "vite.config.mts",
-    "vitest.config.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["svg.d.ts", "**/*.ts", "**/*.tsx", "vite.config.mts", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
 }

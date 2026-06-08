@@ -1,19 +1,9 @@
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  Select
-} from "@gouvfr-lasuite/cunningham-react";
+import { Button, Select } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
-import {
-  Bell,
-  Plus,
-  XMark
-} from "@gouvfr-lasuite/ui-kit/icons";
-
+import { Bell, Plus, XMark } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { IcsAlarm } from "ts-ics";
-
-
 
 interface RemindersSectionProps {
   alarms: IcsAlarm[];
@@ -36,12 +26,7 @@ const alarmToMinutes = (alarm: IcsAlarm): number => {
   const trigger = alarm.trigger;
   if (trigger.type !== "relative") return 15;
   const d = trigger.value;
-  return (
-    (d.weeks || 0) * 10080 +
-    (d.days || 0) * 1440 +
-    (d.hours || 0) * 60 +
-    (d.minutes || 0)
-  );
+  return (d.weeks || 0) * 10080 + (d.days || 0) * 1440 + (d.hours || 0) * 60 + (d.minutes || 0);
 };
 
 const minutesToAlarm = (minutes: number): IcsAlarm => ({

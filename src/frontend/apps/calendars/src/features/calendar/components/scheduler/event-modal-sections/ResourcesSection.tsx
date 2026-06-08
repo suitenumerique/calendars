@@ -3,18 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Select } from "@gouvfr-lasuite/cunningham-react";
 import { Badge } from "@gouvfr-lasuite/ui-kit";
 import { SectionRow } from "./SectionRow";
-import {
-  Building,
-  Computer,
-  XMark
-} from "@gouvfr-lasuite/ui-kit/icons";
-
-
-
+import { Building, Computer, XMark } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { ResourcePrincipal } from "@/features/resources/api/useResourcePrincipals";
-
-
 
 interface ResourcesSectionProps {
   resources: ResourcePrincipal[];
@@ -26,13 +17,7 @@ interface ResourcesSectionProps {
   onToggle?: () => void;
 }
 
-type BadgeType =
-  | "accent"
-  | "neutral"
-  | "danger"
-  | "success"
-  | "warning"
-  | "info";
+type BadgeType = "accent" | "neutral" | "danger" | "success" | "warning" | "info";
 
 const getResourceIcon = (resourceType: string) =>
   resourceType === "ROOM" ? <Building /> : <Computer />;
@@ -42,9 +27,7 @@ const getPartstatBadgeType = (
   eventAttendees?: { email: string; partstat?: string }[],
 ): BadgeType => {
   if (!email || !eventAttendees) return "neutral";
-  const att = eventAttendees.find(
-    (a) => a.email.toLowerCase() === email.toLowerCase(),
-  );
+  const att = eventAttendees.find((a) => a.email.toLowerCase() === email.toLowerCase());
   switch (att?.partstat) {
     case "ACCEPTED":
       return "success";
@@ -69,14 +52,10 @@ export const ResourcesSection = ({
   const { t } = useTranslation();
 
   const selectedIds = new Set(selectedResources.map((r) => r.id));
-  const unselectedResources = availableResources.filter(
-    (r) => !selectedIds.has(r.id),
-  );
+  const unselectedResources = availableResources.filter((r) => !selectedIds.has(r.id));
 
   const handleSelect = useCallback(
-    (e: {
-      target: { value: string | number | string[] | undefined };
-    }) => {
+    (e: { target: { value: string | number | string[] | undefined } }) => {
       const id = e.target.value;
       if (!id || typeof id !== "string") return;
       const resource = availableResources.find((r) => r.id === id);

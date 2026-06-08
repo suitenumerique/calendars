@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "react-hooks", "unicorn", "import"],
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    "src/routes.gen.ts",
+    "test-dst.js",
+    "src/styles/cunningham-tokens.ts",
+    "src/styles/cunningham-tokens-sass.scss"
+  ],
+  "rules": {
+    "typescript/no-empty-object-type": "off",
+    "react-hooks/exhaustive-deps": "off",
+    "react-hooks/rules-of-hooks": "error"
+  }
+}

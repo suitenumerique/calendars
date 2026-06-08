@@ -1,10 +1,6 @@
 import type { IcsRecurrenceRule } from "ts-ics";
 
-import {
-  getEndType,
-  isForeverCount,
-  isForeverUntil
-} from "../RecurrenceEditor";
+import { getEndType, isForeverCount, isForeverUntil } from "../RecurrenceEditor";
 
 function rule(overrides: Partial<IcsRecurrenceRule>): IcsRecurrenceRule {
   return {
@@ -45,19 +41,18 @@ describe("RecurrenceEditor end-type classification", () => {
 
     it("respects INTERVAL when computing coverage", () => {
       // FREQ=WEEKLY;COUNT=1000;INTERVAL=2 = 2000 weeks ≈ 38 yr → forever.
-      expect(
-        isForeverCount(rule({ frequency: "WEEKLY", count: 1000, interval: 2 })),
-      ).toBe(true);
+      expect(isForeverCount(rule({ frequency: "WEEKLY", count: 1000, interval: 2 }))).toBe(true);
       // FREQ=WEEKLY;COUNT=100;INTERVAL=2 = 200 weeks ≈ 3.8 yr → finite.
-      expect(
-        isForeverCount(rule({ frequency: "WEEKLY", count: 100, interval: 2 })),
-      ).toBe(false);
+      expect(isForeverCount(rule({ frequency: "WEEKLY", count: 100, interval: 2 }))).toBe(false);
     });
 
     it("returns false for unknown FREQ (defensive)", () => {
       expect(
         isForeverCount(
-          rule({ frequency: "WHATEVER" as IcsRecurrenceRule["frequency"], count: 999 }),
+          rule({
+            frequency: "WHATEVER" as IcsRecurrenceRule["frequency"],
+            count: 999,
+          }),
         ),
       ).toBe(false);
     });
@@ -69,21 +64,15 @@ describe("RecurrenceEditor end-type classification", () => {
     });
 
     it("treats UNTIL 30 years from now as forever", () => {
-      expect(isForeverUntil(rule({ frequency: "DAILY", until: dateIn(30) }))).toBe(
-        true,
-      );
+      expect(isForeverUntil(rule({ frequency: "DAILY", until: dateIn(30) }))).toBe(true);
     });
 
     it("treats UNTIL 5 years from now as finite", () => {
-      expect(isForeverUntil(rule({ frequency: "DAILY", until: dateIn(5) }))).toBe(
-        false,
-      );
+      expect(isForeverUntil(rule({ frequency: "DAILY", until: dateIn(5) }))).toBe(false);
     });
 
     it("treats past UNTIL as finite (not forever)", () => {
-      expect(isForeverUntil(rule({ frequency: "DAILY", until: dateIn(-5) }))).toBe(
-        false,
-      );
+      expect(isForeverUntil(rule({ frequency: "DAILY", until: dateIn(-5) }))).toBe(false);
     });
   });
 
@@ -102,15 +91,11 @@ describe("RecurrenceEditor end-type classification", () => {
     });
 
     it("returns 'date' for near UNTIL", () => {
-      expect(getEndType(rule({ frequency: "DAILY", until: dateIn(2) }))).toBe(
-        "date",
-      );
+      expect(getEndType(rule({ frequency: "DAILY", until: dateIn(2) }))).toBe("date");
     });
 
     it("returns 'never' for far-future UNTIL", () => {
-      expect(getEndType(rule({ frequency: "DAILY", until: dateIn(25) }))).toBe(
-        "never",
-      );
+      expect(getEndType(rule({ frequency: "DAILY", until: dateIn(25) }))).toBe("never");
     });
   });
 });

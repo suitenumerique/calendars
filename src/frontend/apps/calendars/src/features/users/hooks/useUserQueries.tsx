@@ -4,14 +4,7 @@ import { fetchAPI } from "@/features/api/fetchApi";
 import { User } from "@/features/users/types";
 import { UserFilters } from "@/features/api/types";
 
-
-
-
-
-export const useUsers = (
-  filters?: UserFilters,
-  options?: HookUseQueryOptions<User[]>
-) => {
+export const useUsers = (filters?: UserFilters, options?: HookUseQueryOptions<User[]>) => {
   return useQuery({
     ...options,
     queryKey: ["users", filters],

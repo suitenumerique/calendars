@@ -31,8 +31,8 @@
  * canonical RFC 5545 output and rejects malformed inputs at build
  * time.
  */
-import { generateIcsCalendar, type IcsCalendar, type IcsFreeBusy } from 'ts-ics'
-import type { FreeBusyRequest } from '../types/caldav-service'
+import { generateIcsCalendar, type IcsCalendar, type IcsFreeBusy } from "ts-ics";
+import type { FreeBusyRequest } from "../types/caldav-service";
 
 /**
  * Validate that an email string is free of control characters.
@@ -57,19 +57,19 @@ import type { FreeBusyRequest } from '../types/caldav-service'
  * bug upstream or an attack — and we want loud failure, not quiet
  * mangling.
  */
-const CONTROL_CHARS = /[\x00-\x1f\x7f]/
+const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
 function assertSafeEmail(email: string, role: string): void {
   if (CONTROL_CHARS.test(email)) {
     throw new InvalidFreeBusyEmailError(
       `${role} email contains control characters and cannot be used in a CalDAV freebusy request`,
-    )
+    );
   }
 }
 
 export class InvalidFreeBusyEmailError extends Error {
   constructor(message: string) {
-    super(message)
-    this.name = 'InvalidFreeBusyEmailError'
+    super(message);
+    this.name = "InvalidFreeBusyEmailError";
   }
 }
 
@@ -87,37 +87,37 @@ export function buildFreeBusyRequestIcs(request: FreeBusyRequest): string {
   // Validate every email BEFORE building the calendar so the throw
   // happens at a single, easy-to-trace point. Validation is cheap.
   for (const email of request.attendees) {
-    assertSafeEmail(email, 'attendee')
+    assertSafeEmail(email, "attendee");
   }
   if (request.organizer) {
-    assertSafeEmail(request.organizer.email, 'organizer')
+    assertSafeEmail(request.organizer.email, "organizer");
   }
 
   const startDate =
-    typeof request.timeRange.start === 'string'
+    typeof request.timeRange.start === "string"
       ? new Date(request.timeRange.start)
-      : request.timeRange.start
+      : request.timeRange.start;
   const endDate =
-    typeof request.timeRange.end === 'string'
+    typeof request.timeRange.end === "string"
       ? new Date(request.timeRange.end)
-      : request.timeRange.end
+      : request.timeRange.end;
 
   const freeBusy: IcsFreeBusy = {
     // RFC 5545 requires DTSTAMP and UID on every component.
-    stamp: { date: new Date(), type: 'DATE-TIME' },
+    stamp: { date: new Date(), type: "DATE-TIME" },
     uid: `freebusy-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-    start: { date: startDate, type: 'DATE-TIME' },
-    end: { date: endDate, type: 'DATE-TIME' },
+    start: { date: startDate, type: "DATE-TIME" },
+    end: { date: endDate, type: "DATE-TIME" },
     attendees: request.attendees.map((email) => ({ email })),
     ...(request.organizer ? { organizer: { email: request.organizer.email } } : {}),
-  }
+  };
 
   const fbCalendar: IcsCalendar = {
-    version: '2.0',
-    prodId: '-//CalDavService//NONSGML v1.0//EN',
-    method: 'REQUEST',
+    version: "2.0",
+    prodId: "-//CalDavService//NONSGML v1.0//EN",
+    method: "REQUEST",
     freeBusy: [freeBusy],
-  }
+  };
 
   // ts-ics serializes mailto URIs with an uppercase scheme
   // (``ORGANIZER:MAILTO:user@x``). sabre's Schedule plugin then string-
@@ -128,5 +128,5 @@ export function buildFreeBusyRequestIcs(request: FreeBusyRequest): string {
   // URI schemes case-insensitive, so lowering ``MAILTO:`` to ``mailto:``
   // here changes only the string sabre compares against, not the
   // semantics.
-  return generateIcsCalendar(fbCalendar).replace(/MAILTO:/g, 'mailto:')
+  return generateIcsCalendar(fbCalendar).replace(/MAILTO:/g, "mailto:");
 }

@@ -51,6 +51,6 @@ export const formatDateLocal = (date: Date, isFakeUtc = false): string => {
  * @param value - String in YYYY-MM-DD format
  */
 export const parseDateLocal = (value: string): Date => {
-  const [year, month, day] = value.split('-').map(Number);
+  const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);
 };

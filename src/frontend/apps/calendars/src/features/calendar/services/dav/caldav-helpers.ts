@@ -4,7 +4,7 @@
  * Factorized utilities for XML building, DAV requests, and error handling.
  */
 
-import type { SharePrivilege, CalDavResponse } from './types/caldav-service'
+import type { SharePrivilege, CalDavResponse } from "./types/caldav-service";
 
 /** XML namespace prefix lookup used when building prop keys in PROPFIND
  * bodies. Mirrors what tsdav's `DAVNamespaceShort` used to provide; kept
@@ -12,12 +12,12 @@ import type { SharePrivilege, CalDavResponse } from './types/caldav-service'
  * `${NS.CALDAV}:calendar-availability` without depending on tsdav.
  */
 export const NS = {
-  DAV: 'd',
-  CALDAV: 'c',
-  CALDAV_APPLE: 'ca',
-  CALENDAR_SERVER: 'cs',
-  CARDDAV: 'card',
-} as const
+  DAV: "d",
+  CALDAV: "c",
+  CALDAV_APPLE: "ca",
+  CALENDAR_SERVER: "cs",
+  CARDDAV: "card",
+} as const;
 
 // ============================================================================
 // XML Helpers
@@ -26,17 +26,17 @@ export const NS = {
 /** Escape special XML characters */
 export function escapeXml(str: string | undefined | null): string {
   if (str === undefined || str === null) {
-    return '';
+    return "";
   }
-  if (typeof str !== 'string') {
+  if (typeof str !== "string") {
     str = String(str);
   }
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 /** XML namespaces used in CalDAV */
@@ -46,11 +46,11 @@ export const XML_NS = {
   APPLE: 'xmlns:A="http://apple.com/ns/ical/"',
   CS: 'xmlns:CS="http://calendarserver.org/ns/"',
   LS: 'xmlns:LS="http://lasuite.numerique.gouv.fr/ns/"',
-} as const
+} as const;
 
 /** Build XML prop element */
 export function xmlProp(namespace: string, name: string, value: string): string {
-  return `<${namespace}:${name}>${escapeXml(value)}</${namespace}:${name}>`
+  return `<${namespace}:${name}>${escapeXml(value)}</${namespace}:${name}>`;
 }
 
 // ============================================================================
@@ -58,81 +58,89 @@ export function xmlProp(namespace: string, name: string, value: string): string 
 // ============================================================================
 
 export type CalendarProps = {
-  displayName?: string
-  description?: string
-  color?: string
+  displayName?: string;
+  description?: string;
+  color?: string;
   /** VTIMEZONE block, sent as `<C:calendar-timezone>`. */
-  timezone?: string
+  timezone?: string;
   /**
    * `{http://apple.com/ns/ical/}calendar-order`. Integer used to manually
    * sort calendars in the sidebar; stored as a dead property by Sabre's
    * PropertyStorage.
    */
-  order?: number
-  components?: string[]
+  order?: number;
+  components?: string[];
   /** schedule-calendar-transp: 'opaque' (counts as busy) or 'transparent' */
-  scheduleTransp?: 'opaque' | 'transparent'
-}
+  scheduleTransp?: "opaque" | "transparent";
+};
 
 /** Build calendar property XML elements */
 export function buildCalendarPropsXml(props: CalendarProps): string[] {
-  const elements: string[] = []
+  const elements: string[] = [];
 
-  if (props.displayName !== undefined && props.displayName !== null && typeof props.displayName === 'string') {
-    elements.push(xmlProp('D', 'displayname', props.displayName))
+  if (
+    props.displayName !== undefined &&
+    props.displayName !== null &&
+    typeof props.displayName === "string"
+  ) {
+    elements.push(xmlProp("D", "displayname", props.displayName));
   }
-  if (props.description !== undefined && props.description !== null && typeof props.description === 'string') {
-    elements.push(xmlProp('C', 'calendar-description', props.description))
+  if (
+    props.description !== undefined &&
+    props.description !== null &&
+    typeof props.description === "string"
+  ) {
+    elements.push(xmlProp("C", "calendar-description", props.description));
   }
-  if (props.color !== undefined && props.color !== null && typeof props.color === 'string') {
-    elements.push(xmlProp('A', 'calendar-color', props.color))
+  if (props.color !== undefined && props.color !== null && typeof props.color === "string") {
+    elements.push(xmlProp("A", "calendar-color", props.color));
   }
-  if (props.order !== undefined && props.order !== null && typeof props.order === 'number') {
-    elements.push(xmlProp('A', 'calendar-order', String(props.order)))
+  if (props.order !== undefined && props.order !== null && typeof props.order === "number") {
+    elements.push(xmlProp("A", "calendar-order", String(props.order)));
   }
   if (props.components && props.components.length > 0) {
-    const comps = props.components.map((c) => `<C:comp name="${escapeXml(c)}"/>`).join('')
-    elements.push(`<C:supported-calendar-component-set>${comps}</C:supported-calendar-component-set>`)
+    const comps = props.components.map((c) => `<C:comp name="${escapeXml(c)}"/>`).join("");
+    elements.push(
+      `<C:supported-calendar-component-set>${comps}</C:supported-calendar-component-set>`,
+    );
   }
-  if (typeof props.timezone === 'string' && props.timezone.length > 0) {
-    elements.push(xmlProp('C', 'calendar-timezone', props.timezone))
+  if (typeof props.timezone === "string" && props.timezone.length > 0) {
+    elements.push(xmlProp("C", "calendar-timezone", props.timezone));
   }
   if (props.scheduleTransp !== undefined) {
     // RFC 6638: schedule-calendar-transp controls whether this calendar
     // participates in freebusy calculations. Standard CalDAV property.
-    const value = props.scheduleTransp === 'transparent'
-      ? '<C:transparent/>'
-      : '<C:opaque/>'
-    elements.push(`<C:schedule-calendar-transp>${value}</C:schedule-calendar-transp>`)
+    const value = props.scheduleTransp === "transparent" ? "<C:transparent/>" : "<C:opaque/>";
+    elements.push(`<C:schedule-calendar-transp>${value}</C:schedule-calendar-transp>`);
   }
 
-  return elements
+  return elements;
 }
 
 /** Build MKCALENDAR request body */
 export function buildMkCalendarXml(props: CalendarProps): string {
-  const propsXml = buildCalendarPropsXml(props)
+  const propsXml = buildCalendarPropsXml(props);
   return `<?xml version="1.0" encoding="utf-8"?>
 <C:mkcalendar ${XML_NS.DAV} ${XML_NS.CALDAV} ${XML_NS.APPLE}>
   <D:set>
     <D:prop>
-      ${propsXml.join('\n      ')}
+      ${propsXml.join("\n      ")}
     </D:prop>
   </D:set>
-</C:mkcalendar>`
+</C:mkcalendar>`;
 }
 
 /** Build PROPPATCH request body */
 export function buildProppatchXml(props: CalendarProps): string {
-  const propsXml = buildCalendarPropsXml(props)
+  const propsXml = buildCalendarPropsXml(props);
   return `<?xml version="1.0" encoding="utf-8"?>
 <D:propertyupdate ${XML_NS.DAV} ${XML_NS.CALDAV} ${XML_NS.APPLE}>
   <D:set>
     <D:prop>
-      ${propsXml.join('\n      ')}
+      ${propsXml.join("\n      ")}
     </D:prop>
   </D:set>
-</D:propertyupdate>`
+</D:propertyupdate>`;
 }
 
 // ============================================================================
@@ -156,12 +164,12 @@ export function buildProppatchXml(props: CalendarProps): string {
  */
 function sharePrivilegeToXml(privilege: SharePrivilege): string {
   const map: Record<SharePrivilege, string> = {
-    freebusy: '<CS:read/>',
-    read: '<CS:read/>',
-    'read-write': '<CS:read-write/>',
-    admin: '<CS:read-write/>',
-  }
-  return map[privilege] ?? '<CS:read/>'
+    freebusy: "<CS:read/>",
+    read: "<CS:read/>",
+    "read-write": "<CS:read-write/>",
+    admin: "<CS:read-write/>",
+  };
+  return map[privilege] ?? "<CS:read/>";
 }
 
 /** Parse access object to SharePrivilege.
@@ -179,19 +187,19 @@ function sharePrivilegeToXml(privilege: SharePrivilege): string {
  * so we check both kebab-case and camelCase variants.
  */
 export function parseSharePrivilege(access: unknown, shareAccess?: string): SharePrivilege {
-  if (shareAccess === 'freebusy') return 'freebusy'
-  if (shareAccess === 'admin') return 'admin'
-  if (!access) return 'read'
-  const accessObj = access as Record<string, unknown>
-  if (accessObj['read-write'] || accessObj['readWrite']) return 'read-write'
-  return 'read'
+  if (shareAccess === "freebusy") return "freebusy";
+  if (shareAccess === "admin") return "admin";
+  if (!access) return "read";
+  const accessObj = access as Record<string, unknown>;
+  if (accessObj["read-write"] || accessObj["readWrite"]) return "read-write";
+  return "read";
 }
 
 export type ShareeXmlParams = {
-  href: string
-  displayName?: string
-  privilege: SharePrivilege
-}
+  href: string;
+  displayName?: string;
+  privilege: SharePrivilege;
+};
 
 /** Build share set XML for a single sharee.
  *
@@ -204,15 +212,13 @@ export type ShareeXmlParams = {
  * would still read back as ``freebusy``).
  */
 function buildShareeSetXml(params: ShareeXmlParams): string {
-  const privilege = sharePrivilegeToXml(params.privilege)
+  const privilege = sharePrivilegeToXml(params.privilege);
   const commonName = params.displayName
     ? `<CS:common-name>${escapeXml(params.displayName)}</CS:common-name>`
-    : ''
+    : "";
   const overrideLevel =
-    params.privilege === 'freebusy' ? 'freebusy'
-    : params.privilege === 'admin' ? 'admin'
-    : ''
-  const shareAccess = `<LS:share-access>${overrideLevel}</LS:share-access>`
+    params.privilege === "freebusy" ? "freebusy" : params.privilege === "admin" ? "admin" : "";
+  const shareAccess = `<LS:share-access>${overrideLevel}</LS:share-access>`;
 
   return `
     <CS:set>
@@ -220,16 +226,16 @@ function buildShareeSetXml(params: ShareeXmlParams): string {
       ${commonName}
       ${shareAccess}
       ${privilege}
-    </CS:set>`
+    </CS:set>`;
 }
 
 /** Build CS:share request body */
 export function buildShareRequestXml(sharees: ShareeXmlParams[]): string {
-  const shareesXml = sharees.map(buildShareeSetXml).join('')
+  const shareesXml = sharees.map(buildShareeSetXml).join("");
   return `<?xml version="1.0" encoding="utf-8"?>
 <CS:share ${XML_NS.DAV} ${XML_NS.CS} ${XML_NS.LS}>
   ${shareesXml}
-</CS:share>`
+</CS:share>`;
 }
 
 /** Build CS:share remove request body */
@@ -239,7 +245,7 @@ export function buildUnshareRequestXml(shareeHref: string): string {
   <CS:remove>
     <D:href>${escapeXml(shareeHref)}</D:href>
   </CS:remove>
-</CS:share>`
+</CS:share>`;
 }
 
 // ============================================================================
@@ -248,34 +254,34 @@ export function buildUnshareRequestXml(shareeHref: string): string {
 
 /** Format a Date or ISO string as CalDAV `YYYYMMDDTHHMMSSZ` (RFC 4791). */
 function toCalDavTime(value: Date | string): string {
-  const d = typeof value === 'string' ? new Date(value) : value
-  const pad = (n: number) => n.toString().padStart(2, '0')
+  const d = typeof value === "string" ? new Date(value) : value;
+  const pad = (n: number) => n.toString().padStart(2, "0");
   return (
     `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
     `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`
-  )
+  );
 }
 
 type CalendarQueryParams = {
   /** When provided, results are filtered to events overlapping this range. */
-  timeRange?: { start: Date | string; end: Date | string }
+  timeRange?: { start: Date | string; end: Date | string };
   /**
    * When true, the server expands recurring events into individual
    * occurrences within `timeRange` (RFC 4791 §9.6.5). Requires `timeRange`.
    */
-  expand?: boolean
-}
+  expand?: boolean;
+};
 
 /** Build a calendar-query REPORT body that fetches `getetag` + `calendar-data`. */
 export function buildCalendarQueryXml(params: CalendarQueryParams = {}): string {
   const timeRangeFilter = params.timeRange
     ? `<C:time-range start="${toCalDavTime(params.timeRange.start)}" end="${toCalDavTime(params.timeRange.end)}"/>`
-    : ''
+    : "";
 
   const calendarData =
     params.expand && params.timeRange
       ? `<C:calendar-data><C:expand start="${toCalDavTime(params.timeRange.start)}" end="${toCalDavTime(params.timeRange.end)}"/></C:calendar-data>`
-      : '<C:calendar-data/>'
+      : "<C:calendar-data/>";
 
   return `<?xml version="1.0" encoding="utf-8"?>
 <C:calendar-query ${XML_NS.DAV} ${XML_NS.CALDAV}>
@@ -290,7 +296,7 @@ export function buildCalendarQueryXml(params: CalendarQueryParams = {}): string 
       </C:comp-filter>
     </C:comp-filter>
   </C:filter>
-</C:calendar-query>`
+</C:calendar-query>`;
 }
 
 /** Standard PROPFIND props for calendar fetching.
@@ -318,9 +324,9 @@ export const CALENDAR_PROPS = {
   [`${NS.DAV}:sync-token`]: {},
   [`${NS.CALDAV}:schedule-calendar-transp`]: {},
   [`${NS.CALENDAR_SERVER}:invite`]: {},
-  'LS:calendar-owner-type': {},
-  'LS:share-access-map': {},
-} as const
+  "LS:calendar-owner-type": {},
+  "LS:share-access-map": {},
+} as const;
 
 // ============================================================================
 // Response Parsing Helpers
@@ -336,44 +342,46 @@ export const CALENDAR_PROPS = {
  * fall back to displayName.
  */
 export function parseCalendarOrder(raw: unknown): number | undefined {
-  if (typeof raw === 'number' && Number.isFinite(raw)) {
-    return raw
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return raw;
   }
-  if (typeof raw === 'string') {
+  if (typeof raw === "string") {
     // Require the entire (trimmed) string to be an optionally-signed
     // integer — otherwise `Number.parseInt` would happily turn "10abc"
     // into 10 and swallow attacker-supplied trailing junk.
-    const trimmed = raw.trim()
+    const trimmed = raw.trim();
     if (/^[+-]?\d+$/.test(trimmed)) {
-      const n = Number.parseInt(trimmed, 10)
-      if (Number.isFinite(n)) return n
+      const n = Number.parseInt(trimmed, 10);
+      if (Number.isFinite(n)) return n;
     }
   }
-  return undefined
+  return undefined;
 }
 
 /** Parse supported-calendar-component-set from PROPFIND response */
-export function parseCalendarComponents(supportedCalendarComponentSet: unknown): string[] | undefined {
-  if (!supportedCalendarComponentSet) return undefined
+export function parseCalendarComponents(
+  supportedCalendarComponentSet: unknown,
+): string[] | undefined {
+  if (!supportedCalendarComponentSet) return undefined;
 
-  const comp = (supportedCalendarComponentSet as Record<string, unknown>).comp
+  const comp = (supportedCalendarComponentSet as Record<string, unknown>).comp;
   if (Array.isArray(comp)) {
     return comp
       .map((sc: Record<string, unknown>) => (sc._attributes as Record<string, string>)?.name)
-      .filter(Boolean)
+      .filter(Boolean);
   }
-  const name = (comp as Record<string, unknown>)?._attributes as Record<string, string> | undefined
-  return name?.name ? [name.name] : undefined
+  const name = (comp as Record<string, unknown>)?._attributes as Record<string, string> | undefined;
+  return name?.name ? [name.name] : undefined;
 }
 
 /** Parse share status from invite response */
 function parseShareStatus(
   accepted: unknown,
-  noResponse: unknown
-): 'pending' | 'accepted' | 'declined' {
-  if (accepted) return 'accepted'
-  if (noResponse) return 'pending'
-  return 'declined'
+  noResponse: unknown,
+): "pending" | "accepted" | "declined" {
+  if (accepted) return "accepted";
+  if (noResponse) return "pending";
+  return "declined";
 }
 
 /**
@@ -385,25 +393,22 @@ function parseShareStatus(
  * tokens cannot express.
  */
 function parseShareAccessMap(rawMap: unknown): Map<string, string> {
-  const accessMap = new Map<string, string>()
-  if (!rawMap) return accessMap
-  const map = rawMap as Record<string, unknown>
-  const sharees = Array.isArray(map.sharee)
-    ? map.sharee
-    : map.sharee
-      ? [map.sharee]
-      : []
+  const accessMap = new Map<string, string>();
+  if (!rawMap) return accessMap;
+  const map = rawMap as Record<string, unknown>;
+  const sharees = Array.isArray(map.sharee) ? map.sharee : map.sharee ? [map.sharee] : [];
   for (const s of sharees) {
-    const sharee = s as Record<string, unknown>
-    const attrs = (sharee._attributes as Record<string, string> | undefined)
-      ?? (sharee as Record<string, string>)
-    const href = attrs?.href
-    const access = attrs?.access
+    const sharee = s as Record<string, unknown>;
+    const attrs =
+      (sharee._attributes as Record<string, string> | undefined) ??
+      (sharee as Record<string, string>);
+    const href = attrs?.href;
+    const access = attrs?.access;
     if (href && access) {
-      accessMap.set(href, access)
+      accessMap.set(href, access);
     }
   }
-  return accessMap
+  return accessMap;
 }
 
 /**
@@ -417,33 +422,33 @@ export function parseInviteSharees(
   rawInvite: unknown,
   rawAccessMap?: unknown,
 ): SharePrivilegeAndStatus[] {
-  if (!rawInvite) return []
-  const invite = rawInvite as Record<string, unknown>
-  if (!invite.user) return []
-  const accessMap = parseShareAccessMap(rawAccessMap)
-  const users = Array.isArray(invite.user) ? invite.user : [invite.user]
+  if (!rawInvite) return [];
+  const invite = rawInvite as Record<string, unknown>;
+  if (!invite.user) return [];
+  const accessMap = parseShareAccessMap(rawAccessMap);
+  const users = Array.isArray(invite.user) ? invite.user : [invite.user];
   return users.map((u) => {
-    const user = u as Record<string, unknown>
-    const href = (user.href as string) || ''
-    const shareAccess = accessMap.get(href)
+    const user = u as Record<string, unknown>;
+    const href = (user.href as string) || "";
+    const shareAccess = accessMap.get(href);
     return {
       href,
-      displayName: user['common-name'] as string | undefined,
+      displayName: user["common-name"] as string | undefined,
       privilege: parseSharePrivilege(user.access, shareAccess),
-      status: parseShareStatus(user['invite-accepted'], user['invite-noresponse']),
-    }
-  })
+      status: parseShareStatus(user["invite-accepted"], user["invite-noresponse"]),
+    };
+  });
 }
 
 /** Shape returned by ``parseInviteSharees`` — kept here to avoid a
  *  cycle with ``types/caldav-service``. Identical structure to the
  *  ``CalDavSharee`` re-exported there. */
 type SharePrivilegeAndStatus = {
-  href: string
-  displayName?: string
-  privilege: SharePrivilege
-  status: 'pending' | 'accepted' | 'declined'
-}
+  href: string;
+  displayName?: string;
+  privilege: SharePrivilege;
+  status: "pending" | "accepted" | "declined";
+};
 
 /**
  * Parse the owning principal href from a ``CS:invite`` payload and
@@ -454,30 +459,30 @@ type SharePrivilegeAndStatus = {
  * Messages-side ``useMailboxSync`` hydration.
  */
 export function parseInviteOrganizerEmail(rawInvite: unknown): string | undefined {
-  if (!rawInvite) return undefined
+  if (!rawInvite) return undefined;
   const organizer = (rawInvite as Record<string, unknown>).organizer as
     | Record<string, unknown>
-    | undefined
-  const href = organizer?.href as string | undefined
-  if (!href) return undefined
+    | undefined;
+  const href = organizer?.href as string | undefined;
+  if (!href) return undefined;
   // The href looks like ``/caldav/principals/users/team@example.com``
   // (sometimes with a trailing slash). The email is always the last
   // path segment, URL-decoded.
-  const trimmed = href.replace(/\/+$/, '')
-  const lastSegment = trimmed.split('/').pop()
-  if (!lastSegment) return undefined
+  const trimmed = href.replace(/\/+$/, "");
+  const lastSegment = trimmed.split("/").pop();
+  if (!lastSegment) return undefined;
   try {
-    return decodeURIComponent(lastSegment)
+    return decodeURIComponent(lastSegment);
   } catch {
-    return lastSegment
+    return lastSegment;
   }
 }
 
 /** Extract calendar URL from event URL */
 export function getCalendarUrlFromEventUrl(eventUrl: string): string {
-  const parts = eventUrl.split('/')
-  parts.pop() // Remove filename
-  return parts.join('/') + '/'
+  const parts = eventUrl.split("/");
+  parts.pop(); // Remove filename
+  return parts.join("/") + "/";
 }
 
 // ============================================================================
@@ -491,11 +496,11 @@ export function getCalendarUrlFromEventUrl(eventUrl: string): string {
  * the HTTP status (e.g. retry on 412) without parsing error strings.
  */
 export class DavCallError extends Error {
-  readonly status?: number
+  readonly status?: number;
   constructor(message: string, status?: number) {
-    super(message)
-    this.name = 'DavCallError'
-    this.status = status
+    super(message);
+    this.name = "DavCallError";
+    this.status = status;
   }
 }
 
@@ -504,8 +509,8 @@ export function davFailure(
   response: { error?: string; status?: number },
   fallback: string,
 ): DavCallError {
-  const message = response.error ?? `${fallback}: ${response.status}`
-  return new DavCallError(message, response.status)
+  const message = response.error ?? `${fallback}: ${response.status}`;
+  return new DavCallError(message, response.status);
 }
 
 /** Run an async operation and pack its outcome into a `CalDavResponse`.
@@ -522,18 +527,18 @@ export function davFailure(
  */
 export async function asResult<T>(
   operation: () => Promise<T>,
-  errorPrefix: string
+  errorPrefix: string,
 ): Promise<CalDavResponse<T>> {
   try {
-    const data = await operation()
-    return { success: true, data }
+    const data = await operation();
+    return { success: true, data };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const status = error instanceof DavCallError ? error.status : undefined
+    const message = error instanceof Error ? error.message : String(error);
+    const status = error instanceof DavCallError ? error.status : undefined;
     return {
       success: false,
       error: `${errorPrefix}: ${message}`,
       status,
-    }
+    };
   }
 }

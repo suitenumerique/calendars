@@ -1,34 +1,14 @@
-import {
-  useState,
-  useCallback
-} from "react";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  Input,
-  useModal
-} from "@gouvfr-lasuite/cunningham-react";
+import { Button, Input, useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/features/auth/Auth";
 import { ResourceCard } from "./ResourceCard";
 import { CreateResourceModal } from "./CreateResourceModal";
 import { DeleteResourceModal } from "./DeleteResourceModal";
-import {
-  ArrowLeft,
-  Building,
-  Plus
-} from "@gouvfr-lasuite/ui-kit/icons";
-
-
-
-
-
-
-
+import { ArrowLeft, Building, Plus } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { ResourceType } from "../types";
-
-
 
 import { Hourglass } from "@gouvfr-lasuite/ui-kit/icons";
 type ResourcePrincipal = {
@@ -43,11 +23,7 @@ type ResourceListProps = {
   onRefresh: () => void;
 };
 
-export const ResourceList = ({
-  resources,
-  isLoading,
-  onRefresh,
-}: ResourceListProps) => {
+export const ResourceList = ({ resources, isLoading, onRefresh }: ResourceListProps) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -60,27 +36,25 @@ export const ResourceList = ({
   } | null>(null);
 
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<ResourceType | "ALL">(
-    "ALL",
-  );
+  const [typeFilter, setTypeFilter] = useState<ResourceType | "ALL">("ALL");
 
   const filtered = resources.filter((r) => {
     if (typeFilter !== "ALL" && r.resourceType !== typeFilter) return false;
-    if (
-      search &&
-      !r.name.toLowerCase().includes(search.toLowerCase())
-    ) {
+    if (search && !r.name.toLowerCase().includes(search.toLowerCase())) {
       return false;
     }
     return true;
   });
 
-  const handleDelete = useCallback((id: string) => {
-    const resource = resources.find((r) => r.id === id);
-    if (resource) {
-      setDeleteTarget({ id, name: resource.name });
-    }
-  }, [resources]);
+  const handleDelete = useCallback(
+    (id: string) => {
+      const resource = resources.find((r) => r.id === id);
+      if (resource) {
+        setDeleteTarget({ id, name: resource.name });
+      }
+    },
+    [resources],
+  );
 
   return (
     <div className="resource-list">
@@ -96,11 +70,7 @@ export const ResourceList = ({
           <h2>{t("resources.title")}</h2>
         </div>
         {canAdmin && (
-          <Button
-            color="brand"
-            onClick={createModal.open}
-            icon={<Plus />}
-          >
+          <Button color="brand" onClick={createModal.open} icon={<Plus />}>
             {t("resources.create.button")}
           </Button>
         )}
@@ -110,11 +80,7 @@ export const ResourceList = ({
         <Input
           label={t("resources.search")}
           value={search}
-          onChange={(e) =>
-            setSearch(
-              (e.target as HTMLInputElement).value,
-            )
-          }
+          onChange={(e) => setSearch((e.target as HTMLInputElement).value)}
           fullWidth
         />
         <div className="resource-list__type-filters">
@@ -150,11 +116,7 @@ export const ResourceList = ({
       ) : filtered.length === 0 ? (
         <div className="resource-list__empty">
           <Building />
-          <p>
-            {search || typeFilter !== "ALL"
-              ? t("resources.noResults")
-              : t("resources.empty")}
-          </p>
+          <p>{search || typeFilter !== "ALL" ? t("resources.noResults") : t("resources.empty")}</p>
         </div>
       ) : (
         <div className="resource-list__grid">

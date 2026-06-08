@@ -6,21 +6,14 @@ import {
   useState,
   useEffect,
   useCallback,
-  type ReactNode
+  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { CalDavService } from "../services/dav/CalDavService";
 import { EventCalendarAdapter } from "../services/dav/EventCalendarAdapter";
 import { caldavServerUrl } from "../utils/DavClient";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useAuth } from "@/features/auth/Auth";
-
-
-
-
 
 import type {
   CalDavCalendar,
@@ -28,7 +21,6 @@ import type {
   SharePrivilege,
 } from "../services/dav/types/caldav-service";
 import type { CalendarApi } from "../components/scheduler/types";
-
 
 const HIDDEN_CALENDARS_KEY = "calendar-hidden-urls";
 
@@ -46,10 +38,7 @@ const loadHiddenUrls = (): Set<string> => {
 
 const saveHiddenUrls = (hiddenUrls: Set<string>) => {
   try {
-    localStorage.setItem(
-      HIDDEN_CALENDARS_KEY,
-      JSON.stringify([...hiddenUrls]),
-    );
+    localStorage.setItem(HIDDEN_CALENDARS_KEY, JSON.stringify([...hiddenUrls]));
   } catch {
     // Ignore storage errors
   }
@@ -75,16 +64,12 @@ export interface CalendarContextType {
   setSelectedDate: (date: Date) => void;
   refreshCalendars: () => Promise<void>;
   toggleCalendarVisibility: (calendarUrl: string) => void;
-  createCalendar: (
-    params: CalDavCalendarCreate,
-  ) => Promise<{ success: boolean; error?: string }>;
+  createCalendar: (params: CalDavCalendarCreate) => Promise<{ success: boolean; error?: string }>;
   updateCalendar: (
     calendarUrl: string,
     params: { displayName?: string; color?: string; description?: string },
   ) => Promise<{ success: boolean; error?: string }>;
-  deleteCalendar: (
-    calendarUrl: string,
-  ) => Promise<{ success: boolean; error?: string }>;
+  deleteCalendar: (calendarUrl: string) => Promise<{ success: boolean; error?: string }>;
   shareCalendar: (
     calendarUrl: string,
     email: string,
@@ -97,16 +82,12 @@ export interface CalendarContextType {
   goToDate: (date: Date) => void;
 }
 
-const CalendarContext = createContext<CalendarContextType | undefined>(
-  undefined,
-);
+const CalendarContext = createContext<CalendarContextType | undefined>(undefined);
 
 export const useCalendarContext = () => {
   const context = useContext(CalendarContext);
   if (!context) {
-    throw new Error(
-      "useCalendarContext must be used within a CalendarContextProvider",
-    );
+    throw new Error("useCalendarContext must be used within a CalendarContextProvider");
   }
   return context;
 };
@@ -115,9 +96,7 @@ interface CalendarContextProviderProps {
   children: ReactNode;
 }
 
-export const CalendarContextProvider = ({
-  children,
-}: CalendarContextProviderProps) => {
+export const CalendarContextProvider = ({ children }: CalendarContextProviderProps) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const userEmail = user?.email;
@@ -127,9 +106,7 @@ export const CalendarContextProvider = ({
   const [davCalendars, setDavCalendars] = useState<CalDavCalendar[]>([]);
   const davCalendarsRef = useRef<CalDavCalendar[]>([]);
   davCalendarsRef.current = davCalendars;
-  const [visibleCalendarUrls, setVisibleCalendarUrls] = useState<Set<string>>(
-    new Set(),
-  );
+  const [visibleCalendarUrls, setVisibleCalendarUrls] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -224,9 +201,7 @@ export const CalendarContextProvider = ({
   }, []);
 
   const createCalendar = useCallback(
-    async (
-      params: CalDavCalendarCreate,
-    ): Promise<{ success: boolean; error?: string }> => {
+    async (params: CalDavCalendarCreate): Promise<{ success: boolean; error?: string }> => {
       try {
         const result = await caldavService.createCalendar(params);
         if (result.success) {
@@ -275,9 +250,7 @@ export const CalendarContextProvider = ({
   );
 
   const deleteCalendar = useCallback(
-    async (
-      calendarUrl: string,
-    ): Promise<{ success: boolean; error?: string }> => {
+    async (calendarUrl: string): Promise<{ success: boolean; error?: string }> => {
       try {
         const result = await caldavService.deleteCalendar(calendarUrl);
         if (result.success) {
@@ -380,9 +353,7 @@ export const CalendarContextProvider = ({
         const updates: Promise<{ success: boolean; error?: string }>[] = [];
         for (let i = 0; i < bucket.length; i++) {
           if (bucket[i].order !== i) {
-            updates.push(
-              caldavService.updateCalendar(bucket[i].url, { order: i }),
-            );
+            updates.push(caldavService.updateCalendar(bucket[i].url, { order: i }));
           }
         }
         try {
@@ -441,11 +412,7 @@ export const CalendarContextProvider = ({
             setDavCalendars(calendarsResult.data);
             const hidden = loadHiddenUrls();
             setVisibleCalendarUrls(
-              new Set(
-                calendarsResult.data
-                  .map((cal) => cal.url)
-                  .filter((url) => !hidden.has(url)),
-              ),
+              new Set(calendarsResult.data.map((cal) => cal.url).filter((url) => !hidden.has(url))),
             );
           }
           setIsLoading(false);
@@ -506,9 +473,5 @@ export const CalendarContextProvider = ({
     goToDate,
   };
 
-  return (
-    <CalendarContext.Provider value={value}>
-      {children}
-    </CalendarContext.Provider>
-  );
+  return <CalendarContext.Provider value={value}>{children}</CalendarContext.Provider>;
 };

@@ -30,7 +30,7 @@ declare module "@event-calendar/core" {
   export function createCalendar(
     el: HTMLElement,
     plugins: unknown[],
-    options: Record<string, unknown>
+    options: Record<string, unknown>,
   ): Calendar;
 
   export function destroyCalendar(calendar: Calendar): void;

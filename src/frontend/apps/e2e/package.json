@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "lint": "eslint . --ext .ts",
+    "lint": "oxlint",
     "install-playwright": "playwright install --with-deps",
     "test": "playwright test"
   },

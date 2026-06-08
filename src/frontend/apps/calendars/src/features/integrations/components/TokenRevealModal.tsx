@@ -1,12 +1,6 @@
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  Modal,
-  ModalSize
-} from "@gouvfr-lasuite/cunningham-react";
+import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
 import { TokenRevealBox } from "./TokenRevealBox";
-
-
 
 type TokenRevealModalProps = {
   isOpen: boolean;
@@ -57,9 +51,7 @@ export const TokenRevealModal = ({
         <p>{warning}</p>
         {hasCaldavUrl && (
           <>
-            <label className="token-reveal-box__label">
-              {t("integrations.caldav.serverUrl")}
-            </label>
+            <label className="token-reveal-box__label">{t("integrations.caldav.serverUrl")}</label>
             <TokenRevealBox token={caldavUrl!} />
             {hasCaldavUsername && (
               <>
@@ -69,9 +61,7 @@ export const TokenRevealModal = ({
                 <TokenRevealBox token={caldavUsername!} />
               </>
             )}
-            <label className="token-reveal-box__label">
-              {t("integrations.caldav.password")}
-            </label>
+            <label className="token-reveal-box__label">{t("integrations.caldav.password")}</label>
           </>
         )}
         <TokenRevealBox token={token} />

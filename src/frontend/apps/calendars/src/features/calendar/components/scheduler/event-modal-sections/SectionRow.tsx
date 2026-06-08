@@ -1,9 +1,5 @@
 import { type ReactNode } from "react";
-import {
-  ChevronDown,
-  ChevronUp
-} from "@gouvfr-lasuite/ui-kit/icons";
-
+import { ChevronDown, ChevronUp } from "@gouvfr-lasuite/ui-kit/icons";
 
 interface SectionRowProps {
   icon: ReactNode;
@@ -30,8 +26,7 @@ export const SectionRow = ({
   alwaysOpen = false,
   iconAlign = "center",
 }: SectionRowProps) => {
-  const iconAlignClass =
-    iconAlign === "flex-start" ? "section-row--icon-start" : "";
+  const iconAlignClass = iconAlign === "flex-start" ? "section-row--icon-start" : "";
 
   if (alwaysOpen) {
     return (
@@ -51,9 +46,7 @@ export const SectionRow = ({
       } ${iconAlignClass}`}
     >
       <div
-        className={`section-row__header ${
-          isClickable ? "section-row__header--clickable" : ""
-        }`}
+        className={`section-row__header ${isClickable ? "section-row__header--clickable" : ""}`}
         onClick={onToggle}
         onKeyDown={(e) => {
           if (isClickable && (e.key === "Enter" || e.key === " ")) {
@@ -66,21 +59,13 @@ export const SectionRow = ({
         aria-expanded={isClickable ? isExpanded : undefined}
       >
         <div className="section-row__icon">{icon}</div>
-        <div className="section-row__label">
-          {isEmpty ? label : summary || label}
-        </div>
-        {rightAction && (
-          <div className="section-row__right-action">{rightAction}</div>
-        )}
+        <div className="section-row__label">{isEmpty ? label : summary || label}</div>
+        {rightAction && <div className="section-row__right-action">{rightAction}</div>}
         {isClickable && (
-          <div className="section-row__chevron">
-            {isExpanded ? <ChevronUp /> : <ChevronDown />}
-          </div>
+          <div className="section-row__chevron">{isExpanded ? <ChevronUp /> : <ChevronDown />}</div>
         )}
       </div>
-      {isExpanded && children && (
-        <div className="section-row__content">{children}</div>
-      )}
+      {isExpanded && children && <div className="section-row__content">{children}</div>}
     </div>
   );
 };

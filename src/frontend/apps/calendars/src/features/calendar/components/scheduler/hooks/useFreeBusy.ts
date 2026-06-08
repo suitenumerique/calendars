@@ -1,12 +1,5 @@
-import {
-  useQuery,
-  useQueryClient
-} from "@tanstack/react-query";
-import {
-  useCallback,
-  useMemo
-} from "react";
-
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 
 import type { FreeBusyResponse } from "../../../services/dav/types/caldav-service";
 import type { CalDavService } from "../../../services/dav/CalDavService";
@@ -40,10 +33,7 @@ export function useFreeBusy({
   const queryClient = useQueryClient();
 
   // Stable key: sort attendees so order doesn't trigger refetch
-  const attendeesKey = useMemo(
-    () => [...attendees].sort().join(","),
-    [attendees],
-  );
+  const attendeesKey = useMemo(() => [...attendees].sort().join(","), [attendees]);
   const dateKey = date.toISOString().slice(0, 10);
 
   const queryKey = ["freebusy", attendeesKey, organizerEmail, dateKey];

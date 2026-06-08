@@ -1,24 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
-import {
-  Checkmark,
-  QuestionMark,
-  XMark
-} from "@gouvfr-lasuite/ui-kit/icons";
+import { Checkmark, QuestionMark, XMark } from "@gouvfr-lasuite/ui-kit/icons";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
-import {
-  getBadgeType,
-  getPartstatIcon
-} from "../partstatBadge";
-
+import { getBadgeType, getPartstatIcon } from "../partstatBadge";
 
 import type { IcsOrganizer } from "ts-ics";
-
-
-
-
-
 
 type Partstat = "ACCEPTED" | "TENTATIVE" | "DECLINED" | "NEEDS-ACTION";
 

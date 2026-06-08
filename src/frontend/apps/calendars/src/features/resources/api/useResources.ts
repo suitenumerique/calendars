@@ -1,17 +1,11 @@
-import {
-  useMutation,
-  useQueryClient
-} from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchAPI } from "@/features/api/fetchApi";
-
 
 import type { Resource, ResourceCreateRequest } from "../types";
 
 const RESOURCES_QUERY_KEY = ["resources"];
 
-async function createResource(
-  data: ResourceCreateRequest,
-): Promise<Resource> {
+async function createResource(data: ResourceCreateRequest): Promise<Resource> {
   const response = await fetchAPI("resources/", {
     method: "POST",
     body: JSON.stringify(data),

@@ -5,18 +5,10 @@ import { login } from "@/features/auth/Auth";
 import { SimpleLayout } from "@/features/layouts/components/simple/SimpleLayout";
 import { GenericDisclaimer } from "@/features/ui/components/generic-disclaimer/GenericDisclaimer";
 
-
-
-
-
-
 const UnauthorizedPage = () => {
   const { t } = useTranslation();
   return (
-    <GenericDisclaimer
-      message={t("401.title")}
-      imageSrc="/401-background.png"
-    >
+    <GenericDisclaimer message={t("401.title")} imageSrc="/401-background.png">
       <Button onClick={() => login()}>{t("401.button")}</Button>
     </GenericDisclaimer>
   );

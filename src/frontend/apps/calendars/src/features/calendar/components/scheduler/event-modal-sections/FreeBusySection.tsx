@@ -5,18 +5,9 @@ import { useFreeBusy } from "../hooks/useFreeBusy";
 import { FreeBusyTimeline } from "../FreeBusyTimeline";
 import { SectionRow } from "./SectionRow";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
-import {
-  formatDateTimeLocal,
-  parseDateTimeLocal
-} from "../utils/dateFormatters";
-
+import { formatDateTimeLocal, parseDateTimeLocal } from "../utils/dateFormatters";
 
 import type { IcsAttendee } from "ts-ics";
-
-
-
-
-
 
 interface FreeBusySectionProps {
   attendees: IcsAttendee[];
@@ -44,14 +35,8 @@ export const FreeBusySection = ({
   const { t } = useTranslation();
   const { caldavService } = useCalendarContext();
 
-  const eventStart = useMemo(
-    () => parseDateTimeLocal(startDateTime),
-    [startDateTime],
-  );
-  const eventEnd = useMemo(
-    () => parseDateTimeLocal(endDateTime),
-    [endDateTime],
-  );
+  const eventStart = useMemo(() => parseDateTimeLocal(startDateTime), [startDateTime]);
+  const eventEnd = useMemo(() => parseDateTimeLocal(endDateTime), [endDateTime]);
 
   const allEmails = useMemo(
     () => [

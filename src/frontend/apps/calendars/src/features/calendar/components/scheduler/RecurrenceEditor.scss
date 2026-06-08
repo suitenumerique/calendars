@@ -44,7 +44,9 @@
     color: inherit;
     cursor: pointer;
     font-size: 0.875rem;
-    transition: background-color 0.15s, color 0.15s;
+    transition:
+      background-color 0.15s,
+      color 0.15s;
 
     &:hover {
       background: var(--c--theme--colors--greyscale-200, #e8eaeb);

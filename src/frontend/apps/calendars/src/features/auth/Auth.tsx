@@ -1,19 +1,10 @@
-import React, {
-  PropsWithChildren,
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
+import React, { PropsWithChildren, useCallback, useEffect, useState } from "react";
 
 import { fetchAPI } from "@/features/api/fetchApi";
 import { User } from "@/features/auth/types";
 import { baseApiUrl } from "../api/utils";
 import { APIError } from "../api/APIError";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
-
-
-
-
 
 export const logout = () => {
   window.location.replace(new URL("logout/", baseApiUrl()).href);
@@ -37,10 +28,7 @@ export const AuthContext = React.createContext<AuthContextInterface>({});
 
 export const useAuth = () => React.useContext(AuthContext);
 
-export const Auth = ({
-  children,
-  redirect,
-}: PropsWithChildren & { redirect?: boolean }) => {
+export const Auth = ({ children, redirect }: PropsWithChildren & { redirect?: boolean }) => {
   const [user, setUser] = useState<User | null>();
 
   const init = useCallback(async () => {

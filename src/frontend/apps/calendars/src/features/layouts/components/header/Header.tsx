@@ -3,14 +3,11 @@ import {
   Icon,
   IconType,
   LanguagePicker,
-  useResponsive
+  useResponsive,
 } from "@gouvfr-lasuite/ui-kit";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useAuth } from "@/features/auth/Auth";
-import {
-  useEffect,
-  useState
-} from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "@tanstack/react-router";
 import { fetchAPI } from "@/features/api/fetchApi";
@@ -18,21 +15,7 @@ import { Feedback } from "@/features/feedback/Feedback";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
-import {
-  FeatureFlag,
-  useFeatureFlag
-} from "@/hooks/useFeatureFlag";
-
-
-
-
-
-
-
-
-
-
-
+import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 
 export const HeaderIcon = () => {
   const navigate = useNavigate();
@@ -63,9 +46,7 @@ const ApplicationMenu = () => {
 
   const isResourcesEnabled = useFeatureFlag(FeatureFlag.ADMIN_RESOURCES);
   const isChannelsEnabled = useFeatureFlag(FeatureFlag.ADMIN_CHANNELS);
-  const isAvailabilitiesEnabled = useFeatureFlag(
-    FeatureFlag.ADMIN_AVAILABILITIES,
-  );
+  const isAvailabilitiesEnabled = useFeatureFlag(FeatureFlag.ADMIN_AVAILABILITIES);
 
   if (!user) return null;
 
@@ -84,12 +65,7 @@ const ApplicationMenu = () => {
           ? [
               {
                 label: t("integrations.title"),
-                icon: (
-                  <Icon
-                    name="integration_instructions"
-                    type={IconType.OUTLINED}
-                  />
-                ),
+                icon: <Icon name="integration_instructions" type={IconType.OUTLINED} />,
                 callback: () => void navigate({ to: "/integrations" }),
               },
             ]
@@ -113,11 +89,7 @@ const ApplicationMenu = () => {
   if (options.length === 0) return null;
 
   return (
-    <DropdownMenu
-      isOpen={isOpen}
-      onOpenChange={setIsOpen}
-      options={options}
-    >
+    <DropdownMenu isOpen={isOpen} onOpenChange={setIsOpen} options={options}>
       <Button
         onClick={() => setIsOpen(true)}
         icon={<Icon name="settings" type={IconType.OUTLINED} />}
@@ -207,12 +179,5 @@ export const LanguagePickerUserMenu = () => {
     }
   };
 
-  return (
-    <LanguagePicker
-      languages={languages}
-      size="small"
-      onChange={onChange}
-      compact
-    />
-  );
+  return <LanguagePicker languages={languages} size="small" onChange={onChange} compact />;
 };

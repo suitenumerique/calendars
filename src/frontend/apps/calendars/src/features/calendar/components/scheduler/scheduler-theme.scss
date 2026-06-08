@@ -43,18 +43,14 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
 
 .ec-day {
   &.ec-today {
-    --ec-day-bg-color: var(
-      --c--contextuals--background--surface--secondary
-    ) !important;
+    --ec-day-bg-color: var(--c--contextuals--background--surface--secondary) !important;
   }
 }
 
 .ec-col-group,
 .ec-col-head {
   &.ec-today {
-    background-color: var(
-      --c--contextuals--background--surface--secondary
-    ) !important;
+    background-color: var(--c--contextuals--background--surface--secondary) !important;
   }
 }
 
@@ -90,8 +86,7 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
     time {
       .day-of-month {
         padding: 3px 5px;
-        border: 1px solid
-          var(--c--contextuals--border--semantic--neutral--secondary);
+        border: 1px solid var(--c--contextuals--border--semantic--neutral--secondary);
       }
     }
   }
@@ -178,7 +173,7 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
 .ec-custom--medium {
   overflow: hidden;
   font-size: 0.8rem;
-  line-height: 1.30;
+  line-height: 1.3;
 
   .ec-custom__title,
   .ec-custom__details {

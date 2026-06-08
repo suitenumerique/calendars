@@ -2,23 +2,14 @@
  * LeftPanel component - Calendar sidebar with mini calendar and calendar list.
  */
 
-import {
-  useCallback,
-  useMemo
-} from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  useModal
-} from "@gouvfr-lasuite/cunningham-react";
+import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
 import { useNavigate } from "@tanstack/react-router";
 import { IcsEvent } from "ts-ics";
 import { useAuth } from "@/features/auth/Auth";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import {
-  FeatureFlag,
-  useFeatureFlag
-} from "@/hooks/useFeatureFlag";
+import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { CalendarList } from "../calendar-list";
 import { MiniCalendar } from "./MiniCalendar";
 import { EventModal } from "../scheduler/EventModal";
@@ -53,18 +44,10 @@ export const LeftPanel = () => {
 
   const isResourcesEnabled = useFeatureFlag(FeatureFlag.ADMIN_RESOURCES);
   const isChannelsEnabled = useFeatureFlag(FeatureFlag.ADMIN_CHANNELS);
-  const isAvailabilitiesEnabled = useFeatureFlag(
-    FeatureFlag.ADMIN_AVAILABILITIES,
-  );
+  const isAvailabilitiesEnabled = useFeatureFlag(FeatureFlag.ADMIN_AVAILABILITIES);
 
-  const {
-    selectedDate,
-    setSelectedDate,
-    orderedCalendars,
-    caldavService,
-    adapter,
-    calendarRef,
-  } = useCalendarContext();
+  const { selectedDate, setSelectedDate, orderedCalendars, caldavService, adapter, calendarRef } =
+    useCalendarContext();
 
   // Get default calendar URL — first in the displayed order (sidebar top).
   const defaultCalendarUrl = orderedCalendars[0]?.url || "";
@@ -81,8 +64,8 @@ export const LeftPanel = () => {
         start.getDate(),
         start.getHours(),
         start.getMinutes(),
-        0
-      )
+        0,
+      ),
     );
     const fakeUtcEnd = new Date(
       Date.UTC(
@@ -91,8 +74,8 @@ export const LeftPanel = () => {
         end.getDate(),
         end.getHours(),
         end.getMinutes(),
-        0
-      )
+        0,
+      ),
     );
 
     return {
@@ -134,7 +117,7 @@ export const LeftPanel = () => {
         calendarRef.current.refetchEvents();
       }
     },
-    [caldavService, calendarRef]
+    [caldavService, calendarRef],
   );
 
   const handleClose = useCallback(() => {
@@ -179,18 +162,12 @@ export const LeftPanel = () => {
     <>
       <div className="calendar-left-panel">
         <div className="calendar-left-panel__create">
-          <Button
-            onClick={modal.open}
-            icon={<Plus />}
-          >
+          <Button onClick={modal.open} icon={<Plus />}>
             {t("calendar.leftPanel.newEvent")}
           </Button>
         </div>
 
-        <MiniCalendar
-          selectedDate={selectedDate}
-          onDateSelect={setSelectedDate}
-        />
+        <MiniCalendar selectedDate={selectedDate} onDateSelect={setSelectedDate} />
 
         <div className="calendar-left-panel__divider" />
 

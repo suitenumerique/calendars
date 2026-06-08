@@ -7,12 +7,12 @@
  *  - 75 min+    → title (up to 2 lines)  /  time + location
  */
 
-import type { CalDavExtendedProps } from '../../../services/dav/EventCalendarAdapter';
+import type { CalDavExtendedProps } from "../../../services/dav/EventCalendarAdapter";
 import type {
   EventCalendarEvent,
   EventCalendarContent,
-} from '../../../services/dav/types/event-calendar';
-import { cleanEventForDisplay } from './eventDisplayRules';
+} from "../../../services/dav/types/event-calendar";
+import { cleanEventForDisplay } from "./eventDisplayRules";
 
 export interface EventContentInfo {
   event: EventCalendarEvent;
@@ -21,20 +21,14 @@ export interface EventContentInfo {
 }
 
 const esc = (s: string): string =>
-  s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const fmtTime = (d: Date): string =>
-  `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
-export const createEventContent = (
-  info: EventContentInfo,
-): EventCalendarContent => {
+export const createEventContent = (info: EventContentInfo): EventCalendarContent => {
   const { event } = info;
-  const title = typeof event.title === 'string' ? event.title : '';
+  const title = typeof event.title === "string" ? event.title : "";
 
   // All-day events: just show the title
   if (event.allDay) {
@@ -43,22 +37,15 @@ export const createEventContent = (
     };
   }
 
-  const start =
-    event.start instanceof Date ? event.start : new Date(event.start);
-  const end = event.end
-    ? event.end instanceof Date
-      ? event.end
-      : new Date(event.end)
-    : start;
-  const durationMin = Math.round(
-    (end.getTime() - start.getTime()) / 60_000,
-  );
+  const start = event.start instanceof Date ? event.start : new Date(event.start);
+  const end = event.end ? (event.end instanceof Date ? event.end : new Date(event.end)) : start;
+  const durationMin = Math.round((end.getTime() - start.getTime()) / 60_000);
 
   const extProps = event.extendedProps as CalDavExtendedProps | undefined;
   const cleaned = cleanEventForDisplay({
-    description: extProps?.description ?? '',
-    location: extProps?.location ?? '',
-    url: extProps?.url ?? '',
+    description: extProps?.description ?? "",
+    location: extProps?.location ?? "",
+    url: extProps?.url ?? "",
   });
   const location = cleaned.location;
   const time = fmtTime(start);

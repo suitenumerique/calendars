@@ -3,9 +3,6 @@ import { Input } from "@gouvfr-lasuite/cunningham-react";
 import { SectionRow } from "./SectionRow";
 import { Clock, ArrowRight } from "@gouvfr-lasuite/ui-kit/icons";
 
-
-
-
 interface DateTimeSectionProps {
   startDateTime: string;
   endDateTime: string;
@@ -45,10 +42,7 @@ export const DateTimeSection = ({
               hideLabel
               variant="classic"
             />
-            <ArrowRight
-              className="datetime-section__arrow"
-              aria-hidden="true"
-            />
+            <ArrowRight className="datetime-section__arrow" aria-hidden="true" />
             <Input
               type={isAllDay ? "date" : "datetime-local"}
               label={t("calendar.event.end")}
@@ -60,11 +54,7 @@ export const DateTimeSection = ({
             />
           </div>
           <label className="datetime-section__allday">
-            <input
-              type="checkbox"
-              checked={isAllDay}
-              onChange={onAllDayChange}
-            />
+            <input type="checkbox" checked={isAllDay} onChange={onAllDayChange} />
             <span>{t("calendar.event.allDay")}</span>
           </label>
         </div>

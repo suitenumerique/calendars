@@ -1,11 +1,6 @@
-import {
-  useState,
-  useEffect
-} from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAPI } from "@/features/api/fetchApi";
-
-
 
 export interface UserSearchResult {
   id: string;

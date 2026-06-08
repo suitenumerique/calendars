@@ -38,9 +38,34 @@ export type AvailabilitySlots = AvailabilitySlot[];
 export const generateSlotId = (): string => crypto.randomUUID();
 
 export const DEFAULT_AVAILABILITY: AvailabilitySlots = [
-  { id: "d-mon", when: { type: "recurring", day: "monday" }, start: "09:00", end: "18:00" },
-  { id: "d-tue", when: { type: "recurring", day: "tuesday" }, start: "09:00", end: "18:00" },
-  { id: "d-wed", when: { type: "recurring", day: "wednesday" }, start: "09:00", end: "18:00" },
-  { id: "d-thu", when: { type: "recurring", day: "thursday" }, start: "09:00", end: "18:00" },
-  { id: "d-fri", when: { type: "recurring", day: "friday" }, start: "09:00", end: "18:00" },
+  {
+    id: "d-mon",
+    when: { type: "recurring", day: "monday" },
+    start: "09:00",
+    end: "18:00",
+  },
+  {
+    id: "d-tue",
+    when: { type: "recurring", day: "tuesday" },
+    start: "09:00",
+    end: "18:00",
+  },
+  {
+    id: "d-wed",
+    when: { type: "recurring", day: "wednesday" },
+    start: "09:00",
+    end: "18:00",
+  },
+  {
+    id: "d-thu",
+    when: { type: "recurring", day: "thursday" },
+    start: "09:00",
+    end: "18:00",
+  },
+  {
+    id: "d-fri",
+    when: { type: "recurring", day: "friday" },
+    start: "09:00",
+    end: "18:00",
+  },
 ];

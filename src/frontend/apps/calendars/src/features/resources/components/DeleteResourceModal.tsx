@@ -1,17 +1,7 @@
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  Modal,
-  ModalSize
-} from "@gouvfr-lasuite/cunningham-react";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
+import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useDeleteResource } from "../api/useResources";
-
-
-
 
 type DeleteResourceModalProps = {
   isOpen: boolean;
@@ -71,9 +61,7 @@ export const DeleteResourceModal = ({
         </>
       }
     >
-      <p>
-        {t("resources.delete.message", { name })}
-      </p>
+      <p>{t("resources.delete.message", { name })}</p>
     </Modal>
   );
 };

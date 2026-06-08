@@ -2,11 +2,7 @@
  * MiniCalendar component - A small month calendar for date navigation.
  */
 
-import {
-  useEffect,
-  useMemo,
-  useState
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import {
   addMonths,
@@ -19,25 +15,14 @@ import {
   isSameMonth,
   startOfMonth,
   startOfWeek,
-  subMonths
+  subMonths,
 } from "date-fns";
 import { useTranslation } from "react-i18next";
 import { useCalendarContext } from "../../contexts";
 import { useCalendarLocale } from "../../hooks/useCalendarLocale";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
-import {
-  ChevronLeft,
-  ChevronRight
-} from "@gouvfr-lasuite/ui-kit/icons";
-
-
-
-
-
-
-
-
+import { ChevronLeft, ChevronRight } from "@gouvfr-lasuite/ui-kit/icons";
 
 interface MiniCalendarProps {
   selectedDate: Date;
@@ -53,10 +38,7 @@ const chunkArray = <T,>(arr: T[], size: number): T[][] => {
   return result;
 };
 
-export const MiniCalendar = ({
-  selectedDate,
-  onDateSelect,
-}: MiniCalendarProps) => {
+export const MiniCalendar = ({ selectedDate, onDateSelect }: MiniCalendarProps) => {
   const { t } = useTranslation();
   const { goToDate, currentDate } = useCalendarContext();
   const leftPanel = useLeftPanel();
@@ -182,9 +164,7 @@ export const MiniCalendar = ({
                       className={`mini-calendar__day ${
                         !isCurrentMonth ? "mini-calendar__day--outside" : ""
                       } ${isSelected ? "mini-calendar__day--selected" : ""} ${
-                        isToday && !isSelected
-                          ? "mini-calendar__day--today"
-                          : ""
+                        isToday && !isSelected ? "mini-calendar__day--today" : ""
                       }`}
                       onClick={() => handleDayClick(day)}
                     >

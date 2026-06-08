@@ -123,18 +123,11 @@ function assertValidDate(value: string, role: string): void {
  */
 export function slotsToVCalendar(slots: AvailabilitySlots): string {
   // Separate recurring vs specific
-  const recurringSlots = slots.filter(
-    (s) => s.when.type === "recurring",
-  );
-  const specificSlots = slots.filter(
-    (s) => s.when.type === "specific",
-  );
+  const recurringSlots = slots.filter((s) => s.when.type === "recurring");
+  const specificSlots = slots.filter((s) => s.when.type === "specific");
 
   // Group recurring by time range
-  const groups = new Map<
-    string,
-    { days: DayOfWeek[]; start: string; end: string }
-  >();
+  const groups = new Map<string, { days: DayOfWeek[]; start: string; end: string }>();
   for (const slot of recurringSlots) {
     if (slot.when.type !== "recurring") continue;
     const key = `${slot.start}-${slot.end}`;
@@ -205,12 +198,8 @@ export function vCalendarToSlots(vcalendar: string): AvailabilitySlots {
   while ((match = availableRegex.exec(vcalendar)) !== null) {
     const block = match[0];
 
-    const startMatch = block.match(
-      /DTSTART:(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})\d{2}/,
-    );
-    const endMatch = block.match(
-      /DTEND:\d{8}T(\d{2})(\d{2})\d{2}/,
-    );
+    const startMatch = block.match(/DTSTART:(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})\d{2}/);
+    const endMatch = block.match(/DTEND:\d{8}T(\d{2})(\d{2})\d{2}/);
 
     if (!startMatch || !endMatch) continue;
 

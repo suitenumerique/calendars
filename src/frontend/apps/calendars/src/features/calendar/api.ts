@@ -4,14 +4,8 @@
 
 import { fetchAPI } from "@/features/api/fetchApi";
 
-export type {
-  Channel,
-  ChannelWithToken,
-} from "@/features/integrations/types";
-import type {
-  Channel,
-  ChannelWithToken,
-} from "@/features/integrations/types";
+export type { Channel, ChannelWithToken } from "@/features/integrations/types";
+import type { Channel, ChannelWithToken } from "@/features/integrations/types";
 
 /**
  * Error types for channel operations.
@@ -32,14 +26,11 @@ export type GetICalFeedResult =
 /**
  * Get the ical-feed channel for a calendar by CalDAV path.
  */
-export const getICalFeedChannel = async (
-  caldavPath: string,
-): Promise<GetICalFeedResult> => {
+export const getICalFeedChannel = async (caldavPath: string): Promise<GetICalFeedResult> => {
   try {
-    const response = await fetchAPI(
-      `channels/?type=ical-feed`,
-      { method: "GET" },
-    );
+    const response = await fetchAPI(`channels/?type=ical-feed`, {
+      method: "GET",
+    });
     const channels: Channel[] = await response.json();
     const match = channels.find((c) => c.caldav_path === caldavPath) ?? null;
     return { success: true, channel: match };
@@ -137,10 +128,7 @@ export interface TaskStatus {
 /**
  * Start an ICS import task. Returns the task_id for polling.
  */
-export const startImportTask = async (
-  caldavPath: string,
-  file: File,
-): Promise<string> => {
+export const startImportTask = async (caldavPath: string, file: File): Promise<string> => {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("caldav_path", caldavPath);
@@ -191,11 +179,7 @@ export const pollImportTask = async (
           return;
         }
 
-        reject(
-          new Error(
-            status.error ?? "Import failed",
-          ),
-        );
+        reject(new Error(status.error ?? "Import failed"));
       } catch (error) {
         reject(error);
       }

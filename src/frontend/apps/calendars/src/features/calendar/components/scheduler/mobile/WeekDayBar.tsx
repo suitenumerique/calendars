@@ -1,8 +1,5 @@
 import { useMemo } from "react";
-import {
-  isSameDay,
-  isWeekend
-} from "@/utils/date";
+import { isSameDay, isWeekend } from "@/utils/date";
 
 import type { WeekDayBarProps } from "../types";
 

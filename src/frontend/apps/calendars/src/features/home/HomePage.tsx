@@ -1,31 +1,14 @@
 import { useTranslation } from "react-i18next";
-import {
-  Hero,
-  Footer,
-  HomeGutter,
-  Icon,
-  IconType
-} from "@gouvfr-lasuite/ui-kit";
+import { Hero, Footer, HomeGutter, Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 import { login } from "@/features/auth/Auth";
 import { useEffect } from "react";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useThemeCustomization } from "@/hooks/useThemeCustomization";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 
-
-
-
 import banner from "@/assets/home/banner.svg";
-
-
-
-
-
 
 export const HomePage = () => {
   const { t } = useTranslation();
@@ -33,9 +16,7 @@ export const HomePage = () => {
   const footerCustomization = useThemeCustomization("footer");
 
   useEffect(() => {
-    const failure = new URLSearchParams(window.location.search).get(
-      "auth_error",
-    );
+    const failure = new URLSearchParams(window.location.search).get("auth_error");
     if (failure === "alpha") {
       addToast(
         <ToasterItem type="error">

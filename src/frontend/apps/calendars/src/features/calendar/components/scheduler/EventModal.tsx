@@ -1,21 +1,9 @@
-import {
-  useEffect,
-  useMemo,
-  useState
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Button,
-  Input,
-  Modal,
-  ModalSize
-} from "@gouvfr-lasuite/cunningham-react";
+import { Button, Input, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
 import { CalendarSelect } from "./CalendarSelect";
 import { useAuth } from "@/features/auth/Auth";
-import {
-  addToast,
-  ToasterItem
-} from "@/features/ui/components/toaster/Toaster";
+import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { DeleteEventModal } from "./DeleteEventModal";
 import { RecurringEditModal } from "./RecurringEditModal";
 import { useEventForm } from "./hooks/useEventForm";
@@ -33,54 +21,14 @@ import { SectionPills } from "./event-modal-sections/SectionPills";
 import { useResourcePrincipals } from "@/features/resources/api/useResourcePrincipals";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useConfig } from "@/features/config/ConfigProvider";
-import {
-  FeatureFlag,
-  useFeatureFlag
-} from "@/hooks/useFeatureFlag";
+import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { SectionRow } from "./event-modal-sections/SectionRow";
-import {
-  Icon,
-  IconType
-} from "@gouvfr-lasuite/ui-kit";
-import {
-  Meet,
-  Pin,
-  Calendar,
-  Edit,
-  Lock
-} from "@gouvfr-lasuite/ui-kit/icons";
-
+import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
+import { Meet, Pin, Calendar, Edit, Lock } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { IcsEvent, IcsOrganizer } from "ts-ics";
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import type {
-  EventModalProps,
-  RecurringDeleteOption,
-  RecurringEditOption,
-} from "./types";
-
-
-
+import type { EventModalProps, RecurringDeleteOption, RecurringEditOption } from "./types";
 
 export const EventModal = ({
   isOpen,
@@ -118,7 +66,10 @@ export const EventModal = ({
     (initialMailboxEmail
       ? { email: initialMailboxEmail, name: initialMailboxEmail.split("@")[0] }
       : user?.email
-        ? { email: user.email, name: user.full_name || user.email.split("@")[0] }
+        ? {
+            email: user.email,
+            name: user.full_name || user.email.split("@")[0],
+          }
         : undefined);
 
   const form = useEventForm({
@@ -139,8 +90,7 @@ export const EventModal = ({
   const organizer: IcsOrganizer | undefined = useMemo(() => {
     if (event?.organizer) return event.organizer;
     const mbxEmail = form.selectedCalendarUrl
-      ? calendars.find((c) => c.url === form.selectedCalendarUrl)
-          ?.mailboxEmail
+      ? calendars.find((c) => c.url === form.selectedCalendarUrl)?.mailboxEmail
       : undefined;
     if (mbxEmail) return { email: mbxEmail, name: mbxEmail.split("@")[0] };
     if (user?.email) {
@@ -160,9 +110,7 @@ export const EventModal = ({
   useEffect(() => {
     if (!isOpen || calendars.length === 0) return;
     if (calendarUrl) return;
-    const currentIsValid = calendars.some(
-      (cal) => cal.url === form.selectedCalendarUrl,
-    );
+    const currentIsValid = calendars.some((cal) => cal.url === form.selectedCalendarUrl);
     if (!currentIsValid) {
       form.setSelectedCalendarUrl(calendars[0].url);
     }
@@ -183,8 +131,7 @@ export const EventModal = ({
   // The CANCELLED case is still considered "invited" — the section
   // renders a cancelled notice instead of buttons.
   const currentUserAttendee = event?.attendees?.find(
-    (att) =>
-      user?.email && att.email.toLowerCase() === user.email.toLowerCase(),
+    (att) => user?.email && att.email.toLowerCase() === user.email.toLowerCase(),
   );
   const isInvited = !!(
     event?.organizer &&
@@ -199,20 +146,20 @@ export const EventModal = ({
   // modal no longer auto-closes after responding).
   const currentParticipationStatus =
     form.attendees.find(
-      (att) =>
-        user?.email && att.email.toLowerCase() === user.email.toLowerCase(),
+      (att) => user?.email && att.email.toLowerCase() === user.email.toLowerCase(),
     )?.partstat ||
     currentUserAttendee?.partstat ||
     "NEEDS-ACTION";
 
   const showError = (message: string) => {
     addToast(
-      <ToasterItem type="error" closeButton>{message}</ToasterItem>,
+      <ToasterItem type="error" closeButton>
+        {message}
+      </ToasterItem>,
     );
   };
 
-  const isRecurringEvent =
-    mode === "edit" && !!(event?.recurrenceRule || event?.recurrenceId);
+  const isRecurringEvent = mode === "edit" && !!(event?.recurrenceRule || event?.recurrenceId);
 
   // `startDateTime` / `endDateTime` are local form strings
   // ("YYYY-MM-DDTHH:mm" or "YYYY-MM-DD" for all-day). They are sortable
@@ -237,11 +184,7 @@ export const EventModal = ({
         };
       }
 
-      await onSave(
-        icsEvent,
-        form.selectedCalendarUrl,
-        option,
-      );
+      await onSave(icsEvent, form.selectedCalendarUrl, option);
       onClose();
     } catch (error) {
       console.error("Failed to save event:", error);
@@ -302,9 +245,7 @@ export const EventModal = ({
     }
   };
 
-  const handleRespondToInvitation = async (
-    status: "ACCEPTED" | "TENTATIVE" | "DECLINED",
-  ) => {
+  const handleRespondToInvitation = async (status: "ACCEPTED" | "TENTATIVE" | "DECLINED") => {
     if (isRecurringEvent) {
       setPendingRsvpStatus(status);
       return;
@@ -391,18 +332,10 @@ export const EventModal = ({
         isOpen={isOpen}
         onClose={onClose}
         size={isMobile ? ModalSize.FULL : ModalSize.MEDIUM}
-        title={
-          mode === "create"
-            ? t("calendar.event.createTitle")
-            : t("calendar.event.editTitle")
-        }
+        title={mode === "create" ? t("calendar.event.createTitle") : t("calendar.event.editTitle")}
         leftActions={
           mode === "edit" && onDelete ? (
-            <Button
-              color="error"
-              onClick={() => setShowDeleteModal(true)}
-              disabled={isLoading}
-            >
+            <Button color="error" onClick={() => setShowDeleteModal(true)} disabled={isLoading}>
               {t("calendar.event.delete")}
             </Button>
           ) : undefined
@@ -416,10 +349,7 @@ export const EventModal = ({
               color="brand"
               onClick={handleSave}
               disabled={
-                isLoading ||
-                !form.title.trim() ||
-                !form.selectedCalendarUrl ||
-                hasInvalidDateRange
+                isLoading || !form.title.trim() || !form.selectedCalendarUrl || hasInvalidDateRange
               }
             >
               {isLoading ? "..." : t("calendar.event.save")}
@@ -428,11 +358,7 @@ export const EventModal = ({
         }
       >
         <div className="event-modal__content">
-          <SectionRow
-            icon={<Edit />}
-            label={t("calendar.event.calendar")}
-            alwaysOpen={true}
-          >
+          <SectionRow icon={<Edit />} label={t("calendar.event.calendar")} alwaysOpen={true}>
             <Input
               label={t("calendar.event.title")}
               hideLabel
@@ -457,11 +383,7 @@ export const EventModal = ({
               variant="classic"
             />
           </SectionRow>
-          <SectionRow
-            icon={<Calendar />}
-            label={t("calendar.event.calendar")}
-            alwaysOpen={true}
-          >
+          <SectionRow icon={<Calendar />} label={t("calendar.event.calendar")} alwaysOpen={true}>
             <CalendarSelect
               calendars={calendars}
               value={form.selectedCalendarUrl}
@@ -497,11 +419,7 @@ export const EventModal = ({
             />
           )}
           {form.isSectionExpanded("location") && (
-            <LocationSection
-              location={form.location}
-              onChange={form.setLocation}
-              alwaysOpen
-            />
+            <LocationSection location={form.location} onChange={form.setLocation} alwaysOpen />
           )}
 
           {form.isSectionExpanded("attendees") && (
@@ -524,9 +442,7 @@ export const EventModal = ({
                 >
                   {t("calendar.attendees.sentFrom", {
                     email:
-                      calendars.find(
-                        (c) => c.url === form.selectedCalendarUrl,
-                      )?.mailboxEmail ||
+                      calendars.find((c) => c.url === form.selectedCalendarUrl)?.mailboxEmail ||
                       config?.CALENDAR_INVITATION_FROM_EMAIL ||
                       "",
                   })}
@@ -537,13 +453,9 @@ export const EventModal = ({
           {isSchedulingEnabled && form.isSectionExpanded("scheduling") && (
             <FreeBusySection
               attendees={form.attendees}
-              resourceEmails={form.resources
-                .map((r) => r.email)
-                .filter((e): e is string => !!e)}
+              resourceEmails={form.resources.map((r) => r.email).filter((e): e is string => !!e)}
               resourceNames={Object.fromEntries(
-                form.resources
-                  .filter((r) => r.email)
-                  .map((r) => [r.email!.toLowerCase(), r.name]),
+                form.resources.filter((r) => r.email).map((r) => [r.email!.toLowerCase(), r.name]),
               )}
               organizerEmail={user?.email}
               startDateTime={form.startDateTime}
@@ -553,16 +465,15 @@ export const EventModal = ({
               alwaysOpen
             />
           )}
-          {availableResources.length > 0 &&
-            form.isSectionExpanded("resources") && (
-              <ResourcesSection
-                resources={form.resources}
-                onChange={form.setResources}
-                availableResources={availableResources}
-                eventAttendees={form.attendees}
-                alwaysOpen
-              />
-            )}
+          {availableResources.length > 0 && form.isSectionExpanded("resources") && (
+            <ResourcesSection
+              resources={form.resources}
+              onChange={form.setResources}
+              availableResources={availableResources}
+              eventAttendees={form.attendees}
+              alwaysOpen
+            />
+          )}
           {form.isSectionExpanded("description") && (
             <DescriptionSection
               description={form.description}

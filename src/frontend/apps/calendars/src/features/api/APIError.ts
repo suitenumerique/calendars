@@ -25,11 +25,7 @@ export const errorToString = (error: unknown): string => {
       return data;
     }
 
-    if (
-      data?.errors &&
-      Array.isArray(data?.errors) &&
-      data?.errors?.length > 0
-    ) {
+    if (data?.errors && Array.isArray(data?.errors) && data?.errors?.length > 0) {
       return data.errors[0].detail;
     }
 

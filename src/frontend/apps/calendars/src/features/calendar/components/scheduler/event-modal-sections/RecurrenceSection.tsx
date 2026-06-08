@@ -5,8 +5,6 @@ import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
 
 import type { IcsRecurrenceRule } from "ts-ics";
 
-
-
 interface RecurrenceSectionProps {
   recurrence: IcsRecurrenceRule | undefined;
   onChange: (value: IcsRecurrenceRule | undefined) => void;

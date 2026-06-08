@@ -1,11 +1,5 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  type ReactNode
-} from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useMailboxSync } from "./useMailboxSync";
-
 
 import type { Mailbox, MailboxCalendarInfo } from "./types";
 import type { CalDavCalendar } from "@/features/calendar/services/dav/types/caldav-service";
@@ -32,9 +26,7 @@ const MailboxContext = createContext<MailboxContextType | undefined>(undefined);
 export function useMailboxContext(): MailboxContextType {
   const context = useContext(MailboxContext);
   if (!context) {
-    throw new Error(
-      "useMailboxContext must be used within MailboxContextProvider",
-    );
+    throw new Error("useMailboxContext must be used within MailboxContextProvider");
   }
   return context;
 }
@@ -43,9 +35,7 @@ interface MailboxContextProviderProps {
   children: ReactNode;
 }
 
-export function MailboxContextProvider({
-  children,
-}: MailboxContextProviderProps) {
+export function MailboxContextProvider({ children }: MailboxContextProviderProps) {
   const { data, isLoading } = useMailboxSync();
 
   const availableMailboxes = data?.available_mailboxes ?? [];
@@ -119,7 +109,5 @@ export function MailboxContextProvider({
     isLoading,
   };
 
-  return (
-    <MailboxContext.Provider value={value}>{children}</MailboxContext.Provider>
-  );
+  return <MailboxContext.Provider value={value}>{children}</MailboxContext.Provider>;
 }

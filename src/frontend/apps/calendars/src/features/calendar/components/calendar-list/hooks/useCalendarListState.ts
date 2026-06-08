@@ -3,10 +3,7 @@
  * Manages state and handlers for the CalendarList component.
  */
 
-import {
-  useState,
-  useCallback
-} from "react";
+import { useState, useCallback } from "react";
 
 import type {
   CalDavCalendar,
@@ -16,12 +13,10 @@ import type {
 import type { CalendarModalState, DeleteState, ShareModalState } from "../types";
 
 interface UseCalendarListStateProps {
-  createCalendar: (
-    params: CalDavCalendarCreate
-  ) => Promise<{ success: boolean; error?: string }>;
+  createCalendar: (params: CalDavCalendarCreate) => Promise<{ success: boolean; error?: string }>;
   updateCalendar: (
     url: string,
-    options: CalDavCalendarUpdate
+    options: CalDavCalendarUpdate,
   ) => Promise<{ success: boolean; error?: string }>;
   deleteCalendar: (url: string) => Promise<{ success: boolean; error?: string }>;
 }
@@ -86,7 +81,7 @@ export const useCalendarListState = ({
         const result = await createCalendar({
           displayName: name,
           color,
-          components: ['VEVENT'],
+          components: ["VEVENT"],
         });
         if (!result.success) {
           throw new Error(result.error);
@@ -105,8 +100,8 @@ export const useCalendarListState = ({
           params.color = color;
         }
         if (
-          includeInAvailability !== undefined
-          && includeInAvailability !== current.includeInAvailability
+          includeInAvailability !== undefined &&
+          includeInAvailability !== current.includeInAvailability
         ) {
           params.includeInAvailability = includeInAvailability;
         }
@@ -119,7 +114,7 @@ export const useCalendarListState = ({
         }
       }
     },
-    [modalState, createCalendar, updateCalendar]
+    [modalState, createCalendar, updateCalendar],
   );
 
   // Share modal handlers
@@ -169,7 +164,7 @@ export const useCalendarListState = ({
     (calendarUrl: string) => {
       setOpenMenuUrl(openMenuUrl === calendarUrl ? null : calendarUrl);
     },
-    [openMenuUrl]
+    [openMenuUrl],
   );
 
   const handleCloseMenu = useCallback(() => {
