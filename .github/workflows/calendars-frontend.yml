@@ -12,7 +12,7 @@ jobs:
   install-front:
     uses: ./.github/workflows/front-dependencies-installation.yml
     with:
-      node_version: "22.x"
+      node_version: "24.x"
 
   lint-front:
     runs-on: ubuntu-latest
@@ -25,15 +25,17 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "24.x"
+      - name: Enable pnpm via corepack
+        run: corepack enable
       - name: Restore the frontend cache
         uses: actions/cache@v5
         with:
           path: "src/frontend/**/node_modules"
-          key: front-node_modules-${{ hashFiles('src/frontend/**/package-lock.json') }}
+          key: front-node_modules-${{ hashFiles('src/frontend/**/pnpm-lock.yaml') }}
           fail-on-cache-miss: true
 
       - name: Check linting
-        run: cd src/frontend/ && npm run lint
+        run: cd src/frontend/ && pnpm run lint
 
   test-unit:
     runs-on: ubuntu-latest
@@ -47,14 +49,17 @@ jobs:
         with:
           node-version: "24.x"
 
+      - name: Enable pnpm via corepack
+        run: corepack enable
+
       - name: Restore the frontend cache
         uses: actions/cache@v5
         with:
           path: "src/frontend/**/node_modules"
-          key: front-node_modules-${{ hashFiles('src/frontend/**/package-lock.json') }}
+          key: front-node_modules-${{ hashFiles('src/frontend/**/pnpm-lock.yaml') }}
           fail-on-cache-miss: true
 
       - name: Run unit tests
         run: |
           cd src/frontend
-          TZ=Europe/Paris npm test
+          TZ=Europe/Paris pnpm test
