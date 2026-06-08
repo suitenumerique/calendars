@@ -641,9 +641,7 @@ class TestCopyMovePrivacyBypass:
             description="exfiltrate me",
             location="Room 101",
         )
-        shared_cal = _share_and_find(
-            owner_client, owner, cal_id, sharee, "read-write"
-        )
+        shared_cal = _share_and_find(owner_client, owner, cal_id, sharee, "read-write")
 
         src = self._shared_event_path(shared_cal, "priv-cm")
         dest = f"/caldav/calendars/users/{sharee.email}/{sharee_cal_id}/priv-cm.ics"
@@ -655,9 +653,7 @@ class TestCopyMovePrivacyBypass:
         )
 
         # And nothing must have landed on the sharee's own calendar.
-        got = sharee_client.generic(
-            "GET", dest, HTTP_X_LS_CLIENT="web"
-        )
+        got = sharee_client.generic("GET", dest, HTTP_X_LS_CLIENT="web")
         assert got.status_code in (403, 404), (
             "SECURITY: PRIVATE event leaked onto sharee's calendar "
             f"(GET -> {got.status_code})"
@@ -682,9 +678,7 @@ class TestCopyMovePrivacyBypass:
             "CONFIDENTIAL",
             description="salary review",
         )
-        shared_cal = _share_and_find(
-            owner_client, owner, cal_id, sharee, "read-write"
-        )
+        shared_cal = _share_and_find(owner_client, owner, cal_id, sharee, "read-write")
 
         src = self._shared_event_path(shared_cal, "conf-cm")
         dest = f"/caldav/calendars/users/{sharee.email}/{sharee_cal_id}/conf-cm.ics"
@@ -693,6 +687,13 @@ class TestCopyMovePrivacyBypass:
         assert resp.status_code == 403, (
             "SECURITY: sharee MOVE of a CONFIDENTIAL event must be 403, got "
             f"{resp.status_code}: {resp.content[:300]}"
+        )
+
+        # And nothing must have landed on the sharee's own calendar.
+        got = sharee_client.generic("GET", dest, HTTP_X_LS_CLIENT="web")
+        assert got.status_code in (403, 404), (
+            "SECURITY: CONFIDENTIAL event leaked onto sharee's calendar "
+            f"(GET -> {got.status_code})"
         )
 
     def test_sharee_can_move_public_event(self):
@@ -712,17 +713,28 @@ class TestCopyMovePrivacyBypass:
         _put_event_with_class(
             owner_client, owner, cal_id, "pub-cm", "Team Picnic", "PUBLIC"
         )
-        shared_cal = _share_and_find(
-            owner_client, owner, cal_id, sharee, "read-write"
-        )
+        shared_cal = _share_and_find(owner_client, owner, cal_id, sharee, "read-write")
 
         src = self._shared_event_path(shared_cal, "pub-cm")
         dest = f"/caldav/calendars/users/{sharee.email}/{sharee_cal_id}/pub-cm.ics"
         resp = self._move(sharee_client, src, dest)
 
-        assert resp.status_code != 403, (
-            "A PUBLIC event must not be privacy-blocked from MOVE, got "
+        assert resp.status_code in (200, 201, 204), (
+            "A PUBLIC event MOVE by a read-write sharee should succeed (and "
+            "must not be privacy-blocked), got "
             f"{resp.status_code}: {resp.content[:300]}"
+        )
+
+        # The event must actually be readable at the destination with its
+        # data — so the test can't pass on an unrelated 4xx/5xx.
+        got = sharee_client.generic("GET", dest, HTTP_X_LS_CLIENT="web")
+        assert got.status_code == 200, (
+            "Moved PUBLIC event should be readable at the destination, got "
+            f"{got.status_code}: {got.content[:300]}"
+        )
+        assert b"Team Picnic" in got.content, (
+            "Moved PUBLIC event should contain its SUMMARY at the destination. "
+            f"Got: {got.content[:300]}"
         )
 
 

@@ -309,7 +309,7 @@
 // Cunningham renders it as a direct child of
 // ``.c__alert__content__left`` (NOT wrapped in ``.c__alert__icon``,
 // which only exists for the auto-icon variant). So we shrink it via
-// the direct ``.material-icons`` font-size.
+// the direct ``svg`` child's width/height.
 .app__alert--small.c__alert {
   padding: 0.5rem 0.75rem;
   font-size: 0.8125rem;

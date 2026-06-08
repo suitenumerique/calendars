@@ -121,6 +121,9 @@ export const CalendarModal = ({
         setSelectedMailbox(NO_MAILBOX_VALUE);
       } else {
         setColor(DEFAULT_COLORS[0]);
+        // Reset to the default so a stale ``false`` from a previous edit
+        // doesn't silently carry into a freshly created calendar.
+        setIncludeInAvailability(true);
         // Pre-fill the name with a sensible default so the field is never
         // blank — creating an unnamed calendar is nonsense. A mailbox's own
         // name takes precedence when one is pre-selected. The save handler
@@ -175,6 +178,7 @@ export const CalendarModal = ({
     }
     setName("");
     setColor(DEFAULT_COLORS[0]);
+    setIncludeInAvailability(true);
     setSelectedMailbox(NO_MAILBOX_VALUE);
     setError(null);
     onClose();

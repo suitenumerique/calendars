@@ -311,7 +311,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
       },
       calendarUrl: defaultUrl,
     });
-  }, [currentDate, calendarUrl, davCalendars]);
+  }, [currentDate, calendarUrl, orderedCalendars]);
 
   // Mobile list view event click
   const handleMobileEventClick = useCallback(
