@@ -219,8 +219,11 @@
           "visibility": {
             "label": "Visibility",
             "public": "Public",
+            "publicHelp": "Full details are visible to everyone the calendar is shared with.",
             "private": "Private",
-            "confidential": "Confidential"
+            "privateHelp": "Hidden from everyone the calendar is shared with.",
+            "confidential": "Confidential",
+            "confidentialHelp": "Everyone the calendar is shared with sees a busy slot, not the details."
           },
           "availability": {
             "label": "Availability",
@@ -1169,8 +1172,11 @@
           "visibility": {
             "label": "Visibilité",
             "public": "Public",
+            "publicHelp": "Tous les détails sont visibles par les personnes avec qui le calendrier est partagé.",
             "private": "Privé",
-            "confidential": "Confidentiel"
+            "privateHelp": "Masqué pour les personnes avec qui le calendrier est partagé.",
+            "confidential": "Confidentiel",
+            "confidentialHelp": "Les personnes avec qui le calendrier est partagé voient un créneau occupé, sans les détails."
           },
           "availability": {
             "label": "Disponibilité",
@@ -1861,8 +1867,11 @@
           "visibility": {
             "label": "Zichtbaarheid",
             "public": "Openbaar",
+            "publicHelp": "Alle details zijn zichtbaar voor iedereen met wie de agenda wordt gedeeld.",
             "private": "Privé",
-            "confidential": "Vertrouwelijk"
+            "privateHelp": "Verborgen voor iedereen met wie de agenda wordt gedeeld.",
+            "confidential": "Vertrouwelijk",
+            "confidentialHelp": "Iedereen met wie de agenda wordt gedeeld ziet alleen een bezet tijdvak, zonder details."
           },
           "availability": {
             "label": "Beschikbaarheid",

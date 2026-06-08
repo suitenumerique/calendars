@@ -104,7 +104,8 @@ export type EventFormSectionId =
   | "attendees"
   | "resources"
   | "videoConference"
-  | "scheduling";
+  | "scheduling"
+  | "visibility";
 
 /**
  * Attachment metadata (UI only, no actual file upload).

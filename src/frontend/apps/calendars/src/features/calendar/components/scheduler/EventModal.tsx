@@ -26,6 +26,7 @@ import { VideoConferenceSection } from "./event-modal-sections/VideoConferenceSe
 import { AttendeesSection } from "./event-modal-sections/AttendeesSection";
 import { ResourcesSection } from "./event-modal-sections/ResourcesSection";
 import { DescriptionSection } from "./event-modal-sections/DescriptionSection";
+import { VisibilitySection } from "./event-modal-sections/VisibilitySection";
 import { InvitationResponseSection } from "./event-modal-sections/InvitationResponseSection";
 import { FreeBusySection } from "./event-modal-sections/FreeBusySection";
 import { SectionPills } from "./event-modal-sections/SectionPills";
@@ -45,7 +46,8 @@ import {
   Meet,
   Pin,
   Calendar,
-  Edit
+  Edit,
+  Lock
 } from "@gouvfr-lasuite/ui-kit/icons";
 
 
@@ -356,6 +358,11 @@ export const EventModal = ({
         icon: <Icon name="group" type={IconType.OUTLINED} aria-hidden />,
         label: t("calendar.event.attendees"),
       },
+      {
+        id: "visibility" as const,
+        icon: <Lock />,
+        label: t("calendar.event.visibility.label"),
+      },
       ...(availableResources.length > 0
         ? [
             {
@@ -560,6 +567,13 @@ export const EventModal = ({
             <DescriptionSection
               description={form.description}
               onChange={form.setDescription}
+              alwaysOpen
+            />
+          )}
+          {form.isSectionExpanded("visibility") && (
+            <VisibilitySection
+              visibility={form.visibility}
+              onChange={form.setVisibility}
               alwaysOpen
             />
           )}

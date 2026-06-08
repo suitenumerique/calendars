@@ -107,6 +107,11 @@ export const useEventForm = ({
     if (cleaned.description) initialExpanded.add("description");
     if (event?.recurrenceRule) initialExpanded.add("recurrence");
     if (cleaned.url) initialExpanded.add("videoConference");
+    // Surface a non-default visibility (PRIVATE/CONFIDENTIAL) so it's
+    // never hidden behind a closed pill; PUBLIC stays collapsed.
+    if (event?.class && event.class !== "PUBLIC") {
+      initialExpanded.add("visibility");
+    }
 
     if (mode === "create") {
       initialExpanded.add("attendees");

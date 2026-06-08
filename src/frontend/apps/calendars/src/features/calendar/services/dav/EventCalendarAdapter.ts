@@ -18,7 +18,7 @@
  * ```
  */
 
-import type { IcsCalendar, IcsDateObject, IcsEvent, IcsRecurrenceRule, IcsAttendee, IcsOrganizer, IcsDuration } from 'ts-ics'
+import type { IcsCalendar, IcsClassType, IcsDateObject, IcsEvent, IcsRecurrenceRule, IcsAttendee, IcsOrganizer, IcsDuration } from 'ts-ics'
 import type { CalDavCalendar, CalDavEvent } from './types/caldav-service'
 import type {
   EventCalendarEvent,
@@ -134,6 +134,8 @@ export type CalDavExtendedProps = {
   sequence?: number
   /** Event status */
   status?: string
+  /** Event visibility / CLASS (PUBLIC | PRIVATE | CONFIDENTIAL | …) */
+  class?: IcsClassType
   /** Event location */
   location?: string
   /** Event description */
@@ -295,6 +297,7 @@ export class EventCalendarAdapter {
       timezone: icsEvent.start.local?.timezone,
       sequence: icsEvent.sequence,
       status: icsEvent.status,
+      class: icsEvent.class,
       location: icsEvent.location,
       description: icsEvent.description,
       organizer: icsEvent.organizer
@@ -453,6 +456,9 @@ export class EventCalendarAdapter {
     if (extProps.status && this.isValidStatus(extProps.status)) {
       icsEvent.status = extProps.status
     }
+    // Carry CLASS (visibility) back so editing an event preserves its
+    // PRIVATE/CONFIDENTIAL setting instead of silently resetting it.
+    if (extProps.class) icsEvent.class = extProps.class
     if (extProps.categories) icsEvent.categories = extProps.categories
     if (extProps.priority != null) icsEvent.priority = String(extProps.priority)
     // SECURITY: re-sanitize on the way out too. The forward path

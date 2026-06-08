@@ -592,3 +592,214 @@ class TestNonVeventComponentPrivacy:
                 "SECURITY: VTODO DESCRIPTION leaked to sharee. "
                 f"Path={cal_path_to_probe}, Body: {report_text[:1500]}"
             )
+
+
+class TestCopyMovePrivacyBypass:
+    """A sharee must not exfiltrate a masked event via COPY/MOVE.
+
+    COPY/MOVE read the raw stored bytes server-side (they never go
+    through the read-time masking hooks), so without a guard a sharee
+    could move a PRIVATE/CONFIDENTIAL event onto a calendar they own and
+    read it unmasked. (COPY is also blocked at the Django proxy, which
+    only allows MOVE — so MOVE is the reachable path we exercise here.)
+    """
+
+    @staticmethod
+    def _shared_event_path(shared_cal, uid):
+        path = urlparse(str(shared_cal.url)).path
+        if not path.endswith("/"):
+            path += "/"
+        return f"{path}{uid}.ics"
+
+    @staticmethod
+    def _move(sharee_client, src, dest):
+        return sharee_client.generic(
+            "MOVE",
+            src,
+            HTTP_DESTINATION=dest,
+            HTTP_OVERWRITE="T",
+            HTTP_X_LS_CLIENT="web",
+        )
+
+    def test_sharee_cannot_move_private_event(self):
+        """MOVE of a PRIVATE event by a read-write sharee is forbidden."""
+        org = factories.OrganizationFactory(external_id="cm-private")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-cmp")
+        sharee, sharee_client, sharee_cal_path = _create_user_with_calendar(
+            org, "sharee-cmp"
+        )
+        cal_id = _get_cal_id(cal_path)
+        sharee_cal_id = _get_cal_id(sharee_cal_path)
+
+        _put_event_with_class(
+            owner_client,
+            owner,
+            cal_id,
+            "priv-cm",
+            "Secret Offsite",
+            "PRIVATE",
+            description="exfiltrate me",
+            location="Room 101",
+        )
+        shared_cal = _share_and_find(
+            owner_client, owner, cal_id, sharee, "read-write"
+        )
+
+        src = self._shared_event_path(shared_cal, "priv-cm")
+        dest = f"/caldav/calendars/users/{sharee.email}/{sharee_cal_id}/priv-cm.ics"
+        resp = self._move(sharee_client, src, dest)
+
+        assert resp.status_code == 403, (
+            "SECURITY: sharee MOVE of a PRIVATE event must be 403, got "
+            f"{resp.status_code}: {resp.content[:300]}"
+        )
+
+        # And nothing must have landed on the sharee's own calendar.
+        got = sharee_client.generic(
+            "GET", dest, HTTP_X_LS_CLIENT="web"
+        )
+        assert got.status_code in (403, 404), (
+            "SECURITY: PRIVATE event leaked onto sharee's calendar "
+            f"(GET -> {got.status_code})"
+        )
+
+    def test_sharee_cannot_move_confidential_event(self):
+        """MOVE of a CONFIDENTIAL event by a read-write sharee is forbidden."""
+        org = factories.OrganizationFactory(external_id="cm-conf")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-cmc")
+        sharee, sharee_client, sharee_cal_path = _create_user_with_calendar(
+            org, "sharee-cmc"
+        )
+        cal_id = _get_cal_id(cal_path)
+        sharee_cal_id = _get_cal_id(sharee_cal_path)
+
+        _put_event_with_class(
+            owner_client,
+            owner,
+            cal_id,
+            "conf-cm",
+            "Confidential 1:1",
+            "CONFIDENTIAL",
+            description="salary review",
+        )
+        shared_cal = _share_and_find(
+            owner_client, owner, cal_id, sharee, "read-write"
+        )
+
+        src = self._shared_event_path(shared_cal, "conf-cm")
+        dest = f"/caldav/calendars/users/{sharee.email}/{sharee_cal_id}/conf-cm.ics"
+        resp = self._move(sharee_client, src, dest)
+
+        assert resp.status_code == 403, (
+            "SECURITY: sharee MOVE of a CONFIDENTIAL event must be 403, got "
+            f"{resp.status_code}: {resp.content[:300]}"
+        )
+
+    def test_sharee_can_move_public_event(self):
+        """Selectivity check: a PUBLIC event is NOT privacy-blocked.
+
+        Proves the guard reads the real CLASS rather than blanket-failing
+        closed on the source path.
+        """
+        org = factories.OrganizationFactory(external_id="cm-public")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-cmpub")
+        sharee, sharee_client, sharee_cal_path = _create_user_with_calendar(
+            org, "sharee-cmpub"
+        )
+        cal_id = _get_cal_id(cal_path)
+        sharee_cal_id = _get_cal_id(sharee_cal_path)
+
+        _put_event_with_class(
+            owner_client, owner, cal_id, "pub-cm", "Team Picnic", "PUBLIC"
+        )
+        shared_cal = _share_and_find(
+            owner_client, owner, cal_id, sharee, "read-write"
+        )
+
+        src = self._shared_event_path(shared_cal, "pub-cm")
+        dest = f"/caldav/calendars/users/{sharee.email}/{sharee_cal_id}/pub-cm.ics"
+        resp = self._move(sharee_client, src, dest)
+
+        assert resp.status_code != 403, (
+            "A PUBLIC event must not be privacy-blocked from MOVE, got "
+            f"{resp.status_code}: {resp.content[:300]}"
+        )
+
+
+class TestUnrecognizedClassFailsClosed:
+    """RFC 5545 §3.8.1.3: implementations must treat CLASS tokens they
+    don't recognise the same way as PRIVATE. A present-but-unknown CLASS
+    must fail CLOSED (hidden from sharees), never fall through to visible.
+    """
+
+    # Spec-valid CLASS tokens (iana-token / x-name) that we don't honour
+    # as "safe to show", plus a plausible typo of PRIVATE.
+    UNKNOWN_CLASSES = ["RESTRICTED", "X-SECRET", "PRIVAT"]
+
+    def test_unrecognized_class_hidden_from_sharee(self):
+        """Events with an unrecognised CLASS are hidden, like PRIVATE."""
+        org = factories.OrganizationFactory(external_id="class-unknown-hide")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-cu")
+        sharee, _, _ = _create_user_with_calendar(org, "sharee-cu")
+        cal_id = _get_cal_id(cal_path)
+
+        for i, klass in enumerate(self.UNKNOWN_CLASSES):
+            resp = _put_event_with_class(
+                owner_client,
+                owner,
+                cal_id,
+                f"unknown-{i}",
+                f"Hidden {klass} Secret",
+                klass,
+                description=f"leak {klass}",
+            )
+            assert resp.status_code in (200, 201, 204), (
+                f"PUT of CLASS:{klass} should be stored, got "
+                f"{resp.status_code}: {resp.content[:200]}"
+            )
+        _put_event_with_class(
+            owner_client, owner, cal_id, "pub-control", "Visible Control", "PUBLIC"
+        )
+
+        shared_cal = _share_and_find(owner_client, owner, cal_id, sharee, "read")
+        blob = "".join(str(ev.data) for ev in shared_cal.events())
+
+        for klass in self.UNKNOWN_CLASSES:
+            assert f"Hidden {klass} Secret" not in blob, (
+                f"SECURITY: event with unrecognised CLASS:{klass} leaked to "
+                "sharee — must fail closed to PRIVATE (RFC 5545 §3.8.1.3)."
+            )
+            assert f"leak {klass}" not in blob, (
+                f"SECURITY: DESCRIPTION of a CLASS:{klass} event leaked to sharee."
+            )
+        assert "Visible Control" in blob, (
+            "PUBLIC control event missing — test may be vacuously passing."
+        )
+
+    def test_unrecognized_class_visible_to_owner(self):
+        """Owners are never masked, whatever the CLASS value."""
+        org = factories.OrganizationFactory(external_id="class-unknown-owner")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-cuo")
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event_with_class(
+            owner_client,
+            owner,
+            cal_id,
+            "unknown-owner",
+            "Owner Unknown Class",
+            "X-SECRET",
+        )
+
+        dav = CalDAVHTTPClient().get_dav_client(owner)
+        found = False
+        for cal in dav.principal().calendars():
+            try:
+                for ev in cal.events():
+                    if "Owner Unknown Class" in str(ev.data):
+                        found = True
+            except Exception:  # noqa: BLE001
+                continue
+        assert found, (
+            "Owner should still see their own event with an unusual CLASS value"
+        )

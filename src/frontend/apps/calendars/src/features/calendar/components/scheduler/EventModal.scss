@@ -242,11 +242,19 @@
   }
 }
 
-// StatusSection layout
-.status-section {
+// VisibilitySection — a dropdown plus a one-line description of the
+// selected level (because "Public" only means "everyone this calendar
+// is shared with", not the wider world).
+.visibility-section {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.375rem;
+
+  &__help {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #5f6368;
+  }
 }
 
 // CalendarSelect
@@ -263,7 +271,10 @@
   }
 
   &__option {
-    display: inline-flex;
+    // Block-level flex (not inline-flex): inline-flex sits on the text
+    // baseline inside the select's value box and lands ~0.5px high;
+    // block flex centres in the box's full height.
+    display: flex;
     align-items: center;
     gap: 6px;
   }

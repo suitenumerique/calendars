@@ -17,7 +17,8 @@
  *    - Non-owners never see the owner's alarms/reminders
  *
  * Architecture: propFind hook (data layer) for REPORT/PROPFIND,
- * afterMethod:GET for direct .ics downloads, beforeMethod:COPY to block.
+ * afterMethod:GET for direct .ics downloads, beforeMethod:COPY/MOVE to
+ * block exfiltration of events a sharee may not see in full.
  */
 
 namespace Calendars\SabreDav;
@@ -71,8 +72,13 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
         // Response-layer: filter GET (direct .ics, ICS export)
         $server->on('afterMethod:GET', [$this, 'filterGetResponse'], 210);
 
-        // Block COPY from freebusy calendars
-        $server->on('beforeMethod:COPY', [$this, 'blockCopy'], 90);
+        // Block COPY/MOVE of events a sharee may not see in full. These
+        // operations read the raw stored bytes server-side (they never
+        // go through propFind/GET), so without this a sharee — even a
+        // read-only one — could copy a PRIVATE/CONFIDENTIAL event onto a
+        // calendar they own and read it unmasked.
+        $server->on('beforeMethod:COPY', [$this, 'blockSensitiveCopyMove'], 90);
+        $server->on('beforeMethod:MOVE', [$this, 'blockSensitiveCopyMove'], 90);
     }
 
     // ========================================================================
@@ -216,16 +222,93 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
     }
 
     // ========================================================================
-    // Block COPY from freebusy calendars
+    // Block COPY/MOVE that would bypass read-time masking
     // ========================================================================
 
-    public function blockCopy(RequestInterface $request)
+    /**
+     * Refuse COPY/MOVE of an event a sharee is not allowed to see in
+     * full. The read-time masking (propFind / afterMethod:GET) only
+     * rewrites READ responses; a COPY/MOVE reads the raw stored bytes
+     * server-side and re-creates them on the destination (a calendar the
+     * sharee typically owns), so it would hand the sharee the unmasked
+     * PRIVATE/CONFIDENTIAL content. Owners are unaffected (not shared).
+     */
+    public function blockSensitiveCopyMove(RequestInterface $request)
     {
-        if ($this->isFreebusy($request->getPath())) {
+        $path = $request->getPath();
+
+        // Owners have full access — no restriction.
+        if (!$this->isShared($path)) {
+            return;
+        }
+
+        // Freebusy share: every event is confidential, nothing copyable.
+        if ($this->isFreebusy($path)) {
             throw new DAV\Exception\Forbidden(
-                'Cannot copy events from a freebusy-shared calendar'
+                'Cannot copy or move events from a freebusy-shared calendar'
             );
         }
+
+        // Normal share: block only the events whose details are masked
+        // for this sharee (PRIVATE / CONFIDENTIAL). PUBLIC events stay
+        // copyable. Fail closed on anything we cannot read/parse.
+        if ($this->sourceHasMaskedEvent($path)) {
+            throw new DAV\Exception\Forbidden(
+                'Cannot copy or move a private or confidential event '
+                . 'from a shared calendar'
+            );
+        }
+    }
+
+    /**
+     * True if the resource at $path contains a PRIVATE/CONFIDENTIAL
+     * scheduling component (i.e. one whose details a sharee may not
+     * see). Reads the raw stored data directly — NOT through the masking
+     * hooks — because we need the real CLASS value. Fails closed.
+     */
+    private function sourceHasMaskedEvent(string $path): bool
+    {
+        try {
+            $node = $this->server->tree->getNodeForPath($path);
+        } catch (\Exception $e) {
+            return true;
+        }
+
+        if (!($node instanceof \Sabre\CalDAV\ICalendarObject)) {
+            // Not a single event (e.g. a whole-collection COPY). Be
+            // conservative and block — bulk-copying a shared calendar
+            // could sweep up masked events.
+            return true;
+        }
+
+        $data = $node->get();
+        if (is_resource($data)) {
+            $data = stream_get_contents($data);
+        }
+        if (!is_string($data) || $data === '') {
+            return true;
+        }
+
+        try {
+            $vcal = Reader::read($data);
+        } catch (\Exception $e) {
+            return true;
+        }
+
+        foreach ($vcal->getComponents() as $component) {
+            $name = strtoupper($component->name);
+            if (!in_array($name, ['VEVENT', 'VTODO', 'VJOURNAL'], true)) {
+                continue;
+            }
+            $class = isset($component->CLASS)
+                ? strtoupper(trim((string)$component->CLASS))
+                : 'PUBLIC';
+            if ($class === 'PRIVATE' || $class === 'CONFIDENTIAL') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // ========================================================================
@@ -271,15 +354,31 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
                 continue;
             }
 
+            // Classify the component, failing CLOSED on anything we
+            // don't explicitly recognise as safe to show.
+            //
             // Trim before comparing: vobject preserves leading/trailing
             // whitespace in property values, and some clients emit
             // ``CLASS: PRIVATE`` (stray space after the colon). Without
-            // the trim, '" PRIVATE"' !== 'PRIVATE' would fall through to
-            // the PUBLIC default and leak a private event's full details
-            // to everyone the calendar is shared with.
-            $class = $freebusy
-                ? 'CONFIDENTIAL'
-                : (isset($component->CLASS) ? strtoupper(trim((string)$component->CLASS)) : 'PUBLIC');
+            // the trim, '" PRIVATE"' !== 'PRIVATE' would fall through and
+            // leak a private event's full details to every sharee.
+            //
+            // RFC 5545 §3.8.1.3: an absent CLASS defaults to PUBLIC, but
+            // implementations MUST treat x-name / iana-token values they
+            // don't recognise the same way as PRIVATE. So only an
+            // explicit PUBLIC or CONFIDENTIAL is honoured as-is; PRIVATE
+            // and ANY unrecognised token (typos like ``PRIVAT``,
+            // ``RESTRICTED``, ``X-SECRET``, …) are hidden, not leaked.
+            if ($freebusy) {
+                $class = 'CONFIDENTIAL';
+            } elseif (!isset($component->CLASS)) {
+                $class = 'PUBLIC';
+            } else {
+                $raw = strtoupper(trim((string)$component->CLASS));
+                $class = in_array($raw, ['PUBLIC', 'CONFIDENTIAL'], true)
+                    ? $raw
+                    : 'PRIVATE';
+            }
 
             if ($class === 'PRIVATE') {
                 $toRemove[] = $component;
