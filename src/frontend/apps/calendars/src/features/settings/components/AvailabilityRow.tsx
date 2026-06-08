@@ -15,12 +15,14 @@ interface AvailabilityRowProps {
   slot: AvailabilitySlot;
   onChange: (id: string, updates: Partial<AvailabilitySlot>) => void;
   onDelete: (id: string) => void;
+  isInvalid?: boolean;
 }
 
 export const AvailabilityRow = ({
   slot,
   onChange,
   onDelete,
+  isInvalid = false,
 }: AvailabilityRowProps) => {
   const { t } = useTranslation();
 
@@ -52,7 +54,12 @@ export const AvailabilityRow = ({
   );
 
   return (
-    <div className="working-hours__row">
+    <>
+    <div
+      className={`working-hours__row${
+        isInvalid ? " working-hours__row--invalid" : ""
+      }`}
+    >
       <div className="working-hours__row-when">
         <select
           className="working-hours__select"
@@ -82,6 +89,7 @@ export const AvailabilityRow = ({
         type="time"
         className="working-hours__row-time"
         value={slot.start}
+        aria-invalid={isInvalid || undefined}
         onChange={(e) => onChange(slot.id, { start: e.target.value })}
       />
 
@@ -89,6 +97,7 @@ export const AvailabilityRow = ({
         type="time"
         className="working-hours__row-time"
         value={slot.end}
+        aria-invalid={isInvalid || undefined}
         onChange={(e) => onChange(slot.id, { end: e.target.value })}
       />
 
@@ -101,5 +110,11 @@ export const AvailabilityRow = ({
         <XMark />
       </button>
     </div>
+    {isInvalid && (
+      <p className="working-hours__row-error" role="alert">
+        {t("settings.workingHours.invalidRange")}
+      </p>
+    )}
+    </>
   );
 };

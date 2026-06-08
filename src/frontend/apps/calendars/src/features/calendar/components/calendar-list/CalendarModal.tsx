@@ -295,6 +295,11 @@ export const CalendarModal = ({
           placeholder={t("calendar.createCalendar.defaultName")}
           value={name}
           onChange={(e) => setName(e.target.value)}
+          // The field is always pre-filled (default name on create, the
+          // existing name on edit), so select it on focus — otherwise the
+          // cursor lands at the end and typing appends, producing names
+          // like "My calendarFoo".
+          onFocus={(e) => e.target.select()}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();

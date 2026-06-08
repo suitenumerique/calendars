@@ -137,6 +137,7 @@ const AvailabilityForm = ({
             slot={slot}
             onChange={updateSlot}
             onDelete={removeSlot}
+            isInvalid={slot.end <= slot.start}
           />
         ))}
       </div>

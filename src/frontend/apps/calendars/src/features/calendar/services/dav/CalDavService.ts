@@ -1246,7 +1246,14 @@ export class CalDavService {
     })
 
     if (!result.success) {
-      return { success: false, error: result.error || 'Failed to update event' }
+      // Propagate the HTTP status (notably 412) so the caller's
+      // refetch-and-retry-on-stale-ETag path can fire. Dropping it here
+      // made a second RSVP in the same modal session fail silently.
+      return {
+        success: false,
+        status: result.status,
+        error: result.error || 'Failed to update event',
+      }
     }
 
     return {
