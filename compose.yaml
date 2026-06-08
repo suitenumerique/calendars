@@ -46,7 +46,7 @@ services:
     volumes:
       - ./src/backend:/app
       - ./data/static:/data/static
-      - ./src/frontend/apps/calendars/src/features/i18n/translations.json:/data/translations.json:ro
+      - ./src/frontend/src/features/i18n/translations.json:/data/translations.json:ro
       - /app/.venv
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -85,7 +85,7 @@ services:
     volumes:
       - ./src/backend:/app
       - ./data/static:/data/static
-      - ./src/frontend/apps/calendars/src/features/i18n/translations.json:/data/translations.json:ro
+      - ./src/frontend/src/features/i18n/translations.json:/data/translations.json:ro
       - /app/.venv
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -116,7 +116,7 @@ services:
     volumes:
       - ./src/backend:/app
       - ./data/static:/data/static
-      - ./src/frontend/apps/calendars/src/features/i18n/translations.json:/data/translations.json:ro
+      - ./src/frontend/src/features/i18n/translations.json:/data/translations.json:ro
       - /app/.venv
 
   frontend-dev:
@@ -133,7 +133,6 @@ services:
     volumes:
       - ./src/frontend/:/home/frontend/
       - /home/frontend/node_modules
-      - /home/frontend/apps/calendars/node_modules
     ports:
       - "8930:8930"
 

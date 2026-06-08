@@ -126,7 +126,7 @@ $ make start-back
 And run the frontend locally in development mode:
 
 ```bash
-$ cd src/frontend/apps/calendars && npm run dev
+$ cd src/frontend && npm run dev
 ```
 
 ### Django admin

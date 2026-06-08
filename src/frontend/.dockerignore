@@ -27,8 +27,8 @@ db.sqlite3
 
 # Frontend
 node_modules
-apps/calendars/dist
-apps/calendars/bundle-stats.html
-apps/calendars/src/routes.gen.ts
-apps/calendars/.next
-apps/calendars/tsconfig.tsbuildinfo
+dist
+bundle-stats.html
+src/routes.gen.ts
+.next
+tsconfig.tsbuildinfo

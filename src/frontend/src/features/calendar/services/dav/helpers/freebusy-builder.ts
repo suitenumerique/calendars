@@ -57,6 +57,7 @@ import type { FreeBusyRequest } from "../types/caldav-service";
  * bug upstream or an attack — and we want loud failure, not quiet
  * mangling.
  */
+// eslint-disable-next-line no-control-regex -- intentional: detect and reject control chars in emails
 const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
 function assertSafeEmail(email: string, role: string): void {
   if (CONTROL_CHARS.test(email)) {

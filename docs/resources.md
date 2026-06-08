@@ -762,14 +762,14 @@ No existing SabreDAV plugin provides this -- see [What SabreDAV Provides](#what-
 6. **Resource management panel**: For admins to create/edit/configure resources
 
 **Files to create**:
-- `src/frontend/apps/calendars/src/features/resources/` -- new feature module
+- `src/frontend/src/features/resources/` -- new feature module
   - `types.ts` -- TypeScript types for resource properties
   - `components/ResourceDirectory.tsx`
   - `components/ResourcePicker.tsx`
   - `components/ResourceDetail.tsx`
   - `components/ResourceTimeline.tsx`
   - `components/ResourceAdmin.tsx`
-- `src/frontend/apps/calendars/src/services/dav/CalDavService.ts` -- extend with resource PROPFIND/PROPPATCH methods
+- `src/frontend/src/services/dav/CalDavService.ts` -- extend with resource PROPFIND/PROPPATCH methods
 - Updates to event modal for resource attendee support
 
 The frontend reads/writes resource metadata via CalDAV (PROPFIND/PROPPATCH), the same way it already manages calendar properties. The Django REST API is only used for provisioning (create/delete).

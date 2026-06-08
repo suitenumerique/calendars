@@ -2,8 +2,6 @@ import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { ToastContainer, ToastContentProps, toast } from "react-toastify";
 import { XMark } from "@gouvfr-lasuite/ui-kit/icons";
 
-import clsx from "clsx";
-
 export const Toaster = () => {
   return <ToastContainer />;
 };
@@ -25,7 +23,9 @@ export const ToasterItem = ({
   return (
     <div
       onDrop={(event) => onDrop?.(event)}
-      className={clsx("suite__toaster__item", "suite__toaster__item--" + type, className)}
+      className={["suite__toaster__item", "suite__toaster__item--" + type, className]
+        .filter(Boolean)
+        .join(" ")}
     >
       <div className="suite__toaster__item__content">{children}</div>
       {closeButton && (

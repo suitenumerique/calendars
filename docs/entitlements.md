@@ -247,7 +247,7 @@ header, but cannot access calendars or events.
 | Calendar gating (signal) | `src/backend/core/signals.py` |
 | CalDAV proxy gating | `src/backend/core/api/viewsets_caldav.py` |
 | Import events gating | `src/backend/core/api/viewsets.py` |
-| No-access page | `src/frontend/apps/calendars/src/pages/no-access.tsx` |
-| Homepage gate | `src/frontend/apps/calendars/src/pages/index.tsx` |
-| Calendar gate | `src/frontend/apps/calendars/src/pages/calendar.tsx` |
+| No-access page | `src/frontend/src/pages/no-access.tsx` |
+| Homepage gate | `src/frontend/src/pages/index.tsx` |
+| Calendar gate | `src/frontend/src/pages/calendar.tsx` |
 | Tests | `src/backend/core/tests/test_entitlements.py` |

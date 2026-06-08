@@ -1,0 +1,21 @@
+# Single-package project (no `packages:` list). In pnpm v11 this file is
+# where project settings live.
+
+# pnpm blocks dependency build scripts by default. @parcel/watcher ships
+# prebuilt native binaries, so allow its install script to place the right
+# one. (allowBuilds replaced v10's onlyBuiltDependencies.)
+allowBuilds:
+  "@parcel/watcher": true
+
+# Don't hard-fail the install if some other transitive dep has an
+# unreviewed build script — warn instead of erroring.
+strictDepBuilds: false
+
+# Flat node_modules (like npm) to avoid phantom-dependency surprises,
+# still backed by pnpm's content-addressable store (fast installs, dedup).
+nodeLinker: hoisted
+
+# pnpm v11 supply-chain guard: a dependency must have been published at
+# least this long (in MINUTES) before it may be installed, so a freshly
+# compromised release can't land instantly. 1440 = 1 day.
+minimumReleaseAge: 1440

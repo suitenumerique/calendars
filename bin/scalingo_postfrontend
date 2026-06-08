@@ -10,9 +10,9 @@ echo "-----> Running post-frontend script"
 # destination keeps the same name so bin/scalingo_run_web's
 # CALENDARS_FRONTEND_ROOT default stays valid.
 mkdir -p build/
-mv src/frontend/apps/calendars/dist build/frontend-out
+mv src/frontend/dist build/frontend-out
 
-cp src/frontend/apps/calendars/src/features/i18n/translations.json translations.json
+cp src/frontend/src/features/i18n/translations.json translations.json
 
 mv src/backend/* ./
 

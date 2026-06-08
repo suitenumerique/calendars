@@ -16,7 +16,7 @@ RecurrenceEditor (React)
 ## RecurrenceEditor Component
 
 Located at
-`src/frontend/apps/calendars/src/features/calendar/components/RecurrenceEditor.tsx`
+`src/frontend/src/features/calendar/components/RecurrenceEditor.tsx`
 
 ```tsx
 import { RecurrenceEditor } from '@/features/calendar/components/RecurrenceEditor';
@@ -65,7 +65,7 @@ The component warns about edge cases:
 ### Translations
 
 Supported: English, French, Dutch. Keys are in
-`src/frontend/apps/calendars/src/features/i18n/translations.json`
+`src/frontend/src/features/i18n/translations.json`
 under `calendar.recurrence.*`.
 
 ## IcsRecurrenceRule interface (ts-ics)

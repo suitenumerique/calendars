@@ -1,20 +1,64 @@
 {
-  "name": "main",
-  "version": "0.10.1",
+  "name": "calendars",
+  "version": "0.0.1",
   "private": true,
-  "engines": {
-    "node": "24.x"
-  },
-  "workspaces": [
-    "apps/*"
-  ],
   "scripts": {
-    "dev": "npm run dev -w calendars",
-    "build": "npm run build -w calendars",
-    "lint": "npm run lint -w calendars",
-    "build-theme": "npm run build-theme -w calendars"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "start": "vite preview",
+    "lint": "oxlint",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "build-theme": "cunningham -g css,scss,ts -o src/styles && mv src/styles/cunningham-tokens.scss src/styles/cunningham-tokens-sass.scss",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:update": "vitest run --update",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "routes:generate": "tsr generate",
+    "prebuild": "npm run routes:generate",
+    "prets:check": "npm run routes:generate",
+    "ts:check": "tsc --noEmit",
+    "analyze": "ANALYZE=1 vite build"
+  },
+  "dependencies": {
+    "@event-calendar/core": "5.7.1",
+    "@gouvfr-lasuite/cunningham-react": "4.3.0",
+    "@gouvfr-lasuite/ui-kit": "0.23.2",
+    "@tanstack/react-query": "5.101.0",
+    "@tanstack/react-router": "1.170.15",
+    "date-fns": "4.4.0",
+    "i18next": "25.8.14",
+    "i18next-browser-languagedetector": "8.2.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "react-i18next": "16.5.6",
+    "react-toastify": "11.1.0",
+    "ts-ics": "2.4.5"
   },
   "devDependencies": {
-    "jsdom": "27.4.0"
-  }
+    "@gouvfr-lasuite/cunningham-tokens": "3.1.0",
+    "@tanstack/router-cli": "1.167.13",
+    "@tanstack/router-plugin": "1.168.11",
+    "@types/node": "24.12.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "@vitest/coverage-v8": "4.1.8",
+    "@vitest/ui": "4.1.8",
+    "jsdom": "27.4.0",
+    "oxfmt": "0.53.0",
+    "oxlint": "1.68.0",
+    "rollup-plugin-visualizer": "7.0.1",
+    "sass": "1.100.0",
+    "typescript": "5.9.3",
+    "vite": "8.0.16",
+    "vitest": "4.1.8"
+  },
+  "engines": {
+    "node": "24.x",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "pnpm@11.5.2"
 }

@@ -56,5 +56,5 @@ jobs:
 
       - name: Run unit tests
         run: |
-          cd src/frontend/apps/calendars
+          cd src/frontend
           TZ=Europe/Paris npm test

@@ -5,45 +5,37 @@ ARG FRONTEND_IMAGE=frontend-build-output
 
 FROM node:24-alpine AS frontend-deps
 
-WORKDIR /home/frontend/
-
-COPY ./package.json ./package.json
-COPY ./package-lock.json ./package-lock.json
-COPY ./apps/calendars/package.json ./apps/calendars/package.json
-
-RUN npm ci
-
-COPY .dockerignore ./.dockerignore
-# COPY ./.prettierrc.js ./.prettierrc.js
-#COPY ./packages/eslint-config-calendars ./packages/eslint-config-calendars
-
-COPY ./apps/calendars ./apps/calendars
-
-# Build open-calendar package
+# pnpm, provided by corepack (version pinned via package.json#packageManager).
+RUN corepack enable
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+ENV HOME=/home/frontend
 
 WORKDIR /home/frontend
 
-# Make the image and any anonymous volumes derived from it writable by
-# any host user whose group ID is `node` (1000). Compose runs the
-# container as `${DOCKER_USER:-1000}` which resolves to the host
-# uid:gid — on macOS that's typically 501:20 / 501:1000, on Linux often
-# 1000:1000. Owning everything by `node:node` plus `g+w` lets npm
-# rename/rewrite packages from either case, so `make install-front`
-# Just Works without a root-owned anonymous-volume fight.
-#
-# Also pre-create the npm cache + log directories under HOME so npm
-# doesn't try to write to `/.npm/_logs` (which it can't, as a non-root
-# user with no $HOME).
-RUN mkdir -p /home/frontend/.npm \
- && chown -R node:node /home/frontend \
- && chmod -R g+w /home/frontend
-ENV HOME=/home/frontend
-ENV NPM_CONFIG_CACHE=/home/frontend/.npm
+# Install as the `node` user (uid/gid 1000), not root. Compose runs the
+# container as `<host-uid>:1000`, and `umask 0002` makes every installed
+# file group-writable — so the runtime user (which shares gid 1000) can
+# rewrite node_modules (e.g. `make install-front`) WITHOUT a recursive
+# `chown -R` / `chmod -R` over the whole tree. Owning the single workdir
+# up front is enough; everything created below inherits node ownership.
+RUN chown node:node /home/frontend
+USER node
+
+COPY --chown=node:node ./package.json ./pnpm-workspace.yaml ./pnpm-lock.yaml ./
+
+# umask 0002 => files are born group-writable (gid 1000) => the runtime
+# user can write, no post-install chown required. --frozen-lockfile keeps
+# the image build reproducible (fails on package.json/lockfile drift
+# instead of silently rewriting the lockfile).
+RUN umask 0002 && pnpm install --frozen-lockfile
+
+COPY --chown=node:node .dockerignore ./.dockerignore
+COPY --chown=node:node . .
 
 ### ---- Front-end builder image ----
 FROM frontend-deps AS calendars
 
-WORKDIR /home/frontend/apps/calendars
+WORKDIR /home/frontend
 
 FROM frontend-deps AS calendars-dev
 
@@ -51,26 +43,26 @@ WORKDIR /home/frontend
 
 EXPOSE 8930
 
-RUN cd apps/calendars && npm run build-theme
+RUN pnpm run build-theme
 
 # Build open-calendar package if dist doesn't exist, then start dev server
-CMD ["/bin/sh", "-c", "cd /home/frontend/apps/calendars && npm run dev"]
+CMD ["/bin/sh", "-c", "cd /home/frontend && pnpm run dev"]
 
 # Tilt will rebuild calendars target so, we dissociate calendars and calendars-builder
 # to avoid rebuilding the app at every changes.
 FROM calendars AS calendars-builder
 
-WORKDIR /home/frontend/apps/calendars
+WORKDIR /home/frontend
 
 ARG API_ORIGIN
 ENV NEXT_PUBLIC_API_ORIGIN=${API_ORIGIN}
 
-RUN npm run build
+RUN pnpm run build
 
 # Scratch stage that normalises the build output path.
 # When FRONTEND_IMAGE keeps its default value, BuildKit uses this stage.
 FROM scratch AS frontend-build-output
-COPY --from=calendars-builder /home/frontend/apps/calendars/dist /srv
+COPY --from=calendars-builder /home/frontend/dist /srv
 
 # When FRONTEND_IMAGE is overridden to an external image tag, BuildKit
 # pulls that image instead and skips every stage above.

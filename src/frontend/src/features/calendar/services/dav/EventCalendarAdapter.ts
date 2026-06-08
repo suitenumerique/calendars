@@ -674,7 +674,7 @@ export class EventCalendarAdapter {
     return {
       ...ecEvent,
       extendedProps: {
-        ...(ecEvent.extendedProps ?? {}),
+        ...ecEvent.extendedProps,
         attendees,
       },
     };
@@ -690,7 +690,7 @@ export class EventCalendarAdapter {
     return {
       ...ecEvent,
       extendedProps: {
-        ...(ecEvent.extendedProps ?? {}),
+        ...ecEvent.extendedProps,
         organizer,
       },
     };
@@ -723,7 +723,7 @@ export class EventCalendarAdapter {
     return {
       ...ecEvent,
       extendedProps: {
-        ...(ecEvent.extendedProps ?? {}),
+        ...ecEvent.extendedProps,
         location,
       },
     };
@@ -736,7 +736,7 @@ export class EventCalendarAdapter {
     return {
       ...ecEvent,
       extendedProps: {
-        ...(ecEvent.extendedProps ?? {}),
+        ...ecEvent.extendedProps,
         description,
       },
     };
