@@ -1,12 +1,15 @@
-name: Main Workflow
+name: Backend Workflow
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - "*"
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   lint-back:

@@ -8,6 +8,9 @@ on:
         default: '24.x'
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   front-dependencies-installation:
     runs-on: ubuntu-latest
