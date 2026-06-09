@@ -13,6 +13,7 @@ interface AttendeesSectionProps {
   alwaysOpen?: boolean;
   isExpanded?: boolean;
   onToggle?: () => void;
+  onPendingInvalidChange?: (invalid: boolean) => void;
 }
 
 export const AttendeesSection = ({
@@ -23,6 +24,7 @@ export const AttendeesSection = ({
   alwaysOpen,
   isExpanded,
   onToggle,
+  onPendingInvalidChange,
 }: AttendeesSectionProps) => {
   const { t } = useTranslation();
 
@@ -41,6 +43,7 @@ export const AttendeesSection = ({
         onChange={onChange}
         organizerEmail={organizerEmail}
         organizer={organizer}
+        onPendingInvalidChange={onPendingInvalidChange}
       />
     </SectionRow>
   );

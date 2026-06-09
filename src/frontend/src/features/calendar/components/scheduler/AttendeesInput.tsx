@@ -14,6 +14,8 @@ interface AttendeesInputProps {
   onChange: (attendees: IcsAttendee[]) => void;
   organizerEmail?: string;
   organizer?: IcsOrganizer;
+  /** Reports whether the input holds non-empty text that isn't a valid email. */
+  onPendingInvalidChange?: (invalid: boolean) => void;
 }
 
 export function AttendeesInput({
@@ -21,6 +23,7 @@ export function AttendeesInput({
   onChange,
   organizerEmail,
   organizer,
+  onPendingInvalidChange,
 }: AttendeesInputProps) {
   const { t } = useTranslation();
   const [inputValue, setInputValue] = useState("");
@@ -50,6 +53,13 @@ export function AttendeesInput({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Surface unsubmitted-but-invalid input so the parent (event modal) can keep
+  // Save disabled instead of silently dropping a half-typed attendee on save.
+  useEffect(() => {
+    onPendingInvalidChange?.(trimmedInput !== "" && !isValidEmail(trimmedInput));
+    return () => onPendingInvalidChange?.(false);
+  }, [trimmedInput, onPendingInvalidChange]);
 
   const addAttendeeByEmail = useCallback(
     (email: string, fullName?: string) => {

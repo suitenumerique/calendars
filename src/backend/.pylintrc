@@ -6,8 +6,9 @@
 extension-pkg-whitelist=
 
 # Add files or directories to the blacklist. They should be base names, not
-# paths.
-ignore=migrations
+# paths. `.venv` is the uv virtualenv living inside this dir — never lint
+# third-party site-packages.
+ignore=migrations,.venv
 
 # Add files or directories matching the regex patterns to the blacklist. The
 # regex matches against base names, not paths.

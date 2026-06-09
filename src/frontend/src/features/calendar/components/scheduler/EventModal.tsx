@@ -48,6 +48,9 @@ export const EventModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEditRecurringModal, setShowEditRecurringModal] = useState(false);
+  // True while the attendees field holds half-typed, invalid text — blocks Save
+  // so we never silently drop a would-be attendee.
+  const [attendeesPendingInvalid, setAttendeesPendingInvalid] = useState(false);
   const [pendingRsvpStatus, setPendingRsvpStatus] = useState<
     "ACCEPTED" | "TENTATIVE" | "DECLINED" | null
   >(null);
@@ -349,7 +352,11 @@ export const EventModal = ({
               color="brand"
               onClick={handleSave}
               disabled={
-                isLoading || !form.title.trim() || !form.selectedCalendarUrl || hasInvalidDateRange
+                isLoading ||
+                !form.title.trim() ||
+                !form.selectedCalendarUrl ||
+                hasInvalidDateRange ||
+                attendeesPendingInvalid
               }
             >
               {isLoading ? "..." : t("calendar.event.save")}
@@ -374,7 +381,8 @@ export const EventModal = ({
                     !isLoading &&
                     form.title.trim() &&
                     form.selectedCalendarUrl &&
-                    !hasInvalidDateRange;
+                    !hasInvalidDateRange &&
+                    !attendeesPendingInvalid;
                   if (canSave) handleSave();
                 }
               }}
@@ -429,6 +437,7 @@ export const EventModal = ({
                 onChange={form.setAttendees}
                 organizerEmail={organizer?.email ?? user?.email}
                 organizer={organizer}
+                onPendingInvalidChange={setAttendeesPendingInvalid}
                 alwaysOpen
               />
               {form.attendees.length > 0 && (

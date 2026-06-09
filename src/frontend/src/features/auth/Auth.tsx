@@ -1,5 +1,6 @@
 import React, { PropsWithChildren, useCallback, useEffect, useState } from "react";
 
+import i18n from "@/features/i18n/initI18n";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { User } from "@/features/auth/types";
 import { baseApiUrl } from "../api/utils";
@@ -66,6 +67,17 @@ export const Auth = ({ children, redirect }: PropsWithChildren & { redirect?: bo
       window.location.href = "/no-access";
     }
   }, [shouldRedirectNoAccess]);
+
+  // Sync the logged-in user's saved language into i18next as soon as the user
+  // loads. The backend value is the source of truth (it's also used for email
+  // invitations). This must live in this always-mounted provider — not in the
+  // language picker, which only mounts when the user opens the menu — otherwise
+  // the UI stays on the browser-detected language until the menu is opened.
+  useEffect(() => {
+    if (user?.language && i18n.language !== user.language) {
+      void i18n.changeLanguage(user.language);
+    }
+  }, [user?.language]);
 
   if (user === undefined || shouldRedirectNoAccess) {
     return <SpinnerPage />;
