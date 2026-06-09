@@ -3742,3 +3742,60 @@ class TestInternalApiCreateMailboxCalendar:
         )
         assert self._read_color(caller, caller.email, first_caller_uri) == ("#111111")
         assert self._read_color(caller, caller.email, second_caller_uri) == ("#222222")
+
+
+class TestNonOwnerCannotReshare:
+    """Only the calendar OWNER may change who a calendar is shared with or at
+    what level. A sharee — even read-write or "admin" — must not be able to
+    re-share the calendar or rewrite another sharee's access level.
+
+    Re-sharing is blocked by SabreDAV's sharing ACL (the CS:share POST targets
+    the owner's calendar, which only the owner may modify); the share-access
+    level write is additionally guarded in ShareAccessPlugin::afterPost so it
+    can never run for a non-owner principal regardless of plugin ordering.
+    """
+
+    def test_readwrite_sharee_cannot_reshare_to_third_party(self):
+        org = factories.OrganizationFactory(external_id="reshare-block")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-rs")
+        sharee, sharee_client, _ = _create_user_with_calendar(org, "sharee-rs")
+        victim, _, _ = _create_user_with_calendar(org, "victim-rs")
+        cal_id = _get_cal_id(cal_path)
+
+        # Owner shares with sharee at the highest non-owner level.
+        resp = _share_calendar_via_caldav(
+            owner_client, owner, cal_id, sharee.email, "read-write"
+        )
+        assert resp.status_code in (200, 204)
+
+        # Sharee (NOT the owner) attempts to add `victim` to the owner's
+        # calendar. Authenticated as the sharee, targeting the owner's path.
+        _share_calendar_via_caldav(sharee_client, owner, cal_id, victim.email, "read")
+
+        # The victim must not have gained any access.
+        assert (
+            _read_share_level(owner_client, owner.email, cal_id, victim.email) is None
+        ), "SECURITY: a non-owner sharee was able to re-share the calendar"
+
+    def test_non_owner_cannot_rewrite_another_sharees_access_level(self):
+        org = factories.OrganizationFactory(external_id="reshare-level")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-rl")
+        alice, _, _ = _create_user_with_calendar(org, "alice-rl")
+        bob, bob_client, _ = _create_user_with_calendar(org, "bob-rl")
+        cal_id = _get_cal_id(cal_path)
+
+        # Owner pins Alice to freebusy and gives Bob read access.
+        assert _share_calendar_via_caldav(
+            owner_client, owner, cal_id, alice.email, "freebusy"
+        ).status_code in (200, 204)
+        assert _share_calendar_via_caldav(
+            owner_client, owner, cal_id, bob.email, "read"
+        ).status_code in (200, 204)
+        _assert_share_level(owner_client, owner.email, cal_id, alice.email, "freebusy")
+
+        # Bob (a non-owner sharee) tries to upgrade Alice to admin.
+        _share_calendar_via_caldav(bob_client, owner, cal_id, alice.email, "admin")
+
+        # Alice's level must be unchanged — the afterPost guard refuses the
+        # share_access_level write for a non-owner principal.
+        _assert_share_level(owner_client, owner.email, cal_id, alice.email, "freebusy")

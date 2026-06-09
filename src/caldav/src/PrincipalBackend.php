@@ -208,15 +208,20 @@ class PrincipalBackend extends BasePDO
     {
         $principals = parent::getPrincipalsByPrefix($prefixPath);
 
+        // Fail closed: discovery/search must be org-scoped. Without an org id
+        // (header missing) or when the org lookup errors, return nothing rather
+        // than leaking every principal across orgs. Cross-org SHARING still
+        // works — it resolves single principals via getPrincipalByPath/findByUri,
+        // which are intentionally not org-filtered.
         $orgId = $this->getRequestOrgId();
         if (!$orgId) {
-            return $principals;
+            return [];
         }
 
         // Filter by org_id
         $filteredUris = $this->getOrgPrincipalUris($prefixPath, $orgId);
         if ($filteredUris === null) {
-            return $principals;
+            return [];
         }
 
         return array_values(array_filter($principals, function ($principal) use ($filteredUris) {
@@ -238,14 +243,16 @@ class PrincipalBackend extends BasePDO
     {
         $results = parent::searchPrincipals($prefixPath, $searchProperties, $test);
 
+        // Fail closed: see getPrincipalsByPrefix. Missing org id or a failed
+        // org lookup yields no results rather than a cross-org principal leak.
         $orgId = $this->getRequestOrgId();
         if (!$orgId) {
-            return $results;
+            return [];
         }
 
         $filteredUris = $this->getOrgPrincipalUris($prefixPath, $orgId);
         if ($filteredUris === null) {
-            return $results;
+            return [];
         }
 
         return array_values(array_filter($results, function ($uri) use ($filteredUris) {

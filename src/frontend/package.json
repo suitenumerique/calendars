@@ -7,7 +7,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "start": "vite preview",
-    "lint": "oxlint",
+    "lint": "npm run ts:check && oxlint",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "build-theme": "cunningham -g css,scss,ts -o src/styles && mv src/styles/cunningham-tokens.scss src/styles/cunningham-tokens-sass.scss",
