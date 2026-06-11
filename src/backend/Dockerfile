@@ -147,5 +147,21 @@ USER ${DOCKER_USER}
 # Copy statics
 COPY --from=link-collector ${CALENDARS_STATIC_ROOT} ${CALENDARS_STATIC_ROOT}
 
+# Bundle the shared translations file. It lives in the frontend source tree
+# (src/frontend/src/features/i18n/translations.json), outside this image's
+# build context, so it is supplied as a buildx named build context "i18n"
+# by the release workflow (.github/workflows/calendars-ghcr.yml). Without
+# it the calendar email/translation service has no file to load and every
+# invitation / update / reply email fails with a 500. It is baked under /app
+# (image-owned, never a mounted volume) rather than /data (the static/volume
+# root) so a runtime volume mount can't shadow it.
+#
+# Only the production stage takes this COPY: the dev image targets
+# backend-development (which never builds this stage) and gets the file via
+# a directory bind mount in compose.yaml instead, so local builds don't need
+# the "i18n" context.
+COPY --from=i18n translations.json /app/translations.json
+ENV TRANSLATIONS_JSON_PATH=/app/translations.json
+
 # The default command runs gunicorn WSGI server in calendars' main module
 CMD ["gunicorn", "-c", "/app/gunicorn.conf.py", "calendars.wsgi:application"]

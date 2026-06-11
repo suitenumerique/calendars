@@ -969,12 +969,12 @@ class TestParticipantVisibility:
 
         for ev in shared_cal.events():
             data = str(ev.data)
-            assert "priv-noinvite-event" not in data and "Not For This Sharee" not in data, (
-                "SECURITY: PRIVATE event leaked to a read sharee who is not invited"
-            )
+            assert (
+                "priv-noinvite-event" not in data and "Not For This Sharee" not in data
+            ), "SECURITY: PRIVATE event leaked to a read sharee who is not invited"
 
 
-def _put_recurring_event_with_override(  # noqa: PLR0913
+def _put_recurring_event_with_override(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
     owner_client,
     owner,
     cal_id,
@@ -1034,6 +1034,8 @@ class TestRecurringOverrideInheritsClass:
     classification gap)."""
 
     def test_private_recurring_override_does_not_leak_to_sharee(self):
+        """A PRIVATE master's override (which omits CLASS) must not leak its
+        summary/description to a read sharee."""
         org = factories.OrganizationFactory(external_id="rec-priv-override")
         owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-rpo")
         sharee, _, _ = _create_user_with_calendar(org, "sharee-rpo")
@@ -1062,6 +1064,8 @@ class TestRecurringOverrideInheritsClass:
             assert "Recurring Master Secret" not in data
 
     def test_confidential_recurring_override_masked_for_sharee(self):
+        """A CONFIDENTIAL master's override (which omits CLASS) must be masked
+        for a read sharee instead of inheriting PUBLIC visibility."""
         org = factories.OrganizationFactory(external_id="rec-conf-override")
         owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-rco")
         sharee, _, _ = _create_user_with_calendar(org, "sharee-rco")

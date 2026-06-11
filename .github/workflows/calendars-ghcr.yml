@@ -21,6 +21,10 @@ jobs:
       image_name: "backend"
       context: "src/backend"
       target: backend-production
+      # Supply the frontend-owned translations file (outside the src/backend
+      # build context) as a named build context so the production stage can
+      # COPY --from=i18n. Keeps prod calendar emails working.
+      build_contexts: "i18n=src/frontend/src/features/i18n"
 
   docker-publish-frontend:
     uses: ./.github/workflows/docker-publish.yml

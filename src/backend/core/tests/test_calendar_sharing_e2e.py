@@ -3756,6 +3756,8 @@ class TestNonOwnerCannotReshare:
     """
 
     def test_readwrite_sharee_cannot_reshare_to_third_party(self):
+        """A read-write sharee (not the owner) must not be able to share the
+        owner's calendar with a third party."""
         org = factories.OrganizationFactory(external_id="reshare-block")
         owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-rs")
         sharee, sharee_client, _ = _create_user_with_calendar(org, "sharee-rs")
@@ -3778,6 +3780,8 @@ class TestNonOwnerCannotReshare:
         ), "SECURITY: a non-owner sharee was able to re-share the calendar"
 
     def test_non_owner_cannot_rewrite_another_sharees_access_level(self):
+        """A non-owner sharee must not be able to change the access level the
+        owner granted to a different sharee."""
         org = factories.OrganizationFactory(external_id="reshare-level")
         owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-rl")
         alice, _, _ = _create_user_with_calendar(org, "alice-rl")

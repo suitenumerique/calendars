@@ -13,6 +13,11 @@ LOGGING_LEVEL_LOGGERS_APP=INFO
 # Python
 PYTHONPATH=/app
 
+# Translations: read from the i18n DIRECTORY mount (see compose.yaml).
+# Mounting the directory rather than the single translations.json file
+# keeps the path resolving correctly after atomic-rename rewrites.
+TRANSLATIONS_JSON_PATH=/data/i18n/translations.json
+
 # Calendar settings
 
 # Media

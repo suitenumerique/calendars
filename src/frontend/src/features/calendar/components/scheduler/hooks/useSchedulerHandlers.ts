@@ -263,7 +263,12 @@ export const useSchedulerHandlers = ({
   const handleDateClick = useCallback(
     (info: EventCalendarDateClickInfo) => {
       const start = info.date;
-      const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hour default
+      // All-day DTEND is exclusive (the form subtracts a day for display and
+      // toIcsEvent adds it back on save), so a single-day all-day event must
+      // end on the *next* day. Timed events default to a 1-hour slot.
+      const end = info.allDay
+        ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1)
+        : new Date(start.getTime() + 60 * 60 * 1000);
 
       const newEvent: Partial<IcsEvent> = {
         uid: crypto.randomUUID(),

@@ -10,7 +10,7 @@ Test users (from Keycloak realm):
   user3@example.local / user3  → viewer on contact@
 
 Usage:
-    python scripts/fake_messages_server.py
+    python bin/fake_messages_server.py
     # or: make fake-messages
     # Listens on port 8940
 """

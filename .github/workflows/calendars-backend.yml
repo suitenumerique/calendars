@@ -20,6 +20,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+      # Fail fast if the shared translations file is malformed. The backend
+      # email/translation service json.load()s it at runtime, so a broken
+      # file silently 500s every invitation / update / reply email. This is
+      # the only place that consumes it server-side, so guard it here.
+      - name: Validate translations.json is valid JSON
+        working-directory: ${{ github.workspace }}
+        run: |
+          python3 -c "import json; json.load(open('src/frontend/src/features/i18n/translations.json')); print('translations.json is valid JSON')"
       - name: "Set up Python"
         uses: actions/setup-python@v6
         with:

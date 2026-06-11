@@ -440,7 +440,13 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
               )}
             </div>
           )}
+        </div>
+      )}
 
+      {/* End-of-recurrence (never / after N / on date) is shown for every
+          recurrence type */}
+      {value && (
+        <div className="recurrence-editor__card recurrence-editor__card--end-only">
           <div className="recurrence-editor__end">
             <span className="recurrence-editor__section-label">
               {t("calendar.recurrence.endsLabel")}

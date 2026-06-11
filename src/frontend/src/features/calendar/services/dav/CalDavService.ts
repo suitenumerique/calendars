@@ -58,6 +58,55 @@ import {
 import { getIcalTimezoneBlock } from "./helpers/ical-timezones";
 import { buildFreeBusyRequestIcs } from "./helpers/freebusy-builder";
 
+/** Resolve an ICS date to its authoritative wall-clock instant. When a
+ * TZID is present `local.date` is the wall-clock value; otherwise fall
+ * back to `date` (real UTC). Mirrors getResolvedUntilDate in the editor. */
+function resolvedInstant(d: IcsDateObject | null | undefined): number | undefined {
+  const date = d?.local?.date ?? d?.date;
+  return date instanceof Date ? date.getTime() : undefined;
+}
+
+// Order-independent structural compare. `JSON.stringify` is sensitive to
+// key insertion order, and the old (parsed-from-server) and new (built-by-
+// form) events take different code paths through ts-ics, so their objects
+// can carry the same data in a different key order. Canonicalize by sorting
+// keys recursively before comparing so a pure reordering is NOT mistaken for
+// a real change (which would wrongly reset every attendee's response).
+function canonical(value: unknown): string {
+  return JSON.stringify(value, function replacer(_key, val) {
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      return Object.keys(val as Record<string, unknown>)
+        .sort()
+        .reduce<Record<string, unknown>>((acc, k) => {
+          acc[k] = (val as Record<string, unknown>)[k];
+          return acc;
+        }, {});
+    }
+    return val;
+  });
+}
+
+/**
+ * Decide whether an edit reschedules the event in the RFC 6638 sense —
+ * a change to DTSTART, DTEND, DURATION or RRULE (i.e. the timing), or a
+ * switch between all-day and timed. Title/description/location edits are
+ * NOT significant and must preserve attendee responses.
+ *
+ * SabreDAV resets PARTSTAT only in the outgoing REQUEST (so the attendee
+ * re-prompts) and never rewrites the organizer's stored copy — it treats
+ * the PUT body as authoritative. So the organizer client is responsible
+ * for clearing the responses it persists.
+ */
+function isSignificantReschedule(oldEvent: IcsEvent, newEvent: IcsEvent): boolean {
+  if (resolvedInstant(oldEvent.start) !== resolvedInstant(newEvent.start)) return true;
+  if (resolvedInstant(oldEvent.end) !== resolvedInstant(newEvent.end)) return true;
+  if (oldEvent.start.type !== newEvent.start.type) return true; // all-day ⇄ timed
+  if (canonical(oldEvent.duration) !== canonical(newEvent.duration)) return true;
+  // RRULE change (frequency / interval / until / count / byDay / …).
+  if (canonical(oldEvent.recurrenceRule) !== canonical(newEvent.recurrenceRule)) return true;
+  return false;
+}
+
 export class CalDavService {
   private _account: CalDavAccount | null = null;
   private _calendars: Map<string, CalDavCalendar> = new Map();
@@ -932,6 +981,19 @@ export class CalDavService {
         const oldEvent = icsCalendar.events[existingIndex];
         const updatedEvent = { ...params.event };
         updatedEvent.sequence = (updatedEvent.sequence ?? 0) + 1;
+
+        // On a reschedule (time/RRULE change), clear every attendee's
+        // response back to NEEDS-ACTION — except the organizer's own entry.
+        // SabreDAV won't do this to the organizer's stored copy, so without
+        // it the organizer keeps seeing stale "Accepted" after moving an
+        // event. Non-timing edits (title/description) preserve responses.
+        if (updatedEvent.attendees?.length && isSignificantReschedule(oldEvent, updatedEvent)) {
+          const organizerEmail = updatedEvent.organizer?.email?.toLowerCase();
+          updatedEvent.attendees = updatedEvent.attendees.map((att) =>
+            att.email.toLowerCase() === organizerEmail ? att : { ...att, partstat: "NEEDS-ACTION" },
+          );
+        }
+
         icsCalendar.events = [...icsCalendar.events];
         icsCalendar.events[existingIndex] = updatedEvent;
 

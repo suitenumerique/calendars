@@ -316,7 +316,7 @@ clean-front: ## reset the frontend node_modules volumes (run after dep changes)
 
 fake-messages: ## start a fake Messages API server on port 8940
 	@echo "$(BOLD)Starting fake Messages API server...$(RESET)"
-	@python3 scripts/fake_messages_server.py
+	@python3 bin/fake_messages_server.py
 .PHONY: fake-messages
 
 clean: ## restore repository state as it was freshly cloned

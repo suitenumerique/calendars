@@ -26,6 +26,11 @@ name: Build and Push Container Image
         required: false
         default: ""
         description: "Build arg name to pass first amd64 tag to arm64 build (skips arch-independent build steps)"
+      build_contexts:
+        type: string
+        required: false
+        default: ""
+        description: "Additional buildx named build contexts (newline-separated name=path), e.g. to pull a file from outside the build context. Empty = none."
 
 jobs:
   docker-build-push:
@@ -76,6 +81,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.context }}
+          build-contexts: ${{ inputs.build_contexts }}
           target: ${{ inputs.target }}
           platforms: linux/amd64
           push: true
@@ -86,6 +92,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.context }}
+          build-contexts: ${{ inputs.build_contexts }}
           target: ${{ inputs.target }}
           platforms: linux/arm64
           push: true

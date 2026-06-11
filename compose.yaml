@@ -46,7 +46,14 @@ services:
     volumes:
       - ./src/backend:/app
       - ./data/static:/data/static
-      - ./src/frontend/src/features/i18n/translations.json:/data/translations.json:ro
+      # Mount the whole i18n DIRECTORY, not just translations.json. A
+      # single-file bind mount pins the container to one inode, so when a
+      # tool (oxfmt, the i18n tooling, an editor) rewrites the file via the
+      # standard write-temp-then-rename, the container keeps reading the old
+      # detached inode — often a truncated mid-write copy — and every email
+      # send 500s on json.load until the container is restarted. A directory
+      # mount re-resolves the child path on each open, so renames are seen.
+      - ./src/frontend/src/features/i18n:/data/i18n:ro
       - /app/.venv
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -85,7 +92,9 @@ services:
     volumes:
       - ./src/backend:/app
       - ./data/static:/data/static
-      - ./src/frontend/src/features/i18n/translations.json:/data/translations.json:ro
+      # Directory mount (see backend-dev) so atomic-rename rewrites of
+      # translations.json are picked up without a container restart.
+      - ./src/frontend/src/features/i18n:/data/i18n:ro
       - /app/.venv
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -116,7 +125,9 @@ services:
     volumes:
       - ./src/backend:/app
       - ./data/static:/data/static
-      - ./src/frontend/src/features/i18n/translations.json:/data/translations.json:ro
+      # Directory mount (see backend-dev) so atomic-rename rewrites of
+      # translations.json are picked up without a container restart.
+      - ./src/frontend/src/features/i18n:/data/i18n:ro
       - /app/.venv
 
   frontend-dev:
