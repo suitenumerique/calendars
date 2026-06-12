@@ -335,33 +335,46 @@ export const EventModal = ({
         isOpen={isOpen}
         onClose={onClose}
         size={isMobile ? ModalSize.FULL : ModalSize.MEDIUM}
+        stickyFooter
         title={mode === "create" ? t("calendar.event.createTitle") : t("calendar.event.editTitle")}
-        leftActions={
-          mode === "edit" && onDelete ? (
-            <Button color="error" onClick={() => setShowDeleteModal(true)} disabled={isLoading}>
-              {t("calendar.event.delete")}
-            </Button>
-          ) : undefined
-        }
-        rightActions={
-          <>
-            <Button color="neutral" onClick={onClose} disabled={isLoading}>
-              {t("calendar.event.cancel")}
-            </Button>
-            <Button
-              color="brand"
-              onClick={handleSave}
-              disabled={
-                isLoading ||
-                !form.title.trim() ||
-                !form.selectedCalendarUrl ||
-                hasInvalidDateRange ||
-                attendeesPendingInvalid
-              }
-            >
-              {isLoading ? "..." : t("calendar.event.save")}
-            </Button>
-          </>
+        actions={
+          // Single footer slot so the section pills and the action buttons
+          // share one sticky footer: pills on top, buttons below. Only the
+          // fields in the scroller above overflow.
+          <div className="event-modal__footer">
+            <SectionPills
+              pills={pills}
+              isSectionExpanded={form.isSectionExpanded}
+              onToggle={form.toggleSection}
+            />
+            <div className="event-modal__footer-actions">
+              {mode === "edit" && onDelete ? (
+                <Button color="error" onClick={() => setShowDeleteModal(true)} disabled={isLoading}>
+                  {t("calendar.event.delete")}
+                </Button>
+              ) : (
+                <span />
+              )}
+              <div className="event-modal__footer-actions__right">
+                <Button color="neutral" onClick={onClose} disabled={isLoading}>
+                  {t("calendar.event.cancel")}
+                </Button>
+                <Button
+                  color="brand"
+                  onClick={handleSave}
+                  disabled={
+                    isLoading ||
+                    !form.title.trim() ||
+                    !form.selectedCalendarUrl ||
+                    hasInvalidDateRange ||
+                    attendeesPendingInvalid
+                  }
+                >
+                  {isLoading ? "..." : t("calendar.event.save")}
+                </Button>
+              </div>
+            </div>
+          </div>
         }
       >
         <div className="event-modal__content">
@@ -497,11 +510,6 @@ export const EventModal = ({
               alwaysOpen
             />
           )}
-          <SectionPills
-            pills={pills}
-            isSectionExpanded={form.isSectionExpanded}
-            onToggle={form.toggleSection}
-          />
           {isInvited && mode === "edit" && onRespondToInvitation && (
             <InvitationResponseSection
               organizer={event?.organizer}

@@ -83,6 +83,27 @@ body {
   z-index: 1000;
 }
 
+// The app header is `position: fixed` with a higher z-index than the modal
+// backdrop, so a centered modal taller than the available space rises behind
+// it and hides the top-right close (X) button. Re-center centered modals
+// within the area *below* the header and cap their height to fit there, so
+// their top (and the close button) always stays under the header.
+// Full/tab modals are intentionally full-screen and handled separately.
+.c__modal:not(.c__modal--full):not(.c__modal--tab) {
+  top: calc(50% + var(--header-height) / 2) !important;
+  max-height: calc(100% - var(--header-height) - 4em) !important;
+}
+
+// Full-screen / tab modals (e.g. the mobile event modal) start at the very
+// top by default, putting their close button behind the fixed header. Pin
+// them to fill the area below the header instead.
+.c__modal--full,
+.c__modal--tab {
+  top: var(--header-height) !important;
+  height: calc(100% - var(--header-height)) !important;
+  max-height: calc(100% - var(--header-height)) !important;
+}
+
 .c__datagrid--empty,
 .c__datagrid thead {
   transition:

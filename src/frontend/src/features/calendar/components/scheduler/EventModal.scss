@@ -5,6 +5,28 @@
     gap: 2px;
   }
 
+  // Footer shared by the section pills (top) and the action buttons (bottom),
+  // living in the modal's single sticky `actions` slot.
+  &__footer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  &__footer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+
+    &__right {
+      display: flex;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+  }
+
   &__error {
     color: var(--c--theme--colors--danger-600, #d2212f);
     font-size: 0.8125rem;
@@ -278,4 +300,45 @@
     align-items: center;
     gap: 6px;
   }
+}
+
+// Let our custom event-modal footer span the full width of cunningham's footer
+// slot, and drop the default sticky-footer divider line (the "HR").
+.c__modal__footer:has(.event-modal__footer) {
+  border-top: none;
+  // The sticky footer is a full-width child flush with the modal's bottom edge;
+  // its square background would otherwise paint over the modal's rounded bottom
+  // corners (border-radius doesn't clip child backgrounds).
+  border-bottom-left-radius: var(--c--components--modal--border-radius);
+  border-bottom-right-radius: var(--c--components--modal--border-radius);
+}
+.c__modal__footer__left:has(.event-modal__footer) {
+  flex: 1;
+  width: 100%;
+}
+
+// Pin the modal title to the top of the scroller while the fields scroll (the
+// close "X" is already sticky in cunningham). The opaque background hides
+// fields scrolling underneath. No z-index, so it sits above the static fields
+// but below the sticky close button (which keeps the X clickable).
+.c__modal__scroller:has(.event-modal__content) .c__modal__title {
+  position: sticky;
+  top: 0;
+  // Solid modal-coloured fill. `padding-bottom` covers the gap down to the
+  // first field; the `box-shadow` paints the same fill upward over the
+  // scroller's top padding so no field content shows above the title while
+  // scrolling. Using box-shadow (not margin) keeps the title's box unchanged,
+  // so it never overlaps the first field. z-index sits above the fields (some
+  // sections, e.g. AttendeesInput, use z-index up to 10) so they scroll under
+  // the title, while the close button is lifted above it (below) so the X
+  // stays clickable.
+  background-color: var(--c--components--modal--background-color, #fff);
+  margin-bottom: 0;
+  padding-bottom: var(--c--globals--spacings--base, 0.75rem);
+  box-shadow: 0 calc(-1 * var(--c--globals--spacings--md, 1rem)) 0 0
+    var(--c--components--modal--background-color, #fff);
+  z-index: 11;
+}
+.c__modal__scroller:has(.event-modal__content) .c__modal__close {
+  z-index: 12;
 }
