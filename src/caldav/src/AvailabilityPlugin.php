@@ -36,7 +36,7 @@ class AvailabilityPlugin extends ServerPlugin
     /** calendar-availability property name */
     private const AVAILABILITY_PROP = '{urn:ietf:params:xml:ns:caldav}calendar-availability';
 
-    public function __construct(\PDO $pdo = null)
+    public function __construct(?\PDO $pdo = null)
     {
         $this->pdo = $pdo;
     }

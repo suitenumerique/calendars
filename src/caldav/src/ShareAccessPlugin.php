@@ -245,7 +245,6 @@ class ShareAccessPlugin extends ServerPlugin
                     return null;
                 }
                 $prop = $reflection->getProperty('calendarInfo');
-                $prop->setAccessible(true);
                 $info = $prop->getValue($node);
 
                 // calendarInfo['id'] is [calendarId, instanceId] in SabreDAV
@@ -287,7 +286,6 @@ class ShareAccessPlugin extends ServerPlugin
                     return null;
                 }
                 $prop = $reflection->getProperty('calendarInfo');
-                $prop->setAccessible(true);
                 $info = $prop->getValue($node);
 
                 $calendarId = is_array($info['id']) ? $info['id'][0] : ($info['id'] ?? null);
@@ -348,7 +346,6 @@ class ShareAccessPlugin extends ServerPlugin
                     return null;
                 }
                 $prop = $reflection->getProperty('calendarInfo');
-                $prop->setAccessible(true);
                 $info = $prop->getValue($node);
                 return $info[self::OWNER_TYPE_PROP] ?? null;
             } catch (\Exception $e) {

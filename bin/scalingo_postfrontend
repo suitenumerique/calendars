@@ -83,6 +83,15 @@ PHP_INI="$PHP_PREFIX/php.ini"
   echo "; Auto-generated PHP config"
   echo "extension_dir = /app/.php/usr/lib/php/${EXT_DIR_NAME}"
   echo ""
+  # Errors go to the logs, never into the HTTP response. Without this a PHP
+  # warning/deprecation (e.g. PHP 8.5 deprecations) prints into the body and
+  # breaks header sending ("headers already sent"). Mirrors the dev container.
+  echo "log_errors = On"
+  echo "error_log = /proc/self/fd/2"
+  echo "display_errors = Off"
+  echo "display_startup_errors = Off"
+  echo "memory_limit = 512M"
+  echo ""
   for so in "$PHP_PREFIX/usr/lib/php/$EXT_DIR_NAME"/*.so; do
     [ -f "$so" ] || continue
     name="$(basename "$so")"

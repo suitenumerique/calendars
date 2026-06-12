@@ -29,7 +29,7 @@ class CalendarsRoot extends DAV\Collection
     public function __construct(
         PrincipalBackendInterface $principalBackend,
         CalDAVBackendInterface $caldavBackend,
-        \PDO $pdo = null
+        ?\PDO $pdo = null
     ) {
         $this->children = [
             new NamedCalendarRoot('users', $principalBackend, $caldavBackend, 'principals/users', $pdo),
@@ -79,7 +79,7 @@ class NamedCalendarRoot extends CalDAV\CalendarRoot
         PrincipalBackendInterface $principalBackend,
         CalDAVBackendInterface $caldavBackend,
         string $principalPrefix,
-        \PDO $pdo = null
+        ?\PDO $pdo = null
     ) {
         parent::__construct($principalBackend, $caldavBackend, $principalPrefix);
         $this->nodeName = $nodeName;
