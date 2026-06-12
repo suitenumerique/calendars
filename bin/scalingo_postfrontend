@@ -39,20 +39,23 @@ PHP_PREFIX=".php"
 DEB_DIR="/tmp/php-debs"
 mkdir -p "$DEB_DIR" "$PHP_PREFIX"
 
-# Hardcoded Launchpad URLs for PHP 8.3.6-0maysync1 (Ubuntu Noble amd64)
-# Source: https://launchpad.net/ubuntu/noble/amd64/php8.3-fpm/8.3.6-0maysync1
+# Standard Ubuntu 24.04 (Noble) php8.3 packages. The scalingo-24 stack is
+# Ubuntu 24.04, so these are ABI-matched to the system libraries it already
+# ships (libxml2, libpq5, libonig5, libcurl4t64, ...) — dpkg-deb -x only
+# unpacks PHP itself and relies on the stack for the shared libs it links.
+# Source: https://launchpad.net/ubuntu/noble/amd64/php8.3-cli
 # Format: "package_name url sha256"
 PHP_DEBS=(
-  "php8.3-cli http://launchpadlibrarian.net/724872605/php8.3-cli_8.3.6-0maysync1_amd64.deb 8cb7461dd06fb214b30c060b80b1c6f95d1ff5e2656fdadf215e50b9f299f196"
-  "php8.3-fpm http://launchpadlibrarian.net/724872610/php8.3-fpm_8.3.6-0maysync1_amd64.deb b3a9435025766bcbf6c16199c06481c5196098c084933dfabf8867c982edc2b2"
-  "php8.3-common http://launchpadlibrarian.net/724872606/php8.3-common_8.3.6-0maysync1_amd64.deb 0e0d0ad9c17add5fb2afcc14c6fffb81c2beb99114108b8ebd0461d910a79dfc"
-  "php8.3-opcache http://launchpadlibrarian.net/724872623/php8.3-opcache_8.3.6-0maysync1_amd64.deb 13b2662201c57904c1eda9b048b1349acaf3609c7d9e8df5b2d93833a059bdb0"
-  "php8.3-readline http://launchpadlibrarian.net/724872627/php8.3-readline_8.3.6-0maysync1_amd64.deb 380f8ed79196914ee2eebb68bf518a752204826af1fdb8a0d5c9609c76086b90"
-  "php8.3-pgsql http://launchpadlibrarian.net/724872624/php8.3-pgsql_8.3.6-0maysync1_amd64.deb b1ed204c980c348d1870cfa88c1b40257621ae5696a2a7f44f861a9d00eb7477"
-  "php8.3-xml http://launchpadlibrarian.net/724872633/php8.3-xml_8.3.6-0maysync1_amd64.deb 6c6ded219d1966a50108d032b7a522e641765a8a6aa48747483313fa7dafd533"
-  "php8.3-mbstring http://launchpadlibrarian.net/724872617/php8.3-mbstring_8.3.6-0maysync1_amd64.deb 42c89945eb105c2232ab208b893ef65e9abc8af5c95aa10c507498655ef812c4"
-  "php8.3-curl http://launchpadlibrarian.net/724872607/php8.3-curl_8.3.6-0maysync1_amd64.deb 95d46a22e6b493ba0b6256cf036a2a37d4b9b5f438968073709845af1c17df4c"
-  "php-common http://launchpadlibrarian.net/710804987/php-common_93ubuntu2_all.deb 39b15c407700e81ddd62580736feba31b187ffff56f6835dac5fa8f847c42529"
+  "php8.3-cli https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-cli_8.3.6-0ubuntu0.24.04.9_amd64.deb 185c396d917a014865e7719439d1f65da6356c37e90f6122ed6a2be2f03d0ad7"
+  "php8.3-fpm https://archive.ubuntu.com/ubuntu/pool/universe/p/php8.3/php8.3-fpm_8.3.6-0ubuntu0.24.04.9_amd64.deb b7bcecf63894285d059d3def56532943e6bde7552c9bfed3e9dc2acf6fa77560"
+  "php8.3-common https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-common_8.3.6-0ubuntu0.24.04.9_amd64.deb 529259491b439c6c188fbfa7306c2b998f23eddf6e8e6cdb2515931df3b8fb92"
+  "php8.3-opcache https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-opcache_8.3.6-0ubuntu0.24.04.9_amd64.deb 87c725b8d87e34c033dbf8ce9efee2e2ed6b9a3765e3ab19aa169906162d6a51"
+  "php8.3-readline https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-readline_8.3.6-0ubuntu0.24.04.9_amd64.deb 2d18f436b6a997a4a60c7b8413008030a18c0bccce605c04cb95dcd96e52b387"
+  "php8.3-pgsql https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-pgsql_8.3.6-0ubuntu0.24.04.9_amd64.deb a254cb163cb6d82f248a6c3a6c93a6caf3c5e78e59427aa55bce1df1c2e3712c"
+  "php8.3-xml https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-xml_8.3.6-0ubuntu0.24.04.9_amd64.deb b5dead8fdc5c8d9d769115783e2003f5274a70063ffa6fa380e2962fd9b468b8"
+  "php8.3-mbstring https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-mbstring_8.3.6-0ubuntu0.24.04.9_amd64.deb 18571a03a1b907fe02ee0bd367b52084e155ba3f47a44571b765160ed8c77e03"
+  "php8.3-curl https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-curl_8.3.6-0ubuntu0.24.04.9_amd64.deb b3f146ae1f379916879569f37b63da1932c48caa8c5b9d9abfff6557e0e6dc35"
+  "php-common https://archive.ubuntu.com/ubuntu/pool/main/p/php-defaults/php-common_93ubuntu2_all.deb 39b15c407700e81ddd62580736feba31b187ffff56f6835dac5fa8f847c42529"
 )
 
 for entry in "${PHP_DEBS[@]}"; do
