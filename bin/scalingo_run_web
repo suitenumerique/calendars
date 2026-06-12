@@ -8,8 +8,10 @@ export CALENDARS_FRONTEND_ROOT="${CALENDARS_FRONTEND_ROOT:-/app/build/frontend-o
 export CALENDARS_FRONTEND_BACKEND_SERVER="${CALENDARS_FRONTEND_BACKEND_SERVER:-localhost:8000}"
 export DJANGO_ADMIN_URL="${DJANGO_ADMIN_URL:-admin}"
 
-# Start PHP-FPM for SabreDAV (CalDAV server)
-.php/usr/sbin/php-fpm8.3 \
+# Start PHP-FPM for SabreDAV (CalDAV server). The php8.5 binary links the
+# scalingo-26 stack's system libs (libxml2.so.16, libpq, ...) from the
+# default linker path, so no LD_LIBRARY_PATH is needed.
+.php/usr/sbin/php-fpm8.5 \
   -n -c /app/.php/php.ini \
   --fpm-config /app/sabredav/php-fpm.conf \
   --nodaemonize &

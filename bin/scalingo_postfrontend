@@ -33,29 +33,29 @@ cp src/proxy/Caddyfile ./Caddyfile
 echo "3.13" > .python-version
 
 # --- PHP + SabreDAV setup ---
-echo "-----> Installing PHP 8.3 from Ubuntu packages"
+echo "-----> Installing PHP 8.5 from Ubuntu 26.04 packages"
 
 PHP_PREFIX=".php"
 DEB_DIR="/tmp/php-debs"
 mkdir -p "$DEB_DIR" "$PHP_PREFIX"
 
-# Standard Ubuntu 24.04 (Noble) php8.3 packages. The scalingo-24 stack is
-# Ubuntu 24.04, so these are ABI-matched to the system libraries it already
-# ships (libxml2, libpq5, libonig5, libcurl4t64, ...) — dpkg-deb -x only
-# unpacks PHP itself and relies on the stack for the shared libs it links.
-# Source: https://launchpad.net/ubuntu/noble/amd64/php8.3-cli
+# Standard Ubuntu 26.04 (Resolute) php8.5 packages — the production stack is
+# scalingo-26 (Ubuntu 26.04), whose only PHP is 8.5. We just unpack PHP with
+# dpkg-deb -x and rely on the stack for the shared libraries it links against
+# (libxml2.so.16, libpq.so.5, libonig.so.5, libcurl.so.4, libxslt, ...), which
+# are all present at the standard multiarch path. No library bundling needed.
+# Source: https://launchpad.net/ubuntu/resolute/amd64/php8.5-cli
 # Format: "package_name url sha256"
 PHP_DEBS=(
-  "php8.3-cli https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-cli_8.3.6-0ubuntu0.24.04.9_amd64.deb 185c396d917a014865e7719439d1f65da6356c37e90f6122ed6a2be2f03d0ad7"
-  "php8.3-fpm https://archive.ubuntu.com/ubuntu/pool/universe/p/php8.3/php8.3-fpm_8.3.6-0ubuntu0.24.04.9_amd64.deb b7bcecf63894285d059d3def56532943e6bde7552c9bfed3e9dc2acf6fa77560"
-  "php8.3-common https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-common_8.3.6-0ubuntu0.24.04.9_amd64.deb 529259491b439c6c188fbfa7306c2b998f23eddf6e8e6cdb2515931df3b8fb92"
-  "php8.3-opcache https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-opcache_8.3.6-0ubuntu0.24.04.9_amd64.deb 87c725b8d87e34c033dbf8ce9efee2e2ed6b9a3765e3ab19aa169906162d6a51"
-  "php8.3-readline https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-readline_8.3.6-0ubuntu0.24.04.9_amd64.deb 2d18f436b6a997a4a60c7b8413008030a18c0bccce605c04cb95dcd96e52b387"
-  "php8.3-pgsql https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-pgsql_8.3.6-0ubuntu0.24.04.9_amd64.deb a254cb163cb6d82f248a6c3a6c93a6caf3c5e78e59427aa55bce1df1c2e3712c"
-  "php8.3-xml https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-xml_8.3.6-0ubuntu0.24.04.9_amd64.deb b5dead8fdc5c8d9d769115783e2003f5274a70063ffa6fa380e2962fd9b468b8"
-  "php8.3-mbstring https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-mbstring_8.3.6-0ubuntu0.24.04.9_amd64.deb 18571a03a1b907fe02ee0bd367b52084e155ba3f47a44571b765160ed8c77e03"
-  "php8.3-curl https://archive.ubuntu.com/ubuntu/pool/main/p/php8.3/php8.3-curl_8.3.6-0ubuntu0.24.04.9_amd64.deb b3f146ae1f379916879569f37b63da1932c48caa8c5b9d9abfff6557e0e6dc35"
-  "php-common https://archive.ubuntu.com/ubuntu/pool/main/p/php-defaults/php-common_93ubuntu2_all.deb 39b15c407700e81ddd62580736feba31b187ffff56f6835dac5fa8f847c42529"
+  "php8.5-cli https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-cli_8.5.4-0ubuntu1.1_amd64.deb ed6b676240ea06d9c5672281d790f12ccd41a194582089b9cc7209e7733e1728"
+  "php8.5-fpm https://archive.ubuntu.com/ubuntu/pool/universe/p/php8.5/php8.5-fpm_8.5.4-0ubuntu1.1_amd64.deb 7ca88edc71bd17fe415be91ec3b397cdf04a3b109559b616ab1577cf388c159a"
+  "php8.5-common https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-common_8.5.4-0ubuntu1.1_amd64.deb 0f7c152b48931c312a371edfef0604e3ac709363207f1a01c94ffebd685d57a5"
+  "php8.5-readline https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-readline_8.5.4-0ubuntu1.1_amd64.deb 358fec394d5513fd0704fe2ee429604e14b213d5f9277592a295103b1bb0f483"
+  "php8.5-pgsql https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-pgsql_8.5.4-0ubuntu1.1_amd64.deb bd2d6fa4535e62230fd04331b64bebd3152882d2e70f79d7bec658e76af4fa33"
+  "php8.5-xml https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-xml_8.5.4-0ubuntu1.1_amd64.deb 5de6c0a38bbae2dab75b68a0479398a43d27c61788266fb2dcf94cf0c28f5ed9"
+  "php8.5-mbstring https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-mbstring_8.5.4-0ubuntu1.1_amd64.deb ccc34eeb785a7bef524ecf56a1f3ef0fccaed8f712ba2e98dafb15d34a4519af"
+  "php8.5-curl https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-curl_8.5.4-0ubuntu1.1_amd64.deb 5aa2a09b34180140e0cd8cb665be2e290be8a538e907cf548851bc59ed1f54d8"
+  "php-common https://archive.ubuntu.com/ubuntu/pool/main/p/php-defaults/php-common_99ubuntu1_all.deb 2d6417a2f74686b9b23f48126131c6fc1a142d6746e5547d85353d8190aa8f8e"
 )
 
 for entry in "${PHP_DEBS[@]}"; do
@@ -69,7 +69,7 @@ for deb in "$DEB_DIR"/*.deb; do
   dpkg-deb -x "$deb" "$PHP_PREFIX"
 done
 
-# Detect PHP extension directory (e.g. .php/usr/lib/php/20230831)
+# Detect PHP extension directory (e.g. .php/usr/lib/php/20250925)
 EXT_DIR_NAME="$(ls -1 "$PHP_PREFIX/usr/lib/php/" | grep '^20' | head -1)"
 echo "       Extension API dir: ${EXT_DIR_NAME}"
 echo "       Available .so files: $(ls "$PHP_PREFIX/usr/lib/php/$EXT_DIR_NAME/" 2>/dev/null | tr '\n' ' ')"
@@ -77,7 +77,7 @@ echo "       Available .so files: $(ls "$PHP_PREFIX/usr/lib/php/$EXT_DIR_NAME/" 
 # Build a single php.ini that sets extension_dir (relative to /app at runtime)
 # then loads every shared extension present.
 # Conf.d symlinks from debs are broken (absolute paths to /etc/php/...),
-# so we bypass them entirely with a self-contained ini.
+# so we bypass them entirely with a self-contained ini (php is run with -n).
 PHP_INI="$PHP_PREFIX/php.ini"
 {
   echo "; Auto-generated PHP config"
@@ -104,13 +104,13 @@ sed "s|/app/.php|$PWD/.php|" "$PHP_INI" > "$BUILD_INI"
 cat > bin/php << 'WRAPPER'
 #!/bin/bash
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
-exec "$DIR/.php/usr/bin/php8.3" -c "$DIR/.php/php.ini" -n "$@"
+exec "$DIR/.php/usr/bin/php8.5" -c "$DIR/.php/php.ini" -n "$@"
 WRAPPER
 chmod +x bin/php
 
 # For build-time, verify with the build-time ini
-echo "-----> PHP version: $("$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" -v | head -1)"
-echo "-----> PHP modules: $("$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" -m | tr '\n' ' ')"
+echo "-----> PHP version: $("$PHP_PREFIX/usr/bin/php8.5" -n -c "$BUILD_INI" -v | head -1)"
+echo "-----> PHP modules: $("$PHP_PREFIX/usr/bin/php8.5" -n -c "$BUILD_INI" -m | tr '\n' ' ')"
 
 # Download Composer with integrity verification and install SabreDAV dependencies
 echo "-----> Installing SabreDAV dependencies"
@@ -121,6 +121,6 @@ curl -fsSL -o bin/composer.phar \
 echo "${COMPOSER_SHA256}  bin/composer.phar" | sha256sum -c -
 cp -r src/caldav sabredav
 cd sabredav
-"../$PHP_PREFIX/usr/bin/php8.3" -n -c "$BUILD_INI" ../bin/composer.phar install \
+"../$PHP_PREFIX/usr/bin/php8.5" -n -c "$BUILD_INI" ../bin/composer.phar install \
   --no-dev --optimize-autoloader --no-interaction
 cd ..
