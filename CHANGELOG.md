@@ -12,13 +12,7 @@ and this project adheres to
 
 ## [0.1.0] - 2026-06-18
 
-### Changed
-
-- ♻️(frontend) load favicon from asset file instead of inline SVG
-
-### Added
-
-- 👷(docker) add arm64 platform support for image builds
+First public release.
 
 [unreleased]: https://github.com/suitenumerique/calendars/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/suitenumerique/calendars/releases/tag/v0.1.0
