@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "calendars"
-version = "0.10.1"
+version = "0.1.0"
 authors = [{ "name" = "anct", "email" = "contact@suite.anct.gouv.fr" }]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
