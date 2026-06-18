@@ -304,6 +304,12 @@ install-frozen-front: ## install frontend deps strictly from the committed lockf
 		sh -c "cd /app/src/frontend && corepack pnpm install --frozen-lockfile"
 .PHONY: install-frozen-front
 
+# -- Release
+
+release: ## prepare a release (interactive): bump versions, update CHANGELOG, push a release branch
+	@python3 bin/release.py
+.PHONY: release
+
 shell-front: ## open a shell in the frontend container
 	@$(COMPOSE) run --rm frontend-dev /bin/sh
 .PHONY: shell-front
