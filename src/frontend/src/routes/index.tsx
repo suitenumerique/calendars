@@ -7,6 +7,7 @@ import { SESSION_STORAGE_REDIRECT_AFTER_LOGIN_URL } from "@/features/api/fetchAp
 import { CalendarContextProvider } from "@/features/calendar/contexts";
 import { LeftPanel } from "@/features/calendar/components";
 import { Scheduler } from "@/features/calendar/components/scheduler/Scheduler";
+import { NotificationManager } from "@/features/calendar/notifications/NotificationManager";
 import { HomePage } from "@/features/home/HomePage";
 import { HeaderIcon, HeaderRight } from "@/features/layouts/components/header/Header";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
@@ -42,6 +43,7 @@ function AuthenticatedView() {
   return (
     <MailboxContextProvider>
       <CalendarContextProvider>
+        <NotificationManager />
         <div className="calendars__calendar">
           <MainLayout
             enableResize={false}

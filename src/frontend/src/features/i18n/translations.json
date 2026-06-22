@@ -208,7 +208,9 @@
             "30min": "30 minutes before",
             "1hour": "1 hour before",
             "1day": "1 day before",
-            "1week": "1 week before"
+            "1week": "1 week before",
+            "untitled": "Untitled event",
+            "notificationBody": "Starts at {{time}}"
           },
           "status": {
             "label": "Status",
@@ -1161,7 +1163,9 @@
             "30min": "30 minutes avant",
             "1hour": "1 heure avant",
             "1day": "1 jour avant",
-            "1week": "1 semaine avant"
+            "1week": "1 semaine avant",
+            "untitled": "Événement sans titre",
+            "notificationBody": "Commence à {{time}}"
           },
           "status": {
             "label": "Statut",
@@ -1856,7 +1860,9 @@
             "30min": "30 minuten voor",
             "1hour": "1 uur voor",
             "1day": "1 dag voor",
-            "1week": "1 week voor"
+            "1week": "1 week voor",
+            "untitled": "Naamloos evenement",
+            "notificationBody": "Begint om {{time}}"
           },
           "status": {
             "label": "Status",
