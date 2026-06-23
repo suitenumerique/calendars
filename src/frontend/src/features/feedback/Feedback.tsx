@@ -57,14 +57,14 @@ export const Feedback = (props: { buttonProps?: Partial<ButtonProps> }) => {
   };
 
   const onClick = () => {
-    if (config?.FRONTEND_FEEDBACK_BUTTON_IDLE) {
+    if (!config?.FRONTEND_FEEDBACK_BUTTON_IDLE) {
+      modal.open();
       return;
     }
     if (config?.FRONTEND_FEEDBACK_MESSAGES_WIDGET_ENABLED) {
       showWidget();
       return;
     }
-    modal.open();
   };
 
   if (!showFeedbackButton()) {
