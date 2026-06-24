@@ -16,6 +16,8 @@ import { ResourcesSection } from "./event-modal-sections/ResourcesSection";
 import { DescriptionSection } from "./event-modal-sections/DescriptionSection";
 import { VisibilitySection } from "./event-modal-sections/VisibilitySection";
 import { InvitationResponseSection } from "./event-modal-sections/InvitationResponseSection";
+import { RemindersSection } from "./event-modal-sections/RemindersSection";
+import { ensureNotificationPermission } from "@/features/calendar/notifications/browserNotifications";
 import { FreeBusySection } from "./event-modal-sections/FreeBusySection";
 import { SectionPills } from "./event-modal-sections/SectionPills";
 import { useResourcePrincipals } from "@/features/resources/api/useResourcePrincipals";
@@ -24,7 +26,7 @@ import { useConfig } from "@/features/config/ConfigProvider";
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { SectionRow } from "./event-modal-sections/SectionRow";
 import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
-import { Meet, Pin, Calendar, Edit, Lock } from "@gouvfr-lasuite/ui-kit/icons";
+import { Meet, Pin, Calendar, Edit, Lock, Bell } from "@gouvfr-lasuite/ui-kit/icons";
 
 import type { IcsEvent, IcsOrganizer } from "ts-ics";
 
@@ -178,6 +180,14 @@ export const EventModal = ({
     try {
       const icsEvent = form.toIcsEvent();
 
+      // Saving an event with a reminder is the user gesture we use to ask
+      // for notification permission (browsers ignore prompts that aren't
+      // tied to an interaction). Fire-and-forget — reminders still surface
+      // as in-app toasts if the user declines.
+      if (form.alarms.length > 0) {
+        void ensureNotificationPermission();
+      }
+
       // Override organizer with the one matching the currently
       // selected calendar (may differ from the initial prop).
       if (organizer) {
@@ -306,6 +316,11 @@ export const EventModal = ({
         id: "visibility" as const,
         icon: <Lock />,
         label: t("calendar.event.visibility.label"),
+      },
+      {
+        id: "reminders" as const,
+        icon: <Bell />,
+        label: t("calendar.event.sections.addReminder"),
       },
       ...(availableResources.length > 0
         ? [
@@ -509,6 +524,9 @@ export const EventModal = ({
               onChange={form.setVisibility}
               alwaysOpen
             />
+          )}
+          {form.isSectionExpanded("reminders") && (
+            <RemindersSection alarms={form.alarms} onChange={form.setAlarms} alwaysOpen />
           )}
           {isInvited && mode === "edit" && onRespondToInvitation && (
             <InvitationResponseSection
