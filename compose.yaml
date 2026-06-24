@@ -131,7 +131,11 @@ services:
       - /app/.venv
 
   frontend-dev:
-    user: "${DOCKER_USER:-1000}"
+    # Keep the host UID (file ownership on the bind-mounted sources) but force
+    # the GID to 1000, the `node` group that owns the image's group-writable
+    # node_modules. On macOS the host GID is 20 (staff), not 1000, so the
+    # default ${DOCKER_USER} would leave Vite unable to write node_modules/.vite
+    user: "${DOCKER_UID:-1000}:1000"
     build:
       context: src/frontend
       target: calendars-dev
