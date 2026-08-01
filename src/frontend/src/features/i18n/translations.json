@@ -317,7 +317,12 @@
           "repeatOn": "Repeat on",
           "repeatOnDay": "Repeat on day",
           "repeatOnDate": "Repeat on date",
+          "repeatOnWeekday": "Repeat on the",
           "dayOfMonth": "Day",
+          "monthlyMode": {
+            "dayOfMonth": "Day of the month",
+            "nthWeekday": "Day of the week"
+          },
           "endsLabel": "Ends",
           "never": "Never",
           "on": "On",
@@ -345,6 +350,13 @@
             "october": "October",
             "november": "November",
             "december": "December"
+          },
+          "ordinals": {
+            "first": "First",
+            "second": "Second",
+            "third": "Third",
+            "fourth": "Fourth",
+            "last": "Last"
           },
           "warnings": {
             "februaryMax": "February has at most 29 days",
@@ -1270,7 +1282,12 @@
           "repeatOn": "Répéter le",
           "repeatOnDay": "Répéter le jour",
           "repeatOnDate": "Répéter à la date",
+          "repeatOnWeekday": "Répéter le",
           "dayOfMonth": "Jour",
+          "monthlyMode": {
+            "dayOfMonth": "Jour du mois",
+            "nthWeekday": "Jour de la semaine"
+          },
           "endsLabel": "Se termine",
           "never": "Jamais",
           "on": "Le",
@@ -1298,6 +1315,13 @@
             "october": "Octobre",
             "november": "Novembre",
             "december": "Décembre"
+          },
+          "ordinals": {
+            "first": "1er",
+            "second": "2e",
+            "third": "3e",
+            "fourth": "4e",
+            "last": "Dernier"
           },
           "warnings": {
             "februaryMax": "Février a au maximum 29 jours",
@@ -1965,7 +1989,12 @@
           "repeatOn": "Herhaal op",
           "repeatOnDay": "Herhaal op dag",
           "repeatOnDate": "Herhaal op datum",
+          "repeatOnWeekday": "Herhaal op de",
           "dayOfMonth": "Dag",
+          "monthlyMode": {
+            "dayOfMonth": "Dag van de maand",
+            "nthWeekday": "Dag van de week"
+          },
           "endsLabel": "Eindigt",
           "never": "Nooit",
           "on": "Op",
@@ -1993,6 +2022,13 @@
             "october": "Oktober",
             "november": "November",
             "december": "December"
+          },
+          "ordinals": {
+            "first": "Eerste",
+            "second": "Tweede",
+            "third": "Derde",
+            "fourth": "Vierde",
+            "last": "Laatste"
           },
           "warnings": {
             "februaryMax": "Februari heeft maximaal 29 dagen",
