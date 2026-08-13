@@ -33,7 +33,7 @@ OIDC_OP_USER_ENDPOINT=http://keycloak:8080/realms/calendars/protocol/openid-conn
 OIDC_RP_CLIENT_ID=calendars
 OIDC_RP_CLIENT_SECRET=ThisIsAnExampleKeyForDevPurposeOnly
 OIDC_RP_SIGN_ALGO=RS256
-OIDC_RP_SCOPES="openid email"
+OIDC_RP_SCOPES="openid email profile"
 
 LOGIN_REDIRECT_URL=http://localhost:8930
 LOGIN_REDIRECT_URL_FAILURE=http://localhost:8930

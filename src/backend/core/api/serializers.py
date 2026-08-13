@@ -48,10 +48,11 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "email",
             "full_name",
+            "picture",
             "language",
             "timezone",
         ]
-        read_only_fields = ["id", "email", "full_name"]
+        read_only_fields = ["id", "email", "full_name", "picture"]
 
     def get_email(self, user) -> str | None:
         """Return OIDC email, falling back to admin_email for staff users."""

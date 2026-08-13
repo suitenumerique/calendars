@@ -269,6 +269,12 @@ class User(AbstractBaseUser, BaseModel, auth_models.PermissionsMixin):
             raise ValueError("User has no email address.")
         mail.send_mail(subject, message, from_email, [self.email], **kwargs)
 
+    @property
+    def picture(self):
+        """Profile picture URL from the OIDC provider, if any."""
+        picture = self.claims.get("picture")
+        return picture if isinstance(picture, str) else None
+
 
 def uuid_to_urlsafe(u):
     """Encode a UUID as unpadded base64url (22 chars)."""

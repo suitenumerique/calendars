@@ -17,6 +17,7 @@ export interface User {
   id: string;
   email: string;
   full_name?: string;
+  picture?: string | null;
   language: string;
   can_access: boolean;
   can_admin: boolean;
