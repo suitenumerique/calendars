@@ -6,6 +6,7 @@
 # one. (allowBuilds replaced v10's onlyBuiltDependencies.)
 allowBuilds:
   "@parcel/watcher": true
+  core-js: true
 
 # Don't hard-fail the install if some other transitive dep has an
 # unreviewed build script — warn instead of erroring.
