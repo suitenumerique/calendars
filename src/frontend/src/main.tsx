@@ -1,3 +1,20 @@
+// Polyfill crypto.randomUUID for insecure contexts (http) on Chromium 109.
+// Chrome 109 supports crypto.randomUUID only in secure contexts; ANCT
+// instances behind http proxies or on Windows 7 may hit this. The app calls
+// crypto.randomUUID() in CalDavService:300,913, EventCalendarAdapter:421, etc.
+// Guard once at entry so every call site is safe without per-site checks.
+if (typeof crypto !== "undefined" && typeof crypto.randomUUID !== "function") {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (crypto as any).randomUUID = (): string => {
+    // RFC4122 v4 via crypto.getRandomValues (available even when randomUUID is not)
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  };
+}
+
 import "./styles/globals.scss";
 import "./features/i18n/initI18n";
 

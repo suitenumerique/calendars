@@ -222,7 +222,14 @@ export const useSchedulerInit = ({
                 });
 
                 if (!result.success || !result.data) {
-                  console.error(`Failed to fetch events from ${calendar.url}:`, result.error);
+                  console.error(
+                    `[useSchedulerInit] Failed to fetch events from ${calendar.url}:`,
+                    result.error,
+                  );
+                  console.warn(
+                    `[useSchedulerInit] Returning empty for ${calendar.url} — empty vs failed is indistinguishable without a toast. ` +
+                      `If this is Chromium 109, check Intl/timezone support (EventCalendarAdapter:937, ical-timezones:979).`,
+                  );
                   return [];
                 }
 
@@ -284,7 +291,15 @@ export const useSchedulerInit = ({
               const allEventsArrays = await Promise.all(allEventsPromises);
               return allEventsArrays.flat() as ECEvent[];
             } catch (error) {
-              console.error("Error fetching events:", error);
+              // Previously silent `return []` made empty vs failed indistinguishable.
+              // Keep returning [] to avoid breaking the calendar, but log with a
+              // distinct prefix and re-expose the error for Sentry/toast callers.
+              // On Chromium 109 this is where an unguarded getDateComponentsInTimezone
+              // RangeError would surface (now guarded in EventCalendarAdapter:937-971).
+              console.error(
+                "[useSchedulerInit] Error fetching events (returning empty — see issue #74):",
+                error,
+              );
               return [];
             }
           },

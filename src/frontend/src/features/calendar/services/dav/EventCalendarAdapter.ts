@@ -935,39 +935,64 @@ export class EventCalendarAdapter {
    * @returns DateComponents with year, month (1-12), day, hours, minutes, seconds in the target timezone
    */
   public getDateComponentsInTimezone(date: Date, timezone: string): DateComponents {
-    let formatter = this.dateComponentsFormatterCache.get(timezone);
-    if (!formatter) {
-      if (this.dateComponentsFormatterCache.size >= EventCalendarAdapter.FORMATTER_CACHE_MAX_SIZE) {
-        const firstKey = this.dateComponentsFormatterCache.keys().next().value;
-        this.dateComponentsFormatterCache.delete(firstKey as string);
+    try {
+      let formatter = this.dateComponentsFormatterCache.get(timezone);
+      if (!formatter) {
+        if (
+          this.dateComponentsFormatterCache.size >= EventCalendarAdapter.FORMATTER_CACHE_MAX_SIZE
+        ) {
+          const firstKey = this.dateComponentsFormatterCache.keys().next().value;
+          this.dateComponentsFormatterCache.delete(firstKey as string);
+        }
+        formatter = new Intl.DateTimeFormat("en-US", {
+          timeZone: timezone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+        this.dateComponentsFormatterCache.set(timezone, formatter);
       }
-      formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      });
-      this.dateComponentsFormatterCache.set(timezone, formatter);
+      const parts = formatter.formatToParts(date);
+
+      const get = (type: Intl.DateTimeFormatPartTypes): number => {
+        const part = parts.find((p) => p.type === type);
+        return part ? parseInt(part.value, 10) : 0;
+      };
+
+      return {
+        year: get("year"),
+        month: get("month"),
+        day: get("day"),
+        hours: get("hour") === 24 ? 0 : get("hour"), // Intl may return 24 for midnight
+        minutes: get("minute"),
+        seconds: get("second"),
+      };
+    } catch (error) {
+      // Chromium 109 / old ICU may throw RangeError for unknown timezone or
+      // unsupported Intl options. Previously this bubbled to useSchedulerInit
+      // and was swallowed as `return []` → invisible calendar. Log explicitly
+      // and fall back to UTC components so the fetch is not rendered empty.
+      // `getTimezoneOffset` (longOffset) is already guarded; this is the
+      // unguarded caller that could empty the view.
+      console.warn(
+        `[EventCalendarAdapter] getDateComponentsInTimezone failed for timezone "${timezone}" — falling back to UTC components:`,
+        error,
+      );
+      // Fallback: use UTC components (better than empty view; may be off by
+      // the timezone offset but keeps events visible and debuggable).
+      return {
+        year: date.getUTCFullYear(),
+        month: date.getUTCMonth() + 1,
+        day: date.getUTCDate(),
+        hours: date.getUTCHours(),
+        minutes: date.getUTCMinutes(),
+        seconds: date.getUTCSeconds(),
+      };
     }
-    const parts = formatter.formatToParts(date);
-
-    const get = (type: Intl.DateTimeFormatPartTypes): number => {
-      const part = parts.find((p) => p.type === type);
-      return part ? parseInt(part.value, 10) : 0;
-    };
-
-    return {
-      year: get("year"),
-      month: get("month"),
-      day: get("day"),
-      hours: get("hour") === 24 ? 0 : get("hour"), // Intl may return 24 for midnight
-      minutes: get("minute"),
-      seconds: get("second"),
-    };
   }
 
   /**
@@ -992,7 +1017,8 @@ export class EventCalendarAdapter {
       const tzPart = parts.find((p) => p.type === "timeZoneName");
 
       if (tzPart?.value) {
-        // Convert "GMT+02:00" to "+0200"
+        // Convert "GMT+02:00" to "+0200" (longOffset since Chrome 95; 109 supports it,
+        // but old ICU or unknown TZ may throw — caught below).
         const match = tzPart.value.match(/GMT([+-])(\d{1,2}):?(\d{2})?/);
         if (match) {
           const sign = match[1];
@@ -1002,7 +1028,21 @@ export class EventCalendarAdapter {
         }
       }
       return "+0000";
-    } catch {
+    } catch (error) {
+      // Distinguish RangeError (unsupported timeZoneName / unknown TZ on
+      // Chromium 109 / old ICU) from other failures for debuggability.
+      // Previously silent `+0000` fallback caused 1-2h shift without trace.
+      if (error instanceof RangeError) {
+        console.warn(
+          `[EventCalendarAdapter] getTimezoneOffset RangeError for timezone "${timezone}" (longOffset unsupported or unknown TZ) — falling back to +0000:`,
+          error,
+        );
+      } else {
+        console.warn(
+          `[EventCalendarAdapter] getTimezoneOffset failed for timezone "${timezone}" — falling back to +0000:`,
+          error,
+        );
+      }
       return "+0000";
     }
   }
