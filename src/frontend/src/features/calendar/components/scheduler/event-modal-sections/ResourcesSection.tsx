@@ -1,9 +1,8 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Select } from "@gouvfr-lasuite/cunningham-react";
-import { Badge } from "@gouvfr-lasuite/ui-kit";
+import { Select, Badge } from "@gouvfr-lasuite/ui-components";
 import { SectionRow } from "./SectionRow";
-import { Building, Computer, XMark } from "@gouvfr-lasuite/ui-kit/icons";
+import { Building, Computer, XMark } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { ResourcePrincipal } from "@/features/resources/api/useResourcePrincipals";
 

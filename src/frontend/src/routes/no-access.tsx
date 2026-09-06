@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MainLayout } from "@gouvfr-lasuite/ui-kit";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+import { MainLayout, Button } from "@gouvfr-lasuite/ui-components";
 import { useTranslation } from "react-i18next";
 import { logout } from "@/features/auth/Auth";
 import { GlobalLayout } from "@/features/layouts/components/global/GlobalLayout";

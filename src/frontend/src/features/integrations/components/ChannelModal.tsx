@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
+import { Button, Modal, ModalSize } from "@gouvfr-lasuite/ui-components";
 import { useAuth } from "@/features/auth/Auth";
 import { caldavServerUrl } from "@/features/calendar/utils/DavClient";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";

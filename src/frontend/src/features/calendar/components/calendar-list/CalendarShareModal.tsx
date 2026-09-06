@@ -5,14 +5,13 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { ShareModal } from "@gouvfr-lasuite/ui-kit";
-import { Alert, VariantType } from "@gouvfr-lasuite/cunningham-react";
+import { ShareModal, Alert, VariantType } from "@gouvfr-lasuite/ui-components";
 import { useCalendarContext } from "../../contexts";
 import { useAuth } from "../../../auth/Auth";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import { addToast, ToasterItem } from "../../../ui/components/toaster/Toaster";
 import { fetchAPI } from "@/features/api/fetchApi";
-import { Info } from "@gouvfr-lasuite/ui-kit/icons";
+import { Info } from "@gouvfr-lasuite/ui-components/icons";
 
 import type {
   CalDavCalendar,

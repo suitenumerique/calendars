@@ -1,4 +1,4 @@
-import { LaGaufreV2 } from "@gouvfr-lasuite/ui-kit";
+import { LaGaufreV2 } from "@gouvfr-lasuite/ui-components";
 import { removeQuotes, useCunninghamTheme } from "../../cunningham/useCunninghamTheme";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useAppContext } from "@/features/app/AppContext";

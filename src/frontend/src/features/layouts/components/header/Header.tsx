@@ -1,11 +1,11 @@
 import {
+  Button,
   DropdownMenu,
   Icon,
   IconType,
   LanguagePicker,
   useResponsive,
-} from "@gouvfr-lasuite/ui-kit";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+} from "@gouvfr-lasuite/ui-components";
 import { useAuth } from "@/features/auth/Auth";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";

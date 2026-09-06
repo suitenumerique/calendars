@@ -1,11 +1,10 @@
 import { useState, useCallback, useRef, useEffect, type KeyboardEvent } from "react";
-import { Input } from "@gouvfr-lasuite/cunningham-react";
-import { Badge } from "@gouvfr-lasuite/ui-kit";
+import { Input, Badge } from "@gouvfr-lasuite/ui-components";
 import { useTranslation } from "react-i18next";
 import { useUserSearch, type UserSearchResult } from "@/features/users/hooks/useUserSearch";
 import { filterSuggestions, isValidEmail } from "./attendees-utils";
 import { getBadgeType, getPartstatIcon } from "./partstatBadge";
-import { CircleCheck, XMark } from "@gouvfr-lasuite/ui-kit/icons";
+import { CircleCheck, XMark } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { IcsAttendee, IcsOrganizer } from "ts-ics";
 

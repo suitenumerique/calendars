@@ -55,8 +55,12 @@ i18n
     preload: LANGUAGES_ALLOWED,
   })
   .then(() => syncLanguageToDom(i18n.language))
-  .catch(() => {
-    throw new Error("i18n initialization failed");
+  .catch((error) => {
+    // Never take the whole app down over a translation problem: log and
+    // fall back to the base language so rendering can proceed (i18next
+    // returns the raw key when a lookup fails).
+    console.error("i18n initialization failed, falling back to base language", error);
+    return i18n.changeLanguage(BASE_LANGUAGE).catch(() => undefined);
   });
 
 export default i18n;

@@ -15,14 +15,14 @@ import {
   ModalSize,
   Select,
   VariantType,
-} from "@gouvfr-lasuite/cunningham-react";
+} from "@gouvfr-lasuite/ui-components";
 import { errorToString } from "@/features/api/APIError";
 import { useAuth } from "@/features/auth/Auth";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
-import { DEFAULT_COLORS } from "./constants";
-import { ErrorFilled, Mail } from "@gouvfr-lasuite/ui-kit/icons";
+import { DEFAULT_COLORS } from "@/features/calendar/constants";
+import { ErrorFilled, Mail } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { CalendarModalProps } from "./types";
 

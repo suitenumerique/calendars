@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
-import { Checkmark, Copy } from "@gouvfr-lasuite/ui-kit/icons";
+import { Button } from "@gouvfr-lasuite/ui-components";
+import { Checkmark, Copy } from "@gouvfr-lasuite/ui-components/icons";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 
 type TokenRevealBoxProps = {

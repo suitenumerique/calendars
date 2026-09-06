@@ -6,10 +6,12 @@
 //    (e.g. ``UserMenu``) which emit ``.material-icons.icon--filled``
 //    spans. Without it those glyphs fall back to literal ligature text
 //    ("arrow_drop_down", "logout", …). It's a single woff2.
-@use "@gouvfr-lasuite/ui-kit/fonts/Marianne";
-@use "@gouvfr-lasuite/cunningham-react/sass/icons";
-@use "@fontsource/material-icons";
-@use "@gouvfr-lasuite/ui-kit/style";
+@use "@gouvfr-lasuite/ui-components/fonts/marianne";
+@use "@gouvfr-lasuite/ui-components/sass/fonts/material-icons";
+// Explicit namespace: the default one ("material-icons") collides with
+// the ui-components module above.
+@use "@fontsource/material-icons" as material-icons-filled;
+@use "@gouvfr-lasuite/ui-components/style";
 @use "./cunningham-tokens.css";
 @use "./../features/layouts/components/global/GlobalLayout";
 @use "./../features/feedback/Feedback";

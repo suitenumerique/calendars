@@ -5,8 +5,13 @@
 
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { DropdownMenu, DropdownMenuOption, Icon, IconType } from "@gouvfr-lasuite/ui-kit";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+import {
+  DropdownMenu,
+  DropdownMenuOption,
+  Icon,
+  IconType,
+  Button,
+} from "@gouvfr-lasuite/ui-components";
 import {
   ArrowDown,
   ArrowUp,
@@ -15,7 +20,7 @@ import {
   MoreVertical,
   Trash,
   Upload,
-} from "@gouvfr-lasuite/ui-kit/icons";
+} from "@gouvfr-lasuite/ui-components/icons";
 
 import type { CalendarItemMenuProps } from "./types";
 

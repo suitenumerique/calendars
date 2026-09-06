@@ -1,8 +1,8 @@
-import { Alert, Input, Select, VariantType } from "@gouvfr-lasuite/cunningham-react";
+import { Alert, Input, Select, VariantType } from "@gouvfr-lasuite/ui-components";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { FOREVER_YEARS_THRESHOLD } from "../../services/dav/constants";
-import { Warning } from "@gouvfr-lasuite/ui-kit/icons";
+import { Warning } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { IcsRecurrenceRule, IcsWeekDay } from "ts-ics";
 

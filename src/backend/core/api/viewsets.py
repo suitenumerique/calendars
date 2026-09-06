@@ -90,7 +90,7 @@ class UserViewSet(
     """User ViewSet"""
 
     permission_classes = [permissions.IsSelf]
-    queryset = models.User.objects.all().filter(is_active=True)
+    queryset = models.User.objects.filter(is_active=True)
     serializer_class = serializers.UserSerializer
     get_me_serializer_class = serializers.UserMeSerializer
     pagination_class = UserListPagination
@@ -125,7 +125,7 @@ class UserViewSet(
         # Search by email (partial, case-insensitive) or full name
         return queryset.filter(
             Q(email__icontains=query) | Q(full_name__icontains=query)
-        ).order_by("full_name", "email")[:50]
+        ).order_by("full_name", "email")
 
     @action(
         detail=False,

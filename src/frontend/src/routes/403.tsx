@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
-import { Icon } from "@gouvfr-lasuite/ui-kit";
+import { Button, Icon } from "@gouvfr-lasuite/ui-components";
 import { useTranslation } from "react-i18next";
 import { SimpleLayout } from "@/features/layouts/components/simple/SimpleLayout";
 import { GenericDisclaimer } from "@/features/ui/components/generic-disclaimer/GenericDisclaimer";

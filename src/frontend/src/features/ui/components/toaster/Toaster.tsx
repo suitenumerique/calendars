@@ -1,6 +1,6 @@
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+import { Button } from "@gouvfr-lasuite/ui-components";
 import { ToastContainer, ToastContentProps, toast } from "react-toastify";
-import { XMark } from "@gouvfr-lasuite/ui-kit/icons";
+import { XMark } from "@gouvfr-lasuite/ui-components/icons";
 
 export const Toaster = () => {
   return <ToastContainer />;

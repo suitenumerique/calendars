@@ -5,8 +5,8 @@
 
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ErrorFilled, Warning } from "@gouvfr-lasuite/ui-kit/icons";
-import { Alert, Button, Modal, ModalSize, VariantType } from "@gouvfr-lasuite/cunningham-react";
+import { ErrorFilled, Warning } from "@gouvfr-lasuite/ui-components/icons";
+import { Alert, Button, Modal, ModalSize, VariantType } from "@gouvfr-lasuite/ui-components";
 import {
   useCreateICalFeedChannel,
   useDeleteICalFeedChannel,

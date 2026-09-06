@@ -1,4 +1,4 @@
-import { Spinner } from "@gouvfr-lasuite/ui-kit";
+import { Spinner } from "@gouvfr-lasuite/ui-components";
 import { useApiConfig } from "./useApiConfig";
 import { ApiConfig } from "@/features/api/types";
 import { createContext, useContext, useEffect } from "react";

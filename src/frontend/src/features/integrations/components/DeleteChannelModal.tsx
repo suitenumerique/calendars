@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Button, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
+import { Button, Modal, ModalSize } from "@gouvfr-lasuite/ui-components";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useDeleteChannel } from "../api/useChannels";
 

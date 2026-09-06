@@ -9,5 +9,5 @@ export { DeleteConfirmModal } from "./DeleteConfirmModal";
 export { SubscriptionUrlModal } from "./SubscriptionUrlModal";
 export { CalendarListItem } from "./CalendarListItem";
 export { useCalendarListState } from "./hooks/useCalendarListState";
-export { DEFAULT_COLORS } from "./constants";
+export { DEFAULT_COLORS } from "@/features/calendar/constants";
 export * from "./types";

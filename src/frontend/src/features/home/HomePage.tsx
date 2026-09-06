@@ -1,9 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { Hero, Footer, HomeGutter, Icon, IconType } from "@gouvfr-lasuite/ui-kit";
+import { Hero, Footer, HomeGutter, Icon, IconType, Button } from "@gouvfr-lasuite/ui-components";
 import { login } from "@/features/auth/Auth";
 import { useEffect } from "react";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { useThemeCustomization } from "@/hooks/useThemeCustomization";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";

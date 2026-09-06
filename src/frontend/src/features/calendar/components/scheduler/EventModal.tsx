@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input, Modal, ModalSize } from "@gouvfr-lasuite/cunningham-react";
+import { Button, Input, Modal, ModalSize, Icon, IconType } from "@gouvfr-lasuite/ui-components";
 import { CalendarSelect } from "./CalendarSelect";
 import { useAuth } from "@/features/auth/Auth";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
@@ -23,8 +23,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { useConfig } from "@/features/config/ConfigProvider";
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { SectionRow } from "./event-modal-sections/SectionRow";
-import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
-import { Meet, Pin, Calendar, Edit, Lock } from "@gouvfr-lasuite/ui-kit/icons";
+import { Meet, Pin, Calendar, Edit, Lock } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { IcsEvent, IcsOrganizer } from "ts-ics";
 

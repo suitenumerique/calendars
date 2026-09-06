@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
-import { Building, Computer, Trash } from "@gouvfr-lasuite/ui-kit/icons";
+import { Button } from "@gouvfr-lasuite/ui-components";
+import { Building, Computer, Trash } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { ResourceType } from "../types";
 

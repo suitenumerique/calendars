@@ -28,6 +28,7 @@ import type {
   IcsOrganizer,
   IcsDuration,
 } from "ts-ics";
+import { DEFAULT_EVENT_COLOR } from "@/features/calendar/constants";
 import type { CalDavCalendar, CalDavEvent } from "./types/caldav-service";
 import type {
   EventCalendarEvent,
@@ -173,7 +174,7 @@ export type CalDavExtendedProps = {
 
 export class EventCalendarAdapter {
   private defaultOptions: CalDavToEventCalendarOptions = {
-    defaultEventColor: "#3788d8",
+    defaultEventColor: DEFAULT_EVENT_COLOR,
     defaultTextColor: "#ffffff",
     includeRecurringInstances: true,
   };

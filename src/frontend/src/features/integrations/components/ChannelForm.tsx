@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { Button, Input, Switch } from "@gouvfr-lasuite/cunningham-react";
+import { Button, Input, Switch } from "@gouvfr-lasuite/ui-components";
 import { ScopeEditor } from "./ScopeEditor";
-import { Retry } from "@gouvfr-lasuite/ui-kit/icons";
+import { Retry } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { ChannelScopeValue } from "../types";
 

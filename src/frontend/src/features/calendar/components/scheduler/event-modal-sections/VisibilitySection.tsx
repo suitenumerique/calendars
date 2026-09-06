@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Select } from "@gouvfr-lasuite/cunningham-react";
-import { Lock } from "@gouvfr-lasuite/ui-kit/icons";
+import { Select } from "@gouvfr-lasuite/ui-components";
+import { Lock } from "@gouvfr-lasuite/ui-components/icons";
 import { SectionRow } from "./SectionRow";
 
 import type { IcsClassType } from "ts-ics";

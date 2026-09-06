@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input } from "@gouvfr-lasuite/cunningham-react";
+import { Button, Input } from "@gouvfr-lasuite/ui-components";
 import { SectionRow } from "./SectionRow";
 import { extractUrl } from "../utils/eventDisplayRules";
-import { ExternalLink, Pin } from "@gouvfr-lasuite/ui-kit/icons";
+import { ExternalLink, Pin } from "@gouvfr-lasuite/ui-components/icons";
 
 interface LocationSectionProps {
   location: string;
