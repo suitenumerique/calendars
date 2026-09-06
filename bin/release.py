@@ -10,11 +10,9 @@ This script automates the release process by:
 
 It is the calendars counterpart of suitenumerique/messages' bin/release.py and
 follows the same workflow. Differences:
-- the frontend uses pnpm; pnpm-lock.yaml does not store the project's own version
-  so it needs no change on a version bump
-- uv/pnpm are not required on the host: uv.lock's project entry is patched in
-  place (the only change a version bump implies); run `make back-lock` afterwards
-  if you want a full re-resolution
+- uv/npm are not required on the host: uv.lock's and package-lock.json's project
+  entries are patched in place (the only change a version bump implies); run
+  `make back-lock` / `make install-front` afterwards for a full re-resolution
 - the e2e package (src/e2e) keeps its own independent version and is left alone
 """
 
@@ -140,7 +138,7 @@ def update_files(version: str) -> None:
                 "run `make back-lock` manually\n"
             )
 
-    # Frontend: package.json (pnpm-lock.yaml has no project version → no change)
+    # Frontend: package.json
     sys.stdout.write("Updating frontend package.json...\n")
     package_json = Path("src/frontend/package.json")
     pkg_content = package_json.read_text()
@@ -149,6 +147,26 @@ def update_files(version: str) -> None:
     )
     package_json.write_text(pkg_content)
     sys.stdout.write(f"  → {package_json}\n")
+
+    # Frontend: package-lock.json — patch the project's own entries (root and
+    # packages[""]) so `npm ci` stays satisfied without needing npm on the host.
+    lock_json = Path("src/frontend/package-lock.json")
+    if lock_json.exists():
+        sys.stdout.write("Updating frontend package-lock.json...\n")
+        lock_content = lock_json.read_text()
+        lock_content, n = re.subn(
+            r'("name": "calendars",\n\s*"version": )"[^"]+"',
+            f'\\1"{version}"',
+            lock_content,
+        )
+        lock_json.write_text(lock_content)
+        if n:
+            sys.stdout.write(f"  → {lock_json}\n")
+        else:
+            sys.stdout.write(
+                "  ⚠️  could not find the calendars entries in package-lock.json; "
+                "run `make install-front` manually\n"
+            )
 
 
 def update_changelog(version: str) -> None:

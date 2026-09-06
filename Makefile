@@ -169,19 +169,19 @@ analyze-back: ## lint all back-end python sources with pylint
 .PHONY: analyze-back
 
 lint-front: ## format then run the frontend linter (oxfmt + oxlint)
-	@$(COMPOSE) run --rm frontend-dev sh -c "pnpm run format && pnpm run lint"
+	@$(COMPOSE) run --rm frontend-dev sh -c "npm run format && npm run lint"
 .PHONY: lint-front
 
 format-front: ## format front-end sources with oxfmt
-	@$(COMPOSE) run --rm frontend-dev sh -c "pnpm run format"
+	@$(COMPOSE) run --rm frontend-dev sh -c "npm run format"
 .PHONY: format-front
 
 typecheck-front: ## run the frontend type checker
-	@$(COMPOSE) run --rm frontend-dev sh -c "pnpm run ts:check"
+	@$(COMPOSE) run --rm frontend-dev sh -c "npm run ts:check"
 .PHONY: typecheck-front
 
 analyze-front: ## analyze frontend bundle sizes (per-chunk + per-package breakdown)
-	@$(COMPOSE) run --rm frontend-dev sh -c "pnpm run analyze"
+	@$(COMPOSE) run --rm frontend-dev sh -c "npm run analyze"
 .PHONY: analyze-front
 
 # -- Tests
@@ -205,7 +205,7 @@ test-back-parallel: ## run all back-end tests in parallel
 
 test-front: ## run the frontend tests
 	@args="$(filter-out $@,$(MAKECMDGOALS))" && \
-	$(COMPOSE) run --rm frontend-dev sh -c "pnpm test -- $${args:-${1}}"
+	$(COMPOSE) run --rm frontend-dev sh -c "npm test -- $${args:-${1}}"
 .PHONY: test-front
 
 # -- E2E Tests
@@ -294,14 +294,21 @@ demo: ## flush db then create a demo
 
 # -- Frontend
 
-install-front: ## install frontend deps and (re)generate pnpm-lock.yaml
-	@$(COMPOSE) run --rm -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 node \
-		sh -c "cd /app/src/frontend && corepack pnpm install"
+build-front-distroless: ## build the frontend distroless production image (Caddy + static bundle)
+	@docker build --target frontend-production -t calendars-frontend-distroless src/frontend/
+.PHONY: build-front-distroless
+
+test-front-distroless: build-front-distroless ## build and smoke-test the frontend distroless production image
+	@bin/smoke-test-front calendars-frontend-distroless
+.PHONY: test-front-distroless
+
+install-front: ## install frontend deps (freezes the lockfile, then runs the dependency guardrail)
+	@$(COMPOSE) run --rm node sh -c "cd /app/src/frontend && npm install"
+	@$(COMPOSE) run --rm node sh -c "cd /app/src/frontend && npm run check:deps"
 .PHONY: install-front
 
 install-frozen-front: ## install frontend deps strictly from the committed lockfile
-	@$(COMPOSE) run --rm -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 node \
-		sh -c "cd /app/src/frontend && corepack pnpm install --frozen-lockfile"
+	@$(COMPOSE) run --rm node sh -c "cd /app/src/frontend && npm ci"
 .PHONY: install-frozen-front
 
 # -- Release
