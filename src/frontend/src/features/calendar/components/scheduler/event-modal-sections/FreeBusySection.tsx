@@ -4,7 +4,7 @@ import { useCalendarContext } from "../../../contexts/CalendarContext";
 import { useFreeBusy } from "../hooks/useFreeBusy";
 import { FreeBusyTimeline } from "../FreeBusyTimeline";
 import { SectionRow } from "./SectionRow";
-import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
+import { Icon, IconType } from "@gouvfr-lasuite/ui-components";
 import { formatDateTimeLocal, parseDateTimeLocal } from "../utils/dateFormatters";
 
 import type { IcsAttendee } from "ts-ics";

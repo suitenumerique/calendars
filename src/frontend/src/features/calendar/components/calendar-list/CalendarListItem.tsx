@@ -4,10 +4,11 @@
  */
 
 import { useTranslation } from "react-i18next";
-import { Checkbox } from "@gouvfr-lasuite/cunningham-react";
-import { Mail } from "@gouvfr-lasuite/ui-kit/icons";
+import { Checkbox } from "@gouvfr-lasuite/ui-components";
+import { Mail } from "@gouvfr-lasuite/ui-components/icons";
 import { CalendarItemMenu } from "./CalendarItemMenu";
 
+import { DEFAULT_EVENT_COLOR } from "@/features/calendar/constants";
 import type { CalendarListItemProps } from "./types";
 
 /**
@@ -31,7 +32,7 @@ export const CalendarListItem = ({
 }: CalendarListItemProps) => {
   const { t } = useTranslation();
 
-  const calendarColor = typeof calendar.color === "string" ? calendar.color : "#3788d8";
+  const calendarColor = typeof calendar.color === "string" ? calendar.color : DEFAULT_EVENT_COLOR;
 
   return (
     <div className={`calendar-list__item ${isMenuOpen ? "calendar-list__item--menu-open" : ""}`}>

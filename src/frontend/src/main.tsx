@@ -9,6 +9,7 @@ import {
   stringifySearchWith,
 } from "@tanstack/react-router";
 import { routeTree } from "./routes.gen";
+import { AppErrorScreen } from "./features/errors/AppErrorScreen";
 
 // Default TSR encoding JSON-wraps every search value (`?key=1` → `?key=%221%22`).
 // The rest of the app builds URLs via `URLSearchParams.toString()` and the
@@ -18,6 +19,7 @@ const router = createRouter({
   routeTree,
   scrollRestoration: false,
   defaultPreload: false,
+  defaultErrorComponent: AppErrorScreen,
   parseSearch: parseSearchWith((value) => value),
   stringifySearch: stringifySearchWith((value) => (value == null ? "" : String(value))),
 });

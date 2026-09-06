@@ -96,7 +96,7 @@ class UserAdmin(auth_admin.UserAdmin):
         "created_at",
         "updated_at",
     )
-    search_fields = ("id", "sub", "admin_email", "email", "full_name")
+    search_fields = ("=id", "sub", "admin_email", "email", "full_name")
     raw_id_fields = ("organization",)
 
 
@@ -106,6 +106,7 @@ class OrganizationAdmin(admin.ModelAdmin):
 
     list_display = ("name", "external_id", "default_sharing_level", "created_at")
     list_filter = ("default_sharing_level",)
+    ordering = ("name",)
     search_fields = ("name", "external_id")
     readonly_fields = ("id", "created_at", "updated_at")
 
@@ -125,6 +126,7 @@ class ChannelAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("type", "scope_level", "is_active")
+    ordering = ("-created_at",)
     search_fields = ("name", "user__email", "caldav_path")
     exclude = ("encrypted_settings",)
     readonly_fields = ("id", "created_at", "updated_at", "last_used_at")

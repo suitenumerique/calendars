@@ -14,6 +14,7 @@
 
 :8080 {
 	root * /srv
+	header -Server
 	header X-Frame-Options DENY
 
 	# Vite emits every bundled output under /assets/ with a

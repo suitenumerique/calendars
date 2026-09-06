@@ -104,6 +104,29 @@ class ShareAccessPlugin extends ServerPlugin
         $server->on('propFind', [$this, 'propFindShareAccess'], 200);
         $server->on('propFind', [$this, 'propFindShareAccessMap'], 200);
         $server->on('propFind', [$this, 'propFindOwnerType'], 200);
+        // Priority 90: run before PropertyStorage (default 100) so a
+        // PROPPATCH on our LS properties is rejected instead of being
+        // silently persisted as a dead property. These properties are
+        // server-computed (read from calendarinstances / calendarInfo);
+        // allowing arbitrary writes would plant stale values for any
+        // future reader that consults PropertyStorage.
+        $server->on('propPatch', [$this, 'propPatchProtect'], 90);
+    }
+
+    /**
+     * Reject client writes to the LS share-access family of properties.
+     */
+    public function propPatchProtect($path, \Sabre\DAV\PropPatch $propPatch)
+    {
+        foreach ([
+            self::SHARE_ACCESS_PROP,
+            self::SHARE_ACCESS_MAP_PROP,
+            self::OWNER_TYPE_PROP,
+        ] as $prop) {
+            $propPatch->handle($prop, function () {
+                return 403;
+            });
+        }
     }
 
     public function cachePostBody($request, $response)
@@ -313,8 +336,11 @@ class ShareAccessPlugin extends ServerPlugin
                 // right namespace declarations.
                 $xml = '';
                 foreach ($rows as $row) {
-                    $href = htmlspecialchars($row['share_href'], ENT_XML1);
-                    $level = htmlspecialchars($row['share_access_level'], ENT_XML1);
+                    // ENT_QUOTES is required: these values land inside
+                    // double-quoted XML attributes and ENT_XML1 alone does
+                    // not escape quotes.
+                    $href = htmlspecialchars($row['share_href'], ENT_XML1 | ENT_QUOTES);
+                    $level = htmlspecialchars($row['share_access_level'], ENT_XML1 | ENT_QUOTES);
                     $xml .= '<LS:sharee xmlns:LS="' . self::LS_NS . '"'
                         . ' href="' . $href . '"'
                         . ' access="' . $level . '"/>';

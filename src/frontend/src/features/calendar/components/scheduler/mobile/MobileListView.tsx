@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { isSameDay, isToday } from "@/utils/date";
-import { ChevronRight } from "@gouvfr-lasuite/ui-kit/icons";
-import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
+import { ChevronRight } from "@gouvfr-lasuite/ui-components/icons";
+import { Icon, IconType } from "@gouvfr-lasuite/ui-components";
 
 import type { MobileListViewProps, MobileListEvent } from "../types";
 

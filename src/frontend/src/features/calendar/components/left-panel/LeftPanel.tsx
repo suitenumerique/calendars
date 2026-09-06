@@ -4,7 +4,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
+import { Button, useModal } from "@gouvfr-lasuite/ui-components";
 import { useNavigate } from "@tanstack/react-router";
 import { IcsEvent } from "ts-ics";
 import { useAuth } from "@/features/auth/Auth";
@@ -15,7 +15,7 @@ import { MiniCalendar } from "./MiniCalendar";
 import { EventModal } from "../scheduler/EventModal";
 import { useCalendarContext } from "../../contexts";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
-import { Building, Clock, Plus, Puzzle } from "@gouvfr-lasuite/ui-kit/icons";
+import { Building, Clock, Plus, Puzzle } from "@gouvfr-lasuite/ui-components/icons";
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**

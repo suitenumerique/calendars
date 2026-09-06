@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
-import { Edit, Globe, Key, PlugOn, Puzzle, Trash } from "@gouvfr-lasuite/ui-kit/icons";
+import { Button } from "@gouvfr-lasuite/ui-components";
+import { Edit, Globe, Key, PlugOn, Puzzle, Trash } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { Channel } from "../types";
 

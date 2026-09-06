@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { ChevronDown, ChevronUp } from "@gouvfr-lasuite/ui-kit/icons";
+import { ChevronDown, ChevronUp } from "@gouvfr-lasuite/ui-components/icons";
 
 interface SectionRowProps {
   icon: ReactNode;

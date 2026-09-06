@@ -1,4 +1,4 @@
-import { cunninghamConfig } from "@gouvfr-lasuite/ui-kit";
+import { cunninghamConfig } from "@gouvfr-lasuite/ui-components";
 
 // TODO: Temporary solution to override the default button tertiary text color, waiting for the new ui-kit to be released
 
@@ -396,7 +396,9 @@ const defaultConfig = deepMerge(cunninghamConfig, {
       components: getComponents("anct"),
     },
     dark: {
-      globals: cunninghamConfig.themes.default.globals,
+      // ui-components declares themes.default as `unknown` in its d.ts;
+      // the runtime shape carries the globals we re-use for dark mode.
+      globals: (cunninghamConfig.themes.default as { globals: object }).globals,
       components: getComponents("dark"),
     },
     default: {

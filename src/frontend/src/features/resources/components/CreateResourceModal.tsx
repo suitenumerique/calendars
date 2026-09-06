@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input, Modal, ModalSize, Select } from "@gouvfr-lasuite/cunningham-react";
+import { Button, Input, Modal, ModalSize, Select } from "@gouvfr-lasuite/ui-components";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useCreateResource } from "../api/useResources";
 

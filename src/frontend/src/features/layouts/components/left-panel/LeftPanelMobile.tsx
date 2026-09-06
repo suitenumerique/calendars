@@ -1,6 +1,6 @@
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
-import { useResponsive } from "@gouvfr-lasuite/ui-kit";
+import { useResponsive } from "@gouvfr-lasuite/ui-components";
 
 export const LeftPanelMobile = () => {
   const { isTablet } = useResponsive();

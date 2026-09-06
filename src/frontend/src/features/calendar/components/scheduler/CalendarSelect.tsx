@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Select } from "@gouvfr-lasuite/cunningham-react";
-import { Mail } from "@gouvfr-lasuite/ui-kit/icons";
+import { Select } from "@gouvfr-lasuite/ui-components";
+import { Mail } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { CalDavCalendar } from "@/features/calendar/services/dav/types/caldav-service";
+import { DEFAULT_EVENT_COLOR } from "@/features/calendar/constants";
 
 interface CalendarSelectProps {
   calendars: CalDavCalendar[];
@@ -36,7 +37,7 @@ export function CalendarSelect({ calendars, value, onChange }: CalendarSelectPro
     () =>
       calendars.map((cal) => {
         const name = cal.displayName || cal.url;
-        const color = cal.color || "#3788d8";
+        const color = cal.color || DEFAULT_EVENT_COLOR;
         const optionJsx = (
           <CalendarOption name={name} color={color} mailboxEmail={cal.mailboxEmail} />
         );

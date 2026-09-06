@@ -1,9 +1,8 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+import { Button, Icon, IconType } from "@gouvfr-lasuite/ui-components";
 import { SectionRow } from "./SectionRow";
-import { Plus, XMark } from "@gouvfr-lasuite/ui-kit/icons";
-import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
+import { Plus, XMark } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { AttachmentMeta } from "../types";
 

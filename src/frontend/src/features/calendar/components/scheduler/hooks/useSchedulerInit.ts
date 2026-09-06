@@ -138,6 +138,14 @@ export const useSchedulerInit = ({
           hiddenDays: [0, 6],
           firstDay: 1,
         },
+        // Month view: the global ``dayHeaderFormat`` below injects the
+        // day-of-month, which is only correct for day/week grids. In the
+        // month grid the header labels whole columns, so showing the first
+        // row's day numbers is misleading — restore the library default of
+        // weekday-only headers for this view.
+        dayGridMonth: {
+          dayHeaderFormat: { weekday: "short" },
+        },
       },
 
       // Locale & time settings

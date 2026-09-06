@@ -1,5 +1,12 @@
-import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
-import { Button, ButtonProps, Modal, ModalSize, useModal } from "@gouvfr-lasuite/cunningham-react";
+import {
+  Icon,
+  IconType,
+  Button,
+  ButtonProps,
+  Modal,
+  ModalSize,
+  useModal,
+} from "@gouvfr-lasuite/ui-components";
 import { useTranslation } from "react-i18next";
 import { useConfig } from "../config/ConfigProvider";
 import { useMessagesWidget } from "./useMessagesWidget";

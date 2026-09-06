@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { AttendeesInput } from "../AttendeesInput";
 import { SectionRow } from "./SectionRow";
-import { Icon, IconType } from "@gouvfr-lasuite/ui-kit";
+import { Icon, IconType } from "@gouvfr-lasuite/ui-components";
 
 import type { IcsAttendee, IcsOrganizer } from "ts-ics";
 

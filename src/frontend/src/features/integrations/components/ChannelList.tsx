@@ -1,16 +1,15 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, useModal } from "@gouvfr-lasuite/cunningham-react";
+import { Button, useModal } from "@gouvfr-lasuite/ui-components";
 import { useNavigate } from "@tanstack/react-router";
 import { useChannels } from "../api/useChannels";
 import { ChannelCard } from "./ChannelCard";
 import { ChannelModal } from "./ChannelModal";
 import { DeleteChannelModal } from "./DeleteChannelModal";
-import { ArrowLeft, Plus } from "@gouvfr-lasuite/ui-kit/icons";
+import { ArrowLeft, Plus, Hourglass, Puzzle } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { Channel } from "../types";
 
-import { Hourglass, Puzzle } from "@gouvfr-lasuite/ui-kit/icons";
 export const ChannelList = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();

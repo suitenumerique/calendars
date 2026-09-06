@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CircleCheck, Clock, QuestionMark, XMark } from "@gouvfr-lasuite/ui-kit/icons";
+import { CircleCheck, Clock, QuestionMark, XMark } from "@gouvfr-lasuite/ui-components/icons";
 
 export type PartstatBadgeType = "accent" | "neutral" | "danger" | "success" | "warning" | "info";
 

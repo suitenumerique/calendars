@@ -5,10 +5,22 @@
 
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Modal, ModalSize, VariantType } from "@gouvfr-lasuite/cunningham-react";
-import { Spinner } from "@gouvfr-lasuite/ui-kit";
+import {
+  Alert,
+  Button,
+  Modal,
+  ModalSize,
+  VariantType,
+  Spinner,
+} from "@gouvfr-lasuite/ui-components";
 import { useImportEvents } from "../../hooks/useCalendars";
-import { CircleCheck, Copy, ErrorFilled, Upload, Warning } from "@gouvfr-lasuite/ui-kit/icons";
+import {
+  CircleCheck,
+  Copy,
+  ErrorFilled,
+  Upload,
+  Warning,
+} from "@gouvfr-lasuite/ui-components/icons";
 
 import type { ImportEventsResult } from "../../api";
 

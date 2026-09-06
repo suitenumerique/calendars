@@ -1,13 +1,12 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+import { Button } from "@gouvfr-lasuite/ui-components";
 import { useNavigate } from "@tanstack/react-router";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useWorkingHours } from "../api/useWorkingHours";
 import { type AvailabilitySlot, type AvailabilitySlots, generateSlotId } from "../types";
 import { AvailabilityRow } from "./AvailabilityRow";
-import { Hourglass } from "@gouvfr-lasuite/ui-kit/icons";
-import { ArrowLeft, Plus } from "@gouvfr-lasuite/ui-kit/icons";
+import { Hourglass, ArrowLeft, Plus } from "@gouvfr-lasuite/ui-components/icons";
 
 interface AvailabilityFormProps {
   initialSlots: AvailabilitySlots;

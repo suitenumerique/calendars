@@ -1,11 +1,10 @@
 import { useEffect, useRef, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { createCalendar, destroyCalendar, ResourceTimeline } from "@event-calendar/core";
-import { ChevronLeft, ChevronRight } from "@gouvfr-lasuite/ui-kit/icons";
+import { ChevronLeft, ChevronRight, Retry } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { FreeBusyResponse } from "../../services/dav/types/caldav-service";
 
-import { Retry } from "@gouvfr-lasuite/ui-kit/icons";
 interface FreeBusyTimelineProps {
   date: Date;
   attendees: FreeBusyResponse[];

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { Input } from "@gouvfr-lasuite/cunningham-react";
+import { Input } from "@gouvfr-lasuite/ui-components";
 import { SectionRow } from "./SectionRow";
-import { Clock, ArrowRight } from "@gouvfr-lasuite/ui-kit/icons";
+import { Clock, ArrowRight } from "@gouvfr-lasuite/ui-components/icons";
 
 interface DateTimeSectionProps {
   startDateTime: string;

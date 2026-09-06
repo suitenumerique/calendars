@@ -59,7 +59,15 @@ RUN echo "log_errors = On" >> /usr/local/etc/php/conf.d/error-logging.ini \
     && echo "error_log = /proc/self/fd/2" >> /usr/local/etc/php/conf.d/error-logging.ini \
     && echo "display_errors = Off" >> /usr/local/etc/php/conf.d/error-logging.ini \
     && echo "display_startup_errors = Off" >> /usr/local/etc/php/conf.d/error-logging.ini \
-    && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/error-logging.ini
+    && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/error-logging.ini \
+    && echo "expose_php = Off" >> /usr/local/etc/php/conf.d/error-logging.ini
+
+# Don't advertise Apache/PHP versions in the Server header or on error
+# pages (SabreDAV's own version banner is already disabled via
+# $exposeVersion in server.php).
+RUN echo "ServerTokens Prod" >> /etc/apache2/conf-available/hardening.conf \
+    && echo "ServerSignature Off" >> /etc/apache2/conf-available/hardening.conf \
+    && a2enconf hardening
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/sabredav \

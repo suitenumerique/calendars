@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Key, PlugOn } from "@gouvfr-lasuite/ui-kit/icons";
+import { Key, PlugOn } from "@gouvfr-lasuite/ui-components/icons";
 
 export type ChannelPickerType = "caldav" | "webhook";
 

@@ -1,16 +1,15 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input, useModal } from "@gouvfr-lasuite/cunningham-react";
+import { Button, Input, useModal } from "@gouvfr-lasuite/ui-components";
 import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/features/auth/Auth";
 import { ResourceCard } from "./ResourceCard";
 import { CreateResourceModal } from "./CreateResourceModal";
 import { DeleteResourceModal } from "./DeleteResourceModal";
-import { ArrowLeft, Building, Plus } from "@gouvfr-lasuite/ui-kit/icons";
+import { ArrowLeft, Building, Plus, Hourglass } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { ResourceType } from "../types";
 
-import { Hourglass } from "@gouvfr-lasuite/ui-kit/icons";
 type ResourcePrincipal = {
   id: string;
   name: string;

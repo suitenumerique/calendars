@@ -1,9 +1,9 @@
 import { useTranslation } from "react-i18next";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+import { Button } from "@gouvfr-lasuite/ui-components";
 import { SectionRow } from "./SectionRow";
 import { generateVisioRoomId } from "./generateVisioRoomId";
 import { sanitizeIcsUrl } from "../../../services/dav/EventCalendarAdapter";
-import { XMark, Meet } from "@gouvfr-lasuite/ui-kit/icons";
+import { XMark, Meet } from "@gouvfr-lasuite/ui-components/icons";
 
 interface VideoConferenceSectionProps {
   url: string;

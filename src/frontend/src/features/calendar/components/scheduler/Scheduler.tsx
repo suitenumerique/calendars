@@ -22,6 +22,7 @@ import { MobileListView } from "./mobile/MobileListView";
 import { useCalendarContext } from "../../contexts/CalendarContext";
 import { useCalendarLocale } from "../../hooks/useCalendarLocale";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { DEFAULT_EVENT_COLOR } from "@/features/calendar/constants";
 import { EventModal } from "./EventModal";
 import { RecurringEditModal } from "./RecurringEditModal";
 import { SchedulerToolbar } from "./SchedulerToolbar";
@@ -245,7 +246,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
       start: new Date(e.start),
       end: e.end ? new Date(e.end) : new Date(e.start),
       allDay: e.allDay ?? false,
-      backgroundColor: e.backgroundColor || "#2563eb",
+      backgroundColor: e.backgroundColor || DEFAULT_EVENT_COLOR,
       extendedProps: e.extendedProps ?? {},
     }));
     setListEvents(parsed);

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { MainLayout } from "@gouvfr-lasuite/ui-kit";
+import { MainLayout } from "@gouvfr-lasuite/ui-components";
 import { useEffect } from "react";
 import { useAuth } from "@/features/auth/Auth";
 import { CalendarContextProvider } from "@/features/calendar/contexts";

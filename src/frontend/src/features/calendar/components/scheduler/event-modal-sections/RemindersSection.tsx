@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { Button, Select } from "@gouvfr-lasuite/cunningham-react";
+import { Button, Select } from "@gouvfr-lasuite/ui-components";
 import { SectionRow } from "./SectionRow";
-import { Bell, Plus, XMark } from "@gouvfr-lasuite/ui-kit/icons";
+import { Bell, Plus, XMark } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { IcsAlarm } from "ts-ics";
 

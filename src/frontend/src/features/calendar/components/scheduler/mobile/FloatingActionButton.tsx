@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Plus } from "@gouvfr-lasuite/ui-kit/icons";
+import { Plus } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { FloatingActionButtonProps } from "../types";
 

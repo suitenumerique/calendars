@@ -20,9 +20,9 @@ import {
 import { useTranslation } from "react-i18next";
 import { useCalendarContext } from "../../contexts";
 import { useCalendarLocale } from "../../hooks/useCalendarLocale";
-import { Button } from "@gouvfr-lasuite/cunningham-react";
+import { Button } from "@gouvfr-lasuite/ui-components";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
-import { ChevronLeft, ChevronRight } from "@gouvfr-lasuite/ui-kit/icons";
+import { ChevronLeft, ChevronRight } from "@gouvfr-lasuite/ui-components/icons";
 
 interface MiniCalendarProps {
   selectedDate: Date;

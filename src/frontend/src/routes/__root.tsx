@@ -7,7 +7,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { CunninghamProvider } from "@gouvfr-lasuite/ui-kit";
+import { CunninghamProvider } from "@gouvfr-lasuite/ui-components";
 import { useTranslation } from "react-i18next";
 import { AppContextProvider, useAppContext } from "@/features/app/AppContext";
 import { AnalyticsProvider } from "@/features/analytics/AnalyticsProvider";

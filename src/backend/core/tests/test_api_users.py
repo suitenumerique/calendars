@@ -101,10 +101,13 @@ def test_api_users_list_limit(settings):  # pylint: disable=unused-argument
     for i in range(55):
         factories.UserFactory(email=f"alice.{i}@example.com", organization=org)
 
-    # Partial match returns results (capped at 50)
+    # Partial match returns one page of results, with pagination exposing the rest
     response = client.get("/api/v1.0/users/?q=alice")
     assert response.status_code == 200
-    assert len(response.json()["results"]) == 50
+    content = response.json()
+    assert len(content["results"]) == 50
+    assert content["count"] == 55
+    assert content["next"] is not None
 
 
 def test_api_users_list_throttling_authenticated(settings):

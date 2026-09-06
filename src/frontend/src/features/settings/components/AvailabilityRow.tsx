@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { XMark } from "@gouvfr-lasuite/ui-kit/icons";
+import { XMark } from "@gouvfr-lasuite/ui-components/icons";
 import {
   DAYS_OF_WEEK,
   type AvailabilitySlot,
