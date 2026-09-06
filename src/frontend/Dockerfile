@@ -3,7 +3,7 @@
 # under QEMU.  For local / amd64 builds the default is used.
 ARG FRONTEND_IMAGE=frontend-build-output
 
-FROM node:24-alpine AS frontend-deps
+FROM node:26-alpine AS frontend-deps
 
 # pnpm, provided by corepack (version pinned via package.json#packageManager).
 RUN corepack enable
