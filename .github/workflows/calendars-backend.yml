@@ -29,7 +29,7 @@ jobs:
         run: |
           python3 -c "import json; json.load(open('src/frontend/src/features/i18n/translations.json')); print('translations.json is valid JSON')"
       - name: "Set up Python"
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version-file: "src/backend/pyproject.toml"
       - name: Install uv
@@ -121,7 +121,7 @@ jobs:
           echo "CalDAV server is ready"
 
       - name: "Set up Python"
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version-file: "src/backend/pyproject.toml"
       - name: Install uv
