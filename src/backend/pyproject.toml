@@ -67,7 +67,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "django-debug-toolbar==6.1.0",
+    "django-debug-toolbar==8.0.0",
     "django-extensions==4.1",
     "drf-spectacular-sidecar==2025.12.1",
     "freezegun==1.5.5",
