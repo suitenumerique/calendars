@@ -23,7 +23,7 @@
     "analyze": "ANALYZE=1 vite build"
   },
   "dependencies": {
-    "@event-calendar/core": "5.7.1",
+    "@event-calendar/core": "5.12.2",
     "@gouvfr-lasuite/ui-components": "1.0.0",
     "@tanstack/react-query": "5.101.0",
     "@tanstack/react-router": "1.170.15",
