@@ -230,7 +230,10 @@ export const useSchedulerInit = ({
                 });
 
                 if (!result.success || !result.data) {
-                  console.error(`Failed to fetch events from ${calendar.url}:`, result.error);
+                  console.error(
+                    `[useSchedulerInit] Failed to fetch events from ${calendar.url} (rendering it empty):`,
+                    result.error,
+                  );
                   return [];
                 }
 
@@ -292,7 +295,10 @@ export const useSchedulerInit = ({
               const allEventsArrays = await Promise.all(allEventsPromises);
               return allEventsArrays.flat() as ECEvent[];
             } catch (error) {
-              console.error("Error fetching events:", error);
+              // Keep returning [] so one failure doesn't blank the whole view,
+              // but log it: an empty calendar can mean a failed fetch, not an
+              // empty one (issue #74).
+              console.error("[useSchedulerInit] Error fetching events (rendering empty):", error);
               return [];
             }
           },

@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# Smoke-test the frontend production image (frontend-production: distroless +
+# Caddy + lprobe). Adapted from suitenumerique/messages' bin/smoke-test-front;
+# this frontend serves static assets only (no backend proxy), so the test
+# covers boot, the health endpoint, the SPA fallback and the asset 404
+# behavior. The script picks the network mode from the daemon:
+# - bridge mode (normal Docker, Docker Desktop): publish port 8080.
+# - host mode (a daemon without bridge networking): share the host network.
+# Host port 8080 (Caddy, hardcoded in the image HEALTHCHECK) must be free.
+# Requires: docker, curl.
+set -o errexit -o nounset -o pipefail
+
+IMAGE="${1:-calendars-frontend-distroless}"
+BASE=http://127.0.0.1:8080
+CID=""
+
+if docker network inspect bridge >/dev/null 2>&1; then
+  RUN_FLAGS=(-p 8080:8080)
+else
+  RUN_FLAGS=(--network host)
+fi
+
+cleanup() {
+  [ -n "$CID" ] && docker rm -f "$CID" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+trap 'cleanup; trap - EXIT; exit 130' INT TERM
+
+fail() {
+  echo "FAIL: $*" >&2
+  [ -n "$CID" ] && docker logs "$CID" >&2 || true
+  exit 1
+}
+
+port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+if port_open 8080; then
+  echo "FAIL: port 8080 is already in use on the host." >&2
+  echo "Stop the process that uses it, then run the test again." >&2
+  exit 1
+fi
+
+CID=$(docker run -d "${RUN_FLAGS[@]}" "$IMAGE") \
+  || fail "docker run did not start the container"
+for _ in $(seq 1 100); do
+  if curl -fs -o /dev/null --connect-timeout 3 --max-time 10 \
+    "$BASE/__lbheartbeat__" 2>/dev/null; then
+    break
+  fi
+  sleep 0.2
+done
+curl -fs -o /dev/null "$BASE/__lbheartbeat__" \
+  || fail "container did not become ready on $BASE"
+
+code() { curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 10 "$@"; }
+
+assert_code() {
+  local expected="$1" label="$2"; shift 2
+  # curl prints 000 on a connection error; keep going so fail() can dump
+  # the container logs.
+  local got; got=$(code "$@" || true)
+  [ "$got" = "$expected" ] || fail "$label: expected HTTP $expected, got $got"
+  echo "ok: $label ($expected)"
+}
+
+# Boot + heartbeat: proves Caddy starts on distroless.
+assert_code 200 "heartbeat" "$BASE/__lbheartbeat__"
+assert_code 200 "heartbeat (trailing slash)" "$BASE/__lbheartbeat__/"
+
+# Run the exact HEALTHCHECK command in the network namespace of the
+# running container, without a wait for the first health tick.
+docker run --rm --network "container:$CID" --entrypoint /usr/bin/lprobe "$IMAGE" \
+  -mode=http -port=8080 -endpoint=/__lbheartbeat__ \
+  || fail "lprobe healthcheck command"
+echo "ok: lprobe healthcheck"
+
+# SPA shell and client-side routes fall back to index.html.
+assert_code 200 "SPA root" "$BASE/"
+assert_code 200 "SPA fallback for client route" "$BASE/some/client/route"
+
+# A missing hashed asset must stay a 404: serving index.html to a stale
+# <script> tag would crash the page with a SyntaxError.
+assert_code 404 "missing asset stays 404" "$BASE/assets/nonexistent.js"
+
+# Security headers on the SPA shell.
+HEADERS=$(curl -fsi --max-time 10 "$BASE/" | tr -d '\r')
+echo "$HEADERS" | grep -qi '^X-Frame-Options: DENY$' \
+  || fail "X-Frame-Options: DENY missing on the SPA shell"
+echo "$HEADERS" | grep -qi '^Server:' \
+  && fail "Server header should be stripped" || true
+echo "ok: security headers"
+
+# Cache policy: immutable for hashed assets, no-cache for the shell.
+# Headers are captured into variables: piping curl straight into `grep -q`
+# would trip pipefail (grep exits on the first match, curl gets SIGPIPE).
+ASSET=$(curl -fs --max-time 10 "$BASE/" | grep -o '/assets/[^"]*\.js' | head -1 || true)
+if [ -n "$ASSET" ]; then
+  ASSET_HEADERS=$(curl -fsI --max-time 10 "$BASE$ASSET" | tr -d '\r')
+  echo "$ASSET_HEADERS" | grep -qi 'immutable' \
+    || fail "hashed asset is not served with an immutable Cache-Control"
+  echo "ok: immutable cache on $ASSET"
+fi
+echo "$HEADERS" | grep -qi '^Cache-Control: no-cache$' \
+  || fail "SPA shell is not served with Cache-Control: no-cache"
+echo "ok: no-cache on the SPA shell"
+
+echo "OK: frontend production image smoke test passed"

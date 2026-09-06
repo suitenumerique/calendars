@@ -5,14 +5,13 @@
 /.pnp
 .pnp.*
 
-# pnpm / corepack / TanStack runtime caches. The dev container's HOME is
-# this bind-mounted dir, so these land here; this entry also keeps oxlint
+# npm / TanStack runtime caches. The dev container's HOME is this
+# bind-mounted dir, so these land here; this entry also keeps oxlint
 # (which runs inside the container and only sees this .gitignore) from
 # scanning them.
 /.cache
 /.local
 /.npm
-/.pnpm-store
 /.tanstack
 .yarn/*
 !.yarn/patches
@@ -35,7 +34,6 @@ bundle-stats.html
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
 # local env files
 .env*

@@ -22,21 +22,18 @@ jobs:
         id: front-node_modules
         with:
           path: "src/frontend/**/node_modules"
-          key: front-node_modules-${{ hashFiles('src/frontend/**/pnpm-lock.yaml') }}
+          key: front-node_modules-${{ hashFiles('src/frontend/**/package-lock.json') }}
       - name: Setup Node.js
         if: steps.front-node_modules.outputs.cache-hit != 'true'
         uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node_version }}
-      - name: Enable pnpm via corepack
-        if: steps.front-node_modules.outputs.cache-hit != 'true'
-        run: corepack enable
       - name: Install dependencies
         if: steps.front-node_modules.outputs.cache-hit != 'true'
-        run: cd src/frontend/ && pnpm install --frozen-lockfile
+        run: cd src/frontend/ && npm ci
       - name: Cache install frontend
         if: steps.front-node_modules.outputs.cache-hit != 'true'
         uses: actions/cache@v5
         with:
           path: "src/frontend/**/node_modules"
-          key: front-node_modules-${{ hashFiles('src/frontend/**/pnpm-lock.yaml') }}
+          key: front-node_modules-${{ hashFiles('src/frontend/**/package-lock.json') }}
