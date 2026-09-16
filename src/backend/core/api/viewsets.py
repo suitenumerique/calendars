@@ -156,6 +156,7 @@ class ConfigView(views.APIView):
         array_settings = [
             "ENVIRONMENT",
             "FRONTEND_THEME",
+            "FRONTEND_SILENT_LOGIN_ENABLED",
             "FRONTEND_MORE_LINK",
             "FRONTEND_FEEDBACK_BUTTON_SHOW",
             "FRONTEND_FEEDBACK_BUTTON_IDLE",

@@ -511,6 +511,12 @@ class Base(Configuration):
     FRONTEND_THEME = values.Value(
         None, environ_name="FRONTEND_THEME", environ_prefix=None
     )
+    # Redirect anonymous visitors straight to the OIDC provider with
+    # prompt=none, so a live SSO session logs them in without showing the
+    # landing page. Requires an OIDC provider reachable over HTTPS.
+    FRONTEND_SILENT_LOGIN_ENABLED = values.BooleanValue(
+        default=False, environ_name="FRONTEND_SILENT_LOGIN_ENABLED", environ_prefix=None
+    )
     FRONTEND_MORE_LINK = values.Value(
         None,
         environ_name="FRONTEND_MORE_LINK",
@@ -639,6 +645,10 @@ class Base(Configuration):
         environ_name="OIDC_CREATE_USER",
     )
     OIDC_CALLBACK_CLASS = "core.authentication.views.OIDCAuthenticationCallbackView"
+    # Translates ?silent=true on the authenticate endpoint into an OIDC
+    # prompt=none request. Without it the stock mozilla-django-oidc view
+    # ignores the parameter and falls back to an interactive login.
+    OIDC_AUTHENTICATE_CLASS = "lasuite.oidc_login.views.OIDCAuthenticationRequestView"
     OIDC_RP_SIGN_ALGO = values.Value(
         "RS256", environ_name="OIDC_RP_SIGN_ALGO", environ_prefix=None
     )

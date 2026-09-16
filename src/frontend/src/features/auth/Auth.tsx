@@ -6,6 +6,8 @@ import { User } from "@/features/auth/types";
 import { baseApiUrl } from "../api/utils";
 import { APIError } from "../api/APIError";
 import { SpinnerPage } from "@/features/ui/components/spinner/SpinnerPage";
+import { useConfig } from "@/features/config/ConfigProvider";
+import { attemptSilentLogin } from "./silentLogin";
 
 export const logout = () => {
   window.location.replace(new URL("logout/", baseApiUrl()).href);
@@ -31,6 +33,8 @@ export const useAuth = () => React.useContext(AuthContext);
 
 export const Auth = ({ children, redirect }: PropsWithChildren & { redirect?: boolean }) => {
   const [user, setUser] = useState<User | null>();
+  const { config } = useConfig();
+  const silentLoginEnabled = config.FRONTEND_SILENT_LOGIN_ENABLED ?? false;
 
   const init = useCallback(async () => {
     try {
@@ -43,14 +47,22 @@ export const Auth = ({ children, redirect }: PropsWithChildren & { redirect?: bo
       setUser(data);
       return data;
     } catch (error) {
-      if (redirect && error instanceof APIError && error.code === 401) {
+      const is401 = error instanceof APIError && error.code === 401;
+
+      // Leave `user` undefined while the redirect commits, so the spinner
+      // below holds instead of flashing the landing page on the way out.
+      if (is401 && silentLoginEnabled && attemptSilentLogin()) {
+        return null;
+      }
+
+      if (redirect && is401) {
         login(typeof window !== "undefined" ? window.location.href : undefined);
       } else {
         setUser(null);
       }
       return null;
     }
-  }, [redirect]);
+  }, [redirect, silentLoginEnabled]);
 
   const refreshUser = async () => {
     void init();

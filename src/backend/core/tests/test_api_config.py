@@ -19,6 +19,7 @@ pytestmark = pytest.mark.django_db
 
 @override_settings(
     FRONTEND_THEME="test-theme",
+    FRONTEND_SILENT_LOGIN_ENABLED=True,
     FRONTEND_MORE_LINK="https://test.com",
     FRONTEND_FEEDBACK_BUTTON_SHOW=True,
     FRONTEND_FEEDBACK_BUTTON_IDLE=False,
@@ -54,6 +55,7 @@ def test_api_config(is_authenticated):
     assert response.json() == {
         "ENVIRONMENT": "test",
         "FRONTEND_THEME": "test-theme",
+        "FRONTEND_SILENT_LOGIN_ENABLED": True,
         "FRONTEND_MORE_LINK": "https://test.com",
         "FRONTEND_FEEDBACK_BUTTON_SHOW": True,
         "FRONTEND_FEEDBACK_BUTTON_IDLE": False,

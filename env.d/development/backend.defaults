@@ -58,6 +58,8 @@ CALDAV_INBOUND_API_KEY=changeme-inbound-in-production
 CALDAV_INTERNAL_API_KEY=changeme-internal-in-production
 # Frontend
 FRONTEND_THEME=default
+# Keycloak rejects prompt=none over plain HTTP, so keep this off locally
+FRONTEND_SILENT_LOGIN_ENABLED=False
 FRONTEND_MORE_LINK=
 FRONTEND_FEEDBACK_BUTTON_SHOW=True
 FRONTEND_FEEDBACK_BUTTON_IDLE=False
