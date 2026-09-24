@@ -91,3 +91,41 @@ class SetupView(APIView):
                 {"error": "Failed to create calendar"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    def delete(self, request):
+        """Delete a mailbox-owned calendar, for every mailbox user.
+
+        Body: {"mailbox_email": "contact@company.com", "calendar_uri": "..."}
+        """
+        mailbox_email = request.data.get("mailbox_email")
+        calendar_uri = request.data.get("calendar_uri")
+        if not mailbox_email or not calendar_uri:
+            return Response(
+                {"error": "mailbox_email and calendar_uri are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            SetupService().delete_mailbox_calendar(
+                request.user, mailbox_email, calendar_uri
+            )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except SetupServiceError as exc:
+            logger.warning(
+                "Mailbox calendar delete rejected for user %s (mailbox=%s): %s",
+                request.user.pk,
+                mailbox_email,
+                exc,
+            )
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception(
+                "Failed to delete mailbox calendar for %s", request.user.pk
+            )
+            return Response(
+                {"error": "Failed to delete calendar"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

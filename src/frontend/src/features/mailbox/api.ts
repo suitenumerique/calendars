@@ -25,3 +25,23 @@ export async function setupCalendar(
   });
   return response.json();
 }
+
+/**
+ * Delete a MAILBOX-owned calendar for every mailbox user.
+ *
+ * Unlike a plain CalDAV DELETE (which only ever removes the caller's
+ * own share), this reaches the real owner-branch delete via the
+ * backend's internal API, so the calendar disappears for everyone.
+ *
+ * `calendarUri` is the URI the caller reads the calendar at under
+ * their own principal — the last path segment of the calendar's URL.
+ */
+export async function deleteMailboxCalendar(
+  mailboxEmail: string,
+  calendarUri: string,
+): Promise<void> {
+  await fetchAPI("setup/", {
+    method: "DELETE",
+    body: JSON.stringify({ mailbox_email: mailboxEmail, calendar_uri: calendarUri }),
+  });
+}

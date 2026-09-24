@@ -10,6 +10,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- 🐛(global) fix mailbox-owned calendars that could be created without
+  limit but never truly deleted (#73)
+
 ## [0.1.0] - 2026-06-18
 
 First public release.
