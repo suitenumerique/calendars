@@ -39,9 +39,45 @@ const MONTHS = [
   { value: 12, key: "december" },
 ];
 
+const ORDINALS = [
+  { value: 1, key: "first" },
+  { value: 2, key: "second" },
+  { value: 3, key: "third" },
+  { value: 4, key: "fourth" },
+  { value: -1, key: "last" },
+];
+
+const WEEKDAYS_FULL = [
+  { value: "MO", key: "monday" },
+  { value: "TU", key: "tuesday" },
+  { value: "WE", key: "wednesday" },
+  { value: "TH", key: "thursday" },
+  { value: "FR", key: "friday" },
+  { value: "SA", key: "saturday" },
+  { value: "SU", key: "sunday" },
+] as const;
+
+type MonthlyMode = "dayOfMonth" | "nthWeekday";
+
+export function getMonthlyMode(value?: IcsRecurrenceRule): MonthlyMode {
+  return value?.byDay?.length ? "nthWeekday" : "dayOfMonth";
+}
+
+export function getMonthlyWeekday(value?: IcsRecurrenceRule): IcsWeekDay {
+  const entry = value?.byDay?.[0];
+  if (!entry) return "MO";
+  return typeof entry === "string" ? entry : entry.day;
+}
+
+export function getMonthlyOccurrence(value?: IcsRecurrenceRule): number {
+  const entry = value?.byDay?.[0];
+  if (!entry || typeof entry === "string") return 1;
+  return entry.occurrence ?? 1;
+}
+
 const ADVANCED_RRULE_KEYS: (keyof IcsRecurrenceRule)[] = ["bySetPos", "byYearday", "byWeekNo"];
 
-function hasAdvancedProperties(rule?: IcsRecurrenceRule): boolean {
+export function hasAdvancedProperties(rule?: IcsRecurrenceRule): boolean {
   if (!rule) return false;
   return ADVANCED_RRULE_KEYS.some((key) => rule[key] !== undefined && rule[key] !== null);
 }
@@ -188,6 +224,38 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
     [t],
   );
 
+  const ordinalOptions = useMemo(
+    () =>
+      ORDINALS.map((ordinal) => ({
+        value: String(ordinal.value),
+        label: t(`calendar.recurrence.ordinals.${ordinal.key}`),
+      })),
+    [t],
+  );
+
+  const weekdayFullOptions = useMemo(
+    () =>
+      WEEKDAYS_FULL.map((day) => ({
+        value: day.value,
+        label: t(`calendar.weekdaysFull.${day.key}`),
+      })),
+    [t],
+  );
+
+  const monthlyModeOptions = useMemo(
+    () => [
+      {
+        value: "dayOfMonth" as MonthlyMode,
+        label: t("calendar.recurrence.monthlyMode.dayOfMonth"),
+      },
+      {
+        value: "nthWeekday" as MonthlyMode,
+        label: t("calendar.recurrence.monthlyMode.nthWeekday"),
+      },
+    ],
+    [t],
+  );
+
   const summary = useMemo((): string => {
     if (!isCustom || !value) return "";
 
@@ -205,6 +273,16 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
         return t(`calendar.recurrence.weekdays.${dayKey.toLowerCase()}`);
       });
       result += ` · ${dayLabels.join(", ")}`;
+    }
+
+    if (freq === "MONTHLY" && value.byDay?.length) {
+      const occurrence = getMonthlyOccurrence(value);
+      const weekday = getMonthlyWeekday(value);
+      const ordinalMeta = ORDINALS.find((o) => o.value === occurrence);
+      const weekdayMeta = WEEKDAYS_FULL.find((w) => w.value === weekday);
+      const ordinalLabel = ordinalMeta ? t(`calendar.recurrence.ordinals.${ordinalMeta.key}`) : "";
+      const weekdayLabel = weekdayMeta ? t(`calendar.weekdaysFull.${weekdayMeta.key}`) : "";
+      result += ` · ${ordinalLabel} ${weekdayLabel}`;
     }
 
     // Defer to ``getEndType``: a ``count`` / ``until`` past the
@@ -300,7 +378,31 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
     handleChange({ byMonth: [month] });
   };
 
+  const handleMonthlyModeChange = (mode: MonthlyMode) => {
+    if (mode === "dayOfMonth") {
+      handleChange({ byDay: undefined, byMonthday: [getMonthDay()] });
+      return;
+    }
+
+    const today = new Date();
+    const defaultWeekday = WEEKDAY_KEYS[(today.getDay() + 6) % 7];
+    const defaultOccurrence = Math.min(4, Math.ceil(today.getDate() / 7));
+    handleChange({
+      byMonthday: undefined,
+      byDay: [{ day: defaultWeekday, occurrence: defaultOccurrence }],
+    });
+  };
+
+  const handleMonthlyWeekdayChange = (day: IcsWeekDay) => {
+    handleChange({ byDay: [{ day, occurrence: getMonthlyOccurrence(value) }] });
+  };
+
+  const handleMonthlyOccurrenceChange = (occurrence: number) => {
+    handleChange({ byDay: [{ day: getMonthlyWeekday(value), occurrence }] });
+  };
+
   const endType = getEndType(value);
+  const monthlyMode = getMonthlyMode(value);
 
   const monthDay = getMonthDay();
   const dateWarning =
@@ -382,26 +484,62 @@ export function RecurrenceEditor({ value, onChange }: RecurrenceEditorProps) {
 
           {value?.frequency === "MONTHLY" && (
             <div className="recurrence-editor__day-select">
-              <span className="recurrence-editor__label">
-                {t("calendar.recurrence.repeatOnDay")}
-              </span>
-              <div className="recurrence-editor__interval">
-                <span>{t("calendar.recurrence.dayOfMonth")}</span>
-                <Input
-                  label=""
-                  type="number"
-                  min={1}
-                  max={31}
-                  variant="classic"
-                  value={getMonthDay()}
-                  onChange={(e) => {
-                    const day = parseInt(e.target.value) || 1;
-                    if (day >= 1 && day <= 31) {
-                      handleMonthDayChange(day);
-                    }
-                  }}
-                />
+              <div className="recurrence-editor__monthly-mode-options">
+                {monthlyModeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`recurrence-editor__monthly-mode-btn ${monthlyMode === option.value ? "recurrence-editor__monthly-mode-btn--active" : ""}`}
+                    onClick={() => handleMonthlyModeChange(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
+
+              {monthlyMode === "dayOfMonth" && (
+                <div className="recurrence-editor__interval">
+                  <span>{t("calendar.recurrence.dayOfMonth")}</span>
+                  <Input
+                    label=""
+                    type="number"
+                    min={1}
+                    max={31}
+                    variant="classic"
+                    value={getMonthDay()}
+                    onChange={(e) => {
+                      const day = parseInt(e.target.value) || 1;
+                      if (day >= 1 && day <= 31) {
+                        handleMonthDayChange(day);
+                      }
+                    }}
+                  />
+                </div>
+              )}
+
+              {monthlyMode === "nthWeekday" && (
+                <div className="recurrence-editor__interval">
+                  <span>{t("calendar.recurrence.repeatOnWeekday")}</span>
+                  <Select
+                    label=""
+                    variant="classic"
+                    value={String(getMonthlyOccurrence(value))}
+                    options={ordinalOptions}
+                    onChange={(e) =>
+                      handleMonthlyOccurrenceChange(parseInt(String(e.target.value)) || 1)
+                    }
+                  />
+                  <Select
+                    label=""
+                    variant="classic"
+                    value={getMonthlyWeekday(value)}
+                    options={weekdayFullOptions}
+                    onChange={(e) =>
+                      handleMonthlyWeekdayChange(String(e.target.value ?? "MO") as IcsWeekDay)
+                    }
+                  />
+                </div>
+              )}
             </div>
           )}
 

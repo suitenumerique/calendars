@@ -1,6 +1,14 @@
 import type { IcsRecurrenceRule } from "ts-ics";
 
-import { getEndType, isForeverCount, isForeverUntil } from "../RecurrenceEditor";
+import {
+  getEndType,
+  getMonthlyMode,
+  getMonthlyOccurrence,
+  getMonthlyWeekday,
+  hasAdvancedProperties,
+  isForeverCount,
+  isForeverUntil,
+} from "../RecurrenceEditor";
 
 function rule(overrides: Partial<IcsRecurrenceRule>): IcsRecurrenceRule {
   return {
@@ -97,5 +105,68 @@ describe("RecurrenceEditor end-type classification", () => {
     it("returns 'never' for far-future UNTIL", () => {
       expect(getEndType(rule({ frequency: "DAILY", until: dateIn(25) }))).toBe("never");
     });
+  });
+});
+
+describe("RecurrenceEditor monthly nth-weekday helpers", () => {
+  describe("getMonthlyMode", () => {
+    it("returns 'dayOfMonth' for undefined rules", () => {
+      expect(getMonthlyMode(undefined)).toBe("dayOfMonth");
+    });
+
+    it("returns 'dayOfMonth' for a rule using byMonthday", () => {
+      expect(getMonthlyMode(rule({ frequency: "MONTHLY", byMonthday: [15] }))).toBe("dayOfMonth");
+    });
+
+    it("returns 'nthWeekday' for a rule using byDay with an occurrence", () => {
+      expect(
+        getMonthlyMode(rule({ frequency: "MONTHLY", byDay: [{ day: "TU", occurrence: 1 }] })),
+      ).toBe("nthWeekday");
+    });
+  });
+
+  describe("getMonthlyWeekday", () => {
+    it("returns 'MO' fallback when byDay is absent", () => {
+      expect(getMonthlyWeekday(rule({ frequency: "MONTHLY", byMonthday: [15] }))).toBe("MO");
+    });
+
+    it("returns the day from byDay[0]", () => {
+      expect(
+        getMonthlyWeekday(rule({ frequency: "MONTHLY", byDay: [{ day: "FR", occurrence: 2 }] })),
+      ).toBe("FR");
+    });
+  });
+
+  describe("getMonthlyOccurrence", () => {
+    it("returns 1 fallback when byDay is absent", () => {
+      expect(getMonthlyOccurrence(rule({ frequency: "MONTHLY", byMonthday: [15] }))).toBe(1);
+    });
+
+    it("returns the occurrence from byDay[0]", () => {
+      expect(
+        getMonthlyOccurrence(rule({ frequency: "MONTHLY", byDay: [{ day: "TU", occurrence: 3 }] })),
+      ).toBe(3);
+    });
+
+    it("correctly returns a negative occurrence (last weekday of month)", () => {
+      expect(
+        getMonthlyOccurrence(
+          rule({ frequency: "MONTHLY", byDay: [{ day: "FR", occurrence: -1 }] }),
+        ),
+      ).toBe(-1);
+    });
+  });
+
+  it("agrees across getters for a 'last Friday of the month' rule", () => {
+    const lastFriday = rule({ frequency: "MONTHLY", byDay: [{ day: "FR", occurrence: -1 }] });
+    expect(getMonthlyMode(lastFriday)).toBe("nthWeekday");
+    expect(getMonthlyWeekday(lastFriday)).toBe("FR");
+    expect(getMonthlyOccurrence(lastFriday)).toBe(-1);
+  });
+
+  it("does not treat a monthly nth-weekday byDay as an advanced property", () => {
+    expect(
+      hasAdvancedProperties(rule({ frequency: "MONTHLY", byDay: [{ day: "FR", occurrence: -1 }] })),
+    ).toBe(false);
   });
 });
