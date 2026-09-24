@@ -31,6 +31,13 @@
 	@spa_shell path / /index.html
 	header @spa_shell Cache-Control "no-cache"
 
+	# Health checks (the image HEALTHCHECK runs lprobe against this;
+	# load balancers can use it too). Must stay before the SPA fallback.
+	@heartbeat path /__lbheartbeat__ /__lbheartbeat__/
+	handle @heartbeat {
+		respond 200
+	}
+
 	# Serve /assets/* as real files only. A miss must surface as a 404 —
 	# falling back to index.html here would return HTML for a script tag
 	# and crash the page with a SyntaxError when a browser cached on an

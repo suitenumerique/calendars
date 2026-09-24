@@ -972,6 +972,8 @@ export function getIcalTimezoneBlock(tzid: string): [string] | [] {
 
   // Fallback: generate a simple VTIMEZONE for unknown timezones
   // This uses the browser's Intl API to get the UTC offset
+  // shortOffset supported since Chrome 95 — Chromium 109 has it, but old ICU
+  // or truly unknown TZ may still throw RangeError.
   try {
     const now = new Date();
     const formatter = new Intl.DateTimeFormat("en-US", {
@@ -1003,10 +1005,19 @@ DTSTART:19700101T000000
 END:STANDARD
 END:VTIMEZONE`;
 
-    console.warn(`[ical-timezones] Using fallback VTIMEZONE for unknown timezone: ${tzid}`);
+    console.warn(
+      `[ical-timezones] Using fallback VTIMEZONE for unknown timezone: ${tzid} (shortOffset)`,
+    );
     return [fallbackBlock];
-  } catch {
-    console.error(`[ical-timezones] Failed to generate VTIMEZONE for timezone: ${tzid}`);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      console.error(
+        `[ical-timezones] RangeError for timezone "${tzid}" (shortOffset unsupported or unknown TZ on Chromium 109/old ICU) — returning empty VTIMEZONE:`,
+        error,
+      );
+    } else {
+      console.error(`[ical-timezones] Failed to generate VTIMEZONE for timezone: ${tzid}`, error);
+    }
     return [];
   }
 }

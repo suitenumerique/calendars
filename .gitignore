@@ -46,17 +46,16 @@ env.d/terraform
 compose.override.yml
 docker/auth/*.local
 
-# npm / pnpm
+# npm
 node_modules
 src/frontend/dist/
 src/frontend/src/routes.gen.ts
-# The dev container's HOME is the bind-mounted project dir, so npm/pnpm/
-# corepack write their caches and stores onto the host. Keep them out of
-# git (and the linter). TanStack Router writes a .tanstack cache too.
+# The dev container's HOME is the bind-mounted project dir, so npm writes
+# its caches onto the host. Keep them out of git (and the linter).
+# TanStack Router writes a .tanstack cache too.
 .npm/
 .cache/
 .local/
-.pnpm-store/
 .tanstack/
 
 # Composer (PHP)

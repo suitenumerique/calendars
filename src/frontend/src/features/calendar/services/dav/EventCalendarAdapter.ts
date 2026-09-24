@@ -182,6 +182,9 @@ export class EventCalendarAdapter {
   private static readonly FORMATTER_CACHE_MAX_SIZE = 50;
   private dateComponentsFormatterCache = new Map<string, Intl.DateTimeFormat>();
   private offsetFormatterCache = new Map<string, Intl.DateTimeFormat>();
+  // Timezones Intl already threw on (Chromium 109 / old ICU): go straight to
+  // the fallback instead of re-throwing and re-warning for every event.
+  private readonly failedIntlTimezones = new Set<string>();
 
   // ============================================================================
   // CalDAV -> EventCalendar Conversions
@@ -936,38 +939,67 @@ export class EventCalendarAdapter {
    * @returns DateComponents with year, month (1-12), day, hours, minutes, seconds in the target timezone
    */
   public getDateComponentsInTimezone(date: Date, timezone: string): DateComponents {
-    let formatter = this.dateComponentsFormatterCache.get(timezone);
-    if (!formatter) {
-      if (this.dateComponentsFormatterCache.size >= EventCalendarAdapter.FORMATTER_CACHE_MAX_SIZE) {
-        const firstKey = this.dateComponentsFormatterCache.keys().next().value;
-        this.dateComponentsFormatterCache.delete(firstKey as string);
-      }
-      formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: timezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      });
-      this.dateComponentsFormatterCache.set(timezone, formatter);
+    if (this.failedIntlTimezones.has(`components:${timezone}`)) {
+      return this.utcDateComponents(date);
     }
-    const parts = formatter.formatToParts(date);
+    try {
+      let formatter = this.dateComponentsFormatterCache.get(timezone);
+      if (!formatter) {
+        if (
+          this.dateComponentsFormatterCache.size >= EventCalendarAdapter.FORMATTER_CACHE_MAX_SIZE
+        ) {
+          const firstKey = this.dateComponentsFormatterCache.keys().next().value;
+          this.dateComponentsFormatterCache.delete(firstKey as string);
+        }
+        formatter = new Intl.DateTimeFormat("en-US", {
+          timeZone: timezone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        });
+        this.dateComponentsFormatterCache.set(timezone, formatter);
+      }
+      const parts = formatter.formatToParts(date);
 
-    const get = (type: Intl.DateTimeFormatPartTypes): number => {
-      const part = parts.find((p) => p.type === type);
-      return part ? parseInt(part.value, 10) : 0;
-    };
+      const get = (type: Intl.DateTimeFormatPartTypes): number => {
+        const part = parts.find((p) => p.type === type);
+        return part ? parseInt(part.value, 10) : 0;
+      };
 
+      return {
+        year: get("year"),
+        month: get("month"),
+        day: get("day"),
+        hours: get("hour") === 24 ? 0 : get("hour"), // Intl may return 24 for midnight
+        minutes: get("minute"),
+        seconds: get("second"),
+      };
+    } catch (error) {
+      // Chromium 109 / old ICU may throw RangeError for an unknown timezone.
+      // Without this fallback the error bubbles up and the whole calendar
+      // renders empty; UTC components may be off by the timezone offset but
+      // keep events visible. Warn once per timezone.
+      this.failedIntlTimezones.add(`components:${timezone}`);
+      console.warn(
+        `[EventCalendarAdapter] getDateComponentsInTimezone failed for timezone "${timezone}" — falling back to UTC components:`,
+        error,
+      );
+      return this.utcDateComponents(date);
+    }
+  }
+
+  private utcDateComponents(date: Date): DateComponents {
     return {
-      year: get("year"),
-      month: get("month"),
-      day: get("day"),
-      hours: get("hour") === 24 ? 0 : get("hour"), // Intl may return 24 for midnight
-      minutes: get("minute"),
-      seconds: get("second"),
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+      hours: date.getUTCHours(),
+      minutes: date.getUTCMinutes(),
+      seconds: date.getUTCSeconds(),
     };
   }
 
@@ -976,6 +1008,9 @@ export class EventCalendarAdapter {
    * Returns format like "+0200" or "-0500"
    */
   public getTimezoneOffset(date: Date, timezone: string): string {
+    if (this.failedIntlTimezones.has(`offset:${timezone}`)) {
+      return "+0000";
+    }
     try {
       let formatter = this.offsetFormatterCache.get(timezone);
       if (!formatter) {
@@ -1003,7 +1038,15 @@ export class EventCalendarAdapter {
         }
       }
       return "+0000";
-    } catch {
+    } catch (error) {
+      // Chromium 109 / old ICU may throw for longOffset or an unknown
+      // timezone. The +0000 fallback shifts times by the real offset, so
+      // don't leave it silent — warn once per timezone.
+      this.failedIntlTimezones.add(`offset:${timezone}`);
+      console.warn(
+        `[EventCalendarAdapter] getTimezoneOffset failed for timezone "${timezone}" — falling back to +0000:`,
+        error,
+      );
       return "+0000";
     }
   }

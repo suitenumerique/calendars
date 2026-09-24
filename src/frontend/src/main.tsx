@@ -1,3 +1,4 @@
+import "./polyfills";
 import "./styles/globals.scss";
 import "./features/i18n/initI18n";
 
