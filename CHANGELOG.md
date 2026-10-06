@@ -10,6 +10,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- 🔧(global) stop hard-coding the terms of service and footer links
+
 ## [0.1.0] - 2026-06-18
 
 First public release.

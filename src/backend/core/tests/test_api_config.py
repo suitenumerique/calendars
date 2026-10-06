@@ -20,6 +20,7 @@ pytestmark = pytest.mark.django_db
 @override_settings(
     FRONTEND_THEME="test-theme",
     FRONTEND_MORE_LINK="https://test.com",
+    FRONTEND_TERMS_OF_SERVICE_URL="https://test.com/tos",
     FRONTEND_FEEDBACK_BUTTON_SHOW=True,
     FRONTEND_FEEDBACK_BUTTON_IDLE=False,
     FRONTEND_FEEDBACK_ITEMS={"form": {"url": "https://test.com"}},
@@ -55,6 +56,7 @@ def test_api_config(is_authenticated):
         "ENVIRONMENT": "test",
         "FRONTEND_THEME": "test-theme",
         "FRONTEND_MORE_LINK": "https://test.com",
+        "FRONTEND_TERMS_OF_SERVICE_URL": "https://test.com/tos",
         "FRONTEND_FEEDBACK_BUTTON_SHOW": True,
         "FRONTEND_FEEDBACK_BUTTON_IDLE": False,
         "FRONTEND_FEEDBACK_ITEMS": {"form": {"url": "https://test.com"}},

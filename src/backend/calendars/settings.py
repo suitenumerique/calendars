@@ -516,6 +516,13 @@ class Base(Configuration):
         environ_name="FRONTEND_MORE_LINK",
         environ_prefix=None,
     )
+    # Terms of service shown in the user menu. Unset hides the entry rather
+    # than pointing every instance at another operator's document.
+    FRONTEND_TERMS_OF_SERVICE_URL = values.Value(
+        None,
+        environ_name="FRONTEND_TERMS_OF_SERVICE_URL",
+        environ_prefix=None,
+    )
     FRONTEND_FEEDBACK_BUTTON_SHOW = values.BooleanValue(
         default=False, environ_name="FRONTEND_FEEDBACK_BUTTON_SHOW", environ_prefix=None
     )
