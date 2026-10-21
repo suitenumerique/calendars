@@ -17,13 +17,13 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 description = "A calendar application."
 keywords = ["Django", "Contacts", "Templates", "RBAC"]
 license = { file = "LICENSE" }
 readme = "README.md"
-requires-python = "~=3.13.0"
+requires-python = "~=3.14.8"
 dependencies = [
     "Brotli==1.2.0",
     "dj-database-url==3.0.1",

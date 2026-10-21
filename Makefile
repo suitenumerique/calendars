@@ -35,6 +35,8 @@ COMPOSE_RUN_APP_NO_DEPS = $(COMPOSE_RUN) --no-deps backend-dev
 MANAGE              = $(COMPOSE_RUN_APP) python manage.py
 MANAGE_EXEC         = $(COMPOSE_EXEC_APP) python manage.py
 PSQL_E2E            = ./bin/postgres_e2e
+# Keep in sync with src/caldav/Dockerfile and bin/scalingo_postfrontend
+COMPOSER_IMAGE      = composer:2.10.3@sha256:af98f42dfff7c68ba8d53c2164fd9fde1087b7d449514baa38c418b1f6bc4bac
 
 # ==============================================================================
 # RULES
@@ -132,7 +134,7 @@ restart: \
 
 caldav-lock: ## regenerate src/caldav/composer.lock
 	@echo "$(BOLD)Regenerating composer.lock$(RESET)"
-	@docker run --rm -v $(PWD)/src/caldav:/app -w /app composer:2.9.5 composer update --no-install --no-interaction --ignore-platform-reqs
+	@docker run --rm -v $(PWD)/src/caldav:/app -w /app $(COMPOSER_IMAGE) composer update --no-install --no-scripts --no-interaction --ignore-platform-reqs
 .PHONY: caldav-lock
 
 migrate-caldav: ## Initialize CalDAV server database schema
@@ -270,7 +272,7 @@ shell-back-django: ## connect to django shell
 
 back-lock: ## regenerate the uv.lock file
 	@echo "$(BOLD)Regenerating uv.lock$(RESET)"
-	@docker run --rm -v $(PWD)/src/backend:/app -w /app ghcr.io/astral-sh/uv:python3.13-alpine uv lock
+	@docker run --rm -v $(PWD)/src/backend:/app -w /app ghcr.io/astral-sh/uv:0.13.4-python3.14-alpine@sha256:0cb69bb18ffcd57db04f045010b0234132a111da70dde5a393d26ad288d38e13 uv lock
 .PHONY: back-lock
 
 # -- Database

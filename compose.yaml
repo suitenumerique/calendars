@@ -3,7 +3,7 @@ name: calendars
 services:
   # Shared PostgreSQL for all services (calendar, caldav server, keycloak)
   postgresql:
-    image: postgres:15
+    image: postgres:15.19@sha256:c99dd5066e988cd61a72ffe962da08e277eecaba000bbdda0bdaf9f63b56c174
     ports:
       - "8936:5432"
     healthcheck:
@@ -18,12 +18,12 @@ services:
       - env.d/development/postgresql.local
 
   redis:
-    image: redis:5
+    image: redis:5.0.14@sha256:fc5ecd863862f89f04334b7cbb57e93c9790478ea8188a49f6e57b0967d38c75
     ports:
       - "8934:6379"
 
   mailcatcher:
-    image: sj26/mailcatcher:latest
+    image: sj26/mailcatcher:v0.11.0@sha256:572048324658d2198e0a96785cca4f0260f2c4cadb2cb057bd837b9ee0c60533
     ports:
       - "8937:1080"
 
@@ -152,10 +152,14 @@ services:
       - "8930:8930"
 
   node:
-    image: node:24
+    image: node:24.22.1@sha256:5630d96570d4ca4a8523fda3d169d0114554d0f48293e1ae3db6be7c79b42a17
     user: "${DOCKER_USER:-1000}"
     environment:
       HOME: /tmp
+      # Node trusts its own bundled root list, which lags behind Debian's;
+      # make it use the system store instead.
+      NODE_OPTIONS: --use-openssl-ca
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
     volumes:
       - ".:/app"
 
@@ -230,7 +234,7 @@ services:
 
   # Keycloak - now using shared PostgreSQL
   keycloak:
-    image: quay.io/keycloak/keycloak:26.3.2
+    image: quay.io/keycloak/keycloak:26.3.2@sha256:98fab020a3a490aba0978f237e2a06cd0ea42bf149c6cf10f11c0aaf27728ff2
     volumes:
       - ./docker/auth/realm.json:/opt/keycloak/data/import/realm.json
     command:

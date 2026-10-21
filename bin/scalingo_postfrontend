@@ -30,7 +30,7 @@ chmod +x bin/caddy
 # Copy Caddyfile (uses {$ENV} vars natively, no ERB needed)
 cp src/proxy/Caddyfile ./Caddyfile
 
-echo "3.13" > .python-version
+echo "3.14" > .python-version
 
 # --- PHP + SabreDAV setup ---
 echo "-----> Installing PHP 8.5 from Ubuntu 26.04 packages"
@@ -47,14 +47,14 @@ mkdir -p "$DEB_DIR" "$PHP_PREFIX"
 # Source: https://launchpad.net/ubuntu/resolute/amd64/php8.5-cli
 # Format: "package_name url sha256"
 PHP_DEBS=(
-  "php8.5-cli https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-cli_8.5.4-0ubuntu1.2_amd64.deb 2203eb8aae2462a086e86c53276c20eb5234584249ccaf87779b19214e86ae3a"
-  "php8.5-fpm https://archive.ubuntu.com/ubuntu/pool/universe/p/php8.5/php8.5-fpm_8.5.4-0ubuntu1.2_amd64.deb 24e8f0bbf995d90b958f9624151711d3d9707f52308f26a87167ca60cf31f0bb"
-  "php8.5-common https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-common_8.5.4-0ubuntu1.2_amd64.deb 2d29417a5126aa908cc5ef267ba9b59ed96593693f498cee264b4450cbb4a90b"
-  "php8.5-readline https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-readline_8.5.4-0ubuntu1.2_amd64.deb a01b088885240a6e5307914dbe4dbbeea7426de06c4471c54e2f9a9552687219"
-  "php8.5-pgsql https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-pgsql_8.5.4-0ubuntu1.2_amd64.deb c3e3307a4e656be1ef9361638f434660499c2e11bc0773e90570d1ff7c778e8c"
-  "php8.5-xml https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-xml_8.5.4-0ubuntu1.2_amd64.deb 3c89d69373067094a065fc9f4c56a6fb8cddc12c998f2012527de87109245abc"
-  "php8.5-mbstring https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-mbstring_8.5.4-0ubuntu1.2_amd64.deb 4d1f1f99275342d53b1af08592ba759619187cd9dcd2bfa761d0809d251d0b03"
-  "php8.5-curl https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-curl_8.5.4-0ubuntu1.2_amd64.deb eef910ddd3be0a7b64aa484073e15b8d0256203bd212eb7762edcaa8494b9eb5"
+  "php8.5-cli https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-cli_8.5.4-0ubuntu1.4_amd64.deb 6319463270f57ee51111e6d67d56311f9a7e1c6f28e894f1cfeb59f4d6ee1ae4"
+  "php8.5-fpm https://archive.ubuntu.com/ubuntu/pool/universe/p/php8.5/php8.5-fpm_8.5.4-0ubuntu1.4_amd64.deb daea914e92cd083aca0626260bb51ef0787864effd0081f0a235cb5d0c03160c"
+  "php8.5-common https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-common_8.5.4-0ubuntu1.4_amd64.deb fae6e9fdb6becb922fee90c1995065f7bdb46ad11d4090f002efb82a0c78508f"
+  "php8.5-readline https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-readline_8.5.4-0ubuntu1.4_amd64.deb 41d15a531ac1fe1109f61a7a2f2b0a7a7d28b22570dfbaa7b8c78e1b6c8c6ae8"
+  "php8.5-pgsql https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-pgsql_8.5.4-0ubuntu1.4_amd64.deb 94f17b47f3bc47b6d86872c1d1ad5f12ea589296c059defc077aaa56d8ccf4bd"
+  "php8.5-xml https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-xml_8.5.4-0ubuntu1.4_amd64.deb 5a539a65a7cdeb0f31e415e7d70d91455d5e0d967d60e9e812f49e340a49954c"
+  "php8.5-mbstring https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-mbstring_8.5.4-0ubuntu1.4_amd64.deb 95302e46824da80bed0f3921430a1051b694c0a438f717cf4daf190af4e9fafa"
+  "php8.5-curl https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-curl_8.5.4-0ubuntu1.4_amd64.deb db25d6ea06c0b8782c91d347ffef1f5f8d602d1c8e2d371c794a8c0f0181a930"
   "php-common https://archive.ubuntu.com/ubuntu/pool/main/p/php-defaults/php-common_99ubuntu1_all.deb 2d6417a2f74686b9b23f48126131c6fc1a142d6746e5547d85353d8190aa8f8e"
 )
 
@@ -121,10 +121,11 @@ chmod +x bin/php
 echo "-----> PHP version: $("$PHP_PREFIX/usr/bin/php8.5" -n -c "$BUILD_INI" -v | head -1)"
 echo "-----> PHP modules: $("$PHP_PREFIX/usr/bin/php8.5" -n -c "$BUILD_INI" -m | tr '\n' ' ')"
 
-# Download Composer with integrity verification and install SabreDAV dependencies
+# Download Composer with integrity verification and install SabreDAV dependencies.
+# Keep the version in sync with src/caldav/Dockerfile and the Makefile.
 echo "-----> Installing SabreDAV dependencies"
-COMPOSER_VERSION="2.9.5"
-COMPOSER_SHA256="c86ce603fe836bf0861a38c93ac566c8f1e69ac44b2445d9b7a6a17ea2e9972a"
+COMPOSER_VERSION="2.10.3"
+COMPOSER_SHA256="7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6"
 curl -fsSL -o bin/composer.phar \
   "https://getcomposer.org/download/${COMPOSER_VERSION}/composer.phar"
 echo "${COMPOSER_SHA256}  bin/composer.phar" | sha256sum -c -

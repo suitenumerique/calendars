@@ -3,7 +3,19 @@
 # under QEMU.  For local / amd64 builds the default is used.
 ARG FRONTEND_IMAGE=frontend-build-output
 
-FROM node:24-alpine AS frontend-deps
+FROM node:24.22.1-alpine@sha256:6a1c190e17215d844926b0677f4bf87273ff7d5e54db06d3b5b5863ab0b09a3d AS frontend-deps
+
+# Bump to force an apk refresh + security upgrade of the base OS.
+ENV MIN_UPDATE_DATE="2026-10-21"
+
+RUN apk update && \
+  apk upgrade && \
+  rm -rf /var/cache/apk/*
+
+# Node trusts its own bundled root list, which lags behind Alpine's; make it
+# use the system store instead so CA updates come with the apk upgrade above.
+ENV NODE_OPTIONS=--use-openssl-ca
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 # pnpm, provided by corepack (version pinned via package.json#packageManager).
 RUN corepack enable
@@ -69,7 +81,10 @@ COPY --from=calendars-builder /home/frontend/dist /srv
 FROM ${FRONTEND_IMAGE} AS frontend-source
 
 # ---- Front-end image ----
-FROM caddy:2-alpine AS frontend-production
+FROM caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f AS frontend-production
+
+# Bump to force an apk refresh + security upgrade of the base OS.
+ENV MIN_UPDATE_DATE="2026-10-21"
 
 # Upgrade system packages to install security updates
 RUN apk update && \

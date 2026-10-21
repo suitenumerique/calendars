@@ -3,7 +3,7 @@
     "description": "sabre/dav CalDAV server for calendars",
     "type": "project",
     "require": {
-        "php": ">=8.1",
+        "php": "^8.5",
         "sabre/dav": "dev-master#eb16eb7fdaa384c4a827e40152cc53c0e1488cab",
         "ext-pdo": "*",
         "ext-pdo_pgsql": "*",
