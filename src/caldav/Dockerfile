@@ -1,7 +1,7 @@
 # sabre/dav CalDAV Server
 # Based on Debian with Apache and PHP. Pinned to 8.5 to match the
 # scalingo-26 (Ubuntu 26.04) production stack, whose only PHP is 8.5.
-FROM php:8.5.11-apache-bookworm@sha256:7e109f7c26197dac0f8ac9352680c0c7a38d9ce4d67c0dc7ca52ec56a4397a71
+FROM php:8.5.12-apache-bookworm@sha256:747123a8d7d28c6f84960df94cc076a406314e4f9d556af0bcfddab81e33bd09
 
 ENV DEBIAN_FRONTEND=noninteractive
 

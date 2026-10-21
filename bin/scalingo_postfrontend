@@ -47,14 +47,14 @@ mkdir -p "$DEB_DIR" "$PHP_PREFIX"
 # Source: https://launchpad.net/ubuntu/resolute/amd64/php8.5-cli
 # Format: "package_name url sha256"
 PHP_DEBS=(
-  "php8.5-cli https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-cli_8.5.4-0ubuntu1.4_amd64.deb 6319463270f57ee51111e6d67d56311f9a7e1c6f28e894f1cfeb59f4d6ee1ae4"
-  "php8.5-fpm https://archive.ubuntu.com/ubuntu/pool/universe/p/php8.5/php8.5-fpm_8.5.4-0ubuntu1.4_amd64.deb daea914e92cd083aca0626260bb51ef0787864effd0081f0a235cb5d0c03160c"
-  "php8.5-common https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-common_8.5.4-0ubuntu1.4_amd64.deb fae6e9fdb6becb922fee90c1995065f7bdb46ad11d4090f002efb82a0c78508f"
-  "php8.5-readline https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-readline_8.5.4-0ubuntu1.4_amd64.deb 41d15a531ac1fe1109f61a7a2f2b0a7a7d28b22570dfbaa7b8c78e1b6c8c6ae8"
-  "php8.5-pgsql https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-pgsql_8.5.4-0ubuntu1.4_amd64.deb 94f17b47f3bc47b6d86872c1d1ad5f12ea589296c059defc077aaa56d8ccf4bd"
-  "php8.5-xml https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-xml_8.5.4-0ubuntu1.4_amd64.deb 5a539a65a7cdeb0f31e415e7d70d91455d5e0d967d60e9e812f49e340a49954c"
-  "php8.5-mbstring https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-mbstring_8.5.4-0ubuntu1.4_amd64.deb 95302e46824da80bed0f3921430a1051b694c0a438f717cf4daf190af4e9fafa"
-  "php8.5-curl https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-curl_8.5.4-0ubuntu1.4_amd64.deb db25d6ea06c0b8782c91d347ffef1f5f8d602d1c8e2d371c794a8c0f0181a930"
+  "php8.5-cli https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-cli_8.5.4-0ubuntu1.5_amd64.deb a3865b136c6fa6d4f10be482e7131eb25e85976f246a730a0cfddbcb72f9156e"
+  "php8.5-fpm https://archive.ubuntu.com/ubuntu/pool/universe/p/php8.5/php8.5-fpm_8.5.4-0ubuntu1.5_amd64.deb 3a5d154e58c814cfa62600710ea23f4699ad7d3aefbe66a6a5154f0f9690d118"
+  "php8.5-common https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-common_8.5.4-0ubuntu1.5_amd64.deb a4e93169f9351f4db59e7717fc214a33fa7bd4b2f47dee6783c04ebbfad8dd54"
+  "php8.5-readline https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-readline_8.5.4-0ubuntu1.5_amd64.deb ccaceb94156a4dccc87b978d8bc28ed3602429cdad85d526de162594938543c9"
+  "php8.5-pgsql https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-pgsql_8.5.4-0ubuntu1.5_amd64.deb 1ff61f8690d61aadc65d5a4de61927364f601c978725c9575978c2e62209959d"
+  "php8.5-xml https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-xml_8.5.4-0ubuntu1.5_amd64.deb 9f5e15611f0a33b78efd9bac98662d3f33bbf9f7f61a654b6cb35e4ef69ff859"
+  "php8.5-mbstring https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-mbstring_8.5.4-0ubuntu1.5_amd64.deb 783d871f7896176a8819d2ba3c1d34b01f11bd7e0c77e783f004e53808812383"
+  "php8.5-curl https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-curl_8.5.4-0ubuntu1.5_amd64.deb 7ff70240fc54f70576b18f9583517d128e614f4b50b1c9332ee504a15bdd4883"
   "php-common https://archive.ubuntu.com/ubuntu/pool/main/p/php-defaults/php-common_99ubuntu1_all.deb 2d6417a2f74686b9b23f48126131c6fc1a142d6746e5547d85353d8190aa8f8e"
 )
 
