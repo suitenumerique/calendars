@@ -10,6 +10,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- 📦(frontend) switch from pnpm to npm #96
+
+### Fixed
+
+- 🐛(frontend) fix empty calendar on Chromium 109 and older browsers #96
+- 🐛(frontend) show an error when events fail to load #96
+
 ## [0.1.0] - 2026-06-18
 
 First public release.
