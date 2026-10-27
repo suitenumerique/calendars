@@ -5,10 +5,6 @@
         {
           "label": "Github",
           "href": "https://github.com/suitenumerique/calendars/"
-        },
-        {
-          "label": "ANCT",
-          "href": "https://anct.gouv.fr/"
         }
       ],
       "license": {

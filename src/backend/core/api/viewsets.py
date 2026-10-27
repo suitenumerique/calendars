@@ -157,6 +157,7 @@ class ConfigView(views.APIView):
             "ENVIRONMENT",
             "FRONTEND_THEME",
             "FRONTEND_MORE_LINK",
+            "FRONTEND_TERMS_OF_SERVICE_URL",
             "FRONTEND_FEEDBACK_BUTTON_SHOW",
             "FRONTEND_FEEDBACK_BUTTON_IDLE",
             "FRONTEND_FEEDBACK_ITEMS",
