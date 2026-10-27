@@ -10,6 +10,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- ✨(frontend) add monthly "nth weekday" recurrence option #70
+
 ## [0.1.0] - 2026-06-18
 
 First public release.
