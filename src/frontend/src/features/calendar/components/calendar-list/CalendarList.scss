@@ -296,27 +296,32 @@
 // ============================================================================
 
 // Compact variant of Cunningham's <Alert>. Cunningham only ships color
-// variants (info/success/warning/error/neutral) — no size modifier —
-// but the default 12px/16px padding + 36px min-height is too prominent
+// variants (info/success/warning/error/neutral), no size modifier,
+// but the default 8px padding + 48px min-height is too prominent
 // for inline form-side info/warning/error messages like the "linked
 // to mailbox" hint or the recurrence editor's date warning. This
-// shrinks padding, content min-height, icon size and font-size while
+// shrinks padding, min-heights, icon size and font-size while
 // leaving Cunningham in charge of color, border, role, and icon-text
 // alignment.
 //
-// Note: when a custom icon is passed via the Alert ``icon`` prop,
-// Cunningham renders it as a direct child of
-// ``.c__alert__content__left`` (NOT wrapped in ``.c__alert__icon``,
-// which only exists for the auto-icon variant). So we shrink it via
-// the direct ``svg`` child's width/height.
+// Since ui-components 1.4.0 the alert shares its content markup with
+// the toast (``.c__notification__*``). A custom ``icon`` prop is
+// wrapped in ``.c__notification__icon`` like the default icon, and
+// the content wrapper carries its own font-size.
 .app__alert--small.c__alert {
+  min-height: 0;
   padding: 0.5rem 0.75rem;
   font-size: 0.8125rem;
 
-  .c__alert__content {
+  .c__notification__content {
     min-height: 1.25rem;
   }
 
+  .c__notification__content__children {
+    font-size: inherit;
+  }
+
+  .c__notification__icon,
   svg {
     width: 1.125rem;
     height: 1.125rem;
