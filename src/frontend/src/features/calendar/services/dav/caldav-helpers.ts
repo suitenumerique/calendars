@@ -311,6 +311,9 @@ export function buildCalendarQueryXml(params: CalendarQueryParams = {}): string 
  * levels are not expressible via the standard CalendarServer access
  * tokens — ``parseSharePrivilege`` needs the override map to round-trip
  * those levels correctly.
+ *
+ * ``LS:calendar-sync-managed`` marks a calendar instance that the
+ * mailbox ACL sync manages.
  */
 export const CALENDAR_PROPS = {
   [`${NS.CALDAV}:calendar-description`]: {},
@@ -326,6 +329,7 @@ export const CALENDAR_PROPS = {
   [`${NS.CALENDAR_SERVER}:invite`]: {},
   "LS:calendar-owner-type": {},
   "LS:share-access-map": {},
+  "LS:calendar-sync-managed": {},
 } as const;
 
 // ============================================================================

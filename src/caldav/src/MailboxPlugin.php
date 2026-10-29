@@ -19,6 +19,7 @@
  *     (runs before Schedule\Plugin at priority 100)
  *   - method:POST (priority 80) — blocks read-write CS:share on MAILBOX
  *     (runs before CalDAV\SharingPlugin at default priority 100)
+ *   - beforeUnbind: blocks removal of sync-managed calendar instances
  */
 
 namespace Calendars\SabreDav;
@@ -67,6 +68,8 @@ class MailboxPlugin extends ServerPlugin
         // Priority 80: run before CalDAV\SharingPlugin's httpPost (priority 100)
         // to reject read-write shares before they're processed.
         $server->on('method:POST', [$this, 'restrictSharing'], 80);
+
+        $server->on('beforeUnbind', [$this, 'protectSyncManagedInstance']);
     }
 
     // ========================================================================
@@ -250,6 +253,35 @@ class MailboxPlugin extends ServerPlugin
                 );
             }
         }
+    }
+
+    /**
+     * Refuse to remove or replace a sync-managed calendar instance.
+     *
+     * beforeUnbind runs for DELETE, MOVE and a COPY that overwrites.
+     * Messages controls the access of these instances. If SabreDAV
+     * removes the instance, the next mailbox ACL sync creates it again.
+     */
+    public function protectSyncManagedInstance($path)
+    {
+        if (!preg_match('#^calendars/users/([^/]+)/([^/]+)$#', trim($path, '/'), $matches)) {
+            return;
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT 1 FROM calendarinstances '
+            . 'WHERE principaluri = ? AND uri = ? AND is_sync_managed = TRUE '
+            . 'LIMIT 1'
+        );
+        $stmt->execute(['principals/users/' . $matches[1], $matches[2]]);
+        if (!$stmt->fetchColumn()) {
+            return;
+        }
+
+        throw new \Sabre\DAV\Exception\Forbidden(
+            'This calendar is managed by Messages. Update the mailbox '
+            . 'permissions in Messages to remove it.'
+        );
     }
 
     /**

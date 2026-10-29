@@ -69,6 +69,7 @@ export const CalendarListItem = ({
           onEdit={() => onEdit(calendar)}
           onDelete={isOwner ? () => onDelete(calendar) : undefined}
           onLeave={isOwner ? undefined : () => onDelete(calendar)}
+          syncManaged={calendar.syncManaged}
           onShare={onShare ? () => onShare(calendar) : undefined}
           onImport={onImport ? () => onImport(calendar) : undefined}
           onSubscription={onSubscription ? () => onSubscription(calendar) : undefined}

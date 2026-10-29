@@ -37,6 +37,14 @@ export const CalendarList = () => {
     isLoading: isCalendarLoading,
   } = useCalendarContext();
 
+  const handleDeleteError = useCallback(() => {
+    addToast(
+      <ToasterItem type="error" closeButton>
+        {t("calendar.deleteCalendar.error")}
+      </ToasterItem>,
+    );
+  }, [t]);
+
   const {
     modalState,
     deleteState,
@@ -61,6 +69,7 @@ export const CalendarList = () => {
     createCalendar,
     updateCalendar,
     deleteCalendar,
+    onDeleteError: handleDeleteError,
   });
 
   // Onboarding: show modal when user has no calendars at all

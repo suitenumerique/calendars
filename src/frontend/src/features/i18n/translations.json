@@ -279,7 +279,8 @@
           "moveUp": "Move up",
           "moveDown": "Move down",
           "options": "Options",
-          "leaveCalendar": "Leave calendar"
+          "leaveCalendar": "Leave calendar",
+          "cannotDeleteMailboxCalendar": "A mailbox calendar cannot be deleted"
         },
         "importEvents": {
           "title": "Import events",
@@ -426,7 +427,8 @@
           "title": "Delete calendar",
           "message": "Are you sure you want to delete the calendar \"{{name}}\"? This action cannot be undone.",
           "confirm": "Delete",
-          "sharedWarning": "This calendar is shared. It will be deleted for every person it is shared with."
+          "sharedWarning": "This calendar is shared. It will be deleted for every person it is shared with.",
+          "error": "The calendar could not be deleted."
         },
         "leaveCalendar": {
           "title": "Leave this calendar",
@@ -1284,7 +1286,8 @@
           "moveUp": "Déplacer vers le haut",
           "moveDown": "Déplacer vers le bas",
           "options": "Options",
-          "leaveCalendar": "Quitter le calendrier"
+          "leaveCalendar": "Quitter le calendrier",
+          "cannotDeleteMailboxCalendar": "Un calendrier de boîte ne peut pas être supprimé"
         },
         "importEvents": {
           "title": "Importer des événements",
@@ -1431,7 +1434,8 @@
           "title": "Supprimer le calendrier",
           "message": "Êtes-vous sûr de vouloir supprimer le calendrier \"{{name}}\" ? Cette action est irréversible.",
           "confirm": "Supprimer",
-          "sharedWarning": "Ce calendrier est partagé. Il sera supprimé pour toutes les personnes avec qui il est partagé."
+          "sharedWarning": "Ce calendrier est partagé. Il sera supprimé pour toutes les personnes avec qui il est partagé.",
+          "error": "Impossible de supprimer le calendrier."
         },
         "leaveCalendar": {
           "title": "Quitter ce calendrier",
@@ -2036,7 +2040,8 @@
           "moveUp": "Omhoog verplaatsen",
           "moveDown": "Omlaag verplaatsen",
           "options": "Opties",
-          "leaveCalendar": "Kalender verlaten"
+          "leaveCalendar": "Kalender verlaten",
+          "cannotDeleteMailboxCalendar": "Een mailboxkalender kan niet worden verwijderd"
         },
         "importEvents": {
           "title": "Evenementen importeren",
@@ -2183,7 +2188,8 @@
           "title": "Kalender verwijderen",
           "message": "Weet u zeker dat u de kalender \"{{name}}\" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
           "confirm": "Verwijderen",
-          "sharedWarning": "Deze kalender is gedeeld. Hij wordt verwijderd voor iedereen met wie hij is gedeeld."
+          "sharedWarning": "Deze kalender is gedeeld. Hij wordt verwijderd voor iedereen met wie hij is gedeeld.",
+          "error": "De kalender kon niet worden verwijderd."
         },
         "leaveCalendar": {
           "title": "Deze kalender verlaten",

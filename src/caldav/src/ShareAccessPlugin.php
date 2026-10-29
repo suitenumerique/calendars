@@ -77,6 +77,12 @@ class ShareAccessPlugin extends ServerPlugin
      */
     const SHARE_ACCESS_MAP_PROP = '{http://lasuite.numerique.gouv.fr/ns/}share-access-map';
 
+    /**
+     * Custom DAV property on a calendar instance: "true" when the mailbox
+     * ACL sync manages this instance.
+     */
+    const SYNC_MANAGED_PROP = '{http://lasuite.numerique.gouv.fr/ns/}calendar-sync-managed';
+
     /** @var \PDO */
     private $pdo;
 
@@ -104,6 +110,7 @@ class ShareAccessPlugin extends ServerPlugin
         $server->on('propFind', [$this, 'propFindShareAccess'], 200);
         $server->on('propFind', [$this, 'propFindShareAccessMap'], 200);
         $server->on('propFind', [$this, 'propFindOwnerType'], 200);
+        $server->on('propFind', [$this, 'propFindSyncManaged'], 200);
         // Priority 90: run before PropertyStorage (default 100) so a
         // PROPPATCH on our LS properties is rejected instead of being
         // silently persisted as a dead property. These properties are
@@ -122,6 +129,7 @@ class ShareAccessPlugin extends ServerPlugin
             self::SHARE_ACCESS_PROP,
             self::SHARE_ACCESS_MAP_PROP,
             self::OWNER_TYPE_PROP,
+            self::SYNC_MANAGED_PROP,
         ] as $prop) {
             $propPatch->handle($prop, function () {
                 return 403;
@@ -377,6 +385,44 @@ class ShareAccessPlugin extends ServerPlugin
             } catch (\Exception $e) {
                 return null;
             }
+        });
+    }
+
+    /**
+     * Expose "true" for a sync-managed calendar instance. For other
+     * instances, the property is not available.
+     */
+    public function propFindSyncManaged(PropFind $propFind, INode $node)
+    {
+        if (!$node instanceof ICalendar) {
+            return;
+        }
+
+        $propFind->handle(self::SYNC_MANAGED_PROP, function () use ($node) {
+            try {
+                $reflection = new \ReflectionObject($node);
+                if (!$reflection->hasProperty('calendarInfo')) {
+                    return null;
+                }
+                $prop = $reflection->getProperty('calendarInfo');
+                $info = $prop->getValue($node);
+
+                $instanceId = is_array($info['id']) ? ($info['id'][1] ?? null) : null;
+                if (!$instanceId) {
+                    return null;
+                }
+
+                $stmt = $this->pdo->prepare(
+                    'SELECT 1 FROM calendarinstances '
+                    . 'WHERE id = ? AND is_sync_managed = TRUE'
+                );
+                $stmt->execute([$instanceId]);
+
+                return $stmt->fetchColumn() ? 'true' : null;
+            } catch (\Exception $e) {
+                error_log("[ShareAccessPlugin] propFindSyncManaged error: " . $e->getMessage());
+            }
+            return null;
         });
     }
 }
