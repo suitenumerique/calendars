@@ -14,6 +14,8 @@ import { EventCalendarAdapter } from "../services/dav/EventCalendarAdapter";
 import { caldavServerUrl } from "../utils/DavClient";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useAuth } from "@/features/auth/Auth";
+import { deleteMailboxCalendar } from "@/features/mailbox";
+import { errorToString } from "@/features/api/APIError";
 
 import type {
   CalDavCalendar,
@@ -69,7 +71,10 @@ export interface CalendarContextType {
     calendarUrl: string,
     params: { displayName?: string; color?: string; description?: string },
   ) => Promise<{ success: boolean; error?: string }>;
-  deleteCalendar: (calendarUrl: string) => Promise<{ success: boolean; error?: string }>;
+  deleteCalendar: (
+    calendarUrl: string,
+    mailboxEmail?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
   shareCalendar: (
     calendarUrl: string,
     email: string,
@@ -250,28 +255,45 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
   );
 
   const deleteCalendar = useCallback(
-    async (calendarUrl: string): Promise<{ success: boolean; error?: string }> => {
+    async (
+      calendarUrl: string,
+      mailboxEmail?: string,
+    ): Promise<{ success: boolean; error?: string }> => {
       try {
-        const result = await caldavService.deleteCalendar(calendarUrl);
-        if (result.success) {
-          // Remove from visible calendars
-          setVisibleCalendarUrls((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(calendarUrl);
-            return newSet;
-          });
-          await refreshCalendars();
-          return { success: true };
+        if (mailboxEmail) {
+          // A plain CalDAV DELETE on a mailbox-owned calendar only
+          // ever removes the caller's own share — the calendar
+          // reappears for everyone else. Go through the backend's
+          // owner-branch delete instead, which removes it for every
+          // mailbox user (see issue #72).
+          const calendarUri = calendarUrl.replace(/\/$/, "").split("/").pop() ?? "";
+          await deleteMailboxCalendar(mailboxEmail, calendarUri);
+        } else {
+          const result = await caldavService.deleteCalendar(calendarUrl);
+          if (!result.success) {
+            return {
+              success: false,
+              error: result.error || "Failed to delete calendar",
+            };
+          }
         }
-        return {
-          success: false,
-          error: result.error || "Failed to delete calendar",
-        };
+        // Remove from visible calendars
+        setVisibleCalendarUrls((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(calendarUrl);
+          return newSet;
+        });
+        await refreshCalendars();
+        return { success: true };
       } catch (error) {
         console.error("Error deleting calendar:", error);
         return {
           success: false,
-          error: error instanceof Error ? error.message : "Unknown error",
+          error: mailboxEmail
+            ? errorToString(error)
+            : error instanceof Error
+              ? error.message
+              : "Unknown error",
         };
       }
     },

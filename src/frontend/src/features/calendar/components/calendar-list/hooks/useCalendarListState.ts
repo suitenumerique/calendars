@@ -18,7 +18,10 @@ interface UseCalendarListStateProps {
     url: string,
     options: CalDavCalendarUpdate,
   ) => Promise<{ success: boolean; error?: string }>;
-  deleteCalendar: (url: string) => Promise<{ success: boolean; error?: string }>;
+  deleteCalendar: (
+    url: string,
+    mailboxEmail?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
 export const useCalendarListState = ({
@@ -148,7 +151,10 @@ export const useCalendarListState = ({
 
     setDeleteState((prev) => ({ ...prev, isLoading: true }));
     try {
-      const result = await deleteCalendar(deleteState.calendar.url);
+      const result = await deleteCalendar(
+        deleteState.calendar.url,
+        deleteState.calendar.mailboxEmail,
+      );
       if (!result.success) {
         console.error("Failed to delete calendar:", result.error);
       }

@@ -158,26 +158,9 @@ class SetupService:
         only — it is never stored on the (invisible) owner row and never
         propagated to other mailbox users via the share fan-out.
         """
-        if not settings.FEATURE_MESSAGES_INTEGRATION:
-            raise SetupServiceError("Messages integration is not enabled")
-
-        # Verify user has sender/admin access
-        mailboxes = self.messages.get_user_mailboxes(user.email)
-        user_mailbox = next(
-            (mb for mb in mailboxes if mb.get("email") == mailbox_email),
-            None,
+        user_mailbox = self._require_mailbox_send_role(
+            user, mailbox_email, action="create a mailbox calendar"
         )
-        if not user_mailbox:
-            raise SetupServiceError(
-                f"User {user.email} does not have access to mailbox {mailbox_email}"
-            )
-
-        user_role = user_mailbox.get("role", "viewer")
-        if user_role not in SEND_ROLES:
-            raise SetupServiceError(
-                f"User needs 'sender' or 'admin' role to create a mailbox calendar"
-                f" (current role: {user_role})"
-            )
 
         # Resolve org from the mailbox's mail domain custom attributes
         org_id = _resolve_mailbox_org_id(user_mailbox)
@@ -209,6 +192,51 @@ class SetupService:
             "mailbox_email": mailbox_email,
             "principal_uri": f"principals/mailboxes/{mailbox_email}",
         }
+
+    def delete_mailbox_calendar(self, user, mailbox_email, calendar_uri):
+        """Delete a calendar owned by a mailbox principal, for everyone.
+
+        Requires the caller to hold sender/admin role on the mailbox
+        (same gate as creation). Unlike a plain CalDAV DELETE — which
+        only ever removes the caller's own share — this reaches the
+        real owner-branch delete via the internal API, so the
+        calendar disappears for every mailbox user, not just the
+        caller.
+
+        Args:
+            user: The OIDC user requesting deletion.
+            mailbox_email: The mailbox the calendar is owned by.
+            calendar_uri: The calendar's URI under the CALLER's own
+                principal (the last segment of its CalDAV path), as
+                exposed to the frontend.
+
+        Raises:
+            SetupServiceError on failure.
+        """
+        self._require_mailbox_send_role(
+            user, mailbox_email, action="delete a mailbox calendar"
+        )
+
+        try:
+            resp = self._http.internal_request(
+                "DELETE",
+                user,
+                f"internal-api/calendars/{calendar_uri}",
+                json={"mailbox_email": mailbox_email},
+            )
+        except Exception as exc:
+            raise SetupServiceError(f"Failed to delete calendar: {exc}") from exc
+
+        if resp.status_code == 404:
+            raise SetupServiceError(f"Calendar '{calendar_uri}' not found")
+        if resp.status_code in (400, 403):
+            try:
+                error_msg = resp.json().get("error", "")
+            except ValueError:
+                error_msg = ""
+            raise SetupServiceError(error_msg or "Cannot delete this calendar")
+        if resp.status_code != 200:
+            raise SetupServiceError(f"Failed to delete calendar: {resp.status_code}")
 
     # ------------------------------------------------------------------
     # Sync: GET /api/v1.0/mailboxes/
@@ -320,6 +348,36 @@ class SetupService:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _require_mailbox_send_role(self, user, mailbox_email, action):
+        """Verify the user has sender/admin role on a mailbox, or raise.
+
+        Shared gate for any mailbox operation that should only be
+        available to users who can send as that mailbox (currently:
+        creating and deleting a mailbox-owned calendar).
+
+        Returns the matching Messages mailbox dict on success.
+        """
+        if not settings.FEATURE_MESSAGES_INTEGRATION:
+            raise SetupServiceError("Messages integration is not enabled")
+
+        mailboxes = self.messages.get_user_mailboxes(user.email)
+        user_mailbox = next(
+            (mb for mb in mailboxes if mb.get("email") == mailbox_email),
+            None,
+        )
+        if not user_mailbox:
+            raise SetupServiceError(
+                f"User {user.email} does not have access to mailbox {mailbox_email}"
+            )
+
+        user_role = user_mailbox.get("role", "viewer")
+        if user_role not in SEND_ROLES:
+            raise SetupServiceError(
+                f"User needs 'sender' or 'admin' role to {action}"
+                f" (current role: {user_role})"
+            )
+        return user_mailbox
 
     def _create_calendar(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
