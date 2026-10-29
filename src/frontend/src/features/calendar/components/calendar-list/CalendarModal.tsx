@@ -198,7 +198,7 @@ export const CalendarModal = ({
           </p>
         )}
 
-        {isOnboarding && (
+        {isOnboarding && messagesEnabled && (
           <p className="calendar-modal__onboarding-text">
             {hasMailboxes
               ? t("calendar.onboarding.description")
