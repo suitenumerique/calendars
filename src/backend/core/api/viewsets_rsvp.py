@@ -33,7 +33,7 @@ PARTSTAT_VALUES = {
 }
 
 
-def _render_error(request, message, lang="en"):
+def _render_error(request, message, lang="en", title_key="rsvp.error.invalidLink"):
     """Render the RSVP error page."""
     t = TranslationService.t
     return render(
@@ -42,7 +42,7 @@ def _render_error(request, message, lang="en"):
         {
             "page_title": t("rsvp.error.title", lang),
             "error": message,
-            "error_title": t("rsvp.error.invalidLink", lang),
+            "error_title": t(title_key, lang),
             "lang": lang,
         },
         status=400,
@@ -194,7 +194,11 @@ def _process_rsvp(request, payload, action, lang):
     principals/mailboxes/) and updates the attendee's PARTSTAT
     atomically. No principal namespace selection needed.
 
-    Returns an error response on failure, or True on success.
+    The internal API refuses the update when the event is cancelled,
+    deleted, or no longer lists the attendee. The event stays as the
+    organizer left it.
+
+    Returns an error response on failure, or the event summary on success.
     """
     t = TranslationService.t
     http = CalDAVHTTPClient()
@@ -218,6 +222,14 @@ def _process_rsvp(request, payload, action, lang):
     except Exception:  # pylint: disable=broad-exception-caught
         logger.exception("RSVP internal API call failed")
         return _render_error(request, t("rsvp.error.updateFailed", lang), lang)
+
+    if resp.status_code == 410:
+        return _render_error(
+            request,
+            t("rsvp.error.eventCancelled", lang),
+            lang,
+            title_key="rsvp.error.eventCancelledTitle",
+        )
 
     if resp.status_code == 404:
         body = resp.json() if resp.text else {}

@@ -758,11 +758,15 @@ export class CalDavService {
   }
 
   /**
-   * Create an override instance for a recurring event.
+   * Create or replace the override of one occurrence of a recurring event.
    *
-   * This adds the modified occurrence as a new VEVENT with RECURRENCE-ID
-   * inside the same ICS resource, and adds an EXDATE to the parent event
-   * to exclude the original occurrence.
+   * If no override exists, the method adds a VEVENT with a RECURRENCE-ID
+   * to the same ICS resource. It also adds an EXDATE for the occurrence to
+   * the master. If an override exists, the method replaces it.
+   *
+   * `occurrenceDate` is the wall-clock time of the occurrence in the
+   * timezone of the series. The UTC fields of the date hold this time
+   * ("fake UTC").
    */
   async createOverrideInstance(
     eventUrl: string,
@@ -792,9 +796,8 @@ export class CalDavService {
         throw new Error("Source event not found in ICS data");
       }
 
-      // occurrenceDate is already in "fake UTC" format (UTC components = local timezone
-      // time), since it comes from adapter.toIcsEvent() which creates fake UTC dates.
-      // Use it directly with the source event's timezone info.
+      // occurrenceDate is fake UTC in the timezone of the series. Use it with
+      // the timezone info of the source event.
       const occurrenceFakeUtc = occurrenceDate;
       let occurrenceLocal: { date: Date; timezone: string; tzoffset: string } | undefined;
 
@@ -875,6 +878,36 @@ export class CalDavService {
     }, "Failed to create override instance");
   }
 
+  /**
+   * Get the occurrence dates of an event in a time range. The server
+   * expands the RRULE and removes the EXDATEs. Each date is the
+   * RECURRENCE-ID of an occurrence, or the start of a non-recurring event.
+   * A timed date is an instant. An all-day date is a calendar date at
+   * midnight UTC.
+   */
+  async fetchOccurrenceDates(
+    eventUrl: string,
+    uid: string,
+    timeRange: { start: Date; end: Date },
+  ): Promise<CalDavResponse<Date[]>> {
+    return asResult(async () => {
+      const result = await davRequest({
+        url: getCalendarUrlFromEventUrl(eventUrl),
+        method: "REPORT",
+        body: buildCalendarQueryXml({ timeRange, expand: true, uid }),
+        depth: "1",
+      });
+      if (!result.success || !result.responses) {
+        throw davFailure(result, "Failed to expand event");
+      }
+      return result.responses
+        .filter((r) => r.ok && r.props?.calendarData)
+        .flatMap((r) => convertIcsCalendar(undefined, r.props?.calendarData as string).events ?? [])
+        .filter((e) => e.uid === uid)
+        .map((e) => e.recurrenceId?.value.date ?? e.start.date);
+    }, "Failed to expand event");
+  }
+
   async fetchEvent(eventUrl: string): Promise<CalDavResponse<CalDavEvent>> {
     return asResult(async () => {
       const result = await davRequest({
@@ -884,7 +917,7 @@ export class CalDavService {
       });
 
       if (!result.success || result.body === undefined) {
-        throw new Error(result.error ?? `Event not found: ${result.status}`);
+        throw davFailure(result, "Event not found");
       }
 
       const calendarUrl = getCalendarUrlFromEventUrl(eventUrl);

@@ -263,19 +263,33 @@ function toCalDavTime(value: Date | string): string {
 }
 
 type CalendarQueryParams = {
-  /** When provided, results are filtered to events overlapping this range. */
+  /**
+   * Sets the range of `expand`. If there is no `uid`, the server also
+   * returns only the events that overlap this range.
+   */
   timeRange?: { start: Date | string; end: Date | string };
   /**
    * When true, the server expands recurring events into individual
    * occurrences within `timeRange` (RFC 4791 §9.6.5). Requires `timeRange`.
    */
   expand?: boolean;
+  /**
+   * When provided, the server returns only events whose UID contains this
+   * value. CalDAV text-match is a substring match, so callers check the
+   * exact UID. SabreDAV ignores this filter next to a time-range filter,
+   * so the UID filter replaces it. `expand` still uses `timeRange`.
+   */
+  uid?: string;
 };
 
 /** Build a calendar-query REPORT body that fetches `getetag` + `calendar-data`. */
 export function buildCalendarQueryXml(params: CalendarQueryParams = {}): string {
-  const timeRangeFilter = params.timeRange
-    ? `<C:time-range start="${toCalDavTime(params.timeRange.start)}" end="${toCalDavTime(params.timeRange.end)}"/>`
+  const timeRangeFilter =
+    params.timeRange && !params.uid
+      ? `<C:time-range start="${toCalDavTime(params.timeRange.start)}" end="${toCalDavTime(params.timeRange.end)}"/>`
+      : "";
+  const uidFilter = params.uid
+    ? `<C:prop-filter name="UID"><C:text-match collation="i;octet">${escapeXml(params.uid)}</C:text-match></C:prop-filter>`
     : "";
 
   const calendarData =
@@ -293,6 +307,7 @@ export function buildCalendarQueryXml(params: CalendarQueryParams = {}): string 
     <C:comp-filter name="VCALENDAR">
       <C:comp-filter name="VEVENT">
         ${timeRangeFilter}
+        ${uidFilter}
       </C:comp-filter>
     </C:comp-filter>
   </C:filter>

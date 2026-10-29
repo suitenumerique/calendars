@@ -487,6 +487,9 @@ class InternalApiPlugin extends ServerPlugin
      *   "attendee_email": "bob@company.com",
      *   "partstat": "ACCEPTED"
      * }
+     *
+     * Responds 404 when the event or the attendee is not found, and 410
+     * when the organizer cancelled the event.
      */
     private function handleRsvp($request, $response)
     {
@@ -548,12 +551,21 @@ class InternalApiPlugin extends ServerPlugin
             }
 
             $vcalendar = \Sabre\VObject\Reader::read($ical);
-            $vevent = $vcalendar->VEVENT;
+            $vevent = $vcalendar->getBaseComponent('VEVENT') ?? $vcalendar->VEVENT;
             if (!$vevent) {
                 $this->pdo->rollBack();
                 $response->setStatus(404);
                 $response->setHeader('Content-Type', 'application/json');
                 $response->setBody(json_encode(['error' => 'No VEVENT in calendar data']));
+                return false;
+            }
+
+            // The organizer cancelled the event. A reply must not change it.
+            if (strtoupper((string) $vevent->STATUS) === 'CANCELLED') {
+                $this->pdo->rollBack();
+                $response->setStatus(410);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode(['error' => 'Event cancelled']));
                 return false;
             }
 

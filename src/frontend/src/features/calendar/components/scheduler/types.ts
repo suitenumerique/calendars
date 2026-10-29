@@ -24,6 +24,19 @@ export type RecurringDeleteOption = "this" | "future" | "all";
  */
 export type RecurringEditOption = "this" | "future" | "all";
 
+/** A reason that prevents an attendee from answering an invitation. */
+export type RsvpBlocker = "cancelled" | "deleted" | "notAttendee";
+
+/** The VEVENTs of one event in the server copy, found once per answer. */
+export interface RsvpEvent {
+  /** All VEVENTs with the UID of the event. */
+  instances: IcsEvent[];
+  /** The VEVENT without RECURRENCE-ID. */
+  master?: IcsEvent;
+  /** The override of the answered occurrence, if any. */
+  override?: IcsEvent;
+}
+
 /**
  * Props for the EventModal component.
  */
