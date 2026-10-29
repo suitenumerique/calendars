@@ -35,6 +35,7 @@ export const CalendarModal = ({
   onClose,
   onSave,
   isOnboarding = false,
+  canDismissOnboarding = false,
 }: CalendarModalProps) => {
   const { t } = useTranslation();
   const { config } = useConfig();
@@ -144,11 +145,10 @@ export const CalendarModal = ({
     }
   };
 
+  const canClose = !isOnboarding || canDismissOnboarding;
+
   const handleClose = () => {
-    if (isOnboarding) {
-      // Cannot dismiss onboarding modal
-      return;
-    }
+    if (!canClose) return;
     setName("");
     setColor(DEFAULT_COLORS[0]);
     setIncludeInAvailability(true);
@@ -172,13 +172,13 @@ export const CalendarModal = ({
       onClose={handleClose}
       size={ModalSize.MEDIUM}
       title={title}
-      closeOnClickOutside={!isOnboarding}
-      hideCloseButton={isOnboarding}
+      closeOnClickOutside={canClose}
+      hideCloseButton={!canClose}
       rightActions={
         <>
-          {!isOnboarding && (
+          {canClose && (
             <Button color="neutral" onClick={handleClose} disabled={isLoading}>
-              {t("calendar.event.cancel")}
+              {isOnboarding ? t("calendar.onboarding.later") : t("calendar.event.cancel")}
             </Button>
           )}
           <Button
@@ -192,6 +192,12 @@ export const CalendarModal = ({
       }
     >
       <div className="calendar-modal__content">
+        {isOnboarding && canDismissOnboarding && (
+          <p className="calendar-modal__onboarding-text">
+            {t("calendar.onboarding.sharedCalendarsHint")}
+          </p>
+        )}
+
         {isOnboarding && (
           <p className="calendar-modal__onboarding-text">
             {hasMailboxes

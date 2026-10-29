@@ -60,3 +60,25 @@ export const getShareErrorKey = ({ error, status }: ShareErrorResult, fallbackKe
   }
   return fallbackKey;
 };
+
+const ONBOARDING_DISMISSED_KEY = "calendar-onboarding-dismissed";
+
+/**
+ * Read the onboarding dismissal flag for this browser.
+ * Return false when the flag is absent or storage is not available.
+ */
+export const loadOnboardingDismissed = (): boolean => {
+  try {
+    return localStorage.getItem(ONBOARDING_DISMISSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+export const saveOnboardingDismissed = () => {
+  try {
+    localStorage.setItem(ONBOARDING_DISMISSED_KEY, "1");
+  } catch {
+    // Ignore storage errors
+  }
+};

@@ -19,6 +19,8 @@ export interface CalendarModalProps {
     includeInAvailability?: boolean,
   ) => Promise<void>;
   isOnboarding?: boolean;
+  /** Onboarding only: lets the user close the modal without creating a calendar. */
+  canDismissOnboarding?: boolean;
 }
 
 /**

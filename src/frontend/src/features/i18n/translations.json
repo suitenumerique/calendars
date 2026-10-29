@@ -414,7 +414,9 @@
         "onboarding": {
           "title": "Welcome! Create your first calendar",
           "description": "Choose a sending identity for your calendar. This determines which email address will be used when sending event invitations.",
-          "noMailboxesMessage": "You don't have access to any mailboxes on Messages so all invitations will be sent from the system address."
+          "noMailboxesMessage": "You don't have access to any mailboxes on Messages so all invitations will be sent from the system address.",
+          "later": "Later",
+          "sharedCalendarsHint": "A calendar is shared with you. You can use it now and create your own calendar later."
         },
         "editCalendar": {
           "title": "Edit calendar",
@@ -1419,7 +1421,9 @@
         "onboarding": {
           "title": "Bienvenue ! Créez votre premier calendrier",
           "description": "Choisissez une identité d'envoi pour votre calendrier. Elle détermine l'adresse email utilisée pour envoyer les invitations.",
-          "noMailboxesMessage": "Vous n'avez accès à aucune boîte mail sur Messages, donc toutes les invitations seront envoyées depuis l'adresse système."
+          "noMailboxesMessage": "Vous n'avez accès à aucune boîte mail sur Messages, donc toutes les invitations seront envoyées depuis l'adresse système.",
+          "later": "Plus tard",
+          "sharedCalendarsHint": "Un calendrier est partagé avec vous. Vous pouvez l'utiliser maintenant et créer votre propre calendrier plus tard."
         },
         "editCalendar": {
           "title": "Modifier le calendrier",
@@ -2171,7 +2175,9 @@
         "onboarding": {
           "title": "Welkom! Maak je eerste kalender aan",
           "description": "Kies een verzendidentiteit voor je kalender. Dit bepaalt welk e-mailadres wordt gebruikt voor het verzenden van uitnodigingen.",
-          "noMailboxesMessage": "Je hebt geen toegang tot mailboxen op Messages, dus alle uitnodigingen worden verzonden vanaf het systeemadres."
+          "noMailboxesMessage": "Je hebt geen toegang tot mailboxen op Messages, dus alle uitnodigingen worden verzonden vanaf het systeemadres.",
+          "later": "Later",
+          "sharedCalendarsHint": "Er is een kalender met je gedeeld. Je kunt die nu gebruiken en later je eigen kalender aanmaken."
         },
         "editCalendar": {
           "title": "Kalender bewerken",

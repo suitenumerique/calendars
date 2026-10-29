@@ -1,6 +1,8 @@
 /**
  * CalendarList component - List of calendars with visibility toggles.
- * Shows onboarding modal when user has no calendars.
+ * It prompts users without an owned calendar to create one. Users
+ * with shared calendars can dismiss the prompt. Users with no
+ * calendar must create one.
  */
 
 import { useState, useCallback } from "react";
@@ -15,7 +17,7 @@ import { ImportEventsModal } from "./ImportEventsModal";
 import { SubscriptionUrlModal } from "./SubscriptionUrlModal";
 import { CalendarListItem } from "./CalendarListItem";
 import { useCalendarListState } from "./hooks/useCalendarListState";
-import { extractCaldavPath } from "./utils";
+import { extractCaldavPath, loadOnboardingDismissed, saveOnboardingDismissed } from "./utils";
 import { Plus, ChevronDown } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
@@ -25,7 +27,6 @@ export const CalendarList = () => {
   const {
     ownedCalendars,
     sharedCalendars,
-    davCalendars,
     visibleCalendarUrls,
     toggleCalendarVisibility,
     createCalendar,
@@ -63,8 +64,16 @@ export const CalendarList = () => {
     deleteCalendar,
   });
 
-  // Onboarding: show modal when user has no calendars at all
-  const showOnboarding = !isCalendarLoading && davCalendars.length === 0;
+  const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(loadOnboardingDismissed);
+  const dismissOnboarding = () => {
+    setIsOnboardingDismissed(true);
+    saveOnboardingDismissed();
+  };
+  const canDismissOnboarding = sharedCalendars.length > 0;
+  const showOnboarding =
+    !isCalendarLoading &&
+    ownedCalendars.length === 0 &&
+    (sharedCalendars.length === 0 || !isOnboardingDismissed);
 
   // Wrap save to handle mailbox calendar creation
   const handleSaveWithMailbox = useCallback(
@@ -253,13 +262,13 @@ export const CalendarList = () => {
         )}
       </div>
 
-      {/* Onboarding modal: shown when user has no calendars */}
       <CalendarModal
         isOpen={showOnboarding}
         mode="create"
-        onClose={() => {}}
+        onClose={dismissOnboarding}
         onSave={handleSaveWithMailbox}
         isOnboarding
+        canDismissOnboarding={canDismissOnboarding}
       />
 
       {/* Normal create/edit modal */}
