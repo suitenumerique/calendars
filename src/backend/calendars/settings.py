@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
 
+import logging
 import os
 import tomllib
 from socket import gethostbyname, gethostname
@@ -21,6 +22,8 @@ from lasuite.configuration.values import SecretFileValue
 from sentry_sdk.integrations.django import DjangoIntegration
 
 # pylint: disable=too-many-lines
+
+logger = logging.getLogger(__name__)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -511,6 +514,12 @@ class Base(Configuration):
     FRONTEND_THEME = values.Value(
         None, environ_name="FRONTEND_THEME", environ_prefix=None
     )
+    # Send anonymous visitors to the OIDC provider with prompt=none.
+    # A visitor with an SSO session then logs in without the landing page.
+    # This flag has no effect without OIDC_OP_LOGOUT_ENDPOINT and OIDC_STORE_ID_TOKEN.
+    FRONTEND_SILENT_LOGIN_ENABLED = values.BooleanValue(
+        default=False, environ_name="FRONTEND_SILENT_LOGIN_ENABLED", environ_prefix=None
+    )
     FRONTEND_MORE_LINK = values.Value(
         None,
         environ_name="FRONTEND_MORE_LINK",
@@ -639,6 +648,9 @@ class Base(Configuration):
         environ_name="OIDC_CREATE_USER",
     )
     OIDC_CALLBACK_CLASS = "core.authentication.views.OIDCAuthenticationCallbackView"
+    # This view changes ?silent=true into an OIDC prompt=none request.
+    # The default mozilla-django-oidc view ignores the parameter.
+    OIDC_AUTHENTICATE_CLASS = "lasuite.oidc_login.views.OIDCAuthenticationRequestView"
     OIDC_RP_SIGN_ALGO = values.Value(
         "RS256", environ_name="OIDC_RP_SIGN_ALGO", environ_prefix=None
     )
@@ -936,6 +948,20 @@ class Base(Configuration):
                 "Both OIDC_FALLBACK_TO_EMAIL_FOR_IDENTIFICATION and "
                 "OIDC_ALLOW_DUPLICATE_EMAILS cannot be set to True simultaneously. "
             )
+
+        if cls.FRONTEND_SILENT_LOGIN_ENABLED:
+            missing = [
+                name
+                for name in ("OIDC_OP_LOGOUT_ENDPOINT", "OIDC_STORE_ID_TOKEN")
+                if not getattr(cls, name)
+            ]
+            if missing:
+                logger.warning(
+                    "FRONTEND_SILENT_LOGIN_ENABLED is ignored because these "
+                    "settings are not set: %s. Without them, logout keeps the "
+                    "SSO session and silent login logs the user back in.",
+                    ", ".join(missing),
+                )
 
 
 class Build(Base):

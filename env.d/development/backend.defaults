@@ -38,9 +38,10 @@ OIDC_RP_SCOPES="openid email"
 LOGIN_REDIRECT_URL=http://localhost:8930
 LOGIN_REDIRECT_URL_FAILURE=http://localhost:8930
 LOGOUT_REDIRECT_URL=http://localhost:8930
+# Logout must end the Keycloak session. If not, silent login logs the user in again.
+OIDC_OP_LOGOUT_ENDPOINT=http://localhost:8935/realms/calendars/protocol/openid-connect/logout
 
 OIDC_REDIRECT_ALLOWED_HOSTS="http://localhost:8933,http://localhost:8930"
-OIDC_AUTH_REQUEST_EXTRA_PARAMS={"acr_values": "eidas1"}
 
 # Resource Server Backend
 OIDC_OP_URL=http://localhost:8935/realms/calendars
@@ -58,6 +59,7 @@ CALDAV_INBOUND_API_KEY=changeme-inbound-in-production
 CALDAV_INTERNAL_API_KEY=changeme-internal-in-production
 # Frontend
 FRONTEND_THEME=default
+FRONTEND_SILENT_LOGIN_ENABLED=False
 FRONTEND_MORE_LINK=
 FRONTEND_FEEDBACK_BUTTON_SHOW=True
 FRONTEND_FEEDBACK_BUTTON_IDLE=False

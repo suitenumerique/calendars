@@ -10,6 +10,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- ✨(auth) add silent login support
+
 ## [0.1.0] - 2026-06-18
 
 First public release.

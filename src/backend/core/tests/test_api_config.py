@@ -19,6 +19,8 @@ pytestmark = pytest.mark.django_db
 
 @override_settings(
     FRONTEND_THEME="test-theme",
+    FRONTEND_SILENT_LOGIN_ENABLED=True,
+    OIDC_OP_LOGOUT_ENDPOINT="https://oidc.test/logout",
     FRONTEND_MORE_LINK="https://test.com",
     FRONTEND_FEEDBACK_BUTTON_SHOW=True,
     FRONTEND_FEEDBACK_BUTTON_IDLE=False,
@@ -54,6 +56,7 @@ def test_api_config(is_authenticated):
     assert response.json() == {
         "ENVIRONMENT": "test",
         "FRONTEND_THEME": "test-theme",
+        "FRONTEND_SILENT_LOGIN_ENABLED": True,
         "FRONTEND_MORE_LINK": "https://test.com",
         "FRONTEND_FEEDBACK_BUTTON_SHOW": True,
         "FRONTEND_FEEDBACK_BUTTON_IDLE": False,
@@ -83,6 +86,25 @@ def test_api_config(is_authenticated):
         "CALENDAR_INVITATION_FROM_EMAIL": None,
         "theme_customization": {},
     }
+
+
+@pytest.mark.parametrize(
+    "logout_endpoint, store_id_token",
+    [(None, True), ("https://oidc.test/logout", False)],
+)
+def test_api_config_silent_login_disabled_when_logout_keeps_sso(
+    logout_endpoint, store_id_token
+):
+    """The config API disables silent login if logout keeps the SSO session."""
+    with override_settings(
+        FRONTEND_SILENT_LOGIN_ENABLED=True,
+        OIDC_OP_LOGOUT_ENDPOINT=logout_endpoint,
+        OIDC_STORE_ID_TOKEN=store_id_token,
+    ):
+        response = APIClient().get("/api/v1.0/config/")
+
+    assert response.status_code == HTTP_200_OK
+    assert response.json()["FRONTEND_SILENT_LOGIN_ENABLED"] is False
 
 
 @override_settings(
