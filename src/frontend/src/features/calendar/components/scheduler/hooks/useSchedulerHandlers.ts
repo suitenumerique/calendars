@@ -9,14 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/features/auth/Auth";
 import { addErrorToast, addSuccessToast } from "@/features/ui/components/toaster/Toaster";
 import { getCalendarUrlFromEventUrl } from "../../../services/dav/caldav-helpers";
-import {
-  buildOccurrenceReply,
-  findRsvpBlocker,
-  resolveRsvpEvent,
-  RSVP_BLOCKER_MESSAGE_KEYS,
-  toOccurrenceInstant,
-  toSeriesWallClock,
-} from "../utils/rsvp";
+import { RSVP_BLOCKER_MESSAGE_KEYS, toOccurrenceInstant } from "../utils/rsvp";
 
 import type {
   EventCalendarEvent,
@@ -33,16 +26,10 @@ import type {
 import type { CalDavService } from "../../../services/dav/CalDavService";
 
 import type { CalDavResponse } from "../../../services/dav/types/caldav-service";
-import type {
-  EventModalState,
-  RecurringDeleteOption,
-  RecurringEditOption,
-  RsvpBlocker,
-} from "../types";
+import type { EventModalState, RecurringDeleteOption, RecurringEditOption } from "../types";
 
 // Get browser timezone
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Run an etag-guarded write; on a 412 Precondition Failed fetch the
  * latest etag and retry once.
@@ -694,17 +681,8 @@ export const useSchedulerHandlers = ({
   }, [setModalState]);
 
   /**
-   * Answer an invitation as the current user.
-   *
-   * Each attempt reads the event from the server, because the modal copy
-   * can be stale. The handler refuses the answer when the server copy shows
-   * a cancelled or deleted event, a removed attendee, or an occurrence that
-   * no longer exists. Otherwise it changes only the PARTSTAT of the user,
-   * in the master or in the override of the occurrence. It writes with the
-   * ETag of the read.
-   *
-   * A 412 means that the event changed between the read and the write. The
-   * handler then tries once more. A second 412 shows an error.
+   * Respond to an invitation as the current user. Show the result in a toast
+   * and reload the grid. A blocked response shows its reason.
    */
   const handleRespondToInvitation = useCallback(
     async (
@@ -725,93 +703,29 @@ export const useSchedulerHandlers = ({
       const eventUrl = modalState.eventUrl;
       const userEmail = user.email;
 
-      // For the "this occurrence" path we need the occurrence date from the
-      // event as it was opened in the modal (modalState.event), not from the
-      // potentially edited form-built event.
-      const occurrenceDate: Date = (() => {
-        const src = modalState.event;
-        if (src?.recurrenceId?.value?.date instanceof Date) {
-          return src.recurrenceId.value.date;
-        }
-        if (src?.start?.date instanceof Date) return src.start.date;
-        if (src?.start?.date) return new Date(src.start.date as unknown as string);
-        if (event.start.date instanceof Date) return event.start.date;
-        return new Date(event.start.date as unknown as string);
-      })();
-      const occurrenceValue =
-        modalState.event?.recurrenceId?.value ?? modalState.event?.start ?? event.start;
+      // Take the occurrence from the event as the modal opened it, not from
+      // the form, which the user can edit.
+      const opened = modalState.event ?? event;
+      const value = opened.recurrenceId?.value ?? opened.start ?? event.start;
+      const occurrence =
+        option === "this" ? toOccurrenceInstant(new Date(value.date), value) : undefined;
 
-      const attempt = async (): Promise<RsvpBlocker | CalDavResponse<unknown>> => {
-        const fetched = await caldavService.fetchEvent(eventUrl);
-        if (!fetched.success || !fetched.data) {
-          if (fetched.status === 404) return "deleted";
-          throw new Error(fetched.error ?? "Failed to fetch event");
-        }
-        const events = fetched.data.data.events;
-        const etag = fetched.data.etag;
-
-        if (option === "this") {
-          const instant = toOccurrenceInstant(occurrenceDate, occurrenceValue);
-          const resolved = resolveRsvpEvent(events, event.uid, instant);
-          // An override for this occurrence means the occurrence is scheduled.
-          // The override can start on another day, so the expansion window
-          // below can miss it.
-          let scheduled = !!resolved.override;
-          if (!scheduled) {
-            // The occurrence exists if the server expansion of the RRULE
-            // still contains its date.
-            const expanded = await caldavService.fetchOccurrenceDates(eventUrl, event.uid, {
-              start: new Date(instant.getTime() - DAY_MS),
-              end: new Date(instant.getTime() + DAY_MS),
-            });
-            if (!expanded.success || !expanded.data) {
-              throw new Error(expanded.error ?? "Failed to expand event");
-            }
-            scheduled = expanded.data.some((d) => d.getTime() === instant.getTime());
-          }
-          const blocker = findRsvpBlocker(resolved, userEmail, scheduled);
-          if (blocker) return blocker;
-          const overrideEvent = buildOccurrenceReply(resolved, instant, userEmail, status);
-          if (!overrideEvent) {
-            return { success: false as const, error: "Occurrence not found" };
-          }
-          return caldavService.createOverrideInstance(
-            eventUrl,
-            overrideEvent,
-            toSeriesWallClock(resolved.master, instant),
-            etag,
-          );
-        }
-
-        const resolved = resolveRsvpEvent(events, event.uid);
-        const blocker = findRsvpBlocker(resolved, userEmail);
-        if (blocker) return blocker;
-        const { master } = resolved;
-        if (!master) {
-          return { success: false as const, error: "Master event not found" };
-        }
-        return caldavService.respondToMeeting(eventUrl, master, userEmail, status, etag);
-      };
-
-      let outcome: RsvpBlocker | CalDavResponse<unknown>;
-      try {
-        outcome = await attempt();
-        if (typeof outcome !== "string" && !outcome.success && outcome.status === 412) {
-          outcome = await attempt();
-        }
-        if (typeof outcome !== "string" && !outcome.success) {
-          throw new Error(outcome.error || "Failed to respond to invitation");
-        }
-      } catch (error) {
+      const result = await caldavService.respondToInvitation(eventUrl, {
+        uid: event.uid,
+        attendeeEmail: userEmail,
+        partstat: status,
+        occurrence,
+      });
+      if (!result.success) {
         addErrorToast(t("rsvp.failed"));
-        console.error("Error responding to invitation:", error);
-        throw error;
+        console.error("Error responding to invitation:", result.error);
+        throw new Error(result.error);
       }
-
-      if (typeof outcome === "string") {
-        addErrorToast(t(RSVP_BLOCKER_MESSAGE_KEYS[outcome]));
+      if (result.data?.kind === "blocked") {
+        const { blocker } = result.data;
+        addErrorToast(t(RSVP_BLOCKER_MESSAGE_KEYS[blocker]));
         calendarRef.current?.refetchEvents();
-        throw new Error(`Cannot respond to invitation: ${outcome}`);
+        throw new Error(`Cannot respond to invitation: ${blocker}`);
       }
 
       addSuccessToast(t("rsvp.responseSent"));

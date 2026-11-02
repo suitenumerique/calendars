@@ -32,8 +32,8 @@ import type {
   CalDavResponse,
   FreeBusyRequest,
   FreeBusyResponse,
-  SchedulingResponse,
-  CalDavAttendee,
+  InvitationOutcome,
+  InvitationResponse,
 } from "./types/caldav-service";
 
 import {
@@ -51,13 +51,23 @@ import {
   parseCalendarOrder,
   getCalendarUrlFromEventUrl,
   asResult,
+  DavCallError,
   davFailure,
   type ShareeXmlParams,
   type CalendarProps,
 } from "./caldav-helpers";
-import { getEventCalendarAdapter } from "./EventCalendarAdapter";
 import { getIcalTimezoneBlock } from "./helpers/ical-timezones";
+import {
+  buildOccurrenceReply,
+  findRsvpBlocker,
+  resolveRsvpEvent,
+  toSeriesWallClock,
+  withPartstat,
+} from "./helpers/rsvp";
+import { toWallClock } from "./helpers/timezone";
 import { buildFreeBusyRequestIcs } from "./helpers/freebusy-builder";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Resolve an ICS date to its authoritative wall-clock instant. When a
  * TZID is present `local.date` is the wall-clock value; otherwise fall
@@ -820,8 +830,7 @@ export class CalDavService {
           return true;
         }
         if (!timezone || value.type === "DATE") return false;
-        const c = getEventCalendarAdapter().getDateComponentsInTimezone(value.date, timezone);
-        return Date.UTC(c.year, c.month - 1, c.day, c.hours, c.minutes, c.seconds) === target;
+        return toWallClock(value.date, timezone).getTime() === target;
       };
       const existingOverrideIdx =
         calendar.events?.findIndex(
@@ -1299,61 +1308,30 @@ export class CalDavService {
   // Scheduling (iTIP - RFC 5546)
   // ============================================================================
 
-  async respondToMeeting(
+  /**
+   * Respond to an invitation, for the whole series or for one occurrence.
+   *
+   * The method reads the event from the server, because a local copy can
+   * be stale. It changes only the PARTSTAT of the attendee, and writes with
+   * the ETag of the read. A 412 means that the event changed between the
+   * read and the write; the method then tries once more.
+   *
+   * `data` tells if the method wrote the response. A "blocked" outcome
+   * gives the reason of the refusal: a cancelled or deleted event, a
+   * removed attendee, or an occurrence that no longer exists.
+   */
+  async respondToInvitation(
     eventUrl: string,
-    event: IcsEvent,
-    attendeeEmail: string,
-    status: CalDavAttendee["partstat"],
-    etag?: string,
-  ): Promise<CalDavResponse<SchedulingResponse>> {
-    const attendee = event.attendees?.find(
-      (a) => a.email.toLowerCase() === attendeeEmail.toLowerCase(),
-    );
-
-    if (!attendee) {
-      return { success: false, error: "Attendee not found in event" };
-    }
-
-    // Update the event with the new participation status
-    // Sabre/DAV will automatically detect the change and send a REPLY to the organizer
-    const updatedEvent = {
-      ...event,
-      attendees: event.attendees?.map((att) =>
-        att.email.toLowerCase() === attendeeEmail.toLowerCase()
-          ? { ...att, partstat: status }
-          : att,
-      ),
-    };
-
-    const result = await this.updateEvent({
-      eventUrl,
-      event: updatedEvent,
-      etag,
-    });
-
-    if (!result.success) {
-      // Propagate the HTTP status (notably 412) so the caller's
-      // refetch-and-retry-on-stale-ETag path can fire. Dropping it here
-      // made a second RSVP in the same modal session fail silently.
-      return {
-        success: false,
-        status: result.status,
-        error: result.error || "Failed to update event",
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        success: true,
-        responses: [
-          {
-            recipient: event.organizer?.email || "",
-            status: "delivered" as const,
-          },
-        ],
-      },
-    };
+    response: InvitationResponse,
+  ): Promise<CalDavResponse<InvitationOutcome>> {
+    return asResult(async () => {
+      try {
+        return await this.writeInvitationResponse(eventUrl, response);
+      } catch (error) {
+        if (!(error instanceof DavCallError) || error.status !== 412) throw error;
+        return this.writeInvitationResponse(eventUrl, response);
+      }
+    }, "Failed to respond to invitation");
   }
 
   // ============================================================================
@@ -1471,6 +1449,63 @@ export class CalDavService {
   // ============================================================================
   // Private Helper Methods
   // ============================================================================
+
+  /** Read the event from the server, check it, and write the response. */
+  private async writeInvitationResponse(
+    eventUrl: string,
+    { uid, attendeeEmail, partstat, occurrence }: InvitationResponse,
+  ): Promise<InvitationOutcome> {
+    const fetched = await this.fetchEvent(eventUrl);
+    if (!fetched.success || !fetched.data) {
+      if (fetched.status === 404) return { kind: "blocked", blocker: "deleted" };
+      throw davFailure(fetched, "Failed to fetch event");
+    }
+    const { data, etag } = fetched.data;
+
+    const resolved = resolveRsvpEvent(data.events, uid, occurrence);
+    const scheduled = occurrence
+      ? await this.isScheduled(eventUrl, uid, occurrence, resolved.override)
+      : undefined;
+    const blocker = findRsvpBlocker(resolved, attendeeEmail, scheduled);
+    if (blocker) return { kind: "blocked", blocker };
+
+    const { master } = resolved;
+    let written: CalDavResponse<unknown>;
+    if (occurrence) {
+      const reply = buildOccurrenceReply(resolved, occurrence, attendeeEmail, partstat);
+      if (!reply) throw new Error("Occurrence not found");
+      const seriesTime = toSeriesWallClock(master, occurrence);
+      written = await this.createOverrideInstance(eventUrl, reply, seriesTime, etag);
+    } else {
+      if (!master) throw new Error("Master event not found");
+      const event = withPartstat(master, attendeeEmail, partstat);
+      written = await this.updateEvent({ eventUrl, event, etag });
+    }
+    if (!written.success) throw davFailure(written, "Failed to write the response");
+    return { kind: "responded" };
+  }
+
+  /**
+   * Tell if an occurrence exists. An override proves it. Otherwise the
+   * server expansion of the RRULE must contain the occurrence. The
+   * override can start on another day, so the expansion window can miss it.
+   */
+  private async isScheduled(
+    eventUrl: string,
+    uid: string,
+    instant: Date,
+    override: IcsEvent | undefined,
+  ): Promise<boolean> {
+    if (override) return true;
+    const expanded = await this.fetchOccurrenceDates(eventUrl, uid, {
+      start: new Date(instant.getTime() - DAY_MS),
+      end: new Date(instant.getTime() + DAY_MS),
+    });
+    if (!expanded.success || !expanded.data) {
+      throw davFailure(expanded, "Failed to expand event");
+    }
+    return expanded.data.some((d) => d.getTime() === instant.getTime());
+  }
 
   private validateTimezones(calendarData: IcsCalendar): void {
     const usedTimezones =

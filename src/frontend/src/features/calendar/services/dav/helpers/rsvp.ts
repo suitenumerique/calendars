@@ -1,0 +1,128 @@
+import type { IcsAttendeePartStatusType, IcsDateObject, IcsEvent } from "ts-ics";
+
+import type { RsvpBlocker } from "../types/caldav-service";
+import { toWallClock } from "./timezone";
+
+/** The VEVENTs of one event in the server copy, found once per response. */
+export interface RsvpEvent {
+  /** All VEVENTs with the UID of the event. */
+  instances: IcsEvent[];
+  /** The VEVENT without RECURRENCE-ID. */
+  master?: IcsEvent;
+  /** The override of the occurrence, if any. */
+  override?: IcsEvent;
+}
+
+const moveTo = (value: IcsDateObject, date: Date): IcsDateObject => ({
+  ...value,
+  date,
+  local: value.local && { ...value.local, date: toWallClock(date, value.local.timezone) },
+});
+
+/**
+ * Copy the master to one occurrence. Move the dates to the occurrence.
+ * Remove the series fields (RRULE, EXDATE).
+ */
+const occurrenceOf = (master: IcsEvent, instant: Date): IcsEvent => {
+  const offset = instant.getTime() - master.start.date.getTime();
+  const start = moveTo(master.start, instant);
+  const moved: IcsEvent = master.end
+    ? { ...master, start, end: moveTo(master.end, new Date(master.end.date.getTime() + offset)) }
+    : { ...master, start };
+  return { ...moved, recurrenceRule: undefined, exceptionDates: undefined };
+};
+
+/** Find the override VEVENT whose RECURRENCE-ID is at `instant`. */
+const findOverride = (instances: IcsEvent[], instant: Date): IcsEvent | undefined =>
+  instances.find((e) => e.recurrenceId?.value.date.getTime() === instant.getTime());
+
+/**
+ * Find the VEVENTs of one event in the server copy. Give `instant` to
+ * also find the override of that occurrence.
+ */
+export const resolveRsvpEvent = (
+  events: IcsEvent[] | undefined,
+  uid: string,
+  instant?: Date,
+): RsvpEvent => {
+  const instances = events?.filter((e) => e.uid === uid) ?? [];
+  return {
+    instances,
+    master: instances.find((e) => !e.recurrenceId),
+    override: instant && findOverride(instances, instant),
+  };
+};
+
+/**
+ * Give the occurrence date as the wall-clock time in the timezone of the
+ * series ("fake UTC"). `createOverrideInstance` expects this format. An
+ * all-day date, or a series without timezone, keeps the instant.
+ */
+export const toSeriesWallClock = (master: IcsEvent | undefined, instant: Date): Date => {
+  const start = master?.start;
+  return start?.type === "DATE" || !start?.local
+    ? instant
+    : toWallClock(instant, start.local.timezone);
+};
+
+/** Copy the event with a new PARTSTAT for the attendee. */
+export const withPartstat = (
+  event: IcsEvent,
+  attendeeEmail: string,
+  partstat: IcsAttendeePartStatusType,
+): IcsEvent => {
+  const email = attendeeEmail.toLowerCase();
+  return {
+    ...event,
+    attendees: event.attendees?.map((a) =>
+      a.email.toLowerCase() === email ? { ...a, partstat } : a,
+    ),
+  };
+};
+
+/**
+ * Build the event data of the response to one occurrence. The base is the
+ * override of the occurrence. If there is no override, the base is a copy
+ * of the master at the occurrence. Only the PARTSTAT of the attendee
+ * changes. `createOverrideInstance` sets the RECURRENCE-ID.
+ *
+ * The function returns undefined if the event has no override and no
+ * master.
+ */
+export const buildOccurrenceReply = (
+  { master, override }: RsvpEvent,
+  instant: Date,
+  attendeeEmail: string,
+  partstat: IcsAttendeePartStatusType,
+): IcsEvent | undefined => {
+  const base = override ?? (master && occurrenceOf(master, instant));
+  return base && withPartstat(base, attendeeEmail, partstat);
+};
+
+/**
+ * Find why an attendee cannot respond to an invitation.
+ *
+ * Give `scheduled` to check one occurrence: it tells if the occurrence
+ * still exists. An occurrence is cancelled when it is not scheduled, or
+ * when its override has STATUS:CANCELLED.
+ *
+ * Returns null when the attendee can respond.
+ */
+export const findRsvpBlocker = (
+  { instances, master, override }: RsvpEvent,
+  attendeeEmail: string,
+  scheduled?: boolean,
+): RsvpBlocker | null => {
+  if (instances.length === 0) return "deleted";
+  if (master?.status === "CANCELLED") return "cancelled";
+
+  let target = master;
+  if (scheduled !== undefined) {
+    if (!scheduled || override?.status === "CANCELLED") return "cancelled";
+    target = override ?? master;
+  }
+
+  const email = attendeeEmail.toLowerCase();
+  const isAttendee = target?.attendees?.some((a) => a.email.toLowerCase() === email);
+  return isAttendee ? null : "notAttendee";
+};

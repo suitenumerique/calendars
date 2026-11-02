@@ -4,7 +4,7 @@
  * Reuses types from ts-ics where possible to avoid duplication.
  */
 
-import type { IcsCalendar, IcsEvent, IcsAttendee } from "ts-ics";
+import type { IcsAttendee, IcsAttendeePartStatusType, IcsCalendar, IcsEvent } from "ts-ics";
 
 /** Attendee type from ts-ics */
 export type CalDavAttendee = IcsAttendee;
@@ -156,17 +156,23 @@ export type CalDavShareResponse = {
 };
 
 // ============================================================================
-// Scheduling (iTIP) Types — used by respondToMeeting
+// Scheduling (iTIP) Types
 // ============================================================================
 
-export type SchedulingResponse = {
-  success: boolean;
-  responses: {
-    recipient: string;
-    status: "delivered" | "failed" | "pending";
-    error?: string;
-  }[];
+/** A reason that prevents an attendee from responding to an invitation. */
+export type RsvpBlocker = "cancelled" | "deleted" | "notAttendee";
+
+/** A response of an attendee to an invitation. */
+export type InvitationResponse = {
+  uid: string;
+  attendeeEmail: string;
+  partstat: IcsAttendeePartStatusType;
+  /** The instant of the occurrence. Omit to respond to the series. */
+  occurrence?: Date;
 };
+
+/** The result of a response to an invitation. */
+export type InvitationOutcome = { kind: "responded" } | { kind: "blocked"; blocker: RsvpBlocker };
 
 // ============================================================================
 // FreeBusy Types
