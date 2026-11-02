@@ -55,6 +55,7 @@ import {
   type ShareeXmlParams,
   type CalendarProps,
 } from "./caldav-helpers";
+import { getEventCalendarAdapter } from "./EventCalendarAdapter";
 import { getIcalTimezoneBlock } from "./helpers/ical-timezones";
 import { buildFreeBusyRequestIcs } from "./helpers/freebusy-builder";
 
@@ -809,17 +810,22 @@ export class CalDavService {
         };
       }
 
-      // Check if an override for this occurrence already exists (re-drag case)
-      // occurrenceFakeUtc is in fake UTC format. Compare against both:
-      // - recurrenceId.value.date (real UTC from ts-ics parsing)
-      // - recurrenceId.value.local?.date (fake UTC if TZID was present)
+      // Find the existing override of this occurrence. Its RECURRENCE-ID can
+      // be in UTC or in another timezone. Thus also compare its instant as
+      // wall-clock time in the timezone of the series.
+      const timezone = occurrenceLocal?.timezone;
+      const isOccurrence = ({ value }: { value: IcsDateObject }): boolean => {
+        const target = occurrenceFakeUtc.getTime();
+        if (value.date.getTime() === target || value.local?.date.getTime() === target) {
+          return true;
+        }
+        if (!timezone || value.type === "DATE") return false;
+        const c = getEventCalendarAdapter().getDateComponentsInTimezone(value.date, timezone);
+        return Date.UTC(c.year, c.month - 1, c.day, c.hours, c.minutes, c.seconds) === target;
+      };
       const existingOverrideIdx =
         calendar.events?.findIndex(
-          (e) =>
-            e.uid === overrideEvent.uid &&
-            e.recurrenceId &&
-            (e.recurrenceId.value.date.getTime() === occurrenceFakeUtc.getTime() ||
-              e.recurrenceId.value.local?.date.getTime() === occurrenceFakeUtc.getTime()),
+          (e) => e.uid === overrideEvent.uid && e.recurrenceId && isOccurrence(e.recurrenceId),
         ) ?? -1;
 
       if (existingOverrideIdx >= 0) {
