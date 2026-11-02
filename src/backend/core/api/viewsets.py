@@ -15,6 +15,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.throttling import UserRateThrottle
 
 from core import models
+from core.authentication.silent_login import get_silent_login_blockers
 from core.services.caldav_service import (
     normalize_caldav_path,
     verify_caldav_access,
@@ -156,6 +157,7 @@ class ConfigView(views.APIView):
         array_settings = [
             "ENVIRONMENT",
             "FRONTEND_THEME",
+            "FRONTEND_SILENT_LOGIN_ENABLED",
             "FRONTEND_MORE_LINK",
             "FRONTEND_FEEDBACK_BUTTON_SHOW",
             "FRONTEND_FEEDBACK_BUTTON_IDLE",
@@ -183,6 +185,9 @@ class ConfigView(views.APIView):
         for setting in array_settings:
             if hasattr(settings, setting):
                 dict_settings[setting] = getattr(settings, setting)
+
+        if get_silent_login_blockers():
+            dict_settings["FRONTEND_SILENT_LOGIN_ENABLED"] = False
 
         dict_settings["theme_customization"] = self._load_theme_customization()
 
