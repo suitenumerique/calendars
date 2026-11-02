@@ -821,17 +821,17 @@ export class CalDavService {
       }
 
       // Find the existing override of this occurrence. Its RECURRENCE-ID can
-      // be in UTC or in another timezone. Thus also compare its instant as
-      // wall-clock time in the timezone of the series.
+      // be in UTC or in another timezone. Thus compare it as wall-clock time
+      // in the timezone of the series, like occurrenceFakeUtc. A date, or a
+      // series without timezone, compares as is.
       const timezone = occurrenceLocal?.timezone;
-      const isOccurrence = ({ value }: { value: IcsDateObject }): boolean => {
-        const target = occurrenceFakeUtc.getTime();
-        if (value.date.getTime() === target || value.local?.date.getTime() === target) {
-          return true;
-        }
-        if (!timezone || value.type === "DATE") return false;
-        return toWallClock(value.date, timezone).getTime() === target;
+      const toSeriesTime = (value: IcsDateObject): Date => {
+        if (!timezone || value.type === "DATE") return value.date;
+        if (value.local?.timezone === timezone) return value.local.date;
+        return toWallClock(value.date, timezone);
       };
+      const isOccurrence = ({ value }: { value: IcsDateObject }): boolean =>
+        toSeriesTime(value).getTime() === occurrenceFakeUtc.getTime();
       const existingOverrideIdx =
         calendar.events?.findIndex(
           (e) => e.uid === overrideEvent.uid && e.recurrenceId && isOccurrence(e.recurrenceId),

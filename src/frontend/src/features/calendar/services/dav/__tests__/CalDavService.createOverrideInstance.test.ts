@@ -92,4 +92,27 @@ describe("CalDavService.createOverrideInstance", () => {
     expect(body).not.toMatch(/^EXDATE/m);
     expect(body).toContain("PARTSTAT=ACCEPTED");
   });
+
+  it("keeps the override of another occurrence at the same UTC digits", async () => {
+    // An hourly series. In winter, 09:00Z is 10:00 in Paris: another
+    // occurrence than 09:00 in Paris, which the call targets.
+    const hourly = ICS.replace("RRULE:FREQ=WEEKLY", "RRULE:FREQ=HOURLY")
+      .replace("RECURRENCE-ID:20261103T080000Z", "RECURRENCE-ID:20261103T090000Z")
+      .replace("DTSTART:20261103T080000Z", "DTSTART:20261103T090000Z")
+      .replace("DTEND:20261103T090000Z", "DTEND:20261103T100000Z");
+    fetchMock.mockResolvedValueOnce(response(200, hourly)).mockResolvedValueOnce(response(204));
+    const master = convertIcsCalendar(undefined, hourly).events!.find((e) => !e.recurrenceId)!;
+
+    const result = await new CalDavService().createOverrideInstance(
+      EVENT_URL,
+      master,
+      new Date(Date.UTC(2026, 10, 3, 9, 0, 0)),
+    );
+
+    expect(result.success).toBe(true);
+    const body = (fetchMock.mock.calls[1][1] as RequestInit).body as string;
+    expect(body.match(/^RECURRENCE-ID/gm)).toHaveLength(2);
+    expect(body).toMatch(/^RECURRENCE-ID[^:\r\n]*:20261103T090000Z\r?$/m);
+    expect(body).toMatch(/^RECURRENCE-ID[^:\r\n]*TZID=Europe\/Paris:20261103T090000\r?$/m);
+  });
 });
