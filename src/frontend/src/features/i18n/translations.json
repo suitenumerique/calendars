@@ -42,6 +42,15 @@
       "my_account": "My Account",
       "settings": {
         "label": "Settings",
+        "calendars": {
+          "title": "Calendars",
+          "description": "Edit your calendars and choose the ones you see. Hidden calendars do not appear in the calendar view or in your other calendar apps, and send no reminders. You keep your access.",
+          "noOwnedCalendar": "You have no calendar.",
+          "noSharedCalendar": "Nobody shares a calendar with you.",
+          "mobileLink": "Calendar settings",
+          "hideTooltip": "Hide this calendar here and in your other calendar apps",
+          "showTooltip": "Show this calendar again"
+        },
         "workingHours": {
           "title": "Working Hours",
           "description": "Set your available hours for scheduling",
@@ -280,8 +289,13 @@
           "moveDown": "Move down",
           "options": "Options",
           "leaveCalendar": "Leave calendar",
-          "cannotDeleteMailboxCalendar": "A mailbox calendar cannot be deleted",
-          "deleteForMailbox": "Delete for all mailbox users"
+          "deleteForMailbox": "Delete for all mailbox users",
+          "hide": "Hide this calendar",
+          "show": "Show this calendar",
+          "hiddenToast": "Calendar hidden here and in your other calendar apps.",
+          "undo": "Undo",
+          "hideError": "The calendar could not be hidden.",
+          "showAgainError": "The calendar could not be shown again."
         },
         "importEvents": {
           "title": "Import events",
@@ -793,6 +807,15 @@
       "my_account": "Mon Compte",
       "settings": {
         "label": "Paramètres",
+        "calendars": {
+          "title": "Calendriers",
+          "description": "Modifiez vos calendriers et choisissez ceux que vous voyez. Les calendriers masqués n'apparaissent ni dans la vue calendrier ni dans vos autres applications d'agenda, et n'envoient pas de rappels. Vous gardez votre accès.",
+          "noOwnedCalendar": "Vous n'avez aucun calendrier.",
+          "noSharedCalendar": "Personne ne partage de calendrier avec vous.",
+          "mobileLink": "Paramètres des calendriers",
+          "hideTooltip": "Masquer ce calendrier ici et dans vos autres applications d'agenda",
+          "showTooltip": "Afficher à nouveau ce calendrier"
+        },
         "workingHours": {
           "title": "Heures de travail",
           "description": "Définissez vos heures de disponibilité pour la planification",
@@ -1295,8 +1318,13 @@
           "moveDown": "Déplacer vers le bas",
           "options": "Options",
           "leaveCalendar": "Quitter le calendrier",
-          "cannotDeleteMailboxCalendar": "Un calendrier de boîte ne peut pas être supprimé",
-          "deleteForMailbox": "Supprimer pour tous les utilisateurs de la boîte"
+          "deleteForMailbox": "Supprimer pour tous les utilisateurs de la boîte",
+          "hide": "Masquer ce calendrier",
+          "show": "Afficher ce calendrier",
+          "hiddenToast": "Calendrier masqué ici et dans vos autres applications d'agenda.",
+          "undo": "Annuler",
+          "hideError": "Impossible de masquer le calendrier.",
+          "showAgainError": "Impossible d'afficher à nouveau le calendrier."
         },
         "importEvents": {
           "title": "Importer des événements",
@@ -1808,6 +1836,15 @@
       "my_account": "Mijn account",
       "settings": {
         "label": "Instellingen",
+        "calendars": {
+          "title": "Kalenders",
+          "description": "Bewerk je kalenders en kies welke je ziet. Verborgen kalenders verschijnen niet in de kalenderweergave of in je andere agenda-apps en sturen geen herinneringen. Je behoudt je toegang.",
+          "noOwnedCalendar": "Je hebt geen kalender.",
+          "noSharedCalendar": "Niemand deelt een kalender met je.",
+          "mobileLink": "Kalenderinstellingen",
+          "hideTooltip": "Deze kalender hier en in je andere agenda-apps verbergen",
+          "showTooltip": "Deze kalender weer tonen"
+        },
         "workingHours": {
           "title": "Werkuren",
           "description": "Stel uw beschikbare uren in voor planning",
@@ -2057,8 +2094,13 @@
           "moveDown": "Omlaag verplaatsen",
           "options": "Opties",
           "leaveCalendar": "Kalender verlaten",
-          "cannotDeleteMailboxCalendar": "Een mailboxkalender kan niet worden verwijderd",
-          "deleteForMailbox": "Verwijderen voor alle mailboxgebruikers"
+          "deleteForMailbox": "Verwijderen voor alle mailboxgebruikers",
+          "hide": "Deze kalender verbergen",
+          "show": "Deze kalender tonen",
+          "hiddenToast": "Kalender verborgen hier en in je andere agenda-apps.",
+          "undo": "Ongedaan maken",
+          "hideError": "De kalender kon niet worden verborgen.",
+          "showAgainError": "De kalender kon niet weer worden getoond."
         },
         "importEvents": {
           "title": "Evenementen importeren",

@@ -37,6 +37,7 @@ import type {
 } from "./types/caldav-service";
 
 import {
+  buildHiddenProppatchXml,
   buildProppatchXml,
   buildShareRequestXml,
   buildUnshareRequestXml,
@@ -178,6 +179,8 @@ export class CalDavService {
         method: "PROPFIND",
         props: CALENDAR_PROPS,
         depth: "1",
+        // The server leaves hidden calendars out of the listing without this header.
+        headers: { "X-LS-Include-Hidden": "true" },
       });
       if (!result.success || !result.responses) {
         throw new Error(result.error ?? "Failed to fetch calendars");
@@ -234,6 +237,7 @@ export class CalDavService {
     const sharees = parseInviteSharees(rawInvite, rawAccessMap);
     const mailboxEmail = ownerType === "MAILBOX" ? parseInviteOrganizerEmail(rawInvite) : undefined;
     const syncManaged = props?.calendarSyncManaged === "true";
+    const hidden = props?.calendarHidden === "true";
 
     const displayname = (props as Record<string, unknown> | undefined)?.displayname;
     const displayName =
@@ -253,6 +257,7 @@ export class CalDavService {
       ownerType,
       mailboxEmail,
       syncManaged,
+      hidden,
       sharees,
       ctag: (props as Record<string, string | undefined> | undefined)?.getctag,
       syncToken: (props as Record<string, string | undefined> | undefined)?.syncToken,
@@ -359,6 +364,23 @@ export class CalDavService {
     }
 
     return this.fetchCalendar(calendarUrl);
+  }
+
+  /**
+   * Hides the calendar for the user, or shows it again. It sets or removes
+   * ``LS:calendar-hidden`` on the user's instance (see ``CalDavCalendar.hidden``).
+   */
+  async setCalendarHidden(calendarUrl: string, hidden: boolean): Promise<CalDavResponse> {
+    const result = await davRequest({
+      url: calendarUrl,
+      method: "PROPPATCH",
+      body: buildHiddenProppatchXml(hidden),
+    });
+    // A refused property comes back in a 207 response with an error status.
+    if (!result.success || result.responses?.some((r) => !r.ok)) {
+      return { success: false, error: result.error, status: result.status };
+    }
+    return { success: true };
   }
 
   async deleteCalendar(calendarUrl: string): Promise<CalDavResponse> {

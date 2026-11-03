@@ -1,0 +1,113 @@
+import { useCallback, useMemo, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+
+import { CalendarModal } from "@/features/calendar/components/calendar-list/CalendarModal";
+import { useCalendarHiding } from "@/features/calendar/components/calendar-list/hooks/useCalendarHiding";
+import { useCalendarModal } from "@/features/calendar/components/calendar-list/hooks/useCalendarModal";
+import { useMailboxCalendarDelete } from "@/features/calendar/components/calendar-list/hooks/useMailboxCalendarDelete";
+import { MailboxCalendarDeleteModal } from "@/features/calendar/components/calendar-list/MailboxCalendarDeleteModal";
+import { useCalendarContext } from "@/features/calendar/contexts";
+import type { CalDavCalendar } from "@/features/calendar/services/dav/types/caldav-service";
+import { isMailboxCalendarAdmin } from "@/features/calendar/utils/calendar-ownership";
+import { useMailboxContext } from "@/features/mailbox/MailboxContext";
+import { addErrorToast } from "@/features/ui/components/toaster/Toaster";
+import { groupCalendarsForSettings } from "../../calendar-settings-groups";
+import { CalendarSettingsHeader } from "./CalendarSettingsHeader";
+import { CalendarSettingsSection } from "./CalendarSettingsSection";
+import { CalendarSettingsActions } from "./CalendarSettingsActions";
+
+/** Lists the calendars of the user. The user can edit them and hide the calendars of others. */
+export const CalendarSettings = () => {
+  const { t } = useTranslation();
+  const {
+    davCalendars,
+    hiddenCalendars,
+    isLoading,
+    setCalendarHidden,
+    createCalendar,
+    updateCalendar,
+    deleteMailboxCalendar,
+  } = useCalendarContext();
+  const { availableMailboxes } = useMailboxContext();
+
+  const { mine, shared } = useMemo(
+    () => groupCalendarsForSettings([...davCalendars, ...hiddenCalendars]),
+    [davCalendars, hiddenCalendars],
+  );
+
+  const handleHidingError = useCallback(
+    (hidden: boolean) =>
+      addErrorToast(t(hidden ? "calendar.list.hideError" : "calendar.list.showAgainError")),
+    [t],
+  );
+  const { setHidden } = useCalendarHiding({ setCalendarHidden, onError: handleHidingError });
+
+  const handleDeleteError = useCallback(
+    () => addErrorToast(t("calendar.deleteCalendar.error")),
+    [t],
+  );
+  const mailboxDelete = useMailboxCalendarDelete({
+    deleteMailboxCalendar,
+    onError: handleDeleteError,
+  });
+
+  const { modalState, handleOpenEditModal, handleCloseModal, handleSaveCalendar } =
+    useCalendarModal({ createCalendar, updateCalendar });
+
+  const canDeleteForMailbox = (calendar: CalDavCalendar) =>
+    isMailboxCalendarAdmin(calendar, availableMailboxes);
+  const withMenuSlot = mine.some(canDeleteForMailbox) || shared.some(canDeleteForMailbox);
+
+  const renderActions = (calendar: CalDavCalendar): ReactNode => (
+    <CalendarSettingsActions
+      calendar={calendar}
+      onEdit={handleOpenEditModal}
+      onSetHidden={setHidden}
+      onDeleteForMailbox={canDeleteForMailbox(calendar) ? mailboxDelete.open : undefined}
+      withMenuSlot={withMenuSlot}
+    />
+  );
+
+  const hasNoCalendar = mine.length === 0 && shared.length === 0;
+
+  return (
+    <div className="calendar-settings">
+      <CalendarSettingsHeader />
+      <p className="calendar-settings__description">{t("settings.calendars.description")}</p>
+
+      {!(isLoading && hasNoCalendar) && (
+        <>
+          <CalendarSettingsSection
+            title={t("calendar.list.myCalendars")}
+            emptyText={t("settings.calendars.noOwnedCalendar")}
+            calendars={mine}
+            renderActions={renderActions}
+          />
+          <CalendarSettingsSection
+            title={t("calendar.list.sharedCalendars")}
+            emptyText={t("settings.calendars.noSharedCalendar")}
+            calendars={shared}
+            renderActions={renderActions}
+          />
+        </>
+      )}
+
+      <CalendarModal
+        isOpen={modalState.isOpen}
+        mode={modalState.mode}
+        calendar={modalState.calendar}
+        onClose={handleCloseModal}
+        onSave={(name, color, _mailboxEmail, includeInAvailability) =>
+          handleSaveCalendar(name, color, includeInAvailability)
+        }
+      />
+
+      <MailboxCalendarDeleteModal
+        calendar={mailboxDelete.calendar}
+        onConfirm={mailboxDelete.confirm}
+        onCancel={mailboxDelete.close}
+        isLoading={mailboxDelete.isLoading}
+      />
+    </div>
+  );
+};

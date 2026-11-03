@@ -4,18 +4,17 @@
 
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, useModal } from "@gouvfr-lasuite/ui-components";
+import { Button, useModal, useResponsive } from "@gouvfr-lasuite/ui-components";
 import { useNavigate } from "@tanstack/react-router";
 import { IcsEvent } from "ts-ics";
 import { useAuth } from "@/features/auth/Auth";
-import { useIsMobile } from "@/hooks/useIsMobile";
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { CalendarList } from "../calendar-list";
 import { MiniCalendar } from "./MiniCalendar";
 import { EventModal } from "../scheduler/EventModal";
 import { useCalendarContext } from "../../contexts";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
-import { Building, Clock, Plus, Puzzle } from "@gouvfr-lasuite/ui-components/icons";
+import { Building, Clock, Plus, Puzzle, Settings } from "@gouvfr-lasuite/ui-components/icons";
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**
@@ -38,7 +37,7 @@ export const LeftPanel = () => {
   const { t } = useTranslation();
   const modal = useModal();
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
+  const { isTablet } = useResponsive();
   const { user } = useAuth();
   const { setIsLeftPanelOpen } = useLeftPanel();
 
@@ -124,11 +123,14 @@ export const LeftPanel = () => {
     modal.close();
   }, [modal]);
 
-  // On mobile, the desktop top-bar (Settings dropdown, user menu) is
-  // hidden, so the only way to reach Working Hours / Resources /
-  // Integrations is via the drawer. Mirror those links here so mobile
-  // users aren't trapped on the calendar grid.
+  // On tablet and mobile, the header hides the Settings menu. The drawer
+  // repeats its links, so that these users can get to the same pages.
   const mobileNavItems = [
+    {
+      label: t("settings.calendars.mobileLink"),
+      icon: <Settings />,
+      to: "/settings/calendars" as const,
+    },
     ...(isAvailabilitiesEnabled
       ? [
           {
@@ -173,7 +175,7 @@ export const LeftPanel = () => {
 
         <CalendarList />
 
-        {isMobile && mobileNavItems.length > 0 && (
+        {isTablet && (
           <>
             <div className="calendar-left-panel__divider" />
             <nav className="calendar-left-panel__mobile-nav">

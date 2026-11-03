@@ -87,13 +87,12 @@ export const saveOnboardingDismissed = () => {
 export interface DeleteMenuEntry {
   labelKey: string;
   callback?: () => void;
-  isDisabled?: boolean;
-  subTextKey?: string;
 }
 
 /**
  * Returns the delete entry of a calendar menu. The delete for every mailbox
- * user replaces the ordinary delete and leave actions.
+ * user replaces the ordinary delete and leave actions. A sync-managed
+ * calendar has no entry for other users: they hide it instead.
  */
 export const getDeleteMenuEntry = ({
   onDelete,
@@ -105,14 +104,13 @@ export const getDeleteMenuEntry = ({
   onLeave?: () => void;
   syncManaged?: boolean;
   onDeleteForMailbox?: () => void;
-}): DeleteMenuEntry => {
+}): DeleteMenuEntry | null => {
   if (onDeleteForMailbox) {
     return { labelKey: "calendar.list.deleteForMailbox", callback: onDeleteForMailbox };
   }
+  if (syncManaged) return null;
   return {
-    labelKey: onLeave && !syncManaged ? "calendar.list.leaveCalendar" : "calendar.list.delete",
+    labelKey: onLeave ? "calendar.list.leaveCalendar" : "calendar.list.delete",
     callback: onLeave ?? onDelete,
-    isDisabled: syncManaged,
-    subTextKey: syncManaged ? "calendar.list.cannotDeleteMailboxCalendar" : undefined,
   };
 };

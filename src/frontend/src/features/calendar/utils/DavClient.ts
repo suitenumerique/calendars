@@ -5,7 +5,7 @@
  * through. It bakes in the shared `X-LS-Client: web` header (which makes the
  * Django proxy drop `WWW-Authenticate: Basic` on 401), `credentials: include`,
  * SabreDAV error-message parsing, multi-status response parsing for
- * PROPFIND/REPORT, and `redirectToLogin` on 401. No code path should call
+ * PROPFIND/PROPPATCH/REPORT, and `redirectToLogin` on 401. No code path should call
  * raw `fetch` against `/caldav/` directly.
  *
  * Scope: this client targets our own SabreDAV instance at the URL derived
@@ -84,7 +84,7 @@ export type DavRequestParams = {
   contentType?: string;
 };
 
-/** Parsed multi-status entry (PROPFIND / REPORT).
+/** Parsed multi-status entry (PROPFIND / PROPPATCH / REPORT).
  *
  * `props` is intentionally loosely typed: DAV property shapes are
  * inherently dynamic (per-prop element trees with `href`, `_cdata`,
@@ -119,7 +119,7 @@ export type DavRequestResult = {
    * generic message.
    */
   error?: string;
-  /** Parsed multi-status responses (PROPFIND / REPORT). */
+  /** Parsed multi-status responses (PROPFIND / PROPPATCH / REPORT). */
   responses?: DavResponseEntry[];
   /** Raw response body text (used for GET ICS, schedule-response, error bodies). */
   body?: string;
@@ -127,7 +127,7 @@ export type DavRequestResult = {
   responseHeaders?: Headers;
 };
 
-const MULTISTATUS_VERBS: ReadonlySet<DavMethod> = new Set(["PROPFIND", "REPORT"]);
+const MULTISTATUS_VERBS: ReadonlySet<DavMethod> = new Set(["PROPFIND", "PROPPATCH", "REPORT"]);
 
 function isAuthFailure(status: number | undefined): boolean {
   return status === 401;
