@@ -3,8 +3,8 @@
  *
  * Adapts event display based on duration:
  *  - up to 30 min → single line: "Title, HH:MM"
- *  - 31 to 60 min → two lines: title  /  time + location
- *  - over 60 min  → title (up to 2 lines)  /  time + location
+ *  - 31 to 60 min → two lines: title  /  "HH:MM – HH:MM" + location
+ *  - over 60 min  → title (up to 2 lines)  /  "HH:MM – HH:MM" + location
  */
 
 import type { CalDavExtendedProps } from "../../../services/dav/EventCalendarAdapter";
@@ -70,7 +70,8 @@ export const createEventContent = (
     };
   }
 
-  const details = location ? `${time}, ${location}` : time;
+  const timeRange = `${time} – ${fmtTime(end)}`;
+  const details = location ? `${timeRange}, ${location}` : timeRange;
 
   // 31 to 60 min: two single lines
   if (durationMin <= 60) {
