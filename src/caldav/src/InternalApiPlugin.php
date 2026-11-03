@@ -812,7 +812,7 @@ class InternalApiPlugin extends ServerPlugin
     {
         $body = json_decode($request->getBodyAsString(), true) ?: [];
         $mailboxEmail = $body['mailbox_email'] ?? null;
-        if (!$mailboxEmail) {
+        if (!is_string($mailboxEmail) || $mailboxEmail === '') {
             $response->setStatus(400);
             $response->setHeader('Content-Type', 'application/json');
             $response->setBody(json_encode(['error' => 'mailbox_email is required']));

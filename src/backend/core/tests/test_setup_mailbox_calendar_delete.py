@@ -2,6 +2,7 @@
 
 from unittest import mock
 
+from django.core.cache import cache
 from django.test import override_settings
 
 import pytest
@@ -26,6 +27,7 @@ _SETTINGS = {
     "FEATURE_MESSAGES_INTEGRATION": True,
     "MESSAGES_API_URL": "http://messages.example",
     "MESSAGES_API_KEY": "test-messages-key",
+    "MESSAGES_CHANNEL_ID": "test-channel",
 }
 
 MAILBOX = "contact@co.example"
@@ -105,6 +107,37 @@ def test_delete_mailbox_calendar_requires_admin_role(client, role):
     assert response.status_code == HTTP_403_FORBIDDEN
     assert response.json()["code"] == "mailbox_admin_required"
     mock_request.assert_not_called()
+
+
+def test_delete_mailbox_calendar_ignores_a_cached_admin_role():
+    """A demoted admin cannot delete while the cache still says admin."""
+    org = factories.OrganizationFactory(external_id="test-org")
+    user = factories.UserFactory(organization=org)
+    client = APIClient()
+    client.force_authenticate(user=user)
+    cache.set(
+        f"messages:by_user:{user.email}",
+        [{"email": MAILBOX, "role": "admin", "users": []}],
+    )
+    messages_response = mock.Mock(status_code=200)
+    messages_response.json.return_value = {
+        "results": [{"email": MAILBOX, "role": "viewer", "users": []}]
+    }
+
+    with (
+        mock.patch(
+            "core.services.messages_service.requests.request",
+            return_value=messages_response,
+        ),
+        mock.patch(
+            "core.services.caldav_service.requests.Session.request"
+        ) as mock_caldav,
+    ):
+        response = client.delete(URL)
+
+    assert response.status_code == HTTP_403_FORBIDDEN
+    assert response.json()["code"] == "mailbox_admin_required"
+    mock_caldav.assert_not_called()
 
 
 def test_delete_mailbox_calendar_success(client):

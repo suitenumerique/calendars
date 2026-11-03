@@ -247,10 +247,11 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     [caldavService, refreshCalendars],
   );
 
-  // The calendar leaves the visible set first, so a failed refresh
-  // does not show it again.
+  // The calendar leaves the list and the visible set first, so a failed
+  // refresh does not show it again.
   const removeDeletedCalendar = useCallback(
     async (calendarUrl: string) => {
+      setDavCalendars((prev) => prev.filter((calendar) => calendar.url !== calendarUrl));
       setVisibleCalendarUrls((prev) => {
         const newSet = new Set(prev);
         newSet.delete(calendarUrl);

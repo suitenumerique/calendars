@@ -268,7 +268,9 @@ class SetupService:
         ``calendar_uri`` is the URI of the user's own instance, under
         ``calendars/users/{user.email}/``.
         """
-        user_mailbox = self._get_user_mailbox(user, mailbox_email)
+        # The delete is destructive, so the role comes from Messages and not
+        # from the cache. A demoted admin cannot delete.
+        user_mailbox = self._get_user_mailbox(user, mailbox_email, use_cache=False)
         user_role = user_mailbox.get("role", MailboxRole.VIEWER)
         if user_role != MailboxRole.ADMIN:
             raise MailboxAdminRequiredError(
@@ -409,7 +411,7 @@ class SetupService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_user_mailbox(self, user, mailbox_email):
+    def _get_user_mailbox(self, user, mailbox_email, *, use_cache=True):
         """Return the Messages data of a mailbox that the user can access.
 
         Raises an error when the Messages integration is disabled or the
@@ -418,7 +420,7 @@ class SetupService:
         if not settings.FEATURE_MESSAGES_INTEGRATION:
             raise MessagesDisabledError("Messages integration is not enabled")
 
-        mailboxes = self.messages.get_user_mailboxes(user.email)
+        mailboxes = self.messages.get_user_mailboxes(user.email, use_cache=use_cache)
         user_mailbox = next(
             (mb for mb in mailboxes if mb.get("email") == mailbox_email),
             None,
