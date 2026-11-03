@@ -64,7 +64,7 @@ import {
   toSeriesWallClock,
   withPartstat,
 } from "./helpers/rsvp";
-import { toWallClock } from "./helpers/timezone";
+import { isKnownTimezone, toWallClock } from "./helpers/timezone";
 import { buildFreeBusyRequestIcs } from "./helpers/freebusy-builder";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1480,7 +1480,15 @@ export class CalDavService {
 
     const { master, override } = resolved;
     // An event without RRULE has no occurrences: answer the event itself.
-    if (occurrence && (override || master?.recurrenceRule)) {
+    // A copy without master holds only overrides: answer the override in
+    // place.
+    if (occurrence && master && (override || master.recurrenceRule)) {
+      // With an unknown TZID, the wall-clock time of the occurrence falls
+      // back to UTC, and the override targets another occurrence.
+      const timezone = master.start.local?.timezone;
+      if (timezone && !isKnownTimezone(timezone)) {
+        throw new Error(`Unknown timezone of the series: ${timezone}`);
+      }
       const reply = buildOccurrenceReply(resolved, occurrence, attendeeEmail, partstat);
       if (!reply) throw new Error("Occurrence not found");
       const seriesTime = toSeriesWallClock(master, occurrence);
@@ -1489,14 +1497,15 @@ export class CalDavService {
       return { kind: "responded" };
     }
 
-    if (!master) throw new Error("Master event not found");
-    // Write the calendar of the read, so that the overrides stay as the
+    const target = master ?? override;
+    if (!target) throw new Error("Event not found");
+    // Write the calendar of the read, so that the other VEVENTs stay as the
     // server has them.
     const reply = {
-      ...withPartstat(master, attendeeEmail, partstat),
-      sequence: (master.sequence ?? 0) + 1,
+      ...withPartstat(target, attendeeEmail, partstat),
+      sequence: (target.sequence ?? 0) + 1,
     };
-    const calendar = { ...data, events: data.events?.map((e) => (e === master ? reply : e)) };
+    const calendar = { ...data, events: data.events?.map((e) => (e === target ? reply : e)) };
     this.validateTimezones(calendar);
     const written = await davRequest({
       url: eventUrl,

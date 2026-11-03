@@ -101,6 +101,16 @@ export class TimezoneConverter {
 
 const shared = new TimezoneConverter();
 
+/** Tell if Intl knows the timezone. */
+export const isKnownTimezone = (timezone: string): boolean => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /**
  * Give the wall-clock time of `date` in `timezone`. The result stores
  * that time in UTC fields ("fake UTC"), so 10:00 in Paris becomes 10:00Z.

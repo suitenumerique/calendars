@@ -36,6 +36,9 @@ const occurrenceOf = (master: IcsEvent, instant: Date): IcsEvent => {
 /**
  * Find the VEVENTs of one event in the server copy. Give `instant` to
  * also find the override of that occurrence.
+ *
+ * An attendee invited to one occurrence only gets a copy without master.
+ * Without `instant`, the single VEVENT of such a copy is the override.
  */
 export const resolveRsvpEvent = (
   events: IcsEvent[] | undefined,
@@ -43,12 +46,13 @@ export const resolveRsvpEvent = (
   instant?: Date,
 ): RsvpEvent => {
   const instances = events?.filter((e) => e.uid === uid) ?? [];
-  return {
-    instances,
-    master: instances.find((e) => !e.recurrenceId),
-    override:
-      instant && instances.find((e) => e.recurrenceId?.value.date.getTime() === instant.getTime()),
-  };
+  const master = instances.find((e) => !e.recurrenceId);
+  const override = instant
+    ? instances.find((e) => e.recurrenceId?.value.date.getTime() === instant.getTime())
+    : !master && instances.length === 1
+      ? instances[0]
+      : undefined;
+  return { instances, master, override };
 };
 
 /**
