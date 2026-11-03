@@ -233,6 +233,7 @@ export class CalDavService {
       (props as Record<string, unknown> | undefined)?.["share-access-map"];
     const sharees = parseInviteSharees(rawInvite, rawAccessMap);
     const mailboxEmail = ownerType === "MAILBOX" ? parseInviteOrganizerEmail(rawInvite) : undefined;
+    const syncManaged = props?.calendarSyncManaged === "true";
 
     const displayname = (props as Record<string, unknown> | undefined)?.displayname;
     const displayName =
@@ -251,6 +252,7 @@ export class CalDavService {
       includeInAvailability: !isTransparent,
       ownerType,
       mailboxEmail,
+      syncManaged,
       sharees,
       ctag: (props as Record<string, string | undefined> | undefined)?.getctag,
       syncToken: (props as Record<string, string | undefined> | undefined)?.syncToken,

@@ -19,12 +19,14 @@ interface UseCalendarListStateProps {
     options: CalDavCalendarUpdate,
   ) => Promise<{ success: boolean; error?: string }>;
   deleteCalendar: (url: string) => Promise<{ success: boolean; error?: string }>;
+  onDeleteError: () => void;
 }
 
 export const useCalendarListState = ({
   createCalendar,
   updateCalendar,
   deleteCalendar,
+  onDeleteError,
 }: UseCalendarListStateProps) => {
   // Modal states
   const [modalState, setModalState] = useState<CalendarModalState>({
@@ -147,17 +149,13 @@ export const useCalendarListState = ({
     if (!deleteState.calendar) return;
 
     setDeleteState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      const result = await deleteCalendar(deleteState.calendar.url);
-      if (!result.success) {
-        console.error("Failed to delete calendar:", result.error);
-      }
-      handleCloseDeleteModal();
-    } catch (error) {
-      console.error("Error deleting calendar:", error);
-      setDeleteState((prev) => ({ ...prev, isLoading: false }));
+    const result = await deleteCalendar(deleteState.calendar.url);
+    handleCloseDeleteModal();
+    if (!result.success) {
+      console.error("Failed to delete calendar:", result.error);
+      onDeleteError();
     }
-  }, [deleteState.calendar, deleteCalendar, handleCloseDeleteModal]);
+  }, [deleteState.calendar, deleteCalendar, handleCloseDeleteModal, onDeleteError]);
 
   // Menu handlers
   const handleMenuToggle = useCallback(

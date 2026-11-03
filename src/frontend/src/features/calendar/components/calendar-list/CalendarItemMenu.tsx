@@ -30,6 +30,7 @@ export const CalendarItemMenu = ({
   onEdit,
   onDelete,
   onLeave,
+  syncManaged,
   onShare,
   onImport,
   onSubscription,
@@ -88,13 +89,26 @@ export const CalendarItemMenu = ({
     }
 
     items.push({
-      label: t(onLeave ? "calendar.list.leaveCalendar" : "calendar.list.delete"),
+      label: t(onLeave && !syncManaged ? "calendar.list.leaveCalendar" : "calendar.list.delete"),
       icon: <Trash />,
       callback: onLeave ?? onDelete,
+      isDisabled: syncManaged,
+      subText: syncManaged ? t("calendar.list.cannotDeleteMailboxCalendar") : undefined,
     });
 
     return items;
-  }, [t, onEdit, onDelete, onLeave, onShare, onImport, onSubscription, onMoveUp, onMoveDown]);
+  }, [
+    t,
+    onEdit,
+    onDelete,
+    onLeave,
+    syncManaged,
+    onShare,
+    onImport,
+    onSubscription,
+    onMoveUp,
+    onMoveDown,
+  ]);
 
   return (
     <DropdownMenu options={options} isOpen={isOpen} onOpenChange={onOpenChange}>

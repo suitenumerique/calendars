@@ -58,6 +58,12 @@ export type CalDavCalendar = {
    */
   mailboxEmail?: string;
   /**
+   * Whether Messages manages the access to this calendar instance.
+   * The value comes from ``LS:calendar-sync-managed``. When it is true,
+   * the server refuses to delete the instance.
+   */
+  syncManaged?: boolean;
+  /**
    * Sharees parsed from the ``CS:invite`` payload returned alongside
    * the standard calendar properties. The share modal reads this
    * directly instead of issuing a second PROPFIND.
