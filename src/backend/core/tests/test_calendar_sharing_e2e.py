@@ -8,6 +8,7 @@ Requires: CalDAV server running.
 
 import secrets
 from datetime import datetime, timedelta
+from unittest import mock
 from urllib.parse import unquote
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
@@ -3957,3 +3958,99 @@ class TestSyncManagedCalendarDeletion:
 
         assert resp.status_code == 204
         assert _list_calendar_urls(sharee) == before_sharee
+
+
+def _setup_mailbox_members(prefix, *members):
+    """Create a mailbox calendar synced to every member.
+
+    Returns (users, mailbox_email, {member email: instance URI}). Each
+    user is a (user, client, calendar path) tuple.
+    """
+    org = factories.OrganizationFactory(external_id=prefix)
+    mailbox_email = f"team@{prefix}.com"
+    users = [_create_user_with_calendar(org, f"{name}-{prefix}") for name in members]
+    _create_mailbox_calendar(users[0][0], mailbox_email, org)
+    before = {user.email: _list_calendar_urls(user) for user, _, _ in users}
+    _sync_mailbox_acls(
+        users[0][0],
+        [
+            {
+                "user_email": user.email,
+                "mailbox_email": mailbox_email,
+                "privilege": "read-write",
+            }
+            for user, _, _ in users
+        ],
+    )
+    uris = {
+        user.email: _find_shared_cal_uri(user, before_urls=before[user.email])
+        for user, _, _ in users
+    }
+    return users, mailbox_email, uris
+
+
+class TestMailboxCalendarAdminDeletion:
+    """A mailbox admin deletes a mailbox calendar for every user."""
+
+    def test_admin_delete_removes_calendar_for_every_member(self, settings):
+        """The calendar, its events and every instance go away."""
+        settings.FEATURE_MESSAGES_INTEGRATION = True
+        users, mailbox_email, uris = _setup_mailbox_members(
+            "del-mbx-admin", "admin", "member"
+        )
+        (admin, admin_client, _), (member, _, _) = users
+        admin_uri = uris[admin.email]
+        _put_event(admin_client, admin.email, admin_uri, "del-mbx-ev", "Gone")
+
+        with mock.patch("core.services.setup_service.MessagesService") as messages:
+            messages.return_value.get_user_mailboxes.return_value = [
+                {"email": mailbox_email, "role": "admin", "users": []}
+            ]
+            resp = admin_client.delete(
+                f"/api/v1.0/calendars/mailboxes/{mailbox_email}/{admin_uri}/"
+            )
+
+        assert resp.status_code == 204
+        assert not any(
+            url.rstrip("/").endswith(admin_uri) for url in _list_calendar_urls(admin)
+        )
+        assert not any(
+            url.rstrip("/").endswith(uris[member.email])
+            for url in _list_calendar_urls(member)
+        )
+
+    def test_delete_refused_for_another_mailbox(self):
+        """The internal API refuses a calendar of another mailbox."""
+        users, _, uris = _setup_mailbox_members("del-mbx-other", "admin")
+        admin = users[0][0]
+
+        resp = http.internal_request(
+            "DELETE",
+            admin,
+            f"internal-api/calendars/{uris[admin.email]}",
+            json={"mailbox_email": "other@del-mbx-other.com"},
+        )
+
+        assert resp.status_code == 403
+        assert any(
+            url.rstrip("/").endswith(uris[admin.email])
+            for url in _list_calendar_urls(admin)
+        )
+
+    def test_delete_refused_for_a_user_calendar(self):
+        """The internal API refuses a calendar that a user owns."""
+        org = factories.OrganizationFactory(external_id="del-mbx-user")
+        owner, _, cal_path = _create_user_with_calendar(org, "owner-dmu")
+        cal_id = _get_cal_id(cal_path)
+
+        resp = http.internal_request(
+            "DELETE",
+            owner,
+            f"internal-api/calendars/{cal_id}",
+            json={"mailbox_email": "team@del-mbx-user.com"},
+        )
+
+        assert resp.status_code == 400
+        assert any(
+            url.rstrip("/").endswith(cal_id) for url in _list_calendar_urls(owner)
+        )

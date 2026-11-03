@@ -1,10 +1,4 @@
-"""Tests for deleting a MAILBOX-owned calendar (issue #72).
-
-Unlike a plain CalDAV DELETE — which only ever removes the caller's
-own share of a mailbox calendar — ``DELETE /api/v1.0/setup/`` reaches
-the real owner-branch delete via the internal API, so the calendar
-disappears for every mailbox user.
-"""
+"""Tests for the delete of a mailbox calendar for every mailbox user."""
 
 from unittest import mock
 
@@ -13,13 +7,17 @@ from django.test import override_settings
 import pytest
 from rest_framework.status import (
     HTTP_204_NO_CONTENT,
-    HTTP_400_BAD_REQUEST,
     HTTP_401_UNAUTHORIZED,
+    HTTP_403_FORBIDDEN,
+    HTTP_404_NOT_FOUND,
+    HTTP_500_INTERNAL_SERVER_ERROR,
 )
 from rest_framework.test import APIClient
 
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
+
+pytestmark = pytest.mark.django_db
 
 _SETTINGS = {
     "ENTITLEMENTS_BACKEND": "core.entitlements.backends.local.LocalEntitlementsBackend",
@@ -30,205 +28,131 @@ _SETTINGS = {
     "MESSAGES_API_KEY": "test-messages-key",
 }
 
+MAILBOX = "contact@co.example"
+URL = f"/api/v1.0/calendars/mailboxes/{MAILBOX}/some-uuid/"
 
-def _authed_client():
+
+@pytest.fixture(autouse=True)
+def _settings():
+    """Enable the Messages integration and the local entitlements."""
+    get_entitlements_backend.cache_clear()
+    with override_settings(**_SETTINGS):
+        yield
+    get_entitlements_backend.cache_clear()
+
+
+@pytest.fixture(name="client")
+def fixture_client():
+    """Return an API client logged in as a user of an organization."""
     org = factories.OrganizationFactory(external_id="test-org")
     user = factories.UserFactory(organization=org)
     client = APIClient()
     client.force_authenticate(user=user)
-    return client, user
+    return client
 
 
-@pytest.mark.django_db
-@override_settings(**_SETTINGS)
+def _delete(client, mailboxes, caldav_status=200):
+    """Send the DELETE with mocked Messages and CalDAV responses."""
+    with (
+        mock.patch("core.services.setup_service.MessagesService") as mock_messages_cls,
+        mock.patch(
+            "core.services.caldav_service.requests.Session.request"
+        ) as mock_request,
+    ):
+        mock_messages_cls.return_value.get_user_mailboxes.return_value = mailboxes
+        mock_request.return_value = mock.Mock(status_code=caldav_status, text="")
+        response = client.delete(URL)
+    return response, mock_request
+
+
 def test_delete_mailbox_calendar_requires_auth():
-    """DELETE /setup/ requires authentication."""
-    get_entitlements_backend.cache_clear()
-    client = APIClient()
-    response = client.delete(
-        "/api/v1.0/setup/",
-        {"mailbox_email": "contact@co.example", "calendar_uri": "default"},
-        format="json",
-    )
+    """The endpoint requires authentication."""
+    response = APIClient().delete(URL)
+
     assert response.status_code == HTTP_401_UNAUTHORIZED
-    get_entitlements_backend.cache_clear()
 
 
-@pytest.mark.django_db
-@override_settings(**_SETTINGS)
-def test_delete_mailbox_calendar_missing_params():
-    """Both mailbox_email and calendar_uri are required."""
-    get_entitlements_backend.cache_clear()
-    client, _user = _authed_client()
-
-    response = client.delete("/api/v1.0/setup/", {}, format="json")
-
-    assert response.status_code == HTTP_400_BAD_REQUEST
-    get_entitlements_backend.cache_clear()
-
-
-@pytest.mark.django_db
-@override_settings(**_SETTINGS)
-def test_delete_mailbox_calendar_requires_send_role():
-    """A viewer-role user cannot delete the mailbox's calendar."""
-    get_entitlements_backend.cache_clear()
-    client, _user = _authed_client()
-
-    with (
-        mock.patch("core.services.setup_service.MessagesService") as mock_messages_cls,
-        mock.patch(
-            "core.services.caldav_service.requests.Session.request"
-        ) as mock_request,
+def test_delete_mailbox_calendar_requires_entitlement(client):
+    """A user without the can_access entitlement gets a 403."""
+    with mock.patch(
+        "core.api.permissions.get_user_entitlements",
+        return_value={"can_access": False, "can_admin": False},
     ):
-        mock_messages_cls.return_value.get_user_mailboxes.return_value = [
-            {"email": "contact@co.example", "role": "viewer", "users": []}
-        ]
-
-        response = client.delete(
-            "/api/v1.0/setup/",
-            {"mailbox_email": "contact@co.example", "calendar_uri": "default"},
-            format="json",
+        response, mock_request = _delete(
+            client, [{"email": MAILBOX, "role": "admin", "users": []}]
         )
 
-    assert response.status_code == HTTP_400_BAD_REQUEST
-    assert "sender" in response.json()["error"]
+    assert response.status_code == HTTP_403_FORBIDDEN
     mock_request.assert_not_called()
-    get_entitlements_backend.cache_clear()
 
 
-@pytest.mark.django_db
-@override_settings(**_SETTINGS)
-def test_delete_mailbox_calendar_no_access_to_mailbox():
-    """A user with no role at all on the mailbox is rejected."""
-    get_entitlements_backend.cache_clear()
-    client, _user = _authed_client()
+def test_delete_mailbox_calendar_no_access_to_mailbox(client):
+    """A user with no role on the mailbox gets a 403."""
+    response, mock_request = _delete(client, [])
 
-    with (
-        mock.patch("core.services.setup_service.MessagesService") as mock_messages_cls,
-        mock.patch(
-            "core.services.caldav_service.requests.Session.request"
-        ) as mock_request,
-    ):
-        mock_messages_cls.return_value.get_user_mailboxes.return_value = []
-
-        response = client.delete(
-            "/api/v1.0/setup/",
-            {"mailbox_email": "contact@co.example", "calendar_uri": "default"},
-            format="json",
-        )
-
-    assert response.status_code == HTTP_400_BAD_REQUEST
+    assert response.status_code == HTTP_403_FORBIDDEN
+    assert response.json()["code"] == "mailbox_access_denied"
     mock_request.assert_not_called()
-    get_entitlements_backend.cache_clear()
 
 
-@pytest.mark.django_db
-@override_settings(**_SETTINGS)
-def test_delete_mailbox_calendar_success():
-    """A sender-role user can delete the mailbox's calendar for everyone."""
-    get_entitlements_backend.cache_clear()
-    client, _user = _authed_client()
+@pytest.mark.parametrize("role", ["viewer", "editor", "sender"])
+def test_delete_mailbox_calendar_requires_admin_role(client, role):
+    """Only an admin of the mailbox can delete its calendars."""
+    response, mock_request = _delete(
+        client, [{"email": MAILBOX, "role": role, "users": []}]
+    )
 
-    with (
-        mock.patch("core.services.setup_service.MessagesService") as mock_messages_cls,
-        mock.patch(
-            "core.services.caldav_service.requests.Session.request"
-        ) as mock_request,
-    ):
-        mock_messages_cls.return_value.get_user_mailboxes.return_value = [
-            {"email": "contact@co.example", "role": "admin", "users": []}
-        ]
-        mock_response = mock.Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"deleted": True}
-        mock_response.text = '{"deleted": true}'
-        mock_request.return_value = mock_response
+    assert response.status_code == HTTP_403_FORBIDDEN
+    assert response.json()["code"] == "mailbox_admin_required"
+    mock_request.assert_not_called()
 
-        response = client.delete(
-            "/api/v1.0/setup/",
-            {"mailbox_email": "contact@co.example", "calendar_uri": "some-uuid"},
-            format="json",
-        )
+
+def test_delete_mailbox_calendar_success(client):
+    """An admin deletes the calendar through the internal API."""
+    response, mock_request = _delete(
+        client, [{"email": MAILBOX, "role": "admin", "users": []}]
+    )
 
     assert response.status_code == HTTP_204_NO_CONTENT
-
     mock_request.assert_called_once()
-    call_kwargs = mock_request.call_args
-    url = call_kwargs.kwargs.get("url", "") or (
-        call_kwargs.args[1] if len(call_kwargs.args) > 1 else ""
+    kwargs = mock_request.call_args.kwargs
+    assert kwargs["method"] == "DELETE"
+    assert kwargs["url"].endswith("internal-api/calendars/some-uuid")
+    assert b'"mailbox_email": "contact@co.example"' in kwargs["data"]
+
+
+@pytest.mark.parametrize("caldav_status", [400, 403, 404])
+def test_delete_mailbox_calendar_not_found(client, caldav_status):
+    """A calendar that the mailbox does not own gives a 404."""
+    response, _ = _delete(
+        client,
+        [{"email": MAILBOX, "role": "admin", "users": []}],
+        caldav_status=caldav_status,
     )
-    assert "internal-api/calendars/some-uuid" in url
-    method = call_kwargs.kwargs.get("method") or (
-        call_kwargs.args[0] if call_kwargs.args else ""
+
+    assert response.status_code == HTTP_404_NOT_FOUND
+    assert response.json()["code"] == "calendar_not_found"
+
+
+def test_delete_mailbox_calendar_caldav_failure(client):
+    """A CalDAV server failure gives a 500 without internal details."""
+    response, _ = _delete(
+        client,
+        [{"email": MAILBOX, "role": "admin", "users": []}],
+        caldav_status=500,
     )
-    assert method == "DELETE"
-    get_entitlements_backend.cache_clear()
+
+    assert response.status_code == HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json() == {
+        "code": "calendar_deletion_failed",
+        "detail": "Calendar deletion failed.",
+    }
 
 
-@pytest.mark.django_db
-@override_settings(**_SETTINGS)
-def test_delete_mailbox_calendar_not_found():
-    """A 404 from the internal API surfaces as a rejected request, not a 500."""
-    get_entitlements_backend.cache_clear()
-    client, _user = _authed_client()
+def test_delete_mailbox_calendar_messages_disabled(client):
+    """Without the Messages integration, the endpoint gives a 404."""
+    with override_settings(FEATURE_MESSAGES_INTEGRATION=False):
+        response, mock_request = _delete(client, [])
 
-    with (
-        mock.patch("core.services.setup_service.MessagesService") as mock_messages_cls,
-        mock.patch(
-            "core.services.caldav_service.requests.Session.request"
-        ) as mock_request,
-    ):
-        mock_messages_cls.return_value.get_user_mailboxes.return_value = [
-            {"email": "contact@co.example", "role": "admin", "users": []}
-        ]
-        mock_response = mock.Mock()
-        mock_response.status_code = 404
-        mock_response.text = '{"error": "Calendar not found"}'
-        mock_request.return_value = mock_response
-
-        response = client.delete(
-            "/api/v1.0/setup/",
-            {"mailbox_email": "contact@co.example", "calendar_uri": "missing"},
-            format="json",
-        )
-
-    assert response.status_code == HTTP_400_BAD_REQUEST
-    assert "not found" in response.json()["error"]
-    get_entitlements_backend.cache_clear()
-
-
-@pytest.mark.django_db
-@override_settings(**_SETTINGS)
-def test_delete_mailbox_calendar_ownership_mismatch():
-    """A 403 (calendar belongs to a different mailbox) is surfaced, not a 500."""
-    get_entitlements_backend.cache_clear()
-    client, _user = _authed_client()
-
-    with (
-        mock.patch("core.services.setup_service.MessagesService") as mock_messages_cls,
-        mock.patch(
-            "core.services.caldav_service.requests.Session.request"
-        ) as mock_request,
-    ):
-        mock_messages_cls.return_value.get_user_mailboxes.return_value = [
-            {"email": "contact@co.example", "role": "admin", "users": []}
-        ]
-        mock_response = mock.Mock()
-        mock_response.status_code = 403
-        mock_response.json.return_value = {
-            "error": "Calendar does not belong to the given mailbox"
-        }
-        mock_response.text = (
-            '{"error": "Calendar does not belong to the given mailbox"}'
-        )
-        mock_request.return_value = mock_response
-
-        response = client.delete(
-            "/api/v1.0/setup/",
-            {"mailbox_email": "contact@co.example", "calendar_uri": "someone-elses"},
-            format="json",
-        )
-
-    assert response.status_code == HTTP_400_BAD_REQUEST
-    assert "does not belong" in response.json()["error"]
-    get_entitlements_backend.cache_clear()
+    assert response.status_code == HTTP_404_NOT_FOUND
+    mock_request.assert_not_called()
