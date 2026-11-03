@@ -51,7 +51,7 @@ def fixture_client():
     return client
 
 
-def _delete(client, mailboxes, caldav_status=200):
+def _delete(client, mailboxes, caldav_status=200, url=URL):
     """Send the DELETE with mocked Messages and CalDAV responses."""
     with (
         mock.patch("core.services.setup_service.MessagesService") as mock_messages_cls,
@@ -61,7 +61,7 @@ def _delete(client, mailboxes, caldav_status=200):
     ):
         mock_messages_cls.return_value.get_user_mailboxes.return_value = mailboxes
         mock_request.return_value = mock.Mock(status_code=caldav_status, text="")
-        response = client.delete(URL)
+        response = client.delete(url)
     return response, mock_request
 
 
@@ -119,6 +119,20 @@ def test_delete_mailbox_calendar_success(client):
     assert kwargs["method"] == "DELETE"
     assert kwargs["url"].endswith("internal-api/calendars/some-uuid")
     assert b'"mailbox_email": "contact@co.example"' in kwargs["data"]
+
+
+def test_delete_mailbox_calendar_quotes_the_uri(client):
+    """The calendar URI cannot change the internal API URL."""
+    response, mock_request = _delete(
+        client,
+        [{"email": MAILBOX, "role": "admin", "users": []}],
+        url=f"/api/v1.0/calendars/mailboxes/{MAILBOX}/a%3Fb%23c/",
+    )
+
+    assert response.status_code == HTTP_204_NO_CONTENT
+    assert mock_request.call_args.kwargs["url"].endswith(
+        "internal-api/calendars/a%3Fb%23c"
+    )
 
 
 @pytest.mark.parametrize("caldav_status", [400, 403, 404])

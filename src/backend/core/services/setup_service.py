@@ -10,6 +10,8 @@ from calendarinstances shares — no explicit address sync needed.
 """
 
 import logging
+from enum import StrEnum
+from urllib.parse import quote
 
 from django.conf import settings
 
@@ -19,16 +21,26 @@ from core.services.messages_service import MessagesService
 
 logger = logging.getLogger(__name__)
 
+
+class MailboxRole(StrEnum):
+    """Role of a user on a Messages mailbox."""
+
+    VIEWER = "viewer"
+    EDITOR = "editor"
+    SENDER = "sender"
+    ADMIN = "admin"
+
+
 # Messages role → CalDAV share privilege
 ROLE_TO_PRIVILEGE = {
-    "viewer": "read",
-    "editor": "read",
-    "sender": "read-write",
-    "admin": "read-write",
+    MailboxRole.VIEWER: "read",
+    MailboxRole.EDITOR: "read",
+    MailboxRole.SENDER: "read-write",
+    MailboxRole.ADMIN: "read-write",
 }
 
 # Roles that allow sending invites as the mailbox
-SEND_ROLES = {"sender", "admin"}
+SEND_ROLES = {MailboxRole.SENDER, MailboxRole.ADMIN}
 
 
 class SetupServiceError(Exception):
@@ -208,7 +220,7 @@ class SetupService:
         propagated to other mailbox users via the share fan-out.
         """
         user_mailbox = self._get_user_mailbox(user, mailbox_email)
-        user_role = user_mailbox.get("role", "viewer")
+        user_role = user_mailbox.get("role", MailboxRole.VIEWER)
         if user_role not in SEND_ROLES:
             raise MailboxRoleRequiredError(
                 f"User needs 'sender' or 'admin' role to create a mailbox calendar"
@@ -257,8 +269,8 @@ class SetupService:
         ``calendars/users/{user.email}/``.
         """
         user_mailbox = self._get_user_mailbox(user, mailbox_email)
-        user_role = user_mailbox.get("role", "viewer")
-        if user_role != "admin":
+        user_role = user_mailbox.get("role", MailboxRole.VIEWER)
+        if user_role != MailboxRole.ADMIN:
             raise MailboxAdminRequiredError(
                 "User needs 'admin' role to delete a mailbox calendar"
                 f" (current role: {user_role})"
@@ -268,7 +280,7 @@ class SetupService:
             resp = self._http.internal_request(
                 "DELETE",
                 user,
-                f"internal-api/calendars/{calendar_uri}",
+                f"internal-api/calendars/{quote(calendar_uri, safe='')}",
                 json={"mailbox_email": mailbox_email},
             )
         except Exception as exc:
@@ -318,7 +330,7 @@ class SetupService:
         shares = []
         for mailbox in mailboxes:
             mb_email = mailbox.get("email", "")
-            mb_role = mailbox.get("role", "viewer")
+            mb_role = mailbox.get("role", MailboxRole.VIEWER)
             if not mb_email:
                 continue
             role_by_email[mb_email] = mb_role
@@ -344,7 +356,7 @@ class SetupService:
                 "calendar_path": (
                     f"calendars/users/{s['mailbox_email']}/{s['calendar_uri']}"
                 ),
-                "role": role_by_email.get(s["mailbox_email"], "viewer"),
+                "role": role_by_email.get(s["mailbox_email"], MailboxRole.VIEWER),
             }
             for s in synced
         ]
@@ -377,7 +389,7 @@ class SetupService:
         shares = []
         for mb_user in users:
             mb_user_email = mb_user.get("email", "")
-            mb_user_role = mb_user.get("role", "viewer")
+            mb_user_role = mb_user.get("role", MailboxRole.VIEWER)
             if not mb_user_email:
                 continue
             # One share entry per user: the CalDAV side fans it out to
