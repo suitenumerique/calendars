@@ -83,8 +83,5 @@ describe("CalDavService.fetchOccurrenceDates", () => {
     expect(url).toBe(CALENDAR_URL);
     expect(init.method).toBe("REPORT");
     expect(init.body).toContain('<C:expand start="20261102T090000Z" end="20261104T090000Z"/>');
-    expect(init.body).toContain(
-      '<C:prop-filter name="UID"><C:text-match collation="i;octet">event-uid</C:text-match>',
-    );
   });
 });

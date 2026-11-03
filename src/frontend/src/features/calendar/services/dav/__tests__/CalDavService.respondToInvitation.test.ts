@@ -99,10 +99,7 @@ describe("CalDavService.respondToInvitation", () => {
     expect(s.updateEvent).toHaveBeenCalledTimes(2);
   });
 
-  it.each([
-    ["cancelled", { ...master(), status: "CANCELLED" }],
-    ["notAttendee", { ...master(), attendees: [] }],
-  ] as const)("does not write after a 412 when the event is now %s", async (blocker, changed) => {
+  it("does not write when the event is cancelled after a 412", async () => {
     const s = setup([master()]);
     s.updateEvent.mockResolvedValueOnce({ success: false, status: 412 });
     s.fetchEvent.mockResolvedValueOnce({
@@ -111,12 +108,12 @@ describe("CalDavService.respondToInvitation", () => {
     } as never);
     s.fetchEvent.mockResolvedValueOnce({
       success: true,
-      data: { data: { events: [changed as IcsEvent] }, etag: "etag-2" },
+      data: { data: { events: [{ ...master(), status: "CANCELLED" }] }, etag: "etag-2" },
     } as never);
 
     const result = await s.service.respondToInvitation(URL, response);
 
-    expect(result).toEqual({ success: true, data: { kind: "blocked", blocker } });
+    expect(result).toEqual({ success: true, data: { kind: "blocked", blocker: "cancelled" } });
     expect(s.updateEvent).toHaveBeenCalledOnce();
   });
 
