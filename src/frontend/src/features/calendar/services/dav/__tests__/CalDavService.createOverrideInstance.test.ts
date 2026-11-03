@@ -68,6 +68,7 @@ describe("CalDavService.createOverrideInstance", () => {
       EVENT_URL,
       reply,
       new Date(Date.UTC(2026, 10, 3, 9, 0, 0)),
+      "etag-1",
     );
 
     expect(result.success).toBe(true);
@@ -76,6 +77,7 @@ describe("CalDavService.createOverrideInstance", () => {
     expect(body.match(/^RECURRENCE-ID/gm)).toHaveLength(1);
     expect(body).not.toMatch(/^EXDATE/m);
     expect(body).toContain("PARTSTAT=ACCEPTED");
+    expect((put.headers as Record<string, string>)["If-Match"]).toBe("etag-1");
   });
 
   it("keeps the override of another occurrence at the same UTC digits", async () => {

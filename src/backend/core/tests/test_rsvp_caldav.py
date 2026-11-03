@@ -246,7 +246,9 @@ class TestStaleAttendeeWrite:
         )
 
         assert response.status_code == 412
-        assert self._status(self._attendee_copy()[1]) == "CANCELLED"
+        attendee_copy = self._attendee_copy()[1]
+        assert self._status(attendee_copy) == "CANCELLED"
+        assert "PARTSTAT=ACCEPTED" not in attendee_copy
         organizer_copy = (
             CalDAVHTTPClient()
             .request("GET", self.organizer, f"{self.calendar}{self.uid}.ics")

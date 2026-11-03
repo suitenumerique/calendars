@@ -37,6 +37,17 @@ const response = (href: string, ...vevents: string[]) => `
     </d:propstat>
   </d:response>`;
 
+const multistatus = (...responses: string[]) =>
+  ({
+    ok: true,
+    status: 207,
+    headers: new Headers({ "content-type": "application/xml" }),
+    text: async () => `<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">${responses.join("")}</d:multistatus>`,
+  }) as unknown as Response;
+
+const RANGE = { start: new Date("2026-11-02T09:00:00Z"), end: new Date("2026-11-04T09:00:00Z") };
+
 describe("CalDavService.fetchOccurrenceDates", () => {
   const originalFetch = globalThis.fetch;
   let fetchMock: Mock;
@@ -51,29 +62,21 @@ describe("CalDavService.fetchOccurrenceDates", () => {
   });
 
   it("returns the RECURRENCE-IDs of the event from an expand REPORT", async () => {
-    const body = `<?xml version="1.0"?>
-<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
-  ${response(
-    "/caldav/calendars/users/u@example.com/cal-uid/event-uid.ics",
-    instance("event-uid", "20261103T080000Z"),
-    instance("event-uid", "20261104T080000Z"),
-  )}
-  ${response(
-    "/caldav/calendars/users/u@example.com/cal-uid/other.ics",
-    instance("other", "20261103T100000Z"),
-  )}
-</d:multistatus>`;
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 207,
-      headers: new Headers({ "content-type": "application/xml" }),
-      text: async () => body,
-    } as unknown as Response);
+    fetchMock.mockResolvedValueOnce(
+      multistatus(
+        response(
+          "/caldav/calendars/users/u@example.com/cal-uid/event-uid.ics",
+          instance("event-uid", "20261103T080000Z"),
+          instance("event-uid", "20261104T080000Z"),
+        ),
+        response(
+          "/caldav/calendars/users/u@example.com/cal-uid/other.ics",
+          instance("other", "20261103T100000Z"),
+        ),
+      ),
+    );
 
-    const result = await new CalDavService().fetchOccurrenceDates(EVENT_URL, "event-uid", {
-      start: new Date("2026-11-02T09:00:00Z"),
-      end: new Date("2026-11-04T09:00:00Z"),
-    });
+    const result = await new CalDavService().fetchOccurrenceDates(EVENT_URL, "event-uid", RANGE);
 
     expect(result.data).toEqual([
       new Date("2026-11-03T08:00:00Z"),
@@ -83,5 +86,23 @@ describe("CalDavService.fetchOccurrenceDates", () => {
     expect(url).toBe(CALENDAR_URL);
     expect(init.method).toBe("REPORT");
     expect(init.body).toContain('<C:expand start="20261102T090000Z" end="20261104T090000Z"/>');
+  });
+
+  it("fails when an entry of the REPORT fails", async () => {
+    fetchMock.mockResolvedValueOnce(
+      multistatus(`
+  <d:response>
+    <d:href>/caldav/calendars/users/u@example.com/cal-uid/event-uid.ics</d:href>
+    <d:propstat>
+      <d:prop><cal:calendar-data/></d:prop>
+      <d:status>HTTP/1.1 500 Internal Server Error</d:status>
+    </d:propstat>
+  </d:response>`),
+    );
+
+    const result = await new CalDavService().fetchOccurrenceDates(EVENT_URL, "event-uid", RANGE);
+
+    expect(result.success).toBe(false);
+    expect(result.status).toBe(500);
   });
 });

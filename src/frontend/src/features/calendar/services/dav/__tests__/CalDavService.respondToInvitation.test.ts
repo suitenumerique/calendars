@@ -85,6 +85,22 @@ describe("CalDavService.respondToInvitation", () => {
     expect(init.body).toContain("PARTSTAT=ACCEPTED");
   });
 
+  it("answers all occurrences on the master and on the overrides", async () => {
+    const THIRD = new Date("2026-11-04T09:00:00Z");
+    const cancelled = {
+      ...override(),
+      status: "CANCELLED",
+      recurrenceId: { value: { date: THIRD, type: "DATE-TIME" } },
+    } as IcsEvent;
+    const s = setup([master(), override(), cancelled]);
+
+    await s.service.respondToInvitation(URL, response);
+
+    const body: string = put.mock.calls[0][1].body;
+    expect(body.match(/PARTSTAT=ACCEPTED/g)).toHaveLength(2);
+    expect(body.match(/PARTSTAT=NEEDS-ACTION/g)).toHaveLength(1);
+  });
+
   it("keeps the overrides of the read when it responds to the series", async () => {
     const s = setup([master(), override()]);
 
@@ -186,7 +202,7 @@ describe("CalDavService.respondToInvitation", () => {
     } as never);
     s.fetchEvent.mockResolvedValueOnce({
       success: true,
-      data: { data: { events: [master()] }, etag: "etag-2" },
+      data: { data: { events: [{ ...master(), summary: "Organizer edit" }] }, etag: "etag-2" },
     } as never);
     put.mockResolvedValueOnce(http(412));
 
@@ -195,6 +211,7 @@ describe("CalDavService.respondToInvitation", () => {
     expect(result.success).toBe(true);
     expect(put).toHaveBeenCalledTimes(2);
     expect(put.mock.calls[1][1].headers["If-Match"]).toBe("etag-2");
+    expect(put.mock.calls[1][1].body).toContain("SUMMARY:Organizer edit");
   });
 
   it.each([
