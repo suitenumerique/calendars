@@ -239,7 +239,7 @@ class CalDAVProxyView(View):
             )
             response["Access-Control-Allow-Headers"] = (
                 "Content-Type, depth, authorization, if-match, if-none-match,"
-                " prefer, destination, overwrite, x-ls-client"
+                " prefer, destination, overwrite, x-ls-client, x-ls-include-hidden"
             )
             return response
 
@@ -339,6 +339,10 @@ class CalDAVProxyView(View):
             headers["If-None-Match"] = request.META["HTTP_IF_NONE_MATCH"]
         if "HTTP_PREFER" in request.META:
             headers["Prefer"] = request.META["HTTP_PREFER"]
+        # SabreDAV leaves hidden calendars out of a calendar home listing.
+        # The web app sends this header to list them too.
+        if request.headers.get("X-LS-Include-Hidden") == "true":
+            headers["X-LS-Include-Hidden"] = "true"
         # NOTE: Destination/Overwrite forwarding below is gated on MOVE
         # specifically. If COPY is ever added to ALLOWED_PROXY_METHODS,
         # this gate must be widened to ("MOVE", "COPY") — otherwise COPY
