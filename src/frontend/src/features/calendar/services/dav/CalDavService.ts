@@ -61,6 +61,7 @@ import {
   buildOccurrenceReply,
   findRsvpBlocker,
   resolveRsvpEvent,
+  seriesTargets,
   toSeriesWallClock,
   withPartstat,
 } from "./helpers/rsvp";
@@ -918,8 +919,12 @@ export class CalDavService {
       if (!result.success || !result.responses) {
         throw davFailure(result, "Failed to expand event");
       }
+      // A failed entry can be the event itself. Without it, the occurrence
+      // looks cancelled.
+      const failed = result.responses.find((r) => !r.ok);
+      if (failed) throw davFailure({ status: failed.status }, "Failed to expand event");
       return result.responses
-        .filter((r) => r.ok && r.props?.calendarData)
+        .filter((r) => r.props?.calendarData)
         .flatMap((r) => convertIcsCalendar(undefined, r.props?.calendarData as string).events ?? [])
         .filter((e) => e.uid === uid)
         .map((e) => e.recurrenceId?.value.date ?? e.start.date);
@@ -1497,15 +1502,17 @@ export class CalDavService {
       return { kind: "responded" };
     }
 
-    const target = master ?? override;
-    if (!target) throw new Error("Event not found");
+    const single = master ?? override;
+    const targets = occurrence ? (single ? [single] : []) : seriesTargets(resolved, attendeeEmail);
+    if (targets.length === 0) throw new Error("Event not found");
     // Write the calendar of the read, so that the other VEVENTs stay as the
     // server has them.
-    const reply = {
-      ...withPartstat(target, attendeeEmail, partstat),
-      sequence: (target.sequence ?? 0) + 1,
-    };
-    const calendar = { ...data, events: data.events?.map((e) => (e === target ? reply : e)) };
+    const events = data.events?.map((e) =>
+      targets.includes(e)
+        ? { ...withPartstat(e, attendeeEmail, partstat), sequence: (e.sequence ?? 0) + 1 }
+        : e,
+    );
+    const calendar = { ...data, events };
     this.validateTimezones(calendar);
     const written = await davRequest({
       url: eventUrl,

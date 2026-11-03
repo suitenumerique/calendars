@@ -725,6 +725,7 @@ export const useSchedulerHandlers = ({
       if (result.data?.kind === "blocked") {
         addErrorToast(t(RSVP_BLOCKER_MESSAGE_KEYS[result.data.blocker]));
         calendarRef.current?.refetchEvents();
+        handleModalClose();
         return false;
       }
 
@@ -732,7 +733,7 @@ export const useSchedulerHandlers = ({
       calendarRef.current?.refetchEvents();
       return true;
     },
-    [caldavService, user, calendarRef, modalState.event, modalState.eventUrl, t],
+    [caldavService, user, calendarRef, modalState.event, modalState.eventUrl, handleModalClose, t],
   );
 
   /**

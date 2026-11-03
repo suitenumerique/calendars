@@ -83,6 +83,18 @@ export const withPartstat = (
 };
 
 /**
+ * Give the VEVENTs that a response to all occurrences changes: the master
+ * and the overrides that list the attendee. A cancelled override keeps
+ * its PARTSTAT.
+ */
+export const seriesTargets = ({ instances }: RsvpEvent, attendeeEmail: string): IcsEvent[] => {
+  const email = attendeeEmail.toLowerCase();
+  return instances.filter(
+    (e) => e.status !== "CANCELLED" && e.attendees?.some((a) => a.email.toLowerCase() === email),
+  );
+};
+
+/**
  * Build the event data of the response to one occurrence. The base is the
  * override of the occurrence. If there is no override, the base is a copy
  * of the master at the occurrence. The function sets the PARTSTAT of the
