@@ -242,6 +242,12 @@ To remove the calendar from a user's list, remove their access to the
 mailbox in Messages. These instances expose `LS:calendar-sync-managed`,
 so clients can disable the delete action. Manual shares do not have it.
 
+A mailbox admin can delete a mailbox calendar for every user with
+`DELETE /api/v1.0/calendars/mailboxes/{mailbox_email}/{calendar_uri}/`.
+`calendar_uri` is the URI of the admin's own instance. The calendar,
+its events and all its instances go away. The frontend shows this
+action to mailbox admins instead of the disabled delete action.
+
 ### Restriction on MAILBOX calendar sharing
 
 `MailboxPlugin` enforces that native `CS:share` POST
@@ -296,6 +302,7 @@ Not accessible from the outside (blocked by Django proxy).
 | `POST` | `/internal-api/rsvp/` | Update attendee PARTSTAT by event UID |
 | `POST` | `/internal-api/resources/` | Create a resource principal |
 | `DELETE` | `/internal-api/resources/{id}` | Delete a resource principal |
+| `DELETE` | `/internal-api/calendars/{calendar_uri}` | Delete a mailbox calendar for every user |
 
 ### `POST /internal-api/calendars/` vs MKCALENDAR
 
@@ -352,6 +359,7 @@ computes diff, applies minimal writes in one transaction.
 |--------|------|------|---------|
 | `GET` | `/api/v1.0/setup/mailboxes/` | OIDC | List user's mailboxes (with users) + sync shares |
 | `POST` | `/api/v1.0/setup/` | OIDC | Create a calendar (standalone or mailbox) |
+| `DELETE` | `/api/v1.0/calendars/mailboxes/{mailbox_email}/{calendar_uri}/` | OIDC | Delete a mailbox calendar for every user (mailbox admin only) |
 
 `GET /api/v1.0/setup/mailboxes/` fetches the user's mailboxes from Messages
 (cached 5 min) and syncs CalDAV shares as a side effect. Each mailbox
