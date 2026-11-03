@@ -1,8 +1,4 @@
-/**
- * Date components extracted from a Date in a specific timezone.
- * Used by getDateComponents() to convert UTC instants to local time
- * components in any IANA timezone.
- */
+/** The date and time of an instant in an IANA timezone. */
 export type DateComponents = {
   year: number;
   month: number; // 1-12 (not 0-11 like JS Date)

@@ -32,10 +32,6 @@ const occurrenceOf = (master: IcsEvent, instant: Date): IcsEvent => {
   return { ...moved, recurrenceRule: undefined, exceptionDates: undefined };
 };
 
-/** Find the override VEVENT whose RECURRENCE-ID is at `instant`. */
-const findOverride = (instances: IcsEvent[], instant: Date): IcsEvent | undefined =>
-  instances.find((e) => e.recurrenceId?.value.date.getTime() === instant.getTime());
-
 /**
  * Find the VEVENTs of one event in the server copy. Give `instant` to
  * also find the override of that occurrence.
@@ -49,7 +45,8 @@ export const resolveRsvpEvent = (
   return {
     instances,
     master: instances.find((e) => !e.recurrenceId),
-    override: instant && findOverride(instances, instant),
+    override:
+      instant && instances.find((e) => e.recurrenceId?.value.date.getTime() === instant.getTime()),
   };
 };
 
@@ -116,12 +113,9 @@ export const findRsvpBlocker = (
   if (instances.length === 0) return "deleted";
   if (master?.status === "CANCELLED") return "cancelled";
 
-  let target = master;
-  if (scheduled !== undefined) {
-    if (!scheduled || override?.status === "CANCELLED") return "cancelled";
-    target = override ?? master;
-  }
+  if (scheduled === false || override?.status === "CANCELLED") return "cancelled";
 
+  const target = override ?? master;
   const email = attendeeEmail.toLowerCase();
   const isAttendee = target?.attendees?.some((a) => a.email.toLowerCase() === email);
   return isAttendee ? null : "notAttendee";

@@ -807,8 +807,6 @@ export class CalDavService {
         throw new Error("Source event not found in ICS data");
       }
 
-      // occurrenceDate is fake UTC in the timezone of the series. Use it with
-      // the timezone info of the source event.
       const occurrenceFakeUtc = occurrenceDate;
       let occurrenceLocal: { date: Date; timezone: string; tzoffset: string } | undefined;
 
@@ -830,11 +828,12 @@ export class CalDavService {
         if (value.local?.timezone === timezone) return value.local.date;
         return toWallClock(value.date, timezone);
       };
-      const isOccurrence = ({ value }: { value: IcsDateObject }): boolean =>
-        toSeriesTime(value).getTime() === occurrenceFakeUtc.getTime();
       const existingOverrideIdx =
         calendar.events?.findIndex(
-          (e) => e.uid === overrideEvent.uid && e.recurrenceId && isOccurrence(e.recurrenceId),
+          (e) =>
+            e.uid === overrideEvent.uid &&
+            e.recurrenceId &&
+            toSeriesTime(e.recurrenceId.value).getTime() === occurrenceFakeUtc.getTime(),
         ) ?? -1;
 
       if (existingOverrideIdx >= 0) {
