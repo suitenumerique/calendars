@@ -3,6 +3,7 @@
  * refuses a response that the server copy blocks, and retries once when
  * the event changed between the read and the write.
  */
+import type { Mock } from "vitest";
 import type { IcsEvent } from "ts-ics";
 
 import { CalDavService } from "../CalDavService";
@@ -23,6 +24,34 @@ const master = (): IcsEvent =>
     attendees: [{ email: USER, partstat: "NEEDS-ACTION" }],
   }) as IcsEvent;
 
+const override = (): IcsEvent =>
+  ({
+    ...master(),
+    start: { date: SECOND, type: "DATE-TIME" },
+    recurrenceRule: undefined,
+    recurrenceId: { value: { date: SECOND, type: "DATE-TIME" } },
+  }) as IcsEvent;
+
+const http = (status: number) =>
+  ({
+    ok: status < 300,
+    status,
+    headers: new Headers(),
+    text: async () => "",
+  }) as unknown as Response;
+
+const originalFetch = globalThis.fetch;
+let put: Mock;
+
+beforeEach(() => {
+  put = vi.fn().mockResolvedValue(http(204));
+  globalThis.fetch = put as unknown as typeof fetch;
+});
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
 const setup = (events: IcsEvent[], occurrenceDates: Date[] = []) => {
   const service = new CalDavService();
   const spies = {
@@ -33,7 +62,6 @@ const setup = (events: IcsEvent[], occurrenceDates: Date[] = []) => {
     fetchOccurrenceDates: vi
       .spyOn(service, "fetchOccurrenceDates")
       .mockResolvedValue({ success: true, data: occurrenceDates }),
-    updateEvent: vi.spyOn(service, "updateEvent").mockResolvedValue({ success: true }),
     createOverrideInstance: vi
       .spyOn(service, "createOverrideInstance")
       .mockResolvedValue({ success: true }),
@@ -50,14 +78,19 @@ describe("CalDavService.respondToInvitation", () => {
     const result = await s.service.respondToInvitation(URL, response);
 
     expect(result).toEqual({ success: true, data: { kind: "responded" } });
-    expect(s.updateEvent).toHaveBeenCalledWith({
-      eventUrl: URL,
-      event: expect.objectContaining({
-        uid: UID,
-        attendees: [{ email: USER, partstat: "ACCEPTED" }],
-      }),
-      etag: "etag-1",
-    });
+    const [url, init] = put.mock.calls[0];
+    expect(url).toBe(URL);
+    expect(init.method).toBe("PUT");
+    expect(init.headers["If-Match"]).toBe("etag-1");
+    expect(init.body).toContain("PARTSTAT=ACCEPTED");
+  });
+
+  it("keeps the overrides of the read when it responds to the series", async () => {
+    const s = setup([master(), override()]);
+
+    await s.service.respondToInvitation(URL, response);
+
+    expect(put.mock.calls[0][1].body).toMatch(/^RECURRENCE-ID/m);
   });
 
   it("responds to a scheduled occurrence with an override", async () => {
@@ -67,7 +100,7 @@ describe("CalDavService.respondToInvitation", () => {
 
     expect(result.data).toEqual({ kind: "responded" });
     expect(s.createOverrideInstance).toHaveBeenCalledOnce();
-    expect(s.updateEvent).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
   });
 
   it("refuses an occurrence that the expansion does not contain", async () => {
@@ -90,13 +123,13 @@ describe("CalDavService.respondToInvitation", () => {
 
   it("reads the event again and retries once on a 412", async () => {
     const s = setup([master()]);
-    s.updateEvent.mockResolvedValueOnce({ success: false, status: 412 });
+    put.mockResolvedValueOnce(http(412));
 
     const result = await s.service.respondToInvitation(URL, response);
 
     expect(result.success).toBe(true);
     expect(s.fetchEvent).toHaveBeenCalledTimes(2);
-    expect(s.updateEvent).toHaveBeenCalledTimes(2);
+    expect(put).toHaveBeenCalledTimes(2);
   });
 
   it.each([
@@ -104,7 +137,7 @@ describe("CalDavService.respondToInvitation", () => {
     ["notAttendee", { ...master(), attendees: [] }],
   ] as const)("does not write after a 412 when the event is now %s", async (blocker, changed) => {
     const s = setup([master()]);
-    s.updateEvent.mockResolvedValueOnce({ success: false, status: 412 });
+    put.mockResolvedValueOnce(http(412));
     s.fetchEvent.mockResolvedValueOnce({
       success: true,
       data: { data: { events: [master()] }, etag: "etag-1" },
@@ -117,17 +150,17 @@ describe("CalDavService.respondToInvitation", () => {
     const result = await s.service.respondToInvitation(URL, response);
 
     expect(result).toEqual({ success: true, data: { kind: "blocked", blocker } });
-    expect(s.updateEvent).toHaveBeenCalledOnce();
+    expect(put).toHaveBeenCalledOnce();
   });
 
   it("fails after a second 412", async () => {
     const s = setup([master()]);
-    s.updateEvent.mockResolvedValue({ success: false, status: 412 });
+    put.mockResolvedValue(http(412));
 
     const result = await s.service.respondToInvitation(URL, response);
 
     expect(result.success).toBe(false);
     expect(result.status).toBe(412);
-    expect(s.updateEvent).toHaveBeenCalledTimes(2);
+    expect(put).toHaveBeenCalledTimes(2);
   });
 });

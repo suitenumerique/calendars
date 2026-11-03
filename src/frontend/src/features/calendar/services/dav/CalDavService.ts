@@ -1479,17 +1479,31 @@ export class CalDavService {
     if (blocker) return { kind: "blocked", blocker };
 
     const { master } = resolved;
-    let written: CalDavResponse<unknown>;
     if (occurrence) {
       const reply = buildOccurrenceReply(resolved, occurrence, attendeeEmail, partstat);
       if (!reply) throw new Error("Occurrence not found");
       const seriesTime = toSeriesWallClock(master, occurrence);
-      written = await this.createOverrideInstance(eventUrl, reply, seriesTime, etag);
-    } else {
-      if (!master) throw new Error("Master event not found");
-      const event = withPartstat(master, attendeeEmail, partstat);
-      written = await this.updateEvent({ eventUrl, event, etag });
+      const written = await this.createOverrideInstance(eventUrl, reply, seriesTime, etag);
+      if (!written.success) throw davFailure(written, "Failed to write the response");
+      return { kind: "responded" };
     }
+
+    if (!master) throw new Error("Master event not found");
+    // Write the calendar of the read, so that the overrides stay as the
+    // server has them.
+    const reply = {
+      ...withPartstat(master, attendeeEmail, partstat),
+      sequence: (master.sequence ?? 0) + 1,
+    };
+    const calendar = { ...data, events: data.events?.map((e) => (e === master ? reply : e)) };
+    this.validateTimezones(calendar);
+    const written = await davRequest({
+      url: eventUrl,
+      method: "PUT",
+      body: generateIcsCalendar(calendar),
+      contentType: "text/calendar; charset=utf-8",
+      headers: etag ? { "If-Match": etag } : undefined,
+    });
     if (!written.success) throw davFailure(written, "Failed to write the response");
     return { kind: "responded" };
   }
