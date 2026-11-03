@@ -81,8 +81,9 @@ export const withPartstat = (
 /**
  * Build the event data of the response to one occurrence. The base is the
  * override of the occurrence. If there is no override, the base is a copy
- * of the master at the occurrence. Only the PARTSTAT of the attendee
- * changes. `createOverrideInstance` sets the RECURRENCE-ID.
+ * of the master at the occurrence. The function sets the PARTSTAT of the
+ * attendee in the base. `createOverrideInstance` then writes it: it sets
+ * the RECURRENCE-ID and increments SEQUENCE.
  *
  * The function returns undefined if the event has no override and no
  * master.
@@ -100,9 +101,11 @@ export const buildOccurrenceReply = (
 /**
  * Find why an attendee cannot respond to an invitation.
  *
- * Give `scheduled` to check one occurrence: it tells if the occurrence
- * still exists. An occurrence is cancelled when it is not scheduled, or
- * when its override has STATUS:CANCELLED.
+ * Give `scheduled` to check one occurrence. `scheduled` only tells if the
+ * occurrence is present in the event. A missing occurrence is cancelled.
+ * A present occurrence can still block the response: when its override
+ * has STATUS:CANCELLED, or when its override or the master does not list
+ * the attendee.
  *
  * Returns null when the attendee can respond.
  */

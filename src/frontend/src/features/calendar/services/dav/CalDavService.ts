@@ -1327,7 +1327,7 @@ export class CalDavService {
    *
    * `data` tells if the method wrote the response. A "blocked" outcome
    * gives the reason of the refusal: a cancelled or deleted event, a
-   * removed attendee, or an occurrence that no longer exists.
+   * removed attendee, or an occurrence that is no longer in the event.
    */
   async respondToInvitation(
     eventUrl: string,
