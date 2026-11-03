@@ -793,16 +793,14 @@ class InternalApiPlugin extends ServerPlugin
 
     /**
      * DELETE /internal-api/calendars/{calendar_uri}
-     * Delete a MAILBOX-owned calendar for every mailbox user — the true
-     * owner-branch delete that plain CalDAV DELETE can never reach,
-     * because nobody authenticates as the mailbox principal (see
-     * handleCreateCalendar's docblock above). Django has already
-     * verified the caller holds sender/admin role on the mailbox
-     * before calling this; this handler re-derives the calendar from
-     * the CALLER's own (sharee) instance and only proceeds if that
-     * calendar is genuinely MAILBOX-owned and belongs to the mailbox
-     * Django checked against — fail-closed guards against a
-     * mismatched or forged request.
+     * Delete a MAILBOX-owned calendar for every mailbox user. A plain
+     * CalDAV DELETE cannot do this, because nobody signs in as the
+     * mailbox principal (see handleCreateCalendar). Django checks that
+     * the caller is an admin of the mailbox before it calls this
+     * endpoint. This handler finds the calendar from the caller's own
+     * (sharee) instance. It deletes the calendar only if the calendar
+     * is MAILBOX-owned and belongs to the mailbox that Django checked.
+     * It fails closed on a mismatched or forged request.
      *
      * ``$calendarUri`` is the URI the caller reads the calendar at
      * under their own principal (``calendars/users/{caller}/{uri}/``),
@@ -840,14 +838,16 @@ class InternalApiPlugin extends ServerPlugin
             $response->setBody(json_encode(['error' => 'Calendar not found']));
             return false;
         }
-        $calendarId = $calendarInfo['id'];
+        // SabreDAV calendar ids are [calendarId, instanceId] pairs.
+        $id = $calendarInfo['id'];
+        $calendarId = is_array($id) ? $id[0] : $id;
 
         // Resolve the owner instance to verify this is really a
         // MAILBOX-owned calendar belonging to the mailbox Django
         // already checked the caller's role against.
         try {
             $stmt = $this->pdo->prepare(
-                'SELECT p.email, p.calendar_user_type, p.org_id'
+                'SELECT ci.id AS instance_id, p.email, p.calendar_user_type, p.org_id'
                 . ' FROM calendarinstances ci'
                 . ' JOIN principals p ON p.uri = ci.principaluri'
                 . ' WHERE ci.calendarid = ? AND ci.access = 1'
@@ -893,7 +893,9 @@ class InternalApiPlugin extends ServerPlugin
         // and every calendarinstances row (owner + every sharee) for
         // this calendarid — not just the caller's own row.
         try {
-            $this->caldavBackend->deleteCalendar($calendarId);
+            // Pass the owner instance: SabreDAV deletes only the given
+            // instance when it is not the owner instance.
+            $this->caldavBackend->deleteCalendar([$calendarId, (int) $owner['instance_id']]);
         } catch (\Exception $e) {
             error_log('[InternalApiPlugin] Failed to delete mailbox calendar: ' . $e->getMessage());
             $response->setStatus(500);
