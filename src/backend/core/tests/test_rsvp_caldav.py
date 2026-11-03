@@ -123,7 +123,7 @@ class TestRSVPDoesNotRestoreEvents:
         assert _state(self._caldav("GET").text) == ("CANCELLED", "NEEDS-ACTION")
 
     def test_deleted_event_is_not_recreated(self):
-        self._caldav("PUT", _ics(self._vevent(self.start)))
+        assert self._caldav("PUT", _ics(self._vevent(self.start))).status_code == 201
         self._caldav("DELETE")
 
         response = self._rsvp()

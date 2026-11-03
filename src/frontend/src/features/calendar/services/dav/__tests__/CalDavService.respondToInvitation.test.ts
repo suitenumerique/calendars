@@ -93,13 +93,59 @@ describe("CalDavService.respondToInvitation", () => {
     expect(put.mock.calls[0][1].body).toMatch(/^RECURRENCE-ID/m);
   });
 
-  it("responds to a scheduled occurrence with an override", async () => {
+  it("responds to a scheduled occurrence with a new override", async () => {
     const s = setup([master()], [SECOND]);
 
     const result = await s.service.respondToInvitation(URL, { ...response, occurrence: SECOND });
 
     expect(result.data).toEqual({ kind: "responded" });
     expect(s.createOverrideInstance).toHaveBeenCalledOnce();
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it("builds the response from the existing override", async () => {
+    const s = setup([master(), { ...override(), summary: "Moved by the organizer" }]);
+
+    await s.service.respondToInvitation(URL, { ...response, occurrence: SECOND });
+
+    expect(s.createOverrideInstance).toHaveBeenCalledWith(
+      URL,
+      expect.objectContaining({
+        summary: "Moved by the organizer",
+        attendees: [{ email: USER, partstat: "ACCEPTED" }],
+      }),
+      SECOND,
+      "etag-1",
+    );
+  });
+
+  it.each([
+    ["the occurrence", { occurrence: SECOND }],
+    ["all occurrences", {}],
+  ])("answers %s in place when the copy has no master", async (_, choice) => {
+    const s = setup([override()]);
+
+    const result = await s.service.respondToInvitation(URL, { ...response, ...choice });
+
+    expect(result.data).toEqual({ kind: "responded" });
+    expect(s.createOverrideInstance).not.toHaveBeenCalled();
+    expect(put.mock.calls[0][1].body).toMatch(/^RECURRENCE-ID/m);
+    expect(put.mock.calls[0][1].body).toContain("PARTSTAT=ACCEPTED");
+  });
+
+  it("does not write an occurrence of a series in an unknown timezone", async () => {
+    const tzid = "W. Europe Standard Time";
+    const start = {
+      date: START,
+      type: "DATE-TIME",
+      local: { date: START, timezone: tzid, tzoffset: "+0100" },
+    };
+    const s = setup([{ ...master(), start } as IcsEvent], [SECOND]);
+
+    const result = await s.service.respondToInvitation(URL, { ...response, occurrence: SECOND });
+
+    expect(result.success).toBe(false);
+    expect(s.createOverrideInstance).not.toHaveBeenCalled();
     expect(put).not.toHaveBeenCalled();
   });
 
@@ -134,13 +180,21 @@ describe("CalDavService.respondToInvitation", () => {
 
   it("reads the event again and retries once on a 412", async () => {
     const s = setup([master()]);
+    s.fetchEvent.mockResolvedValueOnce({
+      success: true,
+      data: { data: { events: [master()] }, etag: "etag-1" },
+    } as never);
+    s.fetchEvent.mockResolvedValueOnce({
+      success: true,
+      data: { data: { events: [master()] }, etag: "etag-2" },
+    } as never);
     put.mockResolvedValueOnce(http(412));
 
     const result = await s.service.respondToInvitation(URL, response);
 
     expect(result.success).toBe(true);
-    expect(s.fetchEvent).toHaveBeenCalledTimes(2);
     expect(put).toHaveBeenCalledTimes(2);
+    expect(put.mock.calls[1][1].headers["If-Match"]).toBe("etag-2");
   });
 
   it.each([
