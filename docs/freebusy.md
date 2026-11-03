@@ -237,6 +237,11 @@ This is a per-calendar-instance property — each user controls their own
 view. If someone shares a birthday calendar, the sharee can mark it
 transparent on their side without affecting the owner's setting.
 
+Hiding a calendar (`LS:calendar-hidden`, see
+[hidden-calendars.md](hidden-calendars.md)) does not change
+whether it contributes to free/busy. Only this property controls
+availability.
+
 ### UI
 
 The "Include in availability" checkbox in the calendar edit modal
