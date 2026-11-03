@@ -759,7 +759,8 @@ class InternalApiPlugin extends ServerPlugin
             // the freshly-allocated UUID for the sharee row, not the
             // owner-side ``$newUri``. We surface it in the response so
             // callers (Python setup service, tests) don't have to do
-            // a follow-up PROPFIND just to discover it.
+            // a follow-up PROPFIND just to discover it. The instance
+            // starts transparent, like the ones the sync creates.
             $callerCalendarUri = $newUri;
             if ($isMailbox && !$callerIsOwner && $callerEmail !== null) {
                 $cidStmt = $this->pdo->prepare(
@@ -776,7 +777,7 @@ class InternalApiPlugin extends ServerPlugin
                     . ' (calendarid, principaluri, access, uri, displayname,'
                     . '  calendarcolor, share_href, share_displayname,'
                     . '  share_invitestatus, transparent, is_sync_managed)'
-                    . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 0, TRUE)'
+                    . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 1, TRUE)'
                 );
                 $sharee->execute([
                     $calendarId,
@@ -1136,12 +1137,15 @@ class InternalApiPlugin extends ServerPlugin
                 }
             }
 
-            // 5. Prepare upsert statement (reused across all users)
+            // 5. Prepare upsert statement (reused across all users).
+            // New sharees start transparent, like SabreDAV shares, so
+            // mailbox events do not make them busy. The update does not
+            // touch ``transparent``, so the user's own choice stays.
             $upsertStmt = $this->pdo->prepare(
                 'INSERT INTO calendarinstances '
                 . '(calendarid, principaluri, access, uri, displayname, calendarcolor, '
                 . 'share_href, share_displayname, share_invitestatus, transparent, is_sync_managed) '
-                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 0, TRUE) '
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 1, TRUE) '
                 . 'ON CONFLICT (principaluri, calendarid) '
                 . 'DO UPDATE SET access = EXCLUDED.access, share_href = EXCLUDED.share_href, '
                 . 'is_sync_managed = TRUE'
