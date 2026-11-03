@@ -231,7 +231,7 @@ export const EventModal = ({
     if (!onRespondToInvitation || !event) return;
     setIsLoading(true);
     try {
-      await onRespondToInvitation(event as IcsEvent, status, option);
+      if (!(await onRespondToInvitation(event as IcsEvent, status, option))) return;
       form.setAttendees((prev) =>
         prev.map((att) =>
           user?.email && att.email.toLowerCase() === user.email.toLowerCase()
@@ -239,9 +239,6 @@ export const EventModal = ({
             : att,
         ),
       );
-    } catch (error) {
-      // Toast is shown by the parent handler; just stop the spinner.
-      console.error("Failed to respond to invitation:", error);
     } finally {
       setIsLoading(false);
     }

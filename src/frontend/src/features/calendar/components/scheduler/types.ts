@@ -40,11 +40,12 @@ export interface EventModalProps {
     calendarUrl: string,
     option?: RecurringDeleteOption,
   ) => Promise<void>;
+  /** Returns true when the response is written. */
   onRespondToInvitation?: (
     event: IcsEvent,
     status: "ACCEPTED" | "TENTATIVE" | "DECLINED",
     option?: RecurringEditOption,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   onClose: () => void;
 }
 

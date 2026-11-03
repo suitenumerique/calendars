@@ -683,21 +683,23 @@ export const useSchedulerHandlers = ({
   /**
    * Respond to an invitation as the current user. Show the result in a toast
    * and reload the grid. A blocked response shows its reason.
+   *
+   * Returns true when the response is written.
    */
   const handleRespondToInvitation = useCallback(
     async (
       event: IcsEvent,
       status: "ACCEPTED" | "TENTATIVE" | "DECLINED",
       option?: RecurringEditOption,
-    ) => {
+    ): Promise<boolean> => {
       if (!user?.email) {
         console.error("No user email available");
-        return;
+        return false;
       }
 
       if (!modalState.eventUrl) {
         console.error("No event URL available");
-        return;
+        return false;
       }
 
       const eventUrl = modalState.eventUrl;
@@ -718,17 +720,17 @@ export const useSchedulerHandlers = ({
       if (!result.success) {
         addErrorToast(t("rsvp.failed"));
         console.error("Error responding to invitation:", result.error);
-        throw new Error(result.error);
+        return false;
       }
       if (result.data?.kind === "blocked") {
-        const { blocker } = result.data;
-        addErrorToast(t(RSVP_BLOCKER_MESSAGE_KEYS[blocker]));
+        addErrorToast(t(RSVP_BLOCKER_MESSAGE_KEYS[result.data.blocker]));
         calendarRef.current?.refetchEvents();
-        throw new Error(`Cannot respond to invitation: ${blocker}`);
+        return false;
       }
 
       addSuccessToast(t("rsvp.responseSent"));
       calendarRef.current?.refetchEvents();
+      return true;
     },
     [caldavService, user, calendarRef, modalState.event, modalState.eventUrl, t],
   );
