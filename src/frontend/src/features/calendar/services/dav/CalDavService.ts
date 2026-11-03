@@ -778,6 +778,10 @@ export class CalDavService {
    * `occurrenceDate` is the wall-clock time of the occurrence in the
    * timezone of the series. The UTC fields of the date hold this time
    * ("fake UTC").
+   *
+   * Limitation: in the hour that repeats when DST ends, two occurrences
+   * can have the same wall-clock time. The method cannot tell them apart,
+   * so they share one override.
    */
   async createOverrideInstance(
     eventUrl: string,
@@ -1311,9 +1315,15 @@ export class CalDavService {
    * Respond to an invitation, for the whole series or for one occurrence.
    *
    * The method reads the event from the server, because a local copy can
-   * be stale. It changes only the PARTSTAT of the attendee, and writes with
-   * the ETag of the read. A 412 means that the event changed between the
-   * read and the write; the method then tries once more.
+   * be stale. It applies the response of the attendee to that copy and
+   * keeps the details that the organizer controls. The write increments
+   * SEQUENCE. For one occurrence, it adds or updates an override, and adds
+   * an EXDATE to the master for a new override. It writes with the ETag of
+   * the read.
+   *
+   * A 412 means that the precondition of the write failed: the event
+   * changed or was deleted after the read. The method then reads and
+   * checks the event again, and tries once more.
    *
    * `data` tells if the method wrote the response. A "blocked" outcome
    * gives the reason of the refusal: a cancelled or deleted event, a
@@ -1485,9 +1495,12 @@ export class CalDavService {
   }
 
   /**
-   * Tell if an occurrence exists. An override proves it. Otherwise the
-   * server expansion of the RRULE must contain the occurrence. The
-   * override can start on another day, so the expansion window can miss it.
+   * Tell if an occurrence is present in the event. An override makes it
+   * present, also a cancelled override. Otherwise the server expansion of
+   * the RRULE must contain the occurrence. The override can start on
+   * another day, so the expansion window can miss it.
+   *
+   * findRsvpBlocker checks the cancellation and the attendee.
    */
   private async isScheduled(
     eventUrl: string,

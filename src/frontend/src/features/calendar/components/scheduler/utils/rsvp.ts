@@ -18,10 +18,11 @@ const offsetMs = (tzoffset: string): number => {
  * repeats when daylight saving time ends. An all-day date stays at
  * midnight UTC, as in the server expansion.
  */
-export const toOccurrenceInstant = (date: Date, value?: IcsDateObject): Date =>
-  value?.type === "DATE" || !value?.local
-    ? date
-    : new Date(date.getTime() - offsetMs(value.local.tzoffset));
+export const toOccurrenceInstant = (value: IcsDateObject): Date => {
+  const date = new Date(value.date);
+  if (value.type === "DATE" || !value.local) return date;
+  return new Date(date.getTime() - offsetMs(value.local.tzoffset));
+};
 
 export const RSVP_BLOCKER_MESSAGE_KEYS: Record<RsvpBlocker, string> = {
   cancelled: "rsvp.error.eventCancelled",

@@ -104,6 +104,9 @@ const shared = new TimezoneConverter();
 /**
  * Give the wall-clock time of `date` in `timezone`. The result stores
  * that time in UTC fields ("fake UTC"), so 10:00 in Paris becomes 10:00Z.
+ *
+ * The result has no milliseconds. For a timezone that Intl does not
+ * know, the result is the UTC time of `date`.
  */
 export const toWallClock = (date: Date, timezone: string): Date => {
   const c = shared.getDateComponents(date, timezone);

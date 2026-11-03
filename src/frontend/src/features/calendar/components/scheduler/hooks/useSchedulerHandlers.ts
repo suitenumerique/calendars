@@ -707,8 +707,7 @@ export const useSchedulerHandlers = ({
       // the form, which the user can edit.
       const opened = modalState.event ?? event;
       const value = opened.recurrenceId?.value ?? opened.start ?? event.start;
-      const occurrence =
-        option === "this" ? toOccurrenceInstant(new Date(value.date), value) : undefined;
+      const occurrence = option === "this" ? toOccurrenceInstant(value) : undefined;
 
       const result = await caldavService.respondToInvitation(eventUrl, {
         uid: event.uid,

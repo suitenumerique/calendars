@@ -167,7 +167,11 @@ export type InvitationResponse = {
   uid: string;
   attendeeEmail: string;
   partstat: IcsAttendeePartStatusType;
-  /** The instant of the occurrence. Omit to respond to the series. */
+  /**
+   * The RECURRENCE-ID of the occurrence as an instant: its original
+   * start, not the start of an override that moved it. For an all-day
+   * event, the date at midnight UTC. Omit to respond to the series.
+   */
   occurrence?: Date;
 };
 

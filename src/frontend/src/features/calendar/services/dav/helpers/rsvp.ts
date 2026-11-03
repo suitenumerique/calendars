@@ -24,12 +24,13 @@ const moveTo = (value: IcsDateObject, date: Date): IcsDateObject => ({
  * Remove the series fields (RRULE, EXDATE).
  */
 const occurrenceOf = (master: IcsEvent, instant: Date): IcsEvent => {
-  const offset = instant.getTime() - master.start.date.getTime();
   const start = moveTo(master.start, instant);
-  const moved: IcsEvent = master.end
-    ? { ...master, start, end: moveTo(master.end, new Date(master.end.date.getTime() + offset)) }
-    : { ...master, start };
-  return { ...moved, recurrenceRule: undefined, exceptionDates: undefined };
+  const series = { recurrenceRule: undefined, exceptionDates: undefined };
+  if (!master.end) return { ...master, ...series, start };
+
+  const offset = instant.getTime() - master.start.date.getTime();
+  const end = moveTo(master.end, new Date(master.end.date.getTime() + offset));
+  return { ...master, ...series, start, end };
 };
 
 /**

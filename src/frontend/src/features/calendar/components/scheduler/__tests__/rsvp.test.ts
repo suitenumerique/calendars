@@ -7,7 +7,7 @@ describe("toOccurrenceInstant", () => {
     const local = { date: SECOND, timezone: "Europe/Paris", tzoffset: "+0100" };
     const value = { date: SECOND, type: "DATE-TIME" as const, local };
 
-    expect(toOccurrenceInstant(SECOND, value)).toEqual(new Date("2026-11-03T08:00:00Z"));
+    expect(toOccurrenceInstant(value)).toEqual(new Date("2026-11-03T08:00:00Z"));
   });
 
   it("tells apart the two times of the repeated hour", () => {
@@ -19,13 +19,13 @@ describe("toOccurrenceInstant", () => {
       local: { date: wallClock, timezone: "Europe/Paris", tzoffset },
     });
 
-    expect(toOccurrenceInstant(wallClock, at("+0200"))).toEqual(new Date("2026-10-25T00:30:00Z"));
-    expect(toOccurrenceInstant(wallClock, at("+0100"))).toEqual(new Date("2026-10-25T01:30:00Z"));
+    expect(toOccurrenceInstant(at("+0200"))).toEqual(new Date("2026-10-25T00:30:00Z"));
+    expect(toOccurrenceInstant(at("+0100"))).toEqual(new Date("2026-10-25T01:30:00Z"));
   });
 
   it("keeps an all-day date at midnight UTC", () => {
     const day = new Date("2026-11-03T00:00:00Z");
 
-    expect(toOccurrenceInstant(day, { date: day, type: "DATE" })).toEqual(day);
+    expect(toOccurrenceInstant({ date: day, type: "DATE" })).toEqual(day);
   });
 });
