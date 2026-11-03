@@ -280,7 +280,8 @@
           "moveDown": "Move down",
           "options": "Options",
           "leaveCalendar": "Leave calendar",
-          "cannotDeleteMailboxCalendar": "A mailbox calendar cannot be deleted"
+          "cannotDeleteMailboxCalendar": "A mailbox calendar cannot be deleted",
+          "deleteForMailbox": "Delete for all mailbox users"
         },
         "importEvents": {
           "title": "Import events",
@@ -431,6 +432,11 @@
           "confirm": "Delete",
           "sharedWarning": "This calendar is shared. It will be deleted for every person it is shared with.",
           "error": "The calendar could not be deleted."
+        },
+        "deleteMailboxCalendar": {
+          "title": "Delete for all mailbox users",
+          "message": "Delete \"{{name}}\" for every user of the mailbox {{email}}? The calendar and all its events are deleted for everyone. This action cannot be undone.",
+          "confirm": "Delete for everyone"
         },
         "leaveCalendar": {
           "title": "Leave this calendar",
@@ -1289,7 +1295,8 @@
           "moveDown": "Déplacer vers le bas",
           "options": "Options",
           "leaveCalendar": "Quitter le calendrier",
-          "cannotDeleteMailboxCalendar": "Un calendrier de boîte ne peut pas être supprimé"
+          "cannotDeleteMailboxCalendar": "Un calendrier de boîte ne peut pas être supprimé",
+          "deleteForMailbox": "Supprimer pour tous les utilisateurs de la boîte"
         },
         "importEvents": {
           "title": "Importer des événements",
@@ -1440,6 +1447,11 @@
           "confirm": "Supprimer",
           "sharedWarning": "Ce calendrier est partagé. Il sera supprimé pour toutes les personnes avec qui il est partagé.",
           "error": "Impossible de supprimer le calendrier."
+        },
+        "deleteMailboxCalendar": {
+          "title": "Supprimer pour tous les utilisateurs de la boîte",
+          "message": "Supprimer \"{{name}}\" pour tous les utilisateurs de la boîte {{email}} ? Le calendrier et tous ses événements sont supprimés pour tout le monde. Cette action est irréversible.",
+          "confirm": "Supprimer pour tous"
         },
         "leaveCalendar": {
           "title": "Quitter ce calendrier",
@@ -2045,7 +2057,8 @@
           "moveDown": "Omlaag verplaatsen",
           "options": "Opties",
           "leaveCalendar": "Kalender verlaten",
-          "cannotDeleteMailboxCalendar": "Een mailboxkalender kan niet worden verwijderd"
+          "cannotDeleteMailboxCalendar": "Een mailboxkalender kan niet worden verwijderd",
+          "deleteForMailbox": "Verwijderen voor alle mailboxgebruikers"
         },
         "importEvents": {
           "title": "Evenementen importeren",
@@ -2196,6 +2209,11 @@
           "confirm": "Verwijderen",
           "sharedWarning": "Deze kalender is gedeeld. Hij wordt verwijderd voor iedereen met wie hij is gedeeld.",
           "error": "De kalender kon niet worden verwijderd."
+        },
+        "deleteMailboxCalendar": {
+          "title": "Verwijderen voor alle mailboxgebruikers",
+          "message": "\"{{name}}\" verwijderen voor alle gebruikers van de mailbox {{email}}? De kalender en al zijn afspraken worden voor iedereen verwijderd. Deze actie kan niet ongedaan worden gemaakt.",
+          "confirm": "Voor iedereen verwijderen"
         },
         "leaveCalendar": {
           "title": "Deze kalender verlaten",

@@ -10,6 +10,7 @@
  *   DELETE /internal-api/resources/{resource_id}  Delete a resource principal
  *   POST   /internal-api/import/{user}/{calendar} Bulk import ICS events
  *   POST   /internal-api/calendars/               Create a calendar (and principal if needed)
+ *   DELETE /internal-api/calendars/{calendar_uri} Delete a MAILBOX-owned calendar for everyone
  *   POST   /internal-api/sync-mailbox-acls/     Sync Messages ACL shares for one user
  *   POST   /internal-api/rsvp/                  Update attendee PARTSTAT by event UID
  *
@@ -124,6 +125,12 @@ class InternalApiPlugin extends ServerPlugin
         // Route: POST /internal-api/calendars/
         if ($method === 'POST' && preg_match('#^internal-api/calendars/?$#', $path)) {
             $this->handleCreateCalendar($request, $response);
+            return false;
+        }
+
+        // Route: DELETE /internal-api/calendars/{calendar_uri}
+        if ($method === 'DELETE' && preg_match('#^internal-api/calendars/([^/]+)$#', $path, $matches)) {
+            $this->handleDeleteMailboxCalendar($request, $response, $matches[1]);
             return false;
         }
 
@@ -781,6 +788,125 @@ class InternalApiPlugin extends ServerPlugin
             'caller_calendar_uri' => $callerCalendarUri,
             'created' => true,
         ]));
+        return false;
+    }
+
+    /**
+     * DELETE /internal-api/calendars/{calendar_uri}
+     * Delete a MAILBOX-owned calendar for every mailbox user. A plain
+     * CalDAV DELETE cannot do this, because nobody signs in as the
+     * mailbox principal (see handleCreateCalendar). Django checks that
+     * the caller is an admin of the mailbox before it calls this
+     * endpoint. This handler finds the calendar from the caller's own
+     * (sharee) instance. It deletes the calendar only if the calendar
+     * is MAILBOX-owned and belongs to the mailbox that Django checked.
+     * It fails closed on a mismatched or forged request.
+     *
+     * ``$calendarUri`` is the URI the caller reads the calendar at
+     * under their own principal (``calendars/users/{caller}/{uri}/``),
+     * not the owner-side URI — the caller never sees the latter.
+     *
+     * Body: {"mailbox_email": "contact@company.com"}
+     */
+    private function handleDeleteMailboxCalendar($request, $response, $calendarUri)
+    {
+        $body = json_decode($request->getBodyAsString(), true) ?: [];
+        $mailboxEmail = $body['mailbox_email'] ?? null;
+        if (!is_string($mailboxEmail) || $mailboxEmail === '') {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'mailbox_email is required']));
+            return false;
+        }
+
+        $callerEmail = $request->getHeader('X-LS-User');
+        $orgId = $request->getHeader('X-LS-Org-Id');
+        if (!$callerEmail || !$orgId) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'X-LS-User and X-LS-Org-Id headers are required',
+            ]));
+            return false;
+        }
+
+        $callerPrincipalUri = 'principals/users/' . $callerEmail;
+        $calendarInfo = $this->resolveCalendarInfo($callerPrincipalUri, $calendarUri);
+        if ($calendarInfo === null) {
+            $response->setStatus(404);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Calendar not found']));
+            return false;
+        }
+        // SabreDAV calendar ids are [calendarId, instanceId] pairs.
+        $id = $calendarInfo['id'];
+        $calendarId = is_array($id) ? $id[0] : $id;
+
+        // Resolve the owner instance to verify this is really a
+        // MAILBOX-owned calendar belonging to the mailbox Django
+        // already checked the caller's role against.
+        try {
+            $stmt = $this->pdo->prepare(
+                'SELECT ci.id AS instance_id, p.email, p.calendar_user_type, p.org_id'
+                . ' FROM calendarinstances ci'
+                . ' JOIN principals p ON p.uri = ci.principaluri'
+                . ' WHERE ci.calendarid = ? AND ci.access = 1'
+            );
+            $stmt->execute([$calendarId]);
+            $owner = $stmt->fetch(\PDO::FETCH_ASSOC);
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] Failed to look up calendar owner: ' . $e->getMessage());
+            $response->setStatus(500);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Failed to look up calendar']));
+            return false;
+        }
+
+        if (!$owner || $owner['calendar_user_type'] !== PrincipalBackend::TYPE_MAILBOX) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Not a mailbox-owned calendar']));
+            return false;
+        }
+
+        if (strcasecmp($owner['email'], $mailboxEmail) !== 0) {
+            $response->setStatus(403);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'Calendar does not belong to the given mailbox',
+            ]));
+            return false;
+        }
+
+        // Fail-closed org check — same contract as handleDeleteResource
+        // and handleDeleteUser.
+        if (!$owner['org_id'] || $orgId !== $owner['org_id']) {
+            $response->setStatus(403);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'Cannot delete a calendar from a different organization',
+            ]));
+            return false;
+        }
+
+        // Owner-branch delete: wipes calendarobjects, calendarchanges,
+        // and every calendarinstances row (owner + every sharee) for
+        // this calendarid — not just the caller's own row.
+        try {
+            // Pass the owner instance: SabreDAV deletes only the given
+            // instance when it is not the owner instance.
+            $this->caldavBackend->deleteCalendar([$calendarId, (int) $owner['instance_id']]);
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] Failed to delete mailbox calendar: ' . $e->getMessage());
+            $response->setStatus(500);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'Failed to delete calendar']));
+            return false;
+        }
+
+        $response->setStatus(200);
+        $response->setHeader('Content-Type', 'application/json');
+        $response->setBody(json_encode(['deleted' => true]));
         return false;
     }
 

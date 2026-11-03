@@ -2,13 +2,16 @@
 
 Handles:
 - Setup: creating a principal + calendar (standalone or mailbox)
-- Syncing Messages mailbox ACLs to CalDAV shares (on GET /mailboxes/)
+- Deleting a mailbox calendar for every user of the mailbox
+- Syncing Messages mailbox ACLs to CalDAV shares (on GET /setup/mailboxes/)
 
 The calendar-user-address-set is derived at runtime by PrincipalBackend
 from calendarinstances shares — no explicit address sync needed.
 """
 
 import logging
+from enum import StrEnum
+from urllib.parse import quote
 
 from django.conf import settings
 
@@ -18,16 +21,26 @@ from core.services.messages_service import MessagesService
 
 logger = logging.getLogger(__name__)
 
+
+class MailboxRole(StrEnum):
+    """Role of a user on a Messages mailbox."""
+
+    VIEWER = "viewer"
+    EDITOR = "editor"
+    SENDER = "sender"
+    ADMIN = "admin"
+
+
 # Messages role → CalDAV share privilege
 ROLE_TO_PRIVILEGE = {
-    "viewer": "read",
-    "editor": "read",
-    "sender": "read-write",
-    "admin": "read-write",
+    MailboxRole.VIEWER: "read",
+    MailboxRole.EDITOR: "read",
+    MailboxRole.SENDER: "read-write",
+    MailboxRole.ADMIN: "read-write",
 }
 
 # Roles that allow sending invites as the mailbox
-SEND_ROLES = {"sender", "admin"}
+SEND_ROLES = {MailboxRole.SENDER, MailboxRole.ADMIN}
 
 
 class SetupServiceError(Exception):
@@ -56,6 +69,24 @@ class MailboxRoleRequiredError(SetupServiceError):
     """Raised when the user has no role on the mailbox that lets them send."""
 
     code = "mailbox_role_required"
+
+
+class MailboxAdminRequiredError(SetupServiceError):
+    """Raised when the user is not an admin of the mailbox."""
+
+    code = "mailbox_admin_required"
+
+
+class MailboxCalendarNotFoundError(SetupServiceError):
+    """Raised when the mailbox does not own a calendar at this URI."""
+
+    code = "calendar_not_found"
+
+
+class CalendarDeletionError(SetupServiceError):
+    """Raised when the CalDAV server fails to delete a calendar."""
+
+    code = "calendar_deletion_failed"
 
 
 class MailboxOrgUnresolvedError(SetupServiceError):
@@ -188,21 +219,8 @@ class SetupService:
         only — it is never stored on the (invisible) owner row and never
         propagated to other mailbox users via the share fan-out.
         """
-        if not settings.FEATURE_MESSAGES_INTEGRATION:
-            raise MessagesDisabledError("Messages integration is not enabled")
-
-        # Verify user has sender/admin access
-        mailboxes = self.messages.get_user_mailboxes(user.email)
-        user_mailbox = next(
-            (mb for mb in mailboxes if mb.get("email") == mailbox_email),
-            None,
-        )
-        if not user_mailbox:
-            raise MailboxAccessDeniedError(
-                f"User {user.email} does not have access to mailbox {mailbox_email}"
-            )
-
-        user_role = user_mailbox.get("role", "viewer")
+        user_mailbox = self._get_user_mailbox(user, mailbox_email)
+        user_role = user_mailbox.get("role", MailboxRole.VIEWER)
         if user_role not in SEND_ROLES:
             raise MailboxRoleRequiredError(
                 f"User needs 'sender' or 'admin' role to create a mailbox calendar"
@@ -240,6 +258,48 @@ class SetupService:
             "principal_uri": f"principals/mailboxes/{mailbox_email}",
         }
 
+    def delete_mailbox_calendar(self, user, mailbox_email, calendar_uri):
+        """Delete a calendar of a mailbox, for every user of the mailbox.
+
+        Only an admin of the mailbox can do this. A CalDAV DELETE from a
+        user removes only the user's own instance. The internal API
+        deletes the calendar, its events and all its instances.
+
+        ``calendar_uri`` is the URI of the user's own instance, under
+        ``calendars/users/{user.email}/``.
+        """
+        # The delete is destructive, so the role comes from Messages and not
+        # from the cache. A demoted admin cannot delete.
+        user_mailbox = self._get_user_mailbox(user, mailbox_email, use_cache=False)
+        user_role = user_mailbox.get("role", MailboxRole.VIEWER)
+        if user_role != MailboxRole.ADMIN:
+            raise MailboxAdminRequiredError(
+                "User needs 'admin' role to delete a mailbox calendar"
+                f" (current role: {user_role})"
+            )
+
+        try:
+            resp = self._http.internal_request(
+                "DELETE",
+                user,
+                f"internal-api/calendars/{quote(calendar_uri, safe='')}",
+                json={"mailbox_email": mailbox_email},
+            )
+        except Exception as exc:
+            raise CalendarDeletionError(f"Failed to delete calendar: {exc}") from exc
+
+        # The CalDAV server returns 400 or 403 when the calendar is not
+        # a calendar of this mailbox. For the user, it does not exist.
+        if resp.status_code in (400, 403, 404):
+            raise MailboxCalendarNotFoundError(
+                f"Mailbox {mailbox_email} has no calendar '{calendar_uri}'"
+                f" (status {resp.status_code}: {resp.text})"
+            )
+        if resp.status_code != 200:
+            raise CalendarDeletionError(
+                f"Failed to delete calendar: {resp.status_code} {resp.text}"
+            )
+
     # ------------------------------------------------------------------
     # Sync: GET /api/v1.0/mailboxes/
     # ------------------------------------------------------------------
@@ -272,7 +332,7 @@ class SetupService:
         shares = []
         for mailbox in mailboxes:
             mb_email = mailbox.get("email", "")
-            mb_role = mailbox.get("role", "viewer")
+            mb_role = mailbox.get("role", MailboxRole.VIEWER)
             if not mb_email:
                 continue
             role_by_email[mb_email] = mb_role
@@ -298,7 +358,7 @@ class SetupService:
                 "calendar_path": (
                     f"calendars/users/{s['mailbox_email']}/{s['calendar_uri']}"
                 ),
-                "role": role_by_email.get(s["mailbox_email"], "viewer"),
+                "role": role_by_email.get(s["mailbox_email"], MailboxRole.VIEWER),
             }
             for s in synced
         ]
@@ -331,7 +391,7 @@ class SetupService:
         shares = []
         for mb_user in users:
             mb_user_email = mb_user.get("email", "")
-            mb_user_role = mb_user.get("role", "viewer")
+            mb_user_role = mb_user.get("role", MailboxRole.VIEWER)
             if not mb_user_email:
                 continue
             # One share entry per user: the CalDAV side fans it out to
@@ -350,6 +410,26 @@ class SetupService:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _get_user_mailbox(self, user, mailbox_email, *, use_cache=True):
+        """Return the Messages data of a mailbox that the user can access.
+
+        Raises an error when the Messages integration is disabled or the
+        user has no role on the mailbox.
+        """
+        if not settings.FEATURE_MESSAGES_INTEGRATION:
+            raise MessagesDisabledError("Messages integration is not enabled")
+
+        mailboxes = self.messages.get_user_mailboxes(user.email, use_cache=use_cache)
+        user_mailbox = next(
+            (mb for mb in mailboxes if mb.get("email") == mailbox_email),
+            None,
+        )
+        if not user_mailbox:
+            raise MailboxAccessDeniedError(
+                f"User {user.email} does not have access to mailbox {mailbox_email}"
+            )
+        return user_mailbox
 
     def _create_calendar(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,

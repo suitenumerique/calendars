@@ -25,3 +25,19 @@ export async function setupCalendar(
   });
   return response.json();
 }
+
+/**
+ * Deletes a mailbox calendar for every user of the mailbox.
+ *
+ * `calendarUri` is the last path segment of the user's own instance URL,
+ * decoded. It is not the URI of the mailbox's instance, and not a full URL.
+ */
+export async function deleteMailboxCalendar(
+  mailboxEmail: string,
+  calendarUri: string,
+): Promise<void> {
+  await fetchAPI(
+    `calendars/mailboxes/${encodeURIComponent(mailboxEmail)}/${encodeURIComponent(calendarUri)}/`,
+    { method: "DELETE" },
+  );
+}

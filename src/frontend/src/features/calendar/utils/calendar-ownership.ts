@@ -1,3 +1,4 @@
+import type { Mailbox } from "@/features/mailbox/types";
 import type { CalDavCalendar } from "../services/dav/types/caldav-service";
 
 /**
@@ -37,3 +38,11 @@ export const getCalendarDeleteMode = (calendar: CalDavCalendar): CalendarDeleteM
   }
   return calendar.sharees?.length ? "delete-shared" : "delete";
 };
+
+/**
+ * Returns whether the given mailboxes show the user as an admin of the
+ * mailbox that owns the calendar.
+ */
+export const isMailboxCalendarAdmin = (calendar: CalDavCalendar, mailboxes: Mailbox[]): boolean =>
+  calendar.ownerType === "MAILBOX" &&
+  mailboxes.some((mailbox) => mailbox.email === calendar.mailboxEmail && mailbox.role === "admin");

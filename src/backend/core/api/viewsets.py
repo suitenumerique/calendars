@@ -22,6 +22,14 @@ from core.services.caldav_service import (
 )
 from core.services.import_service import MAX_FILE_SIZE
 from core.services.resource_service import ResourceProvisioningError, ResourceService
+from core.services.setup_service import (
+    MailboxAccessDeniedError,
+    MailboxAdminRequiredError,
+    MailboxCalendarNotFoundError,
+    MessagesDisabledError,
+    SetupService,
+    SetupServiceError,
+)
 
 from . import permissions, serializers
 
@@ -280,16 +288,25 @@ class OrganizationSettingsViewSet(viewsets.ViewSet):
         return response.Response(serializers.OrganizationSerializer(org).data)
 
 
+MAILBOX_CALENDAR_ERROR_STATUSES = {
+    MessagesDisabledError: status.HTTP_404_NOT_FOUND,
+    MailboxAccessDeniedError: status.HTTP_403_FORBIDDEN,
+    MailboxAdminRequiredError: status.HTTP_403_FORBIDDEN,
+    MailboxCalendarNotFoundError: status.HTTP_404_NOT_FOUND,
+}
+
+
 class CalendarViewSet(viewsets.GenericViewSet):
     """ViewSet for calendar operations.
 
     import_events: Import events from an ICS file.
+    delete_mailbox_calendar: Delete a mailbox calendar for every user.
     """
 
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
-        if self.action == "import_events":
+        if self.action in ("import_events", "delete_mailbox_calendar"):
             return [permissions.IsEntitledToAccess()]
         return super().get_permissions()
 
@@ -358,6 +375,40 @@ class CalendarViewSet(viewsets.GenericViewSet):
             {"task_id": task.id},
             status=status.HTTP_202_ACCEPTED,
         )
+
+    @action(
+        detail=False,
+        methods=["delete"],
+        url_path=r"mailboxes/(?P<mailbox_email>[^/]+)/(?P<calendar_uri>[^/]+)",
+        url_name="mailbox-calendar",
+    )
+    def delete_mailbox_calendar(self, request, mailbox_email, calendar_uri):
+        """Delete a calendar of a mailbox for every user of the mailbox.
+
+        DELETE /api/v1.0/calendars/mailboxes/{mailbox_email}/{calendar_uri}/
+
+        ``calendar_uri`` is the URI of the user's own instance.
+        """
+        try:
+            SetupService().delete_mailbox_calendar(
+                request.user, mailbox_email, calendar_uri
+            )
+        except SetupServiceError as exc:
+            logger.warning(
+                "Mailbox calendar delete rejected for user %s (mailbox=%s, code=%s): %s",
+                request.user.pk,
+                mailbox_email,
+                exc.code,
+                exc,
+            )
+            # The message can hold internal details, so return only the code.
+            return response.Response(
+                {"code": exc.code, "detail": "Calendar deletion failed."},
+                status=MAILBOX_CALENDAR_ERROR_STATUSES.get(
+                    type(exc), status.HTTP_500_INTERNAL_SERVER_ERROR
+                ),
+            )
+        return response.Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ResourceViewSet(viewsets.ViewSet):

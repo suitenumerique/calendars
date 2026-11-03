@@ -111,8 +111,11 @@ class MessagesService:
             return data["results"]
         return data
 
-    def _fetch_mailboxes(self, cache_key, default, **params):
+    def _fetch_mailboxes(self, cache_key, default, *, use_cache=True, **params):
         """Fetch from provisioning/mailboxes/ with caching.
+
+        With ``use_cache=False``, the result comes from Messages. It also
+        refreshes the cache.
 
         Cache keys MUST be distinct per query shape — the response includes
         user-specific fields (role) when queried by user_email, but not
@@ -122,7 +125,7 @@ class MessagesService:
         ``default``). The caller cannot distinguish transient errors from
         a missing mailbox — see the warning logged here for correlation.
         """
-        cached = cache.get(cache_key)
+        cached = cache.get(cache_key) if use_cache else None
         if cached is not None:
             return cached
 
@@ -142,14 +145,17 @@ class MessagesService:
             )
             return default
 
-    def get_user_mailboxes(self, user_email):
+    def get_user_mailboxes(self, user_email, *, use_cache=True):
         """Fetch mailboxes the user has access to, with all users of each.
 
         Each mailbox includes the user's ``role`` and a ``users`` array.
         Cached separately from get_mailbox_by_email (different response shape).
         """
         return self._fetch_mailboxes(
-            f"messages:by_user:{user_email}", [], user_email=user_email
+            f"messages:by_user:{user_email}",
+            [],
+            use_cache=use_cache,
+            user_email=user_email,
         )
 
     def get_mailbox_by_email(self, mailbox_email):

@@ -9,14 +9,18 @@ import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useCalendarContext } from "../../contexts";
 import { setupCalendar } from "@/features/mailbox/api";
+import { useMailboxContext } from "@/features/mailbox/MailboxContext";
+import { isMailboxCalendarAdmin } from "@/features/calendar/utils/calendar-ownership";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { CalendarModal } from "./CalendarModal";
 import { CalendarShareModal } from "./CalendarShareModal";
 import { DeleteConfirmModal } from "./DeleteConfirmModal";
+import { MailboxCalendarDeleteModal } from "./MailboxCalendarDeleteModal";
 import { ImportEventsModal } from "./ImportEventsModal";
 import { SubscriptionUrlModal } from "./SubscriptionUrlModal";
 import { CalendarListItem } from "./CalendarListItem";
 import { useCalendarListState } from "./hooks/useCalendarListState";
+import { useMailboxCalendarDelete } from "./hooks/useMailboxCalendarDelete";
 import { extractCaldavPath, loadOnboardingDismissed, saveOnboardingDismissed } from "./utils";
 import { Plus, ChevronDown } from "@gouvfr-lasuite/ui-components/icons";
 
@@ -32,6 +36,7 @@ export const CalendarList = () => {
     createCalendar,
     updateCalendar,
     deleteCalendar,
+    deleteMailboxCalendar,
     moveCalendar,
     refreshCalendars,
     calendarRef,
@@ -71,6 +76,12 @@ export const CalendarList = () => {
     updateCalendar,
     deleteCalendar,
     onDeleteError: handleDeleteError,
+  });
+
+  const { availableMailboxes } = useMailboxContext();
+  const mailboxDelete = useMailboxCalendarDelete({
+    deleteMailboxCalendar,
+    onError: handleDeleteError,
   });
 
   const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(loadOnboardingDismissed);
@@ -215,6 +226,11 @@ export const CalendarList = () => {
                   onMenuToggle={handleMenuToggle}
                   onEdit={handleOpenEditModal}
                   onDelete={handleOpenDeleteModal}
+                  onDeleteForMailbox={
+                    isMailboxCalendarAdmin(calendar, availableMailboxes)
+                      ? mailboxDelete.open
+                      : undefined
+                  }
                   onShare={handleOpenShareModal}
                   onImport={handleOpenImportModal}
                   onSubscription={handleOpenSubscriptionModal}
@@ -301,6 +317,13 @@ export const CalendarList = () => {
         onConfirm={handleConfirmDelete}
         onCancel={handleCloseDeleteModal}
         isLoading={deleteState.isLoading}
+      />
+
+      <MailboxCalendarDeleteModal
+        calendar={mailboxDelete.calendar}
+        onConfirm={mailboxDelete.confirm}
+        onCancel={mailboxDelete.close}
+        isLoading={mailboxDelete.isLoading}
       />
 
       {subscriptionModal.isOpen && subscriptionModal.caldavPath && (

@@ -23,6 +23,7 @@ import {
 } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { CalendarItemMenuProps } from "./types";
+import { getDeleteMenuEntry } from "./utils";
 
 export const CalendarItemMenu = ({
   isOpen,
@@ -31,6 +32,7 @@ export const CalendarItemMenu = ({
   onDelete,
   onLeave,
   syncManaged,
+  onDeleteForMailbox,
   onShare,
   onImport,
   onSubscription,
@@ -88,12 +90,13 @@ export const CalendarItemMenu = ({
       });
     }
 
+    const deleteEntry = getDeleteMenuEntry({ onDelete, onLeave, syncManaged, onDeleteForMailbox });
     items.push({
-      label: t(onLeave && !syncManaged ? "calendar.list.leaveCalendar" : "calendar.list.delete"),
+      label: t(deleteEntry.labelKey),
       icon: <Trash />,
-      callback: onLeave ?? onDelete,
-      isDisabled: syncManaged,
-      subText: syncManaged ? t("calendar.list.cannotDeleteMailboxCalendar") : undefined,
+      callback: deleteEntry.callback,
+      isDisabled: deleteEntry.isDisabled,
+      subText: deleteEntry.subTextKey ? t(deleteEntry.subTextKey) : undefined,
     });
 
     return items;
@@ -103,6 +106,7 @@ export const CalendarItemMenu = ({
     onDelete,
     onLeave,
     syncManaged,
+    onDeleteForMailbox,
     onShare,
     onImport,
     onSubscription,

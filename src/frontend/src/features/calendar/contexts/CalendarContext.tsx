@@ -14,6 +14,7 @@ import { EventCalendarAdapter } from "../services/dav/EventCalendarAdapter";
 import { caldavServerUrl } from "../utils/DavClient";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useAuth } from "@/features/auth/Auth";
+import { deleteMailboxCalendar as deleteMailboxCalendarApi } from "@/features/mailbox/api";
 import { belongsInMyCalendars } from "../utils/calendar-ownership";
 
 import type {
@@ -71,6 +72,11 @@ export interface CalendarContextType {
     params: { displayName?: string; color?: string; description?: string },
   ) => Promise<{ success: boolean; error?: string }>;
   deleteCalendar: (calendarUrl: string) => Promise<{ success: boolean; error?: string }>;
+  /** Deletes a mailbox calendar for every user of the mailbox. */
+  deleteMailboxCalendar: (
+    calendarUrl: string,
+    mailboxEmail: string,
+  ) => Promise<{ success: boolean; error?: string }>;
   shareCalendar: (
     calendarUrl: string,
     email: string,
@@ -241,18 +247,27 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     [caldavService, refreshCalendars],
   );
 
+  // The calendar leaves the list and the visible set first, so a failed
+  // refresh does not show it again.
+  const removeDeletedCalendar = useCallback(
+    async (calendarUrl: string) => {
+      setDavCalendars((prev) => prev.filter((calendar) => calendar.url !== calendarUrl));
+      setVisibleCalendarUrls((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(calendarUrl);
+        return newSet;
+      });
+      await refreshCalendars();
+    },
+    [refreshCalendars],
+  );
+
   const deleteCalendar = useCallback(
     async (calendarUrl: string): Promise<{ success: boolean; error?: string }> => {
       try {
         const result = await caldavService.deleteCalendar(calendarUrl);
         if (result.success) {
-          // Remove from visible calendars
-          setVisibleCalendarUrls((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(calendarUrl);
-            return newSet;
-          });
-          await refreshCalendars();
+          await removeDeletedCalendar(calendarUrl);
           return { success: true };
         }
         // The calendar can have become sync-managed since the last fetch.
@@ -272,7 +287,30 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
         };
       }
     },
-    [caldavService, refreshCalendars],
+    [caldavService, refreshCalendars, removeDeletedCalendar],
+  );
+
+  const deleteMailboxCalendar = useCallback(
+    async (
+      calendarUrl: string,
+      mailboxEmail: string,
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const calendarUri = decodeURIComponent(
+          calendarUrl.replace(/\/$/, "").split("/").pop() ?? "",
+        );
+        await deleteMailboxCalendarApi(mailboxEmail, calendarUri);
+      } catch (error) {
+        console.error("Error deleting mailbox calendar:", error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+      await removeDeletedCalendar(calendarUrl);
+      return { success: true };
+    },
+    [removeDeletedCalendar],
   );
 
   const shareCalendar = useCallback(
@@ -466,6 +504,7 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     createCalendar,
     updateCalendar,
     deleteCalendar,
+    deleteMailboxCalendar,
     shareCalendar,
     moveCalendar,
     goToDate,

@@ -82,3 +82,37 @@ export const saveOnboardingDismissed = () => {
     // Ignore storage errors
   }
 };
+
+/** The delete entry of a calendar menu, before translation. */
+export interface DeleteMenuEntry {
+  labelKey: string;
+  callback?: () => void;
+  isDisabled?: boolean;
+  subTextKey?: string;
+}
+
+/**
+ * Returns the delete entry of a calendar menu. The delete for every mailbox
+ * user replaces the ordinary delete and leave actions.
+ */
+export const getDeleteMenuEntry = ({
+  onDelete,
+  onLeave,
+  syncManaged,
+  onDeleteForMailbox,
+}: {
+  onDelete?: () => void;
+  onLeave?: () => void;
+  syncManaged?: boolean;
+  onDeleteForMailbox?: () => void;
+}): DeleteMenuEntry => {
+  if (onDeleteForMailbox) {
+    return { labelKey: "calendar.list.deleteForMailbox", callback: onDeleteForMailbox };
+  }
+  return {
+    labelKey: onLeave && !syncManaged ? "calendar.list.leaveCalendar" : "calendar.list.delete",
+    callback: onLeave ?? onDelete,
+    isDisabled: syncManaged,
+    subTextKey: syncManaged ? "calendar.list.cannotDeleteMailboxCalendar" : undefined,
+  };
+};

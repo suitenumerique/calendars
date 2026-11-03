@@ -24,6 +24,7 @@ export const CalendarListItem = ({
   onMenuToggle,
   onEdit,
   onDelete,
+  onDeleteForMailbox,
   onShare,
   onImport,
   onSubscription,
@@ -70,6 +71,7 @@ export const CalendarListItem = ({
           onDelete={isOwner ? () => onDelete(calendar) : undefined}
           onLeave={isOwner ? undefined : () => onDelete(calendar)}
           syncManaged={calendar.syncManaged}
+          onDeleteForMailbox={onDeleteForMailbox ? () => onDeleteForMailbox(calendar) : undefined}
           onShare={onShare ? () => onShare(calendar) : undefined}
           onImport={onImport ? () => onImport(calendar) : undefined}
           onSubscription={onSubscription ? () => onSubscription(calendar) : undefined}
