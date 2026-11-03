@@ -156,3 +156,101 @@ class TestRSVPDoesNotRestoreEvents:
         stored = self._caldav("GET").text
         assert _state(stored) == ("", "ACCEPTED")
         assert _state(stored, cancelled) == ("CANCELLED", "NEEDS-ACTION")
+
+
+@pytest.mark.django_db
+@pytest.mark.xdist_group("caldav")
+class TestStaleAttendeeWrite:
+    """A CalDAV client cannot answer from a stale copy of an invitation.
+
+    Here the attendee is a user of the server, so SabreDAV delivers the
+    invitation to the calendar of the attendee. The attendee reads that
+    copy, the organizer then changes the event, and the attendee writes
+    the old copy back with its old ETag. The If-Match check refuses the
+    write, so the change of the organizer stays on both copies.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        suffix = uuid4().hex[:8]
+        self.organizer = factories.UserFactory(email=f"stale-org-{suffix}@example.com")
+        self.attendee = factories.UserFactory(email=f"stale-att-{suffix}@example.com")
+        service = CalendarService()
+        service.ensure_default_calendar(self.attendee)
+        self.calendar = service.create_calendar(self.organizer, name="Stale")
+        self.uid = f"stale-{uuid4()}"
+        self.start = (timezone.now() + timedelta(days=7)).replace(microsecond=0)
+
+    def _ics(self, *extra, attendee=True):
+        lines = [
+            f"UID:{self.uid}",
+            f"DTSTART:{_fmt(self.start)}",
+            f"DTEND:{_fmt(self.start + timedelta(hours=1))}",
+            "SUMMARY:Stale copy",
+            f"ORGANIZER:mailto:{self.organizer.email}",
+            *extra,
+        ]
+        if attendee:
+            lines.append(
+                f"ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{self.attendee.email}"
+            )
+        return _ics(lines)
+
+    def _organizer_put(self, ics):
+        response = CalDAVHTTPClient().request(
+            "PUT",
+            self.organizer,
+            f"{self.calendar}{self.uid}.ics",
+            data=ics.encode(),
+            content_type="text/calendar",
+        )
+        assert response.status_code in (201, 204)
+
+    def _attendee_copy(self):
+        _, href, _ = CalDAVHTTPClient().find_event_by_uid(self.attendee, self.uid)
+        assert href, "SabreDAV did not deliver the invitation to the attendee"
+        path = href.removeprefix(CalDAVHTTPClient.BASE_URI_PATH)
+        response = CalDAVHTTPClient().request("GET", self.attendee, path)
+        assert response.status_code == 200
+        return path, response.text, response.headers["ETag"]
+
+    def _status(self, ics):
+        return str(
+            icalendar.Calendar.from_ical(ics).walk("VEVENT")[0].get("STATUS", "")
+        )
+
+    @pytest.mark.parametrize(
+        ("change", "keep_attendee", "organizer_status"),
+        [
+            pytest.param(["STATUS:CANCELLED"], True, "CANCELLED", id="cancelled"),
+            pytest.param([], False, "", id="attendee-removed"),
+        ],
+    )
+    def test_stale_attendee_put_is_refused(
+        self, change, keep_attendee, organizer_status
+    ):
+        self._organizer_put(self._ics())
+        path, stale, etag = self._attendee_copy()
+
+        self._organizer_put(self._ics("SEQUENCE:1", *change, attendee=keep_attendee))
+        assert self._status(self._attendee_copy()[1]) == "CANCELLED"
+
+        accepted = stale.replace("PARTSTAT=NEEDS-ACTION", "PARTSTAT=ACCEPTED")
+        response = CalDAVHTTPClient().request(
+            "PUT",
+            self.attendee,
+            path,
+            data=accepted.encode(),
+            content_type="text/calendar",
+            extra_headers={"If-Match": etag},
+        )
+
+        assert response.status_code == 412
+        assert self._status(self._attendee_copy()[1]) == "CANCELLED"
+        organizer_copy = (
+            CalDAVHTTPClient()
+            .request("GET", self.organizer, f"{self.calendar}{self.uid}.ics")
+            .text
+        )
+        assert self._status(organizer_copy) == organizer_status
+        assert "PARTSTAT=ACCEPTED" not in organizer_copy
