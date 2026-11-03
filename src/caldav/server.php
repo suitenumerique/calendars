@@ -21,6 +21,7 @@ use Calendars\SabreDav\FreeBusyOrgScopePlugin;
 use Calendars\SabreDav\SharedCalendarPrivacyPlugin;
 use Calendars\SabreDav\MailboxPlugin;
 use Calendars\SabreDav\ShareAccessPlugin;
+use Calendars\SabreDav\HiddenCalendarPlugin;
 use Calendars\SabreDav\AvailabilityPlugin;
 use Calendars\SabreDav\AuditCalDAVBackend;
 use Calendars\SabreDav\AuditContextPlugin;
@@ -249,6 +250,7 @@ $server->addPlugin(new DAV\Sharing\Plugin());
 $server->addPlugin(new CalDAV\SharingPlugin());
 $server->addPlugin(new MailboxPlugin($pdo));
 $server->addPlugin(new ShareAccessPlugin($pdo));
+$server->addPlugin(new HiddenCalendarPlugin($pdo));
 
 // Debug logging for POST requests - commented out to avoid PII in logs
 // Uncomment for local debugging only, never in production.

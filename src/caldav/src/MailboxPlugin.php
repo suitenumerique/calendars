@@ -261,6 +261,8 @@ class MailboxPlugin extends ServerPlugin
      * beforeUnbind runs for DELETE, MOVE and a COPY that overwrites.
      * Messages controls the access of these instances. If SabreDAV
      * removes the instance, the next mailbox ACL sync creates it again.
+     * HiddenCalendarPlugin turns a DELETE of a user's own instance into
+     * a hide before this check runs.
      */
     public function protectSyncManagedInstance($path)
     {
