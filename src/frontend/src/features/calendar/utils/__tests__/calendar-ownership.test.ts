@@ -2,7 +2,9 @@ import {
   getCalendarDeleteMode,
   isCalendarOwner,
   belongsInMyCalendars,
+  isMailboxCalendarAdmin,
 } from "../calendar-ownership";
+import type { Mailbox, MailboxRole } from "@/features/mailbox/types";
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
 
 const calendar = (overrides: Partial<CalDavCalendar>): CalDavCalendar => ({
@@ -85,5 +87,42 @@ describe("belongsInMyCalendars", () => {
         calendar({ resourcetype: ["collection", "calendar", "shared"], ownerType: "MAILBOX" }),
       ),
     ).toBe(true);
+  });
+});
+
+describe("isMailboxCalendarAdmin", () => {
+  const mailboxCalendar = calendar({ ownerType: "MAILBOX", mailboxEmail: "team@example.com" });
+  const mailbox = (email: string, role: MailboxRole): Mailbox => ({
+    email,
+    id: email,
+    name: email,
+    role,
+    users: [],
+  });
+
+  it("is true for an admin of the mailbox", () => {
+    expect(isMailboxCalendarAdmin(mailboxCalendar, [mailbox("team@example.com", "admin")])).toBe(
+      true,
+    );
+  });
+
+  it("is false for a sender of the mailbox", () => {
+    expect(isMailboxCalendarAdmin(mailboxCalendar, [mailbox("team@example.com", "sender")])).toBe(
+      false,
+    );
+  });
+
+  it("is false for an admin of another mailbox", () => {
+    expect(isMailboxCalendarAdmin(mailboxCalendar, [mailbox("other@example.com", "admin")])).toBe(
+      false,
+    );
+  });
+
+  it("is false for a calendar that a user owns", () => {
+    expect(
+      isMailboxCalendarAdmin(calendar({ mailboxEmail: "team@example.com" }), [
+        mailbox("team@example.com", "admin"),
+      ]),
+    ).toBe(false);
   });
 });
