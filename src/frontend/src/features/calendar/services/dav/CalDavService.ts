@@ -1478,8 +1478,9 @@ export class CalDavService {
     const blocker = findRsvpBlocker(resolved, attendeeEmail, scheduled);
     if (blocker) return { kind: "blocked", blocker };
 
-    const { master } = resolved;
-    if (occurrence) {
+    const { master, override } = resolved;
+    // An event without RRULE has no occurrences: answer the event itself.
+    if (occurrence && (override || master?.recurrenceRule)) {
       const reply = buildOccurrenceReply(resolved, occurrence, attendeeEmail, partstat);
       if (!reply) throw new Error("Occurrence not found");
       const seriesTime = toSeriesWallClock(master, occurrence);

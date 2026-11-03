@@ -103,6 +103,17 @@ describe("CalDavService.respondToInvitation", () => {
     expect(put).not.toHaveBeenCalled();
   });
 
+  it("responds to the event when the master has no RRULE", async () => {
+    const s = setup([{ ...master(), recurrenceRule: undefined }], [START]);
+
+    const result = await s.service.respondToInvitation(URL, { ...response, occurrence: START });
+
+    expect(result.data).toEqual({ kind: "responded" });
+    expect(s.createOverrideInstance).not.toHaveBeenCalled();
+    expect(put.mock.calls[0][1].body).toContain("PARTSTAT=ACCEPTED");
+    expect(put.mock.calls[0][1].body).not.toMatch(/^(EXDATE|RECURRENCE-ID)/m);
+  });
+
   it("refuses an occurrence that the expansion does not contain", async () => {
     const s = setup([master()], []);
 
