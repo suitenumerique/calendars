@@ -530,7 +530,8 @@
           "organizer": "Organizer",
           "attendee": "Attendee",
           "description": "Description",
-          "wasScheduledFor": "Was scheduled for"
+          "wasScheduledFor": "Was scheduled for",
+          "colon": ":"
         },
         "actions": {
           "accept": "Accept",
@@ -1545,7 +1546,8 @@
           "organizer": "Organisateur",
           "attendee": "Participant",
           "description": "Description",
-          "wasScheduledFor": "Était prévu le"
+          "wasScheduledFor": "Était prévu le",
+          "colon": " :"
         },
         "actions": {
           "accept": "Accepter",
@@ -2307,7 +2309,8 @@
           "organizer": "Organisator",
           "attendee": "Deelnemer",
           "description": "Beschrijving",
-          "wasScheduledFor": "Was gepland op"
+          "wasScheduledFor": "Was gepland op",
+          "colon": ":"
         },
         "actions": {
           "accept": "Accepteren",

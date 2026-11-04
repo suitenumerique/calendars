@@ -712,8 +712,8 @@ class TestRSVPEndToEndFlow(TestCase):
             alt[0] for alt in mail.outbox[0].alternatives if alt[1] == "text/html"
         )
 
-        # Find decline link by red button color (#d2212f)
-        decline_url = self._extract_rsvp_link(html_body, "#d2212f")
+        # Find decline link by its white outlined button (#ffffff)
+        decline_url = self._extract_rsvp_link(html_body, "#ffffff")
         token = self._extract_token_from_url(decline_url)
 
         with patch.object(CalDAVHTTPClient, "internal_request") as mock_internal:
@@ -738,8 +738,8 @@ class TestRSVPEndToEndFlow(TestCase):
         # Each button has a distinct color
         colors = {
             "accept": "#435de6",  # blue
-            "tentative": "#626a80",  # gray
-            "decline": "#d2212f",  # red
+            "tentative": "#eef1fa",  # light blue
+            "decline": "#ffffff",  # white, outlined
         }
         for label, color in colors.items():
             pattern = rf'<a\s+href="([^"]*)"[^>]*background-color:\s*{re.escape(color)}'

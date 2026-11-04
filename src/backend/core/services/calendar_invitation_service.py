@@ -673,6 +673,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 "attendee": t("email.labels.attendee", lang),
                 "description": t("email.labels.description", lang),
                 "wasScheduledFor": t("email.labels.wasScheduledFor", lang),
+                "colon": t("email.labels.colon", lang),
             },
             "actions": {
                 "accept": t("email.actions.accept", lang),
