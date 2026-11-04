@@ -278,12 +278,17 @@ class SetupService:
                 f" (current role: {user_role})"
             )
 
+        # The calendar has the organization of the mailbox. The admin can
+        # be in a different organization.
+        org_id = _resolve_mailbox_org_id(user_mailbox)
+
         try:
             resp = self._http.internal_request(
                 "DELETE",
                 user,
                 f"internal-api/calendars/{quote(calendar_uri, safe='')}",
                 json={"mailbox_email": mailbox_email},
+                extra_headers={"X-LS-Org-Id": org_id},
             )
         except Exception as exc:
             raise CalendarDeletionError(f"Failed to delete calendar: {exc}") from exc
