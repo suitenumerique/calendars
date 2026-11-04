@@ -8,19 +8,19 @@ Variables:
        style="border-collapse:collapse; margin:0 0 4px;">
   <tr><td style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#161616;
                  line-height:1.6; padding:0 0 8px;">
-    <strong>{{ when_label|default:labels.when }}{{ labels.colon }}</strong>
+    <strong>{{ when_label|default:labels.when }}</strong>
     <span{% if cancelled %} style="text-decoration:line-through;"{% endif %}>{{ start_date }} · {{ time_str }}{% if start_date != end_date %} · {{ labels.until }} {{ end_date }}{% endif %}</span>
   </td></tr>
   {% if event.location %}
   <tr><td style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#161616;
                  line-height:1.6; padding:0 0 8px;">
-    <strong>{{ labels.location }}{{ labels.colon }}</strong> {{ event.location }}
+    <strong>{{ labels.location }}</strong> {{ event.location }}
   </td></tr>
   {% endif %}
   {% if event.url %}
   <tr><td style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#161616;
                  line-height:1.6; padding:0 0 8px;">
-    <strong>{{ labels.videoConference }}{{ labels.colon }}</strong>
+    <strong>{{ labels.videoConference }}</strong>
     <a href="{{ event.url }}" target="_blank" rel="noopener noreferrer"
        style="color:#435de6; text-decoration:underline;">{{ event.url }}</a>
   </td></tr>

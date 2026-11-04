@@ -523,15 +523,14 @@
           "body": "{{attendee}} has replied to your event"
         },
         "labels": {
-          "when": "When",
+          "when": "When:",
           "until": "until",
-          "location": "Location",
-          "videoConference": "Video conference",
-          "organizer": "Organizer",
+          "location": "Location:",
+          "videoConference": "Video conference:",
+          "organizer": "Organizer:",
           "attendee": "Attendee",
-          "description": "Description",
-          "wasScheduledFor": "Was scheduled for",
-          "colon": ":"
+          "description": "Description:",
+          "wasScheduledFor": "Was scheduled for:"
         },
         "actions": {
           "accept": "Accept",
@@ -1539,15 +1538,14 @@
           "body": "{{attendee}} a répondu à votre événement"
         },
         "labels": {
-          "when": "Quand",
+          "when": "Quand :",
           "until": "jusqu'au",
-          "location": "Lieu",
-          "videoConference": "Visio",
-          "organizer": "Organisateur",
+          "location": "Lieu :",
+          "videoConference": "Visio :",
+          "organizer": "Organisateur :",
           "attendee": "Participant",
-          "description": "Description",
-          "wasScheduledFor": "Était prévu le",
-          "colon": " :"
+          "description": "Description :",
+          "wasScheduledFor": "Était prévu le :"
         },
         "actions": {
           "accept": "Accepter",
@@ -2302,15 +2300,14 @@
           "body": "{{attendee}} heeft gereageerd op uw evenement"
         },
         "labels": {
-          "when": "Wanneer",
+          "when": "Wanneer:",
           "until": "tot",
-          "location": "Locatie",
-          "videoConference": "Videoconferentie",
-          "organizer": "Organisator",
+          "location": "Locatie:",
+          "videoConference": "Videoconferentie:",
+          "organizer": "Organisator:",
           "attendee": "Deelnemer",
-          "description": "Beschrijving",
-          "wasScheduledFor": "Was gepland op",
-          "colon": ":"
+          "description": "Beschrijving:",
+          "wasScheduledFor": "Was gepland op:"
         },
         "actions": {
           "accept": "Accepteren",

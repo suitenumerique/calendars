@@ -407,7 +407,7 @@ class TestEmailTemplateLayout:
         assert 'class="action-cell"' not in html
         assert "images/icon-close-red.png" in html
 
-    def test_label_colon_follows_the_language(self):
+    def test_labels_carry_the_colon_of_the_language(self):
         html_fr = render_to_string(
             "emails/calendar_invitation.html", self._build_context()
         )
