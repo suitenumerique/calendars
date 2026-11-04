@@ -25,9 +25,23 @@ class CustomCalendarHome extends CalendarHome
     /** @var array<int,bool> Per-instance cache: calendarId → isMailboxOwned */
     private $mailboxOwnedCache = [];
 
+    /** @var string|null Path of this home when getChildren() leaves out hidden calendars */
+    private $hiddenFilterPath = null;
+
     public function setPdo(\PDO $pdo)
     {
         $this->pdo = $pdo;
+    }
+
+    /**
+     * Make getChildren() leave out the sharee instances that have
+     * LS:calendar-hidden. Use it only for the PROPFIND listing of the
+     * home. Free/busy also reads getChildren() and must see every
+     * calendar.
+     */
+    public function excludeHiddenCalendars(string $homePath): void
+    {
+        $this->hiddenFilterPath = trim($homePath, '/');
     }
 
     /**
@@ -74,7 +88,11 @@ class CustomCalendarHome extends CalendarHome
         // Calendars — batch-prefetch mailbox-owned status to avoid N+1 queries
         $calendars = $this->caldavBackend->getCalendarsForUser($this->principalInfo['uri']);
         $this->prefetchMailboxOwned($calendars);
+        $hiddenUris = $this->findHiddenUris($calendars);
         foreach ($calendars as $calendar) {
+            if (isset($hiddenUris[$calendar['uri']])) {
+                continue;
+            }
             $objs[] = $this->wrapCalendar($calendar);
         }
 
@@ -219,4 +237,53 @@ class CustomCalendarHome extends CalendarHome
         }
     }
 
+    /**
+     * Return the URIs of the hidden sharee instances, as array keys.
+     * Return an empty array when the filter is off.
+     *
+     * The PropertyStorage plugin stores LS:calendar-hidden by path. On a
+     * DB error, the calendars stay in the listing.
+     *
+     * @param array $calendars List of calendar info arrays from getCalendarsForUser
+     * @return array<string,true>
+     */
+    private function findHiddenUris(array $calendars): array
+    {
+        if ($this->hiddenFilterPath === null || !$this->pdo) {
+            return [];
+        }
+
+        $uriByPath = [];
+        foreach ($calendars as $cal) {
+            $access = $cal['share-access'] ?? \Sabre\DAV\Sharing\Plugin::ACCESS_NOTSHARED;
+            if ($access === \Sabre\DAV\Sharing\Plugin::ACCESS_SHAREDOWNER
+                || $access === \Sabre\DAV\Sharing\Plugin::ACCESS_NOTSHARED) {
+                continue;
+            }
+            $uriByPath[$this->hiddenFilterPath . '/' . $cal['uri']] = $cal['uri'];
+        }
+        if (empty($uriByPath)) {
+            return [];
+        }
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($uriByPath), '?'));
+            $stmt = $this->pdo->prepare(
+                'SELECT path FROM propertystorage '
+                . 'WHERE name = ? AND path IN (' . $placeholders . ')'
+            );
+            $stmt->execute(array_merge(
+                [HiddenCalendarPlugin::HIDDEN_PROP],
+                array_keys($uriByPath)
+            ));
+            $hidden = [];
+            foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN, 0) as $path) {
+                $hidden[$uriByPath[$path]] = true;
+            }
+            return $hidden;
+        } catch (\Exception $e) {
+            error_log("[CustomCalendarHome] hidden lookup DB error: " . $e->getMessage());
+            return [];
+        }
+    }
 }

@@ -1,7 +1,7 @@
 /**
  * CalendarList component - List of calendars with visibility toggles.
  * It prompts users without an owned calendar to create one. Users
- * with shared calendars can dismiss the prompt. Users with no
+ * with shared or hidden calendars can dismiss the prompt. Users with no
  * calendar must create one.
  */
 
@@ -19,6 +19,8 @@ import { MailboxCalendarDeleteModal } from "./MailboxCalendarDeleteModal";
 import { ImportEventsModal } from "./ImportEventsModal";
 import { SubscriptionUrlModal } from "./SubscriptionUrlModal";
 import { CalendarListItem } from "./CalendarListItem";
+import { CalendarHiddenToast } from "./CalendarHiddenToast";
+import { useCalendarHiding } from "./hooks/useCalendarHiding";
 import { useCalendarListState } from "./hooks/useCalendarListState";
 import { useMailboxCalendarDelete } from "./hooks/useMailboxCalendarDelete";
 import { extractCaldavPath, loadOnboardingDismissed, saveOnboardingDismissed } from "./utils";
@@ -31,6 +33,7 @@ export const CalendarList = () => {
   const {
     ownedCalendars,
     sharedCalendars,
+    hiddenCalendars,
     visibleCalendarUrls,
     toggleCalendarVisibility,
     createCalendar,
@@ -38,6 +41,7 @@ export const CalendarList = () => {
     deleteCalendar,
     deleteMailboxCalendar,
     moveCalendar,
+    setCalendarHidden,
     refreshCalendars,
     calendarRef,
     isLoading: isCalendarLoading,
@@ -84,16 +88,41 @@ export const CalendarList = () => {
     onError: handleDeleteError,
   });
 
+  const handleHidingError = useCallback(
+    (hidden: boolean) => {
+      addToast(
+        <ToasterItem type="error" closeButton>
+          {t(hidden ? "calendar.list.hideError" : "calendar.list.showAgainError")}
+        </ToasterItem>,
+      );
+    },
+    [t],
+  );
+  const { hide: hideCalendar, show: showCalendar } = useCalendarHiding({
+    setCalendarHidden,
+    onError: handleHidingError,
+  });
+  const handleHide = useCallback(
+    (calendar: CalDavCalendar) => {
+      void hideCalendar(calendar).then((hidden) => {
+        if (!hidden) return;
+        addToast(<CalendarHiddenToast onUndo={() => void showCalendar(calendar)} />);
+      });
+    },
+    [hideCalendar, showCalendar],
+  );
+
   const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(loadOnboardingDismissed);
   const dismissOnboarding = () => {
     setIsOnboardingDismissed(true);
     saveOnboardingDismissed();
   };
-  const canDismissOnboarding = sharedCalendars.length > 0;
+  // A hidden calendar is a calendar that the user can show again.
+  const canDismissOnboarding = sharedCalendars.length > 0 || hiddenCalendars.length > 0;
   const showOnboarding =
     !isCalendarLoading &&
     ownedCalendars.length === 0 &&
-    (sharedCalendars.length === 0 || !isOnboardingDismissed);
+    (!canDismissOnboarding || !isOnboardingDismissed);
 
   // Wrap save to handle mailbox calendar creation
   const handleSaveWithMailbox = useCallback(
@@ -231,6 +260,7 @@ export const CalendarList = () => {
                       ? mailboxDelete.open
                       : undefined
                   }
+                  onHide={handleHide}
                   onShare={handleOpenShareModal}
                   onImport={handleOpenImportModal}
                   onSubscription={handleOpenSubscriptionModal}
@@ -274,6 +304,7 @@ export const CalendarList = () => {
                     onMenuToggle={handleMenuToggle}
                     onEdit={handleOpenEditModal}
                     onDelete={handleOpenDeleteModal}
+                    onHide={handleHide}
                     onImport={handleOpenImportModal}
                     onSubscription={handleOpenSubscriptionModal}
                     onMoveUp={idx > 0 ? handleMoveUp : undefined}

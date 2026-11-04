@@ -23,26 +23,17 @@ const entryFor = (role: Mailbox["role"]) =>
 
 describe("getDeleteMenuEntry", () => {
   it("gives a mailbox admin the delete for every mailbox user", () => {
-    const entry = entryFor("admin");
-    expect(entry.labelKey).toBe("calendar.list.deleteForMailbox");
-    expect(entry.isDisabled).toBeFalsy();
+    expect(entryFor("admin")?.labelKey).toBe("calendar.list.deleteForMailbox");
   });
 
-  it.each(["viewer", "editor", "sender"] as const)(
-    "keeps the delete disabled for a mailbox %s",
-    (role) => {
-      const entry = entryFor(role);
-      expect(entry.labelKey).toBe("calendar.list.delete");
-      expect(entry.isDisabled).toBe(true);
-      expect(entry.subTextKey).toBe("calendar.list.cannotDeleteMailboxCalendar");
-    },
-  );
+  it.each(["viewer", "editor", "sender"] as const)("gives no delete to a mailbox %s", (role) => {
+    expect(entryFor(role)).toBeNull();
+  });
 
   it("offers to leave a calendar that is not sync-managed", () => {
     const onLeave = vi.fn();
     const entry = getDeleteMenuEntry({ onDelete: vi.fn(), onLeave });
-    expect(entry.labelKey).toBe("calendar.list.leaveCalendar");
-    expect(entry.callback).toBe(onLeave);
-    expect(entry.isDisabled).toBeFalsy();
+    expect(entry?.labelKey).toBe("calendar.list.leaveCalendar");
+    expect(entry?.callback).toBe(onLeave);
   });
 });

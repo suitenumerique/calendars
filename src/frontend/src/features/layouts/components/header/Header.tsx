@@ -74,6 +74,11 @@ const ApplicationMenu = () => {
     : [];
 
   const options = [
+    {
+      label: t("settings.calendars.title"),
+      icon: <Icon name="calendar_month" type={IconType.OUTLINED} />,
+      callback: () => void navigate({ to: "/settings/calendars" }),
+    },
     ...(isAvailabilitiesEnabled
       ? [
           {
@@ -85,8 +90,6 @@ const ApplicationMenu = () => {
       : []),
     ...adminOptions,
   ];
-
-  if (options.length === 0) return null;
 
   return (
     <DropdownMenu isOpen={isOpen} onOpenChange={setIsOpen} options={options}>

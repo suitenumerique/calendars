@@ -6,6 +6,11 @@
 }
 
 .suite__toaster {
+  // Beats the 320px width of .Toastify__toast, so the item sets the width.
+  &__wrapper.Toastify__toast {
+    width: auto;
+  }
+
   &__wrapper {
     width: auto;
     min-height: 0;

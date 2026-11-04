@@ -16,19 +16,23 @@ import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster"
 import { useAuth } from "@/features/auth/Auth";
 import { deleteMailboxCalendar as deleteMailboxCalendarApi } from "@/features/mailbox/api";
 import { belongsInMyCalendars } from "../utils/calendar-ownership";
+import { setCalendarHiddenAndRefresh } from "./set-calendar-hidden";
 
 import type {
   CalDavCalendar,
   CalDavCalendarCreate,
+  CalDavCalendarUpdate,
   SharePrivilege,
 } from "../services/dav/types/caldav-service";
 import type { CalendarApi } from "../components/scheduler/types";
 
-const HIDDEN_CALENDARS_KEY = "calendar-hidden-urls";
+// The URLs of the calendars that the user unchecked in this browser. The
+// key keeps its old name, so the choices of existing users stay.
+const UNCHECKED_CALENDARS_KEY = "calendar-hidden-urls";
 
-const loadHiddenUrls = (): Set<string> => {
+const loadUncheckedCalendarUrls = (): Set<string> => {
   try {
-    const stored = localStorage.getItem(HIDDEN_CALENDARS_KEY);
+    const stored = localStorage.getItem(UNCHECKED_CALENDARS_KEY);
     if (stored) {
       return new Set(JSON.parse(stored) as string[]);
     }
@@ -38,9 +42,9 @@ const loadHiddenUrls = (): Set<string> => {
   return new Set();
 };
 
-const saveHiddenUrls = (hiddenUrls: Set<string>) => {
+const saveUncheckedCalendarUrls = (uncheckedUrls: Set<string>) => {
   try {
-    localStorage.setItem(HIDDEN_CALENDARS_KEY, JSON.stringify([...hiddenUrls]));
+    localStorage.setItem(UNCHECKED_CALENDARS_KEY, JSON.stringify([...uncheckedUrls]));
   } catch {
     // Ignore storage errors
   }
@@ -50,6 +54,7 @@ export interface CalendarContextType {
   calendarRef: React.RefObject<CalendarApi | null>;
   caldavService: CalDavService;
   adapter: EventCalendarAdapter;
+  /** The calendars that the user did not hide (see `CalDavCalendar.hidden`). */
   davCalendars: CalDavCalendar[];
   ownedCalendars: CalDavCalendar[];
   sharedCalendars: CalDavCalendar[];
@@ -57,6 +62,8 @@ export interface CalendarContextType {
   // the sidebar. Use this (not raw `davCalendars`) anywhere a flat,
   // sidebar-consistent calendar list is needed (e.g. the event modal).
   orderedCalendars: CalDavCalendar[];
+  /** The calendars that the user hid (see `CalDavCalendar.hidden`). */
+  hiddenCalendars: CalDavCalendar[];
   visibleCalendarUrls: Set<string>;
   isLoading: boolean;
   isConnected: boolean;
@@ -69,7 +76,7 @@ export interface CalendarContextType {
   createCalendar: (params: CalDavCalendarCreate) => Promise<{ success: boolean; error?: string }>;
   updateCalendar: (
     calendarUrl: string,
-    params: { displayName?: string; color?: string; description?: string },
+    params: CalDavCalendarUpdate,
   ) => Promise<{ success: boolean; error?: string }>;
   deleteCalendar: (calendarUrl: string) => Promise<{ success: boolean; error?: string }>;
   /** Deletes a mailbox calendar for every user of the mailbox. */
@@ -85,6 +92,16 @@ export interface CalendarContextType {
   moveCalendar: (
     calendarUrl: string,
     direction: "up" | "down",
+  ) => Promise<{ success: boolean; error?: string }>;
+  /**
+   * Hides the calendar for the user, or shows it again (see
+   * `CalDavCalendar.hidden`). Success means that the server accepted the
+   * change. A failed refresh after it shows its own error and keeps the
+   * last calendars, so the list can still show the old state.
+   */
+  setCalendarHidden: (
+    calendarUrl: string,
+    hidden: boolean,
   ) => Promise<{ success: boolean; error?: string }>;
   goToDate: (date: Date) => void;
 }
@@ -110,14 +127,22 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
   const calendarRef = useRef<CalendarApi | null>(null);
   const caldavService = useMemo(() => new CalDavService(), []);
   const adapter = useMemo(() => new EventCalendarAdapter(), []);
-  const [davCalendars, setDavCalendars] = useState<CalDavCalendar[]>([]);
-  const davCalendarsRef = useRef<CalDavCalendar[]>([]);
-  davCalendarsRef.current = davCalendars;
+  const [allCalendars, setAllCalendars] = useState<CalDavCalendar[]>([]);
+  const allCalendarsRef = useRef<CalDavCalendar[]>([]);
+  allCalendarsRef.current = allCalendars;
   const [visibleCalendarUrls, setVisibleCalendarUrls] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  const { davCalendars, hiddenCalendars } = useMemo(
+    () => ({
+      davCalendars: allCalendars.filter((cal) => !cal.hidden),
+      hiddenCalendars: allCalendars.filter((cal) => cal.hidden),
+    }),
+    [allCalendars],
+  );
 
   const { ownedCalendars, sharedCalendars } = useMemo(() => {
     // Sort by `calendar-order` ascending (missing = end), tie-broken by
@@ -155,11 +180,13 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
       setIsLoading(true);
       const result = await caldavService.fetchCalendars();
       if (result.success && result.data) {
-        setDavCalendars(result.data);
-        // Compute visible = all minus hidden (new calendars default to visible)
-        const hidden = loadHiddenUrls();
+        setAllCalendars(result.data);
+        // Visible = all calendars minus the URLs that the user unchecked in
+        // this browser. New calendars are visible. This is not
+        // `CalDavCalendar.hidden`: a hidden calendar is not in davCalendars.
+        const unchecked = loadUncheckedCalendarUrls();
         setVisibleCalendarUrls(
-          new Set(result.data.map((cal) => cal.url).filter((url) => !hidden.has(url))),
+          new Set(result.data.map((cal) => cal.url).filter((url) => !unchecked.has(url))),
         );
       } else {
         console.error("Error fetching calendars:", result.error);
@@ -189,11 +216,11 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
       } else {
         newVisible.add(calendarUrl);
       }
-      // Persist: store the hidden set (all known URLs minus visible)
-      // Use ref to avoid stale closure over davCalendars
-      const allUrls = davCalendarsRef.current.map((cal) => cal.url);
-      const newHidden = new Set(allUrls.filter((url) => !newVisible.has(url)));
-      saveHiddenUrls(newHidden);
+      // Persist: store the unchecked set (all known URLs minus visible)
+      // Use ref to avoid stale closure over allCalendars
+      const allUrls = allCalendarsRef.current.map((cal) => cal.url);
+      const newUnchecked = new Set(allUrls.filter((url) => !newVisible.has(url)));
+      saveUncheckedCalendarUrls(newUnchecked);
       return newVisible;
     });
   }, []);
@@ -224,7 +251,7 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
   const updateCalendar = useCallback(
     async (
       calendarUrl: string,
-      params: { displayName?: string; color?: string; description?: string },
+      params: CalDavCalendarUpdate,
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         const result = await caldavService.updateCalendar(calendarUrl, params);
@@ -251,7 +278,7 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
   // refresh does not show it again.
   const removeDeletedCalendar = useCallback(
     async (calendarUrl: string) => {
-      setDavCalendars((prev) => prev.filter((calendar) => calendar.url !== calendarUrl));
+      setAllCalendars((prev) => prev.filter((calendar) => calendar.url !== calendarUrl));
       setVisibleCalendarUrls((prev) => {
         const newSet = new Set(prev);
         newSet.delete(calendarUrl);
@@ -421,6 +448,12 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     [caldavService, ownedCalendars, sharedCalendars, refreshCalendars],
   );
 
+  const setCalendarHidden = useCallback(
+    (calendarUrl: string, hidden: boolean) =>
+      setCalendarHiddenAndRefresh(caldavService, refreshCalendars, calendarUrl, hidden),
+    [caldavService, refreshCalendars],
+  );
+
   const goToDate = useCallback((date: Date) => {
     if (calendarRef.current) {
       calendarRef.current.setOption("date", date);
@@ -445,10 +478,12 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
           // Fetch calendars after successful connection
           const calendarsResult = await caldavService.fetchCalendars();
           if (isMounted && calendarsResult.success && calendarsResult.data) {
-            setDavCalendars(calendarsResult.data);
-            const hidden = loadHiddenUrls();
+            setAllCalendars(calendarsResult.data);
+            const unchecked = loadUncheckedCalendarUrls();
             setVisibleCalendarUrls(
-              new Set(calendarsResult.data.map((cal) => cal.url).filter((url) => !hidden.has(url))),
+              new Set(
+                calendarsResult.data.map((cal) => cal.url).filter((url) => !unchecked.has(url)),
+              ),
             );
           }
           setIsLoading(false);
@@ -492,6 +527,7 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     ownedCalendars,
     sharedCalendars,
     orderedCalendars,
+    hiddenCalendars,
     visibleCalendarUrls,
     isLoading,
     isConnected,
@@ -507,6 +543,7 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     deleteMailboxCalendar,
     shareCalendar,
     moveCalendar,
+    setCalendarHidden,
     goToDate,
   };
 

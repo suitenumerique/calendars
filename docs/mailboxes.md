@@ -236,17 +236,22 @@ in `calendarinstances`. This distinguishes them from manual shares and
 allows the sync to cleanly add/update/remove its own shares without
 touching user-created ones.
 
-A user cannot delete a sync-managed instance. `MailboxPlugin` refuses
-the `DELETE` with a 403, because the next sync would create it again.
-To remove the calendar from a user's list, remove their access to the
-mailbox in Messages. These instances expose `LS:calendar-sync-managed`,
-so clients can disable the delete action. Manual shares do not have it.
+A user cannot delete a sync-managed instance, because the next sync
+would create it again. A `DELETE` of the user's own instance hides the
+calendar instead and returns 204 (see
+[hidden-calendars.md](hidden-calendars.md)).
+CalDAV clients send this `DELETE` when the user deletes the calendar.
+`MailboxPlugin` refuses a `MOVE` or `COPY` that would replace the
+instance. To remove the access, remove the user from the mailbox in
+Messages. These instances expose `LS:calendar-sync-managed`. The web app
+then offers "Hide this calendar" instead of a delete action. Manual
+shares do not have it.
 
 A mailbox admin can delete a mailbox calendar for every user with
 `DELETE /api/v1.0/calendars/mailboxes/{mailbox_email}/{calendar_uri}/`.
 `calendar_uri` is the URI of the admin's own instance. The calendar,
 its events and all its instances go away. The frontend shows this
-action to mailbox admins instead of the disabled delete action.
+action to mailbox admins only.
 
 ### Restriction on MAILBOX calendar sharing
 

@@ -60,9 +60,21 @@ export type CalDavCalendar = {
   /**
    * Whether Messages manages the access to this calendar instance.
    * The value comes from ``LS:calendar-sync-managed``. When it is true,
-   * the server refuses to delete the instance.
+   * the server does not delete the instance. A DELETE hides it.
    */
   syncManaged?: boolean;
+  /**
+   * Whether the user hid this calendar. The value comes from
+   * ``LS:calendar-hidden`` on the user's own instance. A hidden calendar
+   * does not show in the web calendar. A PROPFIND on the calendar home
+   * leaves it out, so CalDAV clients do not list it and stop its
+   * reminders. A request with ``X-LS-Include-Hidden: true`` lists it.
+   * The user keeps access. Hiding does not change whether the calendar
+   * contributes to free/busy.
+   * It is not the unchecked state of the sidebar checkbox, which applies
+   * only to this browser.
+   */
+  hidden?: boolean;
   /**
    * Sharees parsed from the ``CS:invite`` payload returned alongside
    * the standard calendar properties. The share modal reads this

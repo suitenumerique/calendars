@@ -34,13 +34,15 @@ export interface CalendarItemMenuProps {
   onDelete?: () => void;
   /** Asks to confirm that the user leaves the calendar. Set it for a sharee only. */
   onLeave?: () => void;
-  /** Disables the ordinary delete and leave actions, unless onDeleteForMailbox is set. */
+  /** Removes the ordinary delete and leave actions, unless onDeleteForMailbox is set. */
   syncManaged?: boolean;
   /**
    * Asks to confirm the delete for every user of the mailbox. Set it for a
    * mailbox admin only. It replaces the delete and leave actions.
    */
   onDeleteForMailbox?: () => void;
+  /** Hides the calendar for the user (see `CalDavCalendar.hidden`). Set it for a sharee only. */
+  onHide?: () => void;
   onShare?: () => void;
   onImport?: () => void;
   onSubscription?: () => void;
@@ -84,6 +86,8 @@ export interface CalendarListItemProps {
   onDelete: (calendar: CalDavCalendar) => void;
   /** Set it when the user is an admin of the mailbox of the calendar. */
   onDeleteForMailbox?: (calendar: CalDavCalendar) => void;
+  /** Hides the calendar for the user (see `CalDavCalendar.hidden`). The item uses it for a sharee only. */
+  onHide?: (calendar: CalDavCalendar) => void;
   onShare?: (calendar: CalDavCalendar) => void;
   onImport?: (calendar: CalDavCalendar) => void;
   onSubscription?: (calendar: CalDavCalendar) => void;

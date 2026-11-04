@@ -505,6 +505,7 @@ class Base(Configuration):
         "destination",  # WebDAV MOVE target URL
         "overwrite",  # WebDAV MOVE overwrite flag
         "x-ls-client",  # Marks browser-issued requests (suppresses Basic challenge on 401)
+        "x-ls-include-hidden",  # Lists hidden calendars in a PROPFIND
     ]
 
     # Sentry

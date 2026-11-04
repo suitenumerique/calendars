@@ -130,6 +130,17 @@ export function buildMkCalendarXml(props: CalendarProps): string {
 </C:mkcalendar>`;
 }
 
+/** Build the PROPPATCH body that sets or removes `LS:calendar-hidden`. */
+export function buildHiddenProppatchXml(hidden: boolean): string {
+  const update = hidden
+    ? "<D:set><D:prop><LS:calendar-hidden>true</LS:calendar-hidden></D:prop></D:set>"
+    : "<D:remove><D:prop><LS:calendar-hidden/></D:prop></D:remove>";
+  return `<?xml version="1.0" encoding="utf-8"?>
+<D:propertyupdate ${XML_NS.DAV} ${XML_NS.LS}>
+  ${update}
+</D:propertyupdate>`;
+}
+
 /** Build PROPPATCH request body */
 export function buildProppatchXml(props: CalendarProps): string {
   const propsXml = buildCalendarPropsXml(props);
@@ -314,6 +325,9 @@ export function buildCalendarQueryXml(params: CalendarQueryParams = {}): string 
  *
  * ``LS:calendar-sync-managed`` marks a calendar instance that the
  * mailbox ACL sync manages.
+ *
+ * ``LS:calendar-hidden`` marks a calendar that the user hid (see
+ * ``CalDavCalendar.hidden``).
  */
 export const CALENDAR_PROPS = {
   [`${NS.CALDAV}:calendar-description`]: {},
@@ -330,6 +344,7 @@ export const CALENDAR_PROPS = {
   "LS:calendar-owner-type": {},
   "LS:share-access-map": {},
   "LS:calendar-sync-managed": {},
+  "LS:calendar-hidden": {},
 } as const;
 
 // ============================================================================
