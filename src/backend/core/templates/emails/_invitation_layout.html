@@ -6,7 +6,7 @@ Blocks:
   banner_bg      background color of the title banner (default light blue).
   banner_border  border color of the title banner.
   banner_color   text color of the title banner.
-  banner_icon    name of the banner icon file in static/emails, without .png.
+  banner_icon    name of the banner icon file in static/images, without .png.
   body           the per-template body content (after the banner, before the footer).
 {% endcomment %}{% load static %}<!doctype html>
 <html lang="{{ lang|default:'en' }}">
@@ -32,7 +32,7 @@ Blocks:
                     background-color:#ffffff; border:1px solid #dddddd; border-radius:8px;">
 
         <tr><td align="center" style="padding:36px 32px 28px;">
-          <img src="{{ app_url }}{% get_static_prefix %}emails/logo-calendriers.png"
+          <img src="{{ logo_img }}"
                width="205" height="50" alt="{{ app_name }}"
                style="display:block; border:0; width:205px; height:50px;">
         </td></tr>
@@ -44,7 +44,7 @@ Blocks:
                         border:1px solid {% block banner_border %}#bec5f0{% endblock %};">
             <tr>
               <td width="24" style="padding:14px 0 14px 20px; vertical-align:middle;">
-                <img src="{{ app_url }}{% get_static_prefix %}emails/{% block banner_icon %}icon-link-blue{% endblock %}.png"
+                <img src="{{ app_url }}{% get_static_prefix %}images/{% block banner_icon %}icon-link-blue{% endblock %}.png"
                      width="24" height="24" alt=""
                      style="display:block; border:0; width:24px; height:24px;">
               </td>
@@ -82,7 +82,7 @@ Blocks:
         </td></tr>
 
         <tr><td style="padding:24px 32px 28px;">
-          <img src="{{ app_url }}{% get_static_prefix %}emails/logo-footer.png"
+          <img src="{{ app_url }}{% get_static_prefix %}images/logo-footer.png"
                width="160" height="56" alt="République Française, La Suite"
                style="display:block; border:0; width:160px; height:56px;">
         </td></tr>

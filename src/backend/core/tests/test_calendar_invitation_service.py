@@ -371,20 +371,28 @@ class TestEmailTemplateLayout:
         return service._build_template_context(event, method, lang=lang)
 
     @override_settings(APP_URL="https://calendars.example")
-    def test_html_logos_use_app_url(self):
+    def test_html_images_are_served_from_app_url(self):
         html = render_to_string(
             "emails/calendar_invitation.html", self._build_context()
         )
-        assert (
-            'src="https://calendars.example/static/emails/logo-calendriers.png"' in html
+        for name in (
+            "logo-calendriers",
+            "logo-footer",
+            "icon-link-blue",
+            "icon-check-white",
+        ):
+            assert f'src="https://calendars.example/static/images/{name}.png"' in html
+
+    @override_settings(
+        APP_URL="https://calendars.example",
+        EMAIL_LOGO_IMG="https://cdn.example/logo.png",
+    )
+    def test_logo_follows_the_email_logo_setting(self):
+        html = render_to_string(
+            "emails/calendar_invitation.html", self._build_context()
         )
-        assert 'src="https://calendars.example/static/emails/logo-footer.png"' in html
-        assert (
-            'src="https://calendars.example/static/emails/icon-link-blue.png"' in html
-        )
-        assert (
-            'src="https://calendars.example/static/emails/icon-check-white.png"' in html
-        )
+        assert 'src="https://cdn.example/logo.png"' in html
+        assert "logo-calendriers.png" not in html
 
     def test_invitation_html_stacks_buttons_on_narrow_screens(self):
         html = render_to_string(
@@ -397,7 +405,7 @@ class TestEmailTemplateLayout:
         context = self._build_context(method="CANCEL")
         html = render_to_string("emails/calendar_invitation_cancel.html", context)
         assert 'class="action-cell"' not in html
-        assert "icon-close-red.png" in html
+        assert "images/icon-close-red.png" in html
 
     def test_label_colon_follows_the_language(self):
         html_fr = render_to_string(
