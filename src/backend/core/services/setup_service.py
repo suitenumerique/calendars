@@ -278,8 +278,7 @@ class SetupService:
                 f" (current role: {user_role})"
             )
 
-        # The calendar has the organization of the mailbox. The admin can
-        # be in a different organization.
+        # The calendar has the mailbox org, which can differ from the admin org.
         org_id = _resolve_mailbox_org_id(user_mailbox)
 
         try:
