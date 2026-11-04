@@ -256,6 +256,22 @@ describe("caldav-helpers", () => {
         expect(result).not.toContain("<C:expand");
         expect(result).toContain("<C:calendar-data/>");
       });
+
+      it("filters by UID instead of time-range, and still expands", () => {
+        const result = buildCalendarQueryXml({
+          timeRange: {
+            start: "2026-05-01T00:00:00Z",
+            end: "2026-06-01T00:00:00Z",
+          },
+          expand: true,
+          uid: "a&b",
+        });
+        expect(result).toContain(
+          '<C:prop-filter name="UID"><C:text-match collation="i;octet">a&amp;b</C:text-match>',
+        );
+        expect(result).not.toContain("<C:time-range");
+        expect(result).toContain('<C:expand start="20260501T000000Z" end="20260601T000000Z"/>');
+      });
     });
   });
 

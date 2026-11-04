@@ -418,7 +418,21 @@ class TestRSVPConfirmViewPost(TestCase):
         response = self._post(token)
 
         assert response.status_code == 400
-        assert "not found" in response.content.decode().lower()
+        assert "no longer exists" in response.content.decode().lower()
+
+    @patch.object(CalDAVHTTPClient, "internal_request")
+    def test_cancelled_event_returns_400(self, mock_internal):
+        """A cancelled event shows a cancelled message, not a success page."""
+        mock_internal.return_value = _mock_resp(410, {"error": "Event cancelled"})
+
+        token = _make_token(action="accepted")
+        response = self._post(token)
+
+        assert response.status_code == 400
+        content = response.content.decode()
+        assert "Event cancelled" in content
+        assert "cancelled by the organizer" in content
+        assert "accepted the invitation" not in content
 
     @patch.object(CalDAVHTTPClient, "internal_request")
     def test_put_failure_returns_400(self, mock_internal):
