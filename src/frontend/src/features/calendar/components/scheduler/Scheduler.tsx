@@ -30,6 +30,7 @@ import { SchedulerToolbar } from "./SchedulerToolbar";
 import { useSchedulerHandlers } from "./hooks/useSchedulerHandlers";
 import { useSchedulerInit, useSchedulingCapabilitiesCheck } from "./hooks/useSchedulerInit";
 import { useMobileNavigation } from "./hooks/useMobileNavigation";
+import { loadLastView, saveLastView } from "./utils/lastView";
 
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
 import type { CalDavExtendedProps } from "../../services/dav/EventCalendarAdapter";
@@ -60,7 +61,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
   const [calendarUrl, setCalendarUrl] = useState(defaultCalendarUrl || "");
 
   // Toolbar state
-  const [currentView, setCurrentView] = useState("timeGridWeek");
+  const [currentView, setCurrentView] = useState(() => (isMobile ? "timeGridDay" : loadLastView()));
   const [viewTitle, setViewTitle] = useState("");
 
   // Modal state
@@ -164,7 +165,8 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     adapter,
     visibleCalendarUrlsRef,
     davCalendarsRef,
-    initialView: isMobile ? "timeGridDay" : "timeGridWeek",
+    // Keep the current view when a locale change creates the calendar again.
+    initialView: currentView,
     currentDateRef,
     setCurrentDate: handleDatesSet,
     handleEventClick: handleEventClick as (info: unknown) => void,
@@ -197,8 +199,10 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     (view: string) => {
       calendarRef.current?.setOption("view", view);
       setCurrentView(view);
+      if (isMobile) return;
+      saveLastView(view);
     },
-    [calendarRef],
+    [calendarRef, isMobile],
   );
 
   // Auto-switch view when crossing mobile/desktop breakpoint
@@ -206,7 +210,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
   useEffect(() => {
     if (prevIsMobileRef.current === isMobile) return;
     prevIsMobileRef.current = isMobile;
-    const targetView = isMobile ? "timeGridDay" : "timeGridWeek";
+    const targetView = isMobile ? "timeGridDay" : loadLastView();
     handleViewChange(targetView);
   }, [isMobile, handleViewChange]);
 
