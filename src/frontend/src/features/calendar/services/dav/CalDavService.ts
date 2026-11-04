@@ -797,8 +797,12 @@ export class CalDavService {
    * Create or replace the override of one occurrence of a recurring event.
    *
    * If no override exists, the method adds a VEVENT with a RECURRENCE-ID
-   * to the same ICS resource. It also adds an EXDATE for the occurrence to
-   * the master. If an override exists, the method replaces it.
+   * to the same ICS resource. If an override exists, the method replaces
+   * it.
+   *
+   * The method does not add an EXDATE to the master. The RECURRENCE-ID
+   * already replaces the occurrence (RFC 5545). SabreDAV reads a new
+   * EXDATE from an attendee as a decline of the occurrence.
    *
    * `occurrenceDate` is the wall-clock time of the occurrence in the
    * timezone of the series. The UTC fields of the date hold this time
@@ -866,7 +870,7 @@ export class CalDavService {
         ) ?? -1;
 
       if (existingOverrideIdx >= 0) {
-        // Re-drag: update existing override in-place, EXDATE already exists
+        // Re-drag: update existing override in-place
         const existingOverride = calendar.events![existingOverrideIdx];
         calendar.events![existingOverrideIdx] = {
           ...overrideEvent,
@@ -875,15 +879,6 @@ export class CalDavService {
           sequence: (existingOverride.sequence ?? 0) + 1,
         };
       } else {
-        // First override: add EXDATE + new override VEVENT
-        const newExdate: IcsDateObject = {
-          date: occurrenceFakeUtc,
-          type: sourceEvent.start.type,
-          local: occurrenceLocal,
-        };
-
-        sourceEvent.exceptionDates = [...(sourceEvent.exceptionDates ?? []), newExdate];
-
         const overrideVevent: IcsEvent = {
           ...overrideEvent,
           recurrenceRule: undefined,
