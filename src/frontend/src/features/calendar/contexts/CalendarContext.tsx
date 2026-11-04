@@ -84,9 +84,13 @@ export interface CalendarContextType {
     calendarUrl: string,
     mailboxEmail: string,
   ) => Promise<{ success: boolean; error?: string }>;
+  /**
+   * Grants or updates access for the given emails in one CalDAV request.
+   * A failed request can apply some of the changes.
+   */
   shareCalendar: (
     calendarUrl: string,
-    email: string,
+    emails: string[],
     privilege?: SharePrivilege,
   ) => Promise<{ success: boolean; error?: string; status?: number }>;
   moveCalendar: (
@@ -343,18 +347,16 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
   const shareCalendar = useCallback(
     async (
       calendarUrl: string,
-      email: string,
+      emails: string[],
       privilege: SharePrivilege = "read-write",
     ): Promise<{ success: boolean; error?: string; status?: number }> => {
       try {
         const result = await caldavService.shareCalendar({
           calendarUrl,
-          sharees: [
-            {
-              href: `mailto:${email}`,
-              privilege,
-            },
-          ],
+          sharees: emails.map((email) => ({
+            href: `mailto:${email}`,
+            privilege,
+          })),
         });
         if (result.success) {
           return { success: true };

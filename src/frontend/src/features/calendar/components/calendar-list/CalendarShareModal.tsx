@@ -12,7 +12,7 @@ import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import { addToast, ToasterItem } from "../../../ui/components/toaster/Toaster";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { Info } from "@gouvfr-lasuite/ui-components/icons";
-import { getShareErrorKey } from "./utils";
+import { getShareErrorKey, getShareeEmails } from "./utils";
 
 import type {
   CalDavCalendar,
@@ -204,27 +204,26 @@ export const CalendarShareModal = ({ isOpen, calendar, onClose }: CalendarShareM
 
       setLoading(true);
       try {
-        const invitedUser = users[0];
-        // The server fails with an unclear error when the sharee is the owner.
-        if (invitedUser.email.toLowerCase() === ownerEmail?.toLowerCase()) {
+        const owner = ownerEmail?.toLowerCase();
+        const emails = getShareeEmails(users, owner);
+        if (users.some((u) => u.email.toLowerCase() === owner)) {
           addToast(
             <ToasterItem type="error">{t("calendar.shareCalendar.errorOwner")}</ToasterItem>,
           );
-          return;
         }
+        if (emails.length === 0) return;
         const privilege = (
           SHARE_ROLES.includes(role as SharePrivilege) ? role : "read-write"
         ) as SharePrivilege;
-        const result = await shareCalendar(calendar.url, invitedUser.email, privilege);
+        const result = await shareCalendar(calendar.url, emails, privilege);
         if (result.success) {
           addToast(
             <ToasterItem>
               {t("calendar.shareCalendar.success", {
-                email: invitedUser.email,
+                email: emails.join(", "),
               })}
             </ToasterItem>,
           );
-          await refreshSharees();
         } else {
           addToast(
             <ToasterItem type="error">
@@ -232,6 +231,9 @@ export const CalendarShareModal = ({ isOpen, calendar, onClose }: CalendarShareM
             </ToasterItem>,
           );
         }
+        // Refresh after both outcomes: a failed request can apply some shares
+        // (issue #140).
+        await refreshSharees();
       } catch {
         addToast(<ToasterItem type="error">{t("calendar.shareCalendar.error")}</ToasterItem>);
       } finally {
@@ -266,16 +268,15 @@ export const CalendarShareModal = ({ isOpen, calendar, onClose }: CalendarShareM
           SHARE_ROLES.includes(role as SharePrivilege) ? role : "read-write"
         ) as SharePrivilege;
         const email = access.user.email;
-        const result = await shareCalendar(calendar.url, email, privilege);
-        if (result.success) {
-          await refreshSharees();
-        } else {
+        const result = await shareCalendar(calendar.url, [email], privilege);
+        if (!result.success) {
           addToast(
             <ToasterItem type="error">
               {t(getShareErrorKey(result, "calendar.shareCalendar.error"))}
             </ToasterItem>,
           );
         }
+        await refreshSharees();
       } catch {
         addToast(<ToasterItem type="error">{t("calendar.shareCalendar.error")}</ToasterItem>);
       } finally {
