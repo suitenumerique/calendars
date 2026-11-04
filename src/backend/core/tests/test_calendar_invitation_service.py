@@ -387,7 +387,7 @@ class TestEmailTemplateLayout:
         html = render_to_string(
             "emails/calendar_invitation.html", self._build_context()
         )
-        assert "logo-footer" not in html
+        assert html.count("<img") == 5
         assert "border-top:1px solid #e5e5e5" not in html
 
     @override_settings(

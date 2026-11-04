@@ -78,6 +78,3 @@ FRONTEND_MEET_BASE_URL=
 # Must be a valid Fernet key (32 url-safe base64-encoded bytes)
 # To create one, use the bin/fernetkey command.
 # OIDC_STORE_REFRESH_TOKEN_KEY="your-32-byte-encryption-key=="
-
-# Emails
-EMAIL_FOOTER_IMG=http://localhost:8931/static/images/logo-footer.png
