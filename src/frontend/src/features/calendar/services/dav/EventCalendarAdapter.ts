@@ -471,10 +471,14 @@ export class EventCalendarAdapter {
       icsEvent.created = this.jsDateToIcsDate(extProps.created, false, timezone);
     if (extProps.recurrenceRule) icsEvent.recurrenceRule = extProps.recurrenceRule;
 
-    // Convert recurrence ID for recurring instances
+    // Convert recurrence ID for recurring instances. An all-day
+    // RECURRENCE-ID from the server is a date at midnight UTC. It stays as
+    // is: the local date of that instant is the day before west of UTC.
     if (extProps.recurrenceId) {
       icsEvent.recurrenceId = {
-        value: this.jsDateToIcsDate(extProps.recurrenceId, ecEvent.allDay ?? false, timezone),
+        value: isAllDay
+          ? { type: "DATE", date: extProps.recurrenceId }
+          : this.jsDateToIcsDate(extProps.recurrenceId, false, timezone),
       };
     }
 
