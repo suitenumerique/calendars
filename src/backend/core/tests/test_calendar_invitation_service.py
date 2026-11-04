@@ -379,6 +379,12 @@ class TestEmailTemplateLayout:
             'src="https://calendars.example/static/emails/logo-calendriers.png"' in html
         )
         assert 'src="https://calendars.example/static/emails/logo-footer.png"' in html
+        assert (
+            'src="https://calendars.example/static/emails/icon-link-blue.png"' in html
+        )
+        assert (
+            'src="https://calendars.example/static/emails/icon-check-white.png"' in html
+        )
 
     def test_invitation_html_stacks_buttons_on_narrow_screens(self):
         html = render_to_string(
@@ -391,6 +397,7 @@ class TestEmailTemplateLayout:
         context = self._build_context(method="CANCEL")
         html = render_to_string("emails/calendar_invitation_cancel.html", context)
         assert 'class="action-cell"' not in html
+        assert "icon-close-red.png" in html
 
     def test_label_colon_follows_the_language(self):
         html_fr = render_to_string(

@@ -6,6 +6,7 @@ Blocks:
   banner_bg      background color of the title banner (default light blue).
   banner_border  border color of the title banner.
   banner_color   text color of the title banner.
+  banner_icon    name of the banner icon file in static/emails, without .png.
   body           the per-template body content (after the banner, before the footer).
 {% endcomment %}{% load static %}<!doctype html>
 <html lang="{{ lang|default:'en' }}">
@@ -16,45 +17,50 @@ Blocks:
   <title>{{ content.title }}</title>
   <style>
     @media only screen and (max-width: 480px) {
+      .action-table { width: 100% !important; }
       .action-cell { display: block !important; width: 100% !important; padding: 0 0 12px !important; }
+      .action-cell a { display: block !important; }
     }
   </style>
 </head>
-<body style="margin:0; padding:0; background-color:#f6f6f6;">
+<body style="margin:0; padding:0; background-color:#ffffff;">
   <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation"
-         width="100%" style="border-collapse:collapse; background-color:#f6f6f6;">
+         width="100%" style="border-collapse:collapse; background-color:#ffffff;">
     <tr><td align="center" style="padding:24px 12px;">
       <table border="0" cellpadding="0" cellspacing="0" role="presentation"
              style="border-collapse:separate; width:100%; max-width:600px;
-                    background-color:#ffffff; border:1px solid #e5e5e5; border-radius:8px;">
+                    background-color:#ffffff; border:1px solid #dddddd; border-radius:8px;">
 
-        {# ── header: product logo ── #}
-        <tr><td align="center" style="padding:32px 32px 24px;">
+        <tr><td align="center" style="padding:36px 32px 28px;">
           <img src="{{ app_url }}{% get_static_prefix %}emails/logo-calendriers.png"
-               width="164" height="40" alt="{{ app_name }}"
-               style="display:block; border:0; width:164px; height:40px;">
+               width="205" height="50" alt="{{ app_name }}"
+               style="display:block; border:0; width:205px; height:50px;">
         </td></tr>
 
-        {# ── title banner ── #}
         <tr><td style="padding:0 32px 24px;">
           <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%"
                  style="border-collapse:separate; border-radius:8px;
                         background-color:{% block banner_bg %}#eef1fa{% endblock %};
                         border:1px solid {% block banner_border %}#bec5f0{% endblock %};">
-            <tr><td style="padding:14px 20px; font-family:Arial,Helvetica,sans-serif;
-                           font-size:17px; font-weight:700; line-height:1.4;
-                           color:{% block banner_color %}#3e3b98{% endblock %};">
-              {{ content.heading }}
-            </td></tr>
+            <tr>
+              <td width="24" style="padding:14px 0 14px 20px; vertical-align:middle;">
+                <img src="{{ app_url }}{% get_static_prefix %}emails/{% block banner_icon %}icon-link-blue{% endblock %}.png"
+                     width="24" height="24" alt=""
+                     style="display:block; border:0; width:24px; height:24px;">
+              </td>
+              <td style="padding:14px 20px 14px 12px; vertical-align:middle;
+                         font-family:Arial,Helvetica,sans-serif; font-size:17px; font-weight:700;
+                         line-height:1.4; color:{% block banner_color %}#3e3b98{% endblock %};">
+                {{ content.heading }}
+              </td>
+            </tr>
           </table>
         </td></tr>
 
-        {# ── body (per-template) ── #}
         <tr><td style="padding:0 32px;">
           {% block body %}{% endblock %}
         </td></tr>
 
-        {# ── notes ── #}
         <tr><td style="padding:24px 32px 28px;">
           {% if instructions %}
           <p style="font-family:Arial,Helvetica,sans-serif; font-size:13px;
@@ -68,7 +74,6 @@ Blocks:
           </p>
         </td></tr>
 
-        {# ── divider ── #}
         <tr><td style="padding:0 32px;">
           <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%"
                  style="border-collapse:collapse;">
@@ -76,7 +81,6 @@ Blocks:
           </table>
         </td></tr>
 
-        {# ── footer: institutional logos ── #}
         <tr><td style="padding:24px 32px 28px;">
           <img src="{{ app_url }}{% get_static_prefix %}emails/logo-footer.png"
                width="160" height="56" alt="République Française, La Suite"
