@@ -13,6 +13,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { Feedback } from "@/features/feedback/Feedback";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
+import { getPickerLanguage } from "@/features/i18n/utils";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
@@ -120,6 +121,14 @@ export const HeaderRight = () => {
   );
 };
 
+// Values are lowercase because Django uses "en-us", not "en-US".
+const PICKER_LANGUAGES = [
+  { label: "Français", value: "fr-fr", shortLabel: "FR" },
+  { label: "English", value: "en-us", shortLabel: "EN" },
+  { label: "Nederlands", value: "nl-nl", shortLabel: "NL" },
+  { label: "Deutsch", value: "de-de", shortLabel: "DE" },
+];
+
 export const LanguagePickerUserMenu = () => {
   const { i18n } = useTranslation();
   const { user, refreshUser } = useAuth();
@@ -138,34 +147,17 @@ export const LanguagePickerUserMenu = () => {
     }
   }, [user?.language, i18n]);
 
-  // We must set the language to lowercase because django does not use "en-US", but "en-us".
-
-  const languages = [
-    {
-      label: "Français",
-      value: "fr-fr",
-      shortLabel: "FR",
-      isChecked: selectedLanguage === "fr-fr",
-    },
-    {
-      label: "English",
-      value: "en-us",
-      shortLabel: "EN",
-      isChecked: selectedLanguage === "en-us",
-    },
-    {
-      label: "Nederlands",
-      value: "nl-nl",
-      shortLabel: "NL",
-      isChecked: selectedLanguage === "nl-nl",
-    },
-    {
-      label: "Deutsch",
-      value: "de-de",
-      shortLabel: "DE",
-      isChecked: selectedLanguage === "de-de",
-    },
-  ];
+  // resolvedLanguage is the language that the UI shows. It is undefined
+  // when i18next finds no translations for the detected language.
+  const checkedLanguage = getPickerLanguage(
+    selectedLanguage,
+    i18n.resolvedLanguage ?? i18n.language,
+    PICKER_LANGUAGES.map(({ value }) => value),
+  );
+  const languages = PICKER_LANGUAGES.map((language) => ({
+    ...language,
+    isChecked: language.value === checkedLanguage,
+  }));
 
   const onChange = (value: string) => {
     setSelectedLanguage(value);
