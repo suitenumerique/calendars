@@ -3973,12 +3973,15 @@ def _setup_mailbox_members(prefix, *members):
     """Create a mailbox calendar synced to every member.
 
     Returns (users, mailbox_email, {member email: instance URI}). Each
-    user is a (user, client, calendar path) tuple.
+    user is a (user, client, calendar path) tuple. The members are in a
+    different organization from the mailbox. The mailbox organization
+    comes from the mailbox domain, as in ``_resolve_mailbox_org_id``.
     """
     org = factories.OrganizationFactory(external_id=prefix)
     mailbox_email = f"team@{prefix}.com"
+    mailbox_org = factories.OrganizationFactory(external_id=f"{prefix}.com")
     users = [_create_user_with_calendar(org, f"{name}-{prefix}") for name in members]
-    _create_mailbox_calendar(users[0][0], mailbox_email, org)
+    _create_mailbox_calendar(users[0][0], mailbox_email, mailbox_org)
     before = {user.email: _list_calendar_urls(user) for user, _, _ in users}
     _sync_mailbox_acls(
         users[0][0],
