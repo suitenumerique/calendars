@@ -2,16 +2,17 @@
 Accept / Maybe / Decline buttons for REQUEST-method emails.
 Rendered only when rsvp_accepted_url is in context. CANCEL and REPLY
 templates omit the RSVP URLs, so the include is a no-op there.
-The action-table and action-cell classes stack the buttons on narrow
-screens (see the layout).
+The buttons stack by default, so mail clients that ignore style sheets
+get the mobile layout. The layout's media query puts them on one row
+on wide screens.
 {% endcomment %}{% load static %}
 {% if rsvp_accepted_url %}
 <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation"
-       class="action-table" style="border-collapse:collapse; margin:24px auto 0;">
+       class="action-table" style="border-collapse:collapse; margin:24px auto 0; width:100%;">
   <tr>
-    <td class="action-cell" style="padding:0 8px 0 0;">
+    <td class="action-cell" style="display:block; width:100%; padding:0 0 12px;">
       <a href="{{ rsvp_accepted_url }}"
-         style="display:inline-block; text-align:center; background-color:#435de6;
+         style="display:block; text-align:center; background-color:#435de6;
                 border:1px solid #435de6; color:#ffffff; white-space:nowrap;
                 font-family:Arial,Helvetica,sans-serif; font-size:15px; font-weight:700;
                 padding:12px 20px; border-radius:6px; text-decoration:none;">
@@ -20,9 +21,9 @@ screens (see the layout).
              style="border:0; width:20px; height:20px; vertical-align:middle; margin:-3px 8px 0 0;">{{ actions.accept }}
       </a>
     </td>
-    <td class="action-cell" style="padding:0 8px;">
+    <td class="action-cell" style="display:block; width:100%; padding:0 0 12px;">
       <a href="{{ rsvp_tentative_url }}"
-         style="display:inline-block; text-align:center; background-color:#eef1fa;
+         style="display:block; text-align:center; background-color:#eef1fa;
                 border:1px solid #eef1fa; color:#435de6; white-space:nowrap;
                 font-family:Arial,Helvetica,sans-serif; font-size:15px; font-weight:700;
                 padding:12px 20px; border-radius:6px; text-decoration:none;">
@@ -31,9 +32,9 @@ screens (see the layout).
              style="border:0; width:20px; height:20px; vertical-align:middle; margin:-3px 8px 0 0;">{{ actions.maybe }}
       </a>
     </td>
-    <td class="action-cell" style="padding:0 0 0 8px;">
+    <td class="action-cell" style="display:block; width:100%; padding:0 0 12px;">
       <a href="{{ rsvp_declined_url }}"
-         style="display:inline-block; text-align:center; background-color:#ffffff;
+         style="display:block; text-align:center; background-color:#ffffff;
                 border:1px solid #435de6; color:#435de6; white-space:nowrap;
                 font-family:Arial,Helvetica,sans-serif; font-size:15px; font-weight:700;
                 padding:12px 20px; border-radius:6px; text-decoration:none;">

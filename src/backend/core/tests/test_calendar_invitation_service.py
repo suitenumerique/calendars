@@ -394,12 +394,12 @@ class TestEmailTemplateLayout:
         assert 'src="https://cdn.example/logo.png"' in html
         assert "logo-calendriers.png" not in html
 
-    def test_invitation_html_stacks_buttons_on_narrow_screens(self):
+    def test_invitation_html_stacks_buttons_by_default(self):
         html = render_to_string(
             "emails/calendar_invitation.html", self._build_context()
         )
-        assert "@media only screen and (max-width: 600px)" in html
-        assert html.count('class="action-cell"') == 3
+        assert html.count('class="action-cell" style="display:block;') == 3
+        assert "@media only screen and (min-width: 601px)" in html
 
     def test_cancel_html_has_no_button_cells(self):
         context = self._build_context(method="CANCEL")
