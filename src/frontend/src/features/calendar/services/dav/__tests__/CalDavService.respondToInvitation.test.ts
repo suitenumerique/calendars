@@ -149,6 +149,23 @@ describe("CalDavService.respondToInvitation", () => {
     expect(put.mock.calls[0][1].body).toContain("PARTSTAT=ACCEPTED");
   });
 
+  it("answers all occurrences of a copy without master", async () => {
+    const third = new Date("2026-11-04T09:00:00Z");
+    const other = {
+      ...override(),
+      start: { date: third, type: "DATE-TIME" },
+      recurrenceId: { value: { date: third, type: "DATE-TIME" } },
+    } as IcsEvent;
+    const s = setup([override(), other]);
+
+    const result = await s.service.respondToInvitation(URL, response);
+
+    expect(result.data).toEqual({ kind: "responded" });
+    const body: string = put.mock.calls[0][1].body;
+    expect(body.match(/PARTSTAT=ACCEPTED/g)).toHaveLength(2);
+    expect(body).not.toContain("NEEDS-ACTION");
+  });
+
   it("does not write an occurrence of a series in an unknown timezone", async () => {
     const tzid = "W. Europe Standard Time";
     const start = {

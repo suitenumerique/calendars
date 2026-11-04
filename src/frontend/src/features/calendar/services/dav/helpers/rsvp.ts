@@ -36,9 +36,6 @@ const occurrenceOf = (master: IcsEvent, instant: Date): IcsEvent => {
 /**
  * Find the VEVENTs of one event in the server copy. Give `instant` to
  * also find the override of that occurrence.
- *
- * An attendee invited to one occurrence only gets a copy without master.
- * Without `instant`, the single VEVENT of such a copy is the override.
  */
 export const resolveRsvpEvent = (
   events: IcsEvent[] | undefined,
@@ -47,11 +44,8 @@ export const resolveRsvpEvent = (
 ): RsvpEvent => {
   const instances = events?.filter((e) => e.uid === uid) ?? [];
   const master = instances.find((e) => !e.recurrenceId);
-  const override = instant
-    ? instances.find((e) => e.recurrenceId?.value.date.getTime() === instant.getTime())
-    : !master && instances.length === 1
-      ? instances[0]
-      : undefined;
+  const override =
+    instant && instances.find((e) => e.recurrenceId?.value.date.getTime() === instant.getTime());
   return { instances, master, override };
 };
 
@@ -123,6 +117,11 @@ export const buildOccurrenceReply = (
  * has STATUS:CANCELLED, or when its override or the master does not list
  * the attendee.
  *
+ * A copy without master has only overrides: an attendee invited to some
+ * occurrences only gets such a copy. Without override, the function
+ * checks all these overrides. The attendee can respond when one of them
+ * is not cancelled and lists the attendee.
+ *
  * Returns null when the attendee can respond.
  */
 export const findRsvpBlocker = (
@@ -131,12 +130,13 @@ export const findRsvpBlocker = (
   scheduled?: boolean,
 ): RsvpBlocker | null => {
   if (instances.length === 0) return "deleted";
-  if (master?.status === "CANCELLED") return "cancelled";
-
-  if (scheduled === false || override?.status === "CANCELLED") return "cancelled";
+  if (master?.status === "CANCELLED" || scheduled === false) return "cancelled";
 
   const target = override ?? master;
+  const live = (target ? [target] : instances).filter((e) => e.status !== "CANCELLED");
+  if (live.length === 0) return "cancelled";
+
   const email = attendeeEmail.toLowerCase();
-  const isAttendee = target?.attendees?.some((a) => a.email.toLowerCase() === email);
-  return isAttendee ? null : "notAttendee";
+  const listed = live.some((e) => e.attendees?.some((a) => a.email.toLowerCase() === email));
+  return listed ? null : "notAttendee";
 };

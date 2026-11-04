@@ -87,6 +87,32 @@ describe("findRsvpBlocker", () => {
     expect(blocker(events, scheduled(SECOND))).toBe("notAttendee");
     expect(blocker(events, scheduled(START))).toBeNull();
   });
+
+  describe("for all occurrences of a copy without master", () => {
+    const THIRD = new Date("2026-11-04T09:00:00Z");
+    const third = (overrides: Partial<IcsEvent> = {}) =>
+      override({
+        start: { date: THIRD, type: "DATE-TIME" },
+        recurrenceId: { value: { date: THIRD, type: "DATE-TIME" } },
+        ...overrides,
+      });
+
+    it("allows a response when one override lists the attendee", () => {
+      expect(blocker([override(), third()])).toBeNull();
+      expect(blocker([override({ attendees: [] }), third()])).toBeNull();
+      expect(blocker([override({ status: "CANCELLED" }), third()])).toBeNull();
+    });
+
+    it("reports a removed attendee when no live override lists the attendee", () => {
+      const events = [override({ attendees: [] }), third({ status: "CANCELLED" })];
+      expect(blocker(events)).toBe("notAttendee");
+    });
+
+    it("reports a cancelled event when all overrides are cancelled", () => {
+      const events = [override({ status: "CANCELLED" }), third({ status: "CANCELLED" })];
+      expect(blocker(events)).toBe("cancelled");
+    });
+  });
 });
 
 describe("buildOccurrenceReply", () => {
