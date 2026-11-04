@@ -6,7 +6,7 @@ import re
 from unittest.mock import MagicMock, patch
 
 from django.template.loader import render_to_string
-from django.test import Client
+from django.test import Client, override_settings
 
 import pytest
 import requests
@@ -359,6 +359,81 @@ class TestEmailTemplateVisioUrl:
         context = self._build_context(event)
         txt = render_to_string("emails/calendar_invitation.txt", context)
         assert "Visio" not in txt
+
+
+@pytest.mark.django_db
+class TestEmailTemplateLayout:
+    """Tests for the logo images, the labels and the mobile layout of the emails."""
+
+    def _build_context(self, method="REQUEST", lang="fr"):
+        event = ICalendarParser.parse(ICS_WITH_URL, "bob@example.com")
+        service = CalendarInvitationService()
+        return service._build_template_context(event, method, lang=lang)
+
+    @override_settings(APP_URL="https://calendars.example")
+    def test_html_images_are_served_from_app_url(self):
+        html = render_to_string(
+            "emails/calendar_invitation.html", self._build_context()
+        )
+        for name in (
+            "logo-calendriers",
+            "icon-link-blue",
+            "icon-check-white",
+        ):
+            assert f'src="https://calendars.example/static/images/{name}.png"' in html
+
+    @override_settings(APP_URL="https://calendars.example", EMAIL_FOOTER_IMG=None)
+    def test_html_has_no_footer_image_by_default(self):
+        html = render_to_string(
+            "emails/calendar_invitation.html", self._build_context()
+        )
+        assert html.count("<img") == 5
+        assert "border-top:1px solid #e5e5e5" not in html
+
+    @override_settings(
+        APP_URL="https://calendars.example",
+        EMAIL_FOOTER_IMG="https://cdn.example/footer.png",
+    )
+    def test_footer_image_follows_the_setting(self):
+        html = render_to_string(
+            "emails/calendar_invitation.html", self._build_context()
+        )
+        assert 'src="https://cdn.example/footer.png"' in html
+        assert "border-top:1px solid #e5e5e5" in html
+
+    @override_settings(
+        APP_URL="https://calendars.example",
+        EMAIL_LOGO_IMG="https://cdn.example/logo.png",
+    )
+    def test_logo_follows_the_email_logo_setting(self):
+        html = render_to_string(
+            "emails/calendar_invitation.html", self._build_context()
+        )
+        assert 'src="https://cdn.example/logo.png"' in html
+        assert "logo-calendriers.png" not in html
+
+    def test_invitation_html_stacks_buttons_by_default(self):
+        html = render_to_string(
+            "emails/calendar_invitation.html", self._build_context()
+        )
+        assert html.count('class="action-cell" style="display:block;') == 3
+        assert "@media only screen and (min-width: 601px)" in html
+
+    def test_cancel_html_has_no_button_cells(self):
+        context = self._build_context(method="CANCEL")
+        html = render_to_string("emails/calendar_invitation_cancel.html", context)
+        assert 'class="action-cell"' not in html
+        assert "images/icon-close-red.png" in html
+
+    def test_labels_carry_the_colon_of_the_language(self):
+        html_fr = render_to_string(
+            "emails/calendar_invitation.html", self._build_context()
+        )
+        html_en = render_to_string(
+            "emails/calendar_invitation.html", self._build_context(lang="en")
+        )
+        assert "Quand\u00a0:" in html_fr
+        assert "When:" in html_en
 
 
 # ICS template for mailbox invitation tests

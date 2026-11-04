@@ -1,38 +1,20 @@
 {% extends "emails/_invitation_layout.html" %}
 
-{% block header_color %}#16a34a{% endblock %}
-{% block badge_color %}#bbe5c5{% endblock %}
+{% block banner_bg %}#e3fdeb{% endblock %}
+{% block banner_border %}#b8e6c5{% endblock %}
+{% block banner_color %}#18753c{% endblock %}
+{% block banner_icon %}icon-check-green{% endblock %}
 
 {% block body %}
-  {# date/time #}
   <p style="font-family:Arial,Helvetica,sans-serif; font-size:18px; font-weight:700;
-            color:#1b1f2e; line-height:1.4; margin:0 0 4px;">
-    {{ start_date }}
+            color:#161616; line-height:1.4; margin:0 0 8px;">
+    {{ summary }}
   </p>
-  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
-            line-height:1.4; margin:0 0 20px;">
-    {{ time_str }}{% if start_date != end_date %} · {{ labels.until }} {{ end_date }}{% endif %}
-  </p>
-
-  {% if event.location %}
-  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
-            line-height:1.5; margin:0 0 10px;">
-    <strong style="color:#1b1f2e;">{{ labels.location }}:</strong> {{ event.location }}
-  </p>
-  {% endif %}
-
-  {% if event.url %}
-  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
-            line-height:1.5; margin:0 0 10px;">
-    <strong style="color:#1b1f2e;">{{ labels.videoConference }}:</strong>
-    <a href="{{ event.url }}" target="_blank" rel="noopener noreferrer"
-       style="color:#16a34a; text-decoration:none;">{{ event.url }}</a>
-  </p>
-  {% endif %}
-
   {# attendee response sentence (content.body interpolates {{attendee}}) #}
-  <p style="font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#626a80;
-            line-height:1.6; margin:0 0 0;">
+  <p style="font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#3a3a3a;
+            line-height:1.6; margin:0 0 20px;">
     {{ content.body }}
   </p>
+
+  {% include "emails/_event_details.html" %}
 {% endblock %}

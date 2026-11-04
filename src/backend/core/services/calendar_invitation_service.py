@@ -652,6 +652,9 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             "is_cancel": method == self.METHOD_CANCEL,
             "app_name": settings.APP_NAME,
             "app_url": settings.APP_URL,
+            "logo_img": settings.EMAIL_LOGO_IMG
+            or f"{settings.APP_URL}{settings.STATIC_URL}images/logo-calendriers.png",
+            "footer_img": settings.EMAIL_FOOTER_IMG,
             # Translated content blocks
             "content": {
                 "title": t(f"email.{type_key}.title", lang),

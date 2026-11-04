@@ -150,6 +150,14 @@ class Base(Configuration):
     )
     APP_NAME = values.Value("Calendars", environ_name="APP_NAME", environ_prefix=None)
     APP_URL = values.Value("", environ_name="APP_URL", environ_prefix=None)
+    # URL of the logo in the emails. Empty: the Calendriers logo from the static files.
+    EMAIL_LOGO_IMG = values.Value(
+        None, environ_name="EMAIL_LOGO_IMG", environ_prefix=None
+    )
+    # URL of the footer image in the emails. Empty: no footer image.
+    EMAIL_FOOTER_IMG = values.Value(
+        None, environ_name="EMAIL_FOOTER_IMG", environ_prefix=None
+    )
     CALENDAR_ITIP_ENABLED = values.BooleanValue(
         False, environ_name="CALENDAR_ITIP_ENABLED", environ_prefix=None
     )

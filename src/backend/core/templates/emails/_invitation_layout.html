@@ -1,63 +1,95 @@
 {% comment %}
-Shared layout for calendar invitation / update / cancel / reply emails.
-Email-client-safe: table-based, inline styles, no external CSS.
+Shared layout for the calendar invitation, update, cancel and reply emails.
+Email-client safe: tables, inline styles, no external CSS. The one style
+block only stacks the RSVP buttons on narrow screens.
 Blocks:
-  header_color  — background color of the header strip (default blue).
-  badge_color   — text color of the uppercase header badge (default light blue tint).
-  body          — the per-template body content (after the header, before the footer).
-{% endcomment %}<!doctype html>
+  banner_bg      background color of the title banner (default light blue).
+  banner_border  border color of the title banner.
+  banner_color   text color of the title banner.
+  banner_icon    name of the banner icon file in static/images, without .png.
+  body           the per-template body content (after the banner, before the footer).
+{% endcomment %}{% load static %}<!doctype html>
 <html lang="{{ lang|default:'en' }}">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ content.title }}</title>
+  <style>
+    /* The buttons stack by default. This query puts them on one row when the
+       card has its full width, 600px. Below that, the three buttons at their
+       natural width can overflow the card (463px in Dutch, plus 90px of padding). */
+    @media only screen and (min-width: 601px) {
+      .action-table { width: auto !important; }
+      .action-cell { display: table-cell !important; width: auto !important; padding: 0 8px !important; }
+      .action-cell a { display: inline-block !important; }
+    }
+  </style>
 </head>
-<body style="margin:0; padding:0; background-color:#eef0f3;">
+<body style="margin:0; padding:0; background-color:#ffffff;">
   <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation"
-         width="100%" style="border-collapse:collapse; background-color:#eef0f3;">
+         width="100%" style="border-collapse:collapse; background-color:#ffffff;">
     <tr><td align="center" style="padding:24px 12px;">
       <table border="0" cellpadding="0" cellspacing="0" role="presentation"
-             style="border-collapse:collapse; width:100%; max-width:560px;
-                    border-radius:8px; border:1px solid #d4d7dd; overflow:hidden;">
+             style="border-collapse:separate; width:100%; max-width:600px;
+                    background-color:#ffffff; border:1px solid #dddddd; border-radius:8px;">
 
-        {# ── header ── #}
-        <tr><td style="background-color:{% block header_color %}#435de6{% endblock %}; padding:28px 36px;">
-          {% if content.badge %}
-          <p style="font-family:Arial,Helvetica,sans-serif; font-size:11px; font-weight:700;
-                    color:{% block badge_color %}#bdc6f6{% endblock %};
-                    text-transform:uppercase; letter-spacing:0.12em; margin:0 0 6px;">
-            {{ content.badge }}
-          </p>
-          {% endif %}
-          <p style="font-family:Arial,Helvetica,sans-serif; font-size:26px; font-weight:700;
-                    color:#ffffff; line-height:1.25; margin:0;">
-            {{ summary }}
-          </p>
+        <tr><td align="center" style="padding:36px 32px 28px;">
+          <img src="{{ logo_img }}"
+               width="205" height="50" alt="{{ app_name }}"
+               style="display:block; border:0; width:205px; height:50px;">
         </td></tr>
 
-        {# ── body (per-template) ── #}
-        <tr><td style="background-color:#f6f8f9; padding:28px 36px 32px;">
+        <tr><td style="padding:0 32px 24px;">
+          <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%"
+                 style="border-collapse:separate; border-radius:8px;
+                        background-color:{% block banner_bg %}#eef1fa{% endblock %};
+                        border:1px solid {% block banner_border %}#bec5f0{% endblock %};">
+            <tr>
+              <td width="24" style="padding:14px 0 14px 20px; vertical-align:middle;">
+                <img src="{{ app_url }}{% get_static_prefix %}images/{% block banner_icon %}icon-link-blue{% endblock %}.png"
+                     width="24" height="24" alt=""
+                     style="display:block; border:0; width:24px; height:24px;">
+              </td>
+              <td style="padding:14px 20px 14px 12px; vertical-align:middle;
+                         font-family:Arial,Helvetica,sans-serif; font-size:17px; font-weight:700;
+                         line-height:1.4; color:{% block banner_color %}#435de6{% endblock %};">
+                {{ content.heading }}
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:0 32px;">
           {% block body %}{% endblock %}
         </td></tr>
 
-        {# ── divider ── #}
-        <tr><td style="background-color:#e7e9eb; height:1px; padding:0;
-                       font-size:0; line-height:0;"></td></tr>
-
-        {# ── footer ── #}
-        <tr><td style="background-color:#f6f8f9; padding:28px 36px;">
+        <tr><td style="padding:24px 32px 28px;">
           {% if instructions %}
-          <p style="font-family:Arial,Helvetica,sans-serif; font-size:12px;
-                    color:#626a80; line-height:1.6; margin:0 0 12px;">
+          <p style="font-family:Arial,Helvetica,sans-serif; font-size:13px;
+                    color:#666666; line-height:1.6; margin:0 0 8px;">
             {{ instructions }}
           </p>
           {% endif %}
-          <p style="font-family:Arial,Helvetica,sans-serif; font-size:12px;
-                    color:#626a80; line-height:1.6; margin:0;">
+          <p style="font-family:Arial,Helvetica,sans-serif; font-size:13px;
+                    color:#666666; line-height:1.6; margin:0;">
             {{ footer }}
           </p>
         </td></tr>
+
+{% if footer_img %}
+        <tr><td style="padding:0 32px;">
+          <table border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%"
+                 style="border-collapse:collapse;">
+            <tr><td style="border-top:1px solid #e5e5e5; font-size:0; line-height:0; height:1px;">&nbsp;</td></tr>
+          </table>
+        </td></tr>
+
+        <tr><td style="padding:24px 32px 28px;">
+          <img src="{{ footer_img }}" width="160" alt=""
+               style="display:block; border:0; width:160px; height:auto;">
+        </td></tr>
+{% endif %}
 
       </table>
     </td></tr>
