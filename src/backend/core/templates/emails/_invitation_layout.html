@@ -16,7 +16,9 @@ Blocks:
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ content.title }}</title>
   <style>
-    @media only screen and (max-width: 480px) {
+    /* 600px is the card width. Below it the three buttons at their natural
+       width can overflow the card (463px in Dutch, plus 90px of padding). */
+    @media only screen and (max-width: 600px) {
       .action-table { width: 100% !important; }
       .action-cell { display: block !important; width: 100% !important; padding: 0 0 12px !important; }
       .action-cell a { display: block !important; }

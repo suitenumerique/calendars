@@ -398,7 +398,7 @@ class TestEmailTemplateLayout:
         html = render_to_string(
             "emails/calendar_invitation.html", self._build_context()
         )
-        assert "@media only screen and (max-width: 480px)" in html
+        assert "@media only screen and (max-width: 600px)" in html
         assert html.count('class="action-cell"') == 3
 
     def test_cancel_html_has_no_button_cells(self):
