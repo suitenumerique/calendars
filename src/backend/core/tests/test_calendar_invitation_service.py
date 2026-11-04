@@ -377,11 +377,29 @@ class TestEmailTemplateLayout:
         )
         for name in (
             "logo-calendriers",
-            "logo-footer",
             "icon-link-blue",
             "icon-check-white",
         ):
             assert f'src="https://calendars.example/static/images/{name}.png"' in html
+
+    @override_settings(APP_URL="https://calendars.example", EMAIL_FOOTER_IMG=None)
+    def test_html_has_no_footer_image_by_default(self):
+        html = render_to_string(
+            "emails/calendar_invitation.html", self._build_context()
+        )
+        assert "logo-footer" not in html
+        assert "border-top:1px solid #e5e5e5" not in html
+
+    @override_settings(
+        APP_URL="https://calendars.example",
+        EMAIL_FOOTER_IMG="https://cdn.example/footer.png",
+    )
+    def test_footer_image_follows_the_setting(self):
+        html = render_to_string(
+            "emails/calendar_invitation.html", self._build_context()
+        )
+        assert 'src="https://cdn.example/footer.png"' in html
+        assert "border-top:1px solid #e5e5e5" in html
 
     @override_settings(
         APP_URL="https://calendars.example",

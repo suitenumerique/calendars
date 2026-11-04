@@ -154,6 +154,10 @@ class Base(Configuration):
     EMAIL_LOGO_IMG = values.Value(
         None, environ_name="EMAIL_LOGO_IMG", environ_prefix=None
     )
+    # URL of the footer image in the emails. Empty: no footer image.
+    EMAIL_FOOTER_IMG = values.Value(
+        None, environ_name="EMAIL_FOOTER_IMG", environ_prefix=None
+    )
     CALENDAR_ITIP_ENABLED = values.BooleanValue(
         False, environ_name="CALENDAR_ITIP_ENABLED", environ_prefix=None
     )
