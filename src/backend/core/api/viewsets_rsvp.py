@@ -133,6 +133,9 @@ class RSVPConfirmView(View):
         if error_response:
             return error_response
 
+        lang = TranslationService.resolve_language(
+            request=request, email=payload["email"]
+        )
         action = payload["action"]
         label = TranslationService.t(f"rsvp.{action}", lang)
         return render(
@@ -164,6 +167,9 @@ class RSVPConfirmView(View):
         if error_response:
             return error_response
 
+        lang = TranslationService.resolve_language(
+            request=request, email=payload["email"]
+        )
         action = payload["action"]
         result = _process_rsvp(request, payload, action, lang)
 

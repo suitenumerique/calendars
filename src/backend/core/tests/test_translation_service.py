@@ -1,8 +1,21 @@
 """Tests for TranslationService."""
 
+import json
 from datetime import datetime
 
-from core.services.translation_service import TranslationService
+from django.conf import settings
+from django.test import RequestFactory
+
+import pytest
+
+from core import factories
+from core.services.translation_service import SUPPORTED_LANGUAGES, TranslationService
+
+
+def test_supported_languages_match_the_translations():
+    """SUPPORTED_LANGUAGES lists the languages of translations.json."""
+    with open(settings.TRANSLATIONS_JSON_PATH, encoding="utf-8") as f:
+        assert set(SUPPORTED_LANGUAGES) == set(json.load(f))
 
 
 class TestTranslationServiceLookup:  # pylint: disable=missing-function-docstring
@@ -94,3 +107,63 @@ class TestFormatDate:
         assert "23" in result
         assert "januari" in result
         assert "2026" in result
+
+
+@pytest.mark.django_db
+class TestResolveLanguage:  # pylint: disable=missing-function-docstring
+    """Order: saved user language, then Accept-Language, then French."""
+
+    @staticmethod
+    def _request(header=None):
+        headers = {"HTTP_ACCEPT_LANGUAGE": header} if header else {}
+        return RequestFactory().get("/", **headers)
+
+    @pytest.mark.parametrize(
+        ("saved", "expected"),
+        [("nl-nl", "nl"), ("en-us", "en"), (None, "fr"), ("de-de", "fr")],
+    )
+    def test_email_only(self, saved, expected):
+        factories.UserFactory(email="bob@example.com", language=saved)
+        assert TranslationService.resolve_language(email="bob@example.com") == expected
+
+    def test_email_case_does_not_matter(self):
+        factories.UserFactory(email="Bob.Smith@Example.com", language="nl-nl")
+        lang = TranslationService.resolve_language(email="bob.smith@example.com")
+        assert lang == "nl"
+
+    def test_unknown_email_falls_back_to_french(self):
+        assert TranslationService.resolve_language(email="nobody@example.com") == "fr"
+
+    @pytest.mark.parametrize(
+        ("saved", "expected"),
+        [("nl-nl", "nl"), (None, "en"), ("de-de", "en")],
+    )
+    def test_saved_language_then_browser(self, saved, expected):
+        factories.UserFactory(email="bob@example.com", language=saved)
+        lang = TranslationService.resolve_language(
+            request=self._request("en"), email="bob@example.com"
+        )
+        assert lang == expected
+
+    def test_unknown_email_uses_the_browser(self):
+        lang = TranslationService.resolve_language(
+            request=self._request("nl"), email="nobody@example.com"
+        )
+        assert lang == "nl"
+
+    @pytest.mark.parametrize(
+        ("header", "expected"),
+        [
+            (None, "fr"),
+            ("en;q=0.5,nl;q=0.9", "nl"),
+            ("de,en;q=0.8", "en"),
+            ("es", "fr"),
+            ("es,en;q=0", "fr"),
+            ("*", "fr"),
+        ],
+    )
+    def test_browser_only(self, header, expected):
+        assert (
+            TranslationService.resolve_language(request=self._request(header))
+            == expected
+        )
