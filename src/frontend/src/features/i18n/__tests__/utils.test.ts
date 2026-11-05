@@ -1,4 +1,4 @@
-import { getPickerLanguage, toCunninghamLocale } from "../utils";
+import { getPickerLanguage, getPickerLanguages, toCunninghamLocale } from "../utils";
 
 describe("toCunninghamLocale", () => {
   it.each([
@@ -35,7 +35,32 @@ describe("getPickerLanguage", () => {
     expect(getPickerLanguage(null, ui, VALUES)).toBe(expected);
   });
 
+  it("ignores a user language that the picker does not offer", () => {
+    expect(getPickerLanguage("es-es", "fr", VALUES)).toBe("fr-fr");
+  });
+
   it("returns undefined when no value matches the UI language", () => {
     expect(getPickerLanguage(undefined, "es", VALUES)).toBeUndefined();
+  });
+});
+
+describe("getPickerLanguages", () => {
+  const CONFIGURED: [string, string][] = [
+    ["en-us", "English"],
+    ["fr-fr", "French"],
+    ["de-de", "German"],
+    ["nl-nl", "Dutch"],
+  ];
+
+  it("keeps the configured languages that have translations, in order", () => {
+    expect(getPickerLanguages(CONFIGURED, ["en", "fr", "nl"])).toEqual([
+      { value: "en-us", label: "English", shortLabel: "EN" },
+      { value: "fr-fr", label: "Français", shortLabel: "FR" },
+      { value: "nl-nl", label: "Nederlands", shortLabel: "NL" },
+    ]);
+  });
+
+  it("returns no entry when no language has translations", () => {
+    expect(getPickerLanguages(CONFIGURED, [])).toEqual([]);
   });
 });
