@@ -473,7 +473,11 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         recipient = recipient_email.replace("mailto:", "").strip()
 
         # Parse event details
-        event = self.parser.parse(icalendar_data, recipient)
+        # A REPLY goes from the attendee to the organizer: the attendee is
+        # the sender.
+        event = self.parser.parse(
+            icalendar_data, sender if method == self.METHOD_REPLY else recipient
+        )
         if not event:
             logger.error(
                 "Failed to parse iCalendar data for invitation to %s", recipient
