@@ -174,10 +174,12 @@ class ICalendarParser:
         return re.sub(r"^mailto:", "", str(raw), flags=re.IGNORECASE).strip()
 
     @classmethod
-    def parse(  # noqa: PLR0915  # pylint: disable=too-many-statements,too-many-locals
-        cls, icalendar_data: str, recipient_email: str
-    ) -> Optional[EventDetails]:
-        """Parse iCalendar data and return ``EventDetails``, or None on failure."""
+    def parse(cls, icalendar_data: str, attendee_email: str) -> Optional[EventDetails]:
+        """Parse iCalendar data and return ``EventDetails``, or None on failure.
+
+        ``attendee_email`` identifies the attendee whose details go into
+        ``EventDetails``.
+        """
         cal = cls._parse_calendar(icalendar_data)
         if cal is None:
             return None
@@ -187,92 +189,88 @@ class ICalendarParser:
             logger.error("No VEVENT component found in iCalendar data")
             return None
 
-        recipient_clean = cls._strip_mailto(recipient_email).lower()
-
-        # Required fields
-        uid_prop = vevent.get("UID")
-        if not uid_prop:
+        uid = vevent.get("UID")
+        if not uid:
             logger.error("VEVENT missing UID")
             return None
-        uid = str(uid_prop)
 
         dtstart_prop = vevent.get("DTSTART")
         if dtstart_prop is None:
             logger.error("VEVENT missing DTSTART")
             return None
 
-        dtstart_value = dtstart_prop.dt
-        dtend_prop = vevent.get("DTEND")
-        dtend_value = dtend_prop.dt if dtend_prop is not None else None
-
-        is_all_day = cls._is_all_day(dtstart_value)
-        dtstart = cls._coerce_aware(dtstart_value)
-        dtend = cls._coerce_aware(dtend_value)
-
+        dtstart = cls._coerce_aware(dtstart_prop.dt)
         if dtstart is None:
             logger.error("VEVENT DTSTART could not be coerced to a datetime")
             return None
 
-        # Optional text fields. ``icalendar`` returns vText (strings)
-        # which already have RFC 5545 escaping decoded — \n inside
-        # DESCRIPTION becomes a real newline.
-        summary = str(vevent.get("SUMMARY") or "")
-        description_prop = vevent.get("DESCRIPTION")
-        description = str(description_prop) if description_prop is not None else None
-        location_prop = vevent.get("LOCATION")
-        location = str(location_prop) if location_prop is not None else None
-        url_prop = vevent.get("URL")
-        url = cls.sanitize_url(str(url_prop)) if url_prop is not None else None
-
-        # ORGANIZER: vCalAddress with optional CN parameter.
-        organizer_prop = vevent.get("ORGANIZER")
-        organizer_email = ""
-        organizer_name: Optional[str] = None
-        if organizer_prop is not None:
-            organizer_email = cls._strip_mailto(str(organizer_prop))
-            cn = (
-                organizer_prop.params.get("CN")
-                if hasattr(organizer_prop, "params")
-                else None
-            )
-            organizer_name = str(cn) if cn else None
-
-        # ATTENDEE matching the recipient — may be a single value or a list.
-        attendee_name: Optional[str] = None
-        attendees = vevent.get("ATTENDEE")
-        if attendees is not None:
-            if not isinstance(attendees, list):
-                attendees = [attendees]
-            for att in attendees:
-                if cls._strip_mailto(str(att)).lower() == recipient_clean:
-                    cn = att.params.get("CN") if hasattr(att, "params") else None
-                    if cn:
-                        attendee_name = str(cn)
-                    break
-
-        # SEQUENCE
-        sequence_prop = vevent.get("SEQUENCE")
-        try:
-            sequence = int(sequence_prop) if sequence_prop is not None else 0
-        except (TypeError, ValueError):
-            sequence = 0
+        dtend_prop = vevent.get("DTEND")
+        organizer = vevent.get("ORGANIZER")
+        organizer_email, organizer_name = (
+            cls._address(organizer) if organizer is not None else ("", None)
+        )
+        attendee, attendee_name = cls._find_attendee(vevent, attendee_email)
 
         return EventDetails(
-            uid=uid,
-            summary=summary,
-            description=description,
-            location=location,
-            url=url,
+            uid=str(uid),
+            summary=str(vevent.get("SUMMARY") or ""),
+            description=cls._optional_text(vevent, "DESCRIPTION"),
+            location=cls._optional_text(vevent, "LOCATION"),
+            url=cls.sanitize_url(cls._optional_text(vevent, "URL")),
             dtstart=dtstart,
-            dtend=dtend,
+            dtend=cls._coerce_aware(dtend_prop.dt if dtend_prop is not None else None),
             organizer_email=organizer_email,
             organizer_name=organizer_name,
-            attendee_email=recipient_clean,
+            attendee_email=attendee,
             attendee_name=attendee_name,
-            sequence=sequence,
-            is_all_day=bool(is_all_day),
+            sequence=cls._sequence(vevent),
+            is_all_day=cls._is_all_day(dtstart_prop.dt),
             raw_icalendar=icalendar_data,
         )
+
+    @staticmethod
+    def _optional_text(vevent, name: str) -> Optional[str]:
+        """Return a text property as a string, or None when it is absent.
+
+        ``icalendar`` decodes the RFC 5545 escapes: ``\\n`` in DESCRIPTION
+        becomes a real newline.
+        """
+        prop = vevent.get(name)
+        return str(prop) if prop is not None else None
+
+    @classmethod
+    def _address(cls, prop) -> tuple[str, Optional[str]]:
+        """Return the email and the CN name of an ORGANIZER or ATTENDEE."""
+        cn = prop.params.get("CN") if hasattr(prop, "params") else None
+        return cls._strip_mailto(str(prop)), str(cn) if cn else None
+
+    @classmethod
+    def _find_attendee(cls, vevent, attendee_email: str) -> tuple[str, Optional[str]]:
+        """Return the email and the name of the attendee with this email.
+
+        The email is in lower case. The name is None when no ATTENDEE
+        matches, or when it has no CN.
+        """
+        address = cls._strip_mailto(attendee_email).lower()
+        attendees = vevent.get("ATTENDEE")
+        if attendees is None:
+            return address, None
+        if not isinstance(attendees, list):
+            attendees = [attendees]
+        for attendee in attendees:
+            email, name = cls._address(attendee)
+            if email.lower() == address:
+                return address, name
+        return address, None
+
+    @staticmethod
+    def _sequence(vevent) -> int:
+        """Return the SEQUENCE of the event, or 0 when it is absent or not a number."""
+        prop = vevent.get("SEQUENCE")
+        try:
+            return int(prop) if prop is not None else 0
+        except (TypeError, ValueError):
+            return 0
 
     @classmethod
     def is_event_past(cls, icalendar_data: str) -> bool:
