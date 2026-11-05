@@ -61,6 +61,23 @@ export const getShareErrorKey = ({ error, status }: ShareErrorResult, fallbackKe
   return fallbackKey;
 };
 
+/**
+ * Returns the emails to share with: each person once (case-insensitive),
+ * without the owner. The server fails with an unclear error when a sharee
+ * is the owner, and a duplicate recipient can cause an insert failure.
+ * ShareModal from ui-components compares selected users by ID, so a
+ * directory user and an email-only entry can have the same email.
+ * See issue #140 for the server-side fix.
+ */
+export const getShareeEmails = (users: { email: string }[], owner: string | undefined): string[] =>
+  users
+    .filter((user, index) => {
+      const key = user.email.toLowerCase();
+      // Keep the first user with this email.
+      return key !== owner && users.findIndex((u) => u.email.toLowerCase() === key) === index;
+    })
+    .map((user) => user.email);
+
 const ONBOARDING_DISMISSED_KEY = "calendar-onboarding-dismissed";
 
 /**
