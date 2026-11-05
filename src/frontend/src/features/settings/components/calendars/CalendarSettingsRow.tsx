@@ -24,10 +24,13 @@ export const CalendarSettingsRow = ({ calendar, actions }: CalendarSettingsRowPr
         {calendar.displayName || t("calendar.list.unnamed")}
       </span>
       {calendar.mailboxEmail && (
-        <Mail
-          className="calendar-settings__mailbox-icon"
-          aria-label={t("calendar.list.mailboxCalendar", { email: calendar.mailboxEmail })}
-        />
+        <span
+          className="calendar-settings__mailbox"
+          title={t("calendar.list.mailboxCalendar", { email: calendar.mailboxEmail })}
+        >
+          <Mail className="calendar-settings__mailbox-icon" aria-hidden />
+          <span className="calendar-settings__mailbox-email">{calendar.mailboxEmail}</span>
+        </span>
       )}
       {actions && <div className="calendar-settings__actions">{actions}</div>}
     </li>

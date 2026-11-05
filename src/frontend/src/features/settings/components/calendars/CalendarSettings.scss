@@ -68,6 +68,21 @@
     }
   }
 
+  &__mailbox {
+    display: flex;
+    align-items: center;
+    gap: var(--c--globals--spacings--3xs);
+    min-width: 0;
+    font-size: var(--c--globals--font--sizes--sm);
+    color: var(--c--contextuals--content--semantic--neutral--tertiary);
+  }
+
+  &__mailbox-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   &__mailbox-icon {
     width: 0.875rem;
     height: 0.875rem;
