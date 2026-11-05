@@ -36,4 +36,27 @@ describe("groupCalendarsForSettings", () => {
     expect(names(groups.mine)).toEqual(["support"]);
     expect(names(groups.shared)).toEqual(["old"]);
   });
+
+  it("keeps the order of calendars with the same name when one is hidden", () => {
+    const first = calendar("contact", { url: "http://localhost/a/", mailboxEmail: "contact@a.fr" });
+    const second = calendar("contact", {
+      url: "http://localhost/b/",
+      mailboxEmail: "contact@b.fr",
+    });
+
+    const visible = groupCalendarsForSettings([first, second]);
+    const oneHidden = groupCalendarsForSettings([second, { ...first, hidden: true }]);
+
+    expect(visible.mine.map((cal) => cal.url)).toEqual([first.url, second.url]);
+    expect(oneHidden.mine.map((cal) => cal.url)).toEqual([first.url, second.url]);
+  });
+
+  it("sorts by name before URL", () => {
+    const groups = groupCalendarsForSettings([
+      calendar("zeta", { url: "http://localhost/a/" }),
+      calendar("alpha", { url: "http://localhost/z/" }),
+    ]);
+
+    expect(names(groups.mine)).toEqual(["alpha", "zeta"]);
+  });
 });

@@ -8,9 +8,15 @@ export interface CalendarSettingsGroups {
   shared: CalDavCalendar[];
 }
 
-/** Splits the calendars like the sidebar does. Each group is sorted by name. */
+/**
+ * Splits the calendars like the sidebar does. Each group is sorted by name,
+ * then by URL. The URL keeps the order of two calendars with the same name
+ * when the user hides one of them.
+ */
 export const groupCalendarsForSettings = (calendars: CalDavCalendar[]): CalendarSettingsGroups => {
-  const sorted = [...calendars].sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const sorted = [...calendars].sort(
+    (a, b) => a.displayName.localeCompare(b.displayName) || a.url.localeCompare(b.url),
+  );
   return {
     mine: sorted.filter(belongsInMyCalendars),
     shared: sorted.filter((calendar) => !belongsInMyCalendars(calendar)),
