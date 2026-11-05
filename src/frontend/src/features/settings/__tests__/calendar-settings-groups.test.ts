@@ -50,4 +50,13 @@ describe("groupCalendarsForSettings", () => {
     expect(visible.mine.map((cal) => cal.url)).toEqual([first.url, second.url]);
     expect(oneHidden.mine.map((cal) => cal.url)).toEqual([first.url, second.url]);
   });
+
+  it("sorts by name before URL", () => {
+    const groups = groupCalendarsForSettings([
+      calendar("zeta", { url: "http://localhost/a/" }),
+      calendar("alpha", { url: "http://localhost/z/" }),
+    ]);
+
+    expect(names(groups.mine)).toEqual(["alpha", "zeta"]);
+  });
 });
