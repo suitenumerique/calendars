@@ -17,6 +17,7 @@ from rest_framework.test import APIClient
 
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
+from core.models import Organization
 
 pytestmark = pytest.mark.django_db
 
@@ -152,6 +153,45 @@ def test_delete_mailbox_calendar_success(client):
     assert kwargs["method"] == "DELETE"
     assert kwargs["url"].endswith("internal-api/calendars/some-uuid")
     assert b'"mailbox_email": "contact@co.example"' in kwargs["data"]
+
+
+def test_delete_mailbox_calendar_sends_the_mailbox_org(client):
+    """The internal API gets the organization of the mailbox.
+
+    The admin is in the "test-org" organization. The mailbox domain gives
+    a different organization.
+    """
+    response, mock_request = _delete(
+        client, [{"email": MAILBOX, "role": "admin", "users": []}]
+    )
+
+    assert response.status_code == HTTP_204_NO_CONTENT
+    mailbox_org = Organization.objects.get(external_id="co.example")
+    headers = mock_request.call_args.kwargs["headers"]
+    assert headers["X-LS-Org-Id"] == str(mailbox_org.id)
+    user_org = Organization.objects.get(external_id="test-org")
+    assert headers["X-LS-Org-Id"] != str(user_org.id)
+
+
+@override_settings(OIDC_USERINFO_ORGANIZATION_CLAIM="siret")
+def test_delete_mailbox_calendar_sends_the_claim_org(client):
+    """With an organization claim, the org comes from the mail domain."""
+    mailbox_org = factories.OrganizationFactory(external_id="12345678900011")
+    response, mock_request = _delete(
+        client,
+        [
+            {
+                "email": MAILBOX,
+                "role": "admin",
+                "users": [],
+                "maildomain_custom_attributes": {"siret": "12345678900011"},
+            }
+        ],
+    )
+
+    assert response.status_code == HTTP_204_NO_CONTENT
+    headers = mock_request.call_args.kwargs["headers"]
+    assert headers["X-LS-Org-Id"] == str(mailbox_org.id)
 
 
 def test_delete_mailbox_calendar_quotes_the_uri(client):
