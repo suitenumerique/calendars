@@ -75,14 +75,14 @@ class AvailabilityPlugin extends ServerPlugin
             return;
         }
 
+        $modified = null;
         try {
             $modified = $this->processScheduleResponse($body);
-            if ($modified !== null) {
-                $response->setBody($modified);
-            }
         } catch (\Exception $e) {
             error_log("[AvailabilityPlugin] Error processing response: " . $e->getMessage());
         }
+        // getBodyAsString() consumes a stream body, so always set it again.
+        $response->setBody($modified ?? $body);
     }
 
     /**

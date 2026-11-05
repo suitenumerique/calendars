@@ -1122,3 +1122,66 @@ class TestRecurringOverrideInheritsClass:
             except Exception:  # noqa: BLE001
                 continue
         assert found, "Owner should see their own recurring override in full"
+
+
+class TestDirectGetByReadSharee:
+    """A read-only sharee gets the event body on a direct GET of the .ics."""
+
+    @staticmethod
+    def _get_shared_event(sharee_client, shared_cal, uid):
+        path = urlparse(str(shared_cal.url)).path.rstrip("/")
+        return sharee_client.generic("GET", f"{path}/{uid}.ics", HTTP_X_LS_CLIENT="web")
+
+    def test_unfiltered_event_body_is_returned(self):
+        """The privacy rules change nothing, and the body is still returned."""
+        org = factories.OrganizationFactory(external_id="get-read-public")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-grp")
+        sharee, sharee_client, _ = _create_user_with_calendar(org, "sharee-grp")
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event_with_class(
+            owner_client,
+            owner,
+            cal_id,
+            "get-public-event",
+            "Public Standup",
+            "PUBLIC",
+            description="Daily sync",
+        )
+        shared_cal = _share_and_find(owner_client, owner, cal_id, sharee, "read")
+
+        resp = self._get_shared_event(sharee_client, shared_cal, "get-public-event")
+
+        assert resp.status_code == 200
+        assert b"BEGIN:VCALENDAR" in resp.content, (
+            f"GET must return the event body. Got: {resp.content[:300]!r}"
+        )
+        assert b"Public Standup" in resp.content
+        assert b"Daily sync" in resp.content
+
+    def test_confidential_event_body_is_masked(self):
+        """The privacy rules change the event, and the masked body is returned."""
+        org = factories.OrganizationFactory(external_id="get-read-conf")
+        owner, owner_client, cal_path = _create_user_with_calendar(org, "owner-grc")
+        sharee, sharee_client, _ = _create_user_with_calendar(org, "sharee-grc")
+        cal_id = _get_cal_id(cal_path)
+
+        _put_event_with_class(
+            owner_client,
+            owner,
+            cal_id,
+            "get-conf-event",
+            "Secret Review",
+            "CONFIDENTIAL",
+            description="Budget cuts",
+        )
+        shared_cal = _share_and_find(owner_client, owner, cal_id, sharee, "read")
+
+        resp = self._get_shared_event(sharee_client, shared_cal, "get-conf-event")
+
+        assert resp.status_code == 200
+        assert b"SUMMARY:Busy" in resp.content, (
+            f"GET must return the masked body. Got: {resp.content[:300]!r}"
+        )
+        assert b"Secret Review" not in resp.content
+        assert b"Budget cuts" not in resp.content

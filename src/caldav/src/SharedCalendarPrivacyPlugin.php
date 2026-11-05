@@ -377,10 +377,9 @@ class SharedCalendarPrivacyPlugin extends ServerPlugin
         }
 
         $filtered = $this->applyRules($body, $this->isFreebusy($path), $this->currentUserEmail());
-        if ($filtered !== $body) {
-            $response->setBody($filtered);
-            $response->setHeader('Content-Length', strlen($filtered));
-        }
+        // getBodyAsString() consumes the body stream, so always set it again.
+        $response->setBody($filtered);
+        $response->setHeader('Content-Length', strlen($filtered));
     }
 
     // ========================================================================
