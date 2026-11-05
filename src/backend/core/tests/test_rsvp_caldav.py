@@ -256,3 +256,102 @@ class TestStaleAttendeeWrite:
         )
         assert self._status(organizer_copy) == organizer_status
         assert "PARTSTAT=ACCEPTED" not in organizer_copy
+
+
+@pytest.mark.django_db
+@pytest.mark.xdist_group("caldav")
+class TestOccurrenceReply:
+    """An attendee answers one occurrence with an override in its copy.
+
+    SabreDAV sends a REPLY to the organizer and updates the copy of the
+    organizer. A new EXDATE in the copy of the attendee reads as a decline
+    of the occurrence. Thus the override must come without an EXDATE.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _setup(self):
+        suffix = uuid4().hex[:8]
+        self.organizer = factories.UserFactory(email=f"occ-org-{suffix}@example.com")
+        self.attendee = factories.UserFactory(email=f"occ-att-{suffix}@example.com")
+        service = CalendarService()
+        service.ensure_default_calendar(self.attendee)
+        self.calendar = service.create_calendar(self.organizer, name="Occurrence")
+        self.uid = f"occ-{uuid4()}"
+        self.start = (timezone.now() + timedelta(days=7)).replace(
+            microsecond=0, second=0
+        )
+        self.occurrence = self.start + timedelta(days=2)
+
+    def _vevent(self, start, partstat, *extra):
+        return [
+            f"UID:{self.uid}",
+            "DTSTAMP:20260101T000000Z",
+            f"DTSTART:{_fmt(start)}",
+            f"DTEND:{_fmt(start + timedelta(hours=1))}",
+            "SUMMARY:Daily",
+            f"ORGANIZER:mailto:{self.organizer.email}",
+            f"ATTENDEE;PARTSTAT={partstat};RSVP=TRUE:mailto:{self.attendee.email}",
+            *extra,
+        ]
+
+    def _organizer_copy(self):
+        response = CalDAVHTTPClient().request(
+            "GET", self.organizer, f"{self.calendar}{self.uid}.ics"
+        )
+        assert response.status_code == 200
+        return response.text
+
+    def _partstat(self, ics):
+        for vevent in icalendar.Calendar.from_ical(ics).walk("VEVENT"):
+            rid = vevent.get("RECURRENCE-ID")
+            if not rid or rid.dt != self.occurrence:
+                continue
+            attendees = vevent.get("ATTENDEE", [])
+            if not isinstance(attendees, list):
+                attendees = [attendees]
+            return next(
+                str(a.params.get("PARTSTAT"))
+                for a in attendees
+                if str(a).lower() == f"mailto:{self.attendee.email}"
+            )
+        raise AssertionError("No override for the occurrence")
+
+    @pytest.mark.parametrize(
+        ("exdate", "expected"),
+        [
+            pytest.param(False, "ACCEPTED", id="override-only"),
+            pytest.param(True, "DECLINED", id="override-and-exdate"),
+        ],
+    )
+    def test_reply_to_one_occurrence(self, exdate, expected):
+        organizer_put = CalDAVHTTPClient().request(
+            "PUT",
+            self.organizer,
+            f"{self.calendar}{self.uid}.ics",
+            data=_ics(
+                self._vevent(self.start, "NEEDS-ACTION", "RRULE:FREQ=DAILY;COUNT=5")
+            ).encode(),
+            content_type="text/calendar",
+        )
+        assert organizer_put.status_code in (201, 204)
+        _, href, _ = CalDAVHTTPClient().find_event_by_uid(self.attendee, self.uid)
+        assert href, "SabreDAV did not deliver the invitation to the attendee"
+        path = href.removeprefix(CalDAVHTTPClient.BASE_URI_PATH)
+
+        master = ["RRULE:FREQ=DAILY;COUNT=5"]
+        if exdate:
+            master.append(f"EXDATE:{_fmt(self.occurrence)}")
+        override = [f"RECURRENCE-ID:{_fmt(self.occurrence)}", "SEQUENCE:1"]
+        response = CalDAVHTTPClient().request(
+            "PUT",
+            self.attendee,
+            path,
+            data=_ics(
+                self._vevent(self.start, "NEEDS-ACTION", *master),
+                self._vevent(self.occurrence, "ACCEPTED", *override),
+            ).encode(),
+            content_type="text/calendar",
+        )
+
+        assert response.status_code in (201, 204)
+        assert self._partstat(self._organizer_copy()) == expected
