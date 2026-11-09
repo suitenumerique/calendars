@@ -1341,9 +1341,8 @@ export class CalDavService {
    * The method reads the event from the server, because a local copy can
    * be stale. It applies the response of the attendee to that copy and
    * keeps the details that the organizer controls. The write increments
-   * SEQUENCE. For one occurrence, it adds or updates an override, and adds
-   * an EXDATE to the master for a new override. It writes with the ETag of
-   * the read.
+   * SEQUENCE. For one occurrence, it adds or updates an override. It does
+   * not add an EXDATE to the master. It writes with the ETag of the read.
    *
    * A 412 means that the precondition of the write failed: the event
    * changed or was deleted after the read. The method then reads and

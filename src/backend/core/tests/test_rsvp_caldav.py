@@ -8,6 +8,7 @@ deleted. It must not add back an attendee that the organizer removed.
 
 from datetime import timedelta
 from uuid import uuid4
+from xml.etree import ElementTree as ET
 
 from django.core.signing import TimestampSigner
 from django.test import RequestFactory
@@ -21,6 +22,20 @@ from core.api.viewsets_rsvp import RSVPConfirmView
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
 
 ATTENDEE = "rsvp-attendee@external-domain.com"
+
+EXPAND_QUERY = """<?xml version="1.0" encoding="utf-8"?>
+<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <C:calendar-data><C:expand start="{start}" end="{end}"/></C:calendar-data>
+  </D:prop>
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VEVENT">
+        <C:time-range start="{start}" end="{end}"/>
+      </C:comp-filter>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>"""
 
 
 def _fmt(value):
@@ -260,12 +275,17 @@ class TestStaleAttendeeWrite:
 
 @pytest.mark.django_db
 @pytest.mark.xdist_group("caldav")
-class TestOccurrenceReply:
-    """An attendee answers one occurrence with an override in its copy.
+class TestOccurrenceOverride:
+    """The override of one occurrence comes without an EXDATE.
 
+    An attendee answers one occurrence with an override in its copy.
     SabreDAV sends a REPLY to the organizer and updates the copy of the
     organizer. A new EXDATE in the copy of the attendee reads as a decline
-    of the occurrence. Thus the override must come without an EXDATE.
+    of the occurrence.
+
+    An organizer moves one occurrence with an override of the same kind.
+    The expansion of the server must show the occurrence one time, at the
+    new time.
     """
 
     @pytest.fixture(autouse=True)
@@ -294,12 +314,52 @@ class TestOccurrenceReply:
             *extra,
         ]
 
+    def _organizer_put(self, *vevents):
+        response = CalDAVHTTPClient().request(
+            "PUT",
+            self.organizer,
+            f"{self.calendar}{self.uid}.ics",
+            data=_ics(*vevents).encode(),
+            content_type="text/calendar",
+        )
+        assert response.status_code in (201, 204)
+
     def _organizer_copy(self):
         response = CalDAVHTTPClient().request(
             "GET", self.organizer, f"{self.calendar}{self.uid}.ics"
         )
         assert response.status_code == 200
         return response.text
+
+    def _attendee_href(self):
+        _, href, _ = CalDAVHTTPClient().find_event_by_uid(self.attendee, self.uid)
+        assert href, "SabreDAV did not deliver the invitation to the attendee"
+        return href
+
+    def _occurrences(self, user, calendar):
+        """Return the start and the STATUS of each occurrence.
+
+        The server expands the series, as for the calendar view.
+        """
+        response = CalDAVHTTPClient().request(
+            "REPORT",
+            user,
+            calendar,
+            data=EXPAND_QUERY.format(
+                start=_fmt(self.start - timedelta(days=1)),
+                end=_fmt(self.start + timedelta(days=6)),
+            ).encode(),
+            content_type="application/xml",
+            extra_headers={"Depth": "1"},
+        )
+        assert response.status_code == 207
+        return sorted(
+            (vevent["DTSTART"].dt, str(vevent.get("STATUS", "")))
+            for data in ET.fromstring(response.content).iter(
+                "{urn:ietf:params:xml:ns:caldav}calendar-data"
+            )
+            for vevent in icalendar.Calendar.from_ical(data.text).walk("VEVENT")
+        )
 
     def _partstat(self, ics):
         for vevent in icalendar.Calendar.from_ical(ics).walk("VEVENT"):
@@ -324,19 +384,10 @@ class TestOccurrenceReply:
         ],
     )
     def test_reply_to_one_occurrence(self, exdate, expected):
-        organizer_put = CalDAVHTTPClient().request(
-            "PUT",
-            self.organizer,
-            f"{self.calendar}{self.uid}.ics",
-            data=_ics(
-                self._vevent(self.start, "NEEDS-ACTION", "RRULE:FREQ=DAILY;COUNT=5")
-            ).encode(),
-            content_type="text/calendar",
+        self._organizer_put(
+            self._vevent(self.start, "NEEDS-ACTION", "RRULE:FREQ=DAILY;COUNT=5")
         )
-        assert organizer_put.status_code in (201, 204)
-        _, href, _ = CalDAVHTTPClient().find_event_by_uid(self.attendee, self.uid)
-        assert href, "SabreDAV did not deliver the invitation to the attendee"
-        path = href.removeprefix(CalDAVHTTPClient.BASE_URI_PATH)
+        path = self._attendee_href().removeprefix(CalDAVHTTPClient.BASE_URI_PATH)
 
         master = ["RRULE:FREQ=DAILY;COUNT=5"]
         if exdate:
@@ -355,3 +406,23 @@ class TestOccurrenceReply:
 
         assert response.status_code in (201, 204)
         assert self._partstat(self._organizer_copy()) == expected
+
+    def test_organizer_moves_one_occurrence(self):
+        master = self._vevent(self.start, "NEEDS-ACTION", "RRULE:FREQ=DAILY;COUNT=5")
+        self._organizer_put(master)
+
+        moved = self.occurrence + timedelta(hours=3)
+        override = [f"RECURRENCE-ID:{_fmt(self.occurrence)}", "SEQUENCE:1"]
+        self._organizer_put(master, self._vevent(moved, "NEEDS-ACTION", *override))
+
+        # No occurrence at the old time, and no cancelled occurrence.
+        expected = sorted(
+            (start, "")
+            for start in (
+                *(self.start + timedelta(days=day) for day in (0, 1, 3, 4)),
+                moved,
+            )
+        )
+        assert self._occurrences(self.organizer, self.calendar) == expected
+        attendee_calendar = self._attendee_href().rsplit("/", 1)[0] + "/"
+        assert self._occurrences(self.attendee, attendee_calendar) == expected
