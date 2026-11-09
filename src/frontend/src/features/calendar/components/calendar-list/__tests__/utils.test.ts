@@ -1,6 +1,6 @@
 import { APIError } from "@/features/api/APIError";
 
-import { getCalendarSaveErrorKey, getShareErrorKey } from "../utils";
+import { getCalendarSaveErrorKey, getShareErrorKey, getShareeEmails } from "../utils";
 
 describe("getCalendarSaveErrorKey", () => {
   it("maps the mailbox role error code", () => {
@@ -62,5 +62,32 @@ describe("getShareErrorKey", () => {
       FALLBACK,
     );
     expect(getShareErrorKey({}, FALLBACK)).toBe(FALLBACK);
+  });
+});
+
+describe("getShareeEmails", () => {
+  const users = (...emails: string[]) => emails.map((email) => ({ email }));
+
+  it("keeps every email in order", () => {
+    expect(getShareeEmails(users("alice@x.org", "bob@x.org"), "owner@x.org")).toEqual([
+      "alice@x.org",
+      "bob@x.org",
+    ]);
+  });
+
+  it("skips the owner, whatever the letter case", () => {
+    expect(getShareeEmails(users("Owner@x.org", "bob@x.org"), "owner@x.org")).toEqual([
+      "bob@x.org",
+    ]);
+  });
+
+  it("keeps the first spelling of a duplicate email", () => {
+    expect(
+      getShareeEmails(users("alice@x.org", "Alice@x.org", "bob@x.org"), "owner@x.org"),
+    ).toEqual(["alice@x.org", "bob@x.org"]);
+  });
+
+  it("keeps every email when the owner is unknown", () => {
+    expect(getShareeEmails(users("alice@x.org"), undefined)).toEqual(["alice@x.org"]);
   });
 });
