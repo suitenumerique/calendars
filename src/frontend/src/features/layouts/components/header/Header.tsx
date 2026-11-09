@@ -13,7 +13,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { fetchAPI } from "@/features/api/fetchApi";
 import { Feedback } from "@/features/feedback/Feedback";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
-import { getPickerLanguage } from "@/features/i18n/utils";
+import { useConfig } from "@/features/config/ConfigProvider";
+import { getPickerLanguages, getPickerOptions } from "@/features/i18n/utils";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
@@ -121,17 +122,14 @@ export const HeaderRight = () => {
   );
 };
 
-// Values are lowercase because Django uses "en-us", not "en-US".
-const PICKER_LANGUAGES = [
-  { label: "Français", value: "fr-fr", shortLabel: "FR" },
-  { label: "English", value: "en-us", shortLabel: "EN" },
-  { label: "Nederlands", value: "nl-nl", shortLabel: "NL" },
-  { label: "Deutsch", value: "de-de", shortLabel: "DE" },
-];
-
 export const LanguagePickerUserMenu = () => {
   const { i18n } = useTranslation();
+  const { config } = useConfig();
   const { user, refreshUser } = useAuth();
+  const pickerLanguages = getPickerLanguages(
+    config.LANGUAGES ?? [],
+    Object.keys(i18n.options.resources ?? {}),
+  );
   const [selectedLanguage, setSelectedLanguage] = useState(user?.language);
 
   // Sync the user's backend language into the picker state and into i18next on
@@ -147,19 +145,20 @@ export const LanguagePickerUserMenu = () => {
     }
   }, [user?.language, i18n]);
 
-  // resolvedLanguage is the language that the UI shows. It is undefined
-  // when i18next finds no translations for the detected language.
-  const checkedLanguage = getPickerLanguage(
+  // The UI kit picker reads its first language, so it cannot render without one.
+  if (pickerLanguages.length === 0) return null;
+
+  // Use the language of the translations that i18next resolves. It can be a
+  // fallback language. If there is none, use the requested language.
+  const languages = getPickerOptions(
+    pickerLanguages,
     selectedLanguage,
     i18n.resolvedLanguage ?? i18n.language,
-    PICKER_LANGUAGES.map(({ value }) => value),
   );
-  const languages = PICKER_LANGUAGES.map((language) => ({
-    ...language,
-    isChecked: language.value === checkedLanguage,
-  }));
 
   const onChange = (value: string) => {
+    // Ignore a click on the option for a UI language that the config does not offer.
+    if (!pickerLanguages.some((language) => language.value === value)) return;
     setSelectedLanguage(value);
     i18n.changeLanguage(value).catch((err) => {
       console.error("Error changing language", err);
