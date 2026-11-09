@@ -796,21 +796,18 @@ export class CalDavService {
   /**
    * Create or replace the override of one occurrence of a recurring event.
    *
-   * If no override exists, the method adds a VEVENT with a RECURRENCE-ID
-   * to the same ICS resource. If an override exists, the method replaces
-   * it.
+   * The RECURRENCE-ID of the override identifies the occurrence that it
+   * replaces. The method does not add an EXDATE to the master: SabreDAV
+   * reads a new EXDATE from an attendee as a decline of the occurrence.
+   * The method keeps the EXDATEs that the master already has.
    *
-   * The method does not add an EXDATE to the master. The RECURRENCE-ID
-   * already replaces the occurrence (RFC 5545). SabreDAV reads a new
-   * EXDATE from an attendee as a decline of the occurrence.
+   * `occurrenceDate` identifies the original occurrence, also when the
+   * override moves it. The UTC fields of the date hold the wall-clock
+   * time in the timezone of the series ("fake UTC").
    *
-   * `occurrenceDate` is the wall-clock time of the occurrence in the
-   * timezone of the series. The UTC fields of the date hold this time
-   * ("fake UTC").
-   *
-   * Limitation: in the hour that repeats when DST ends, two occurrences
-   * can have the same wall-clock time. The method cannot tell them apart,
-   * so they share one override.
+   * Limitation: the method compares wall-clock times. In the hour that
+   * repeats when DST ends, two occurrences can have the same wall-clock
+   * time. The method cannot tell them apart, so they share one override.
    */
   async createOverrideInstance(
     eventUrl: string,
@@ -870,7 +867,7 @@ export class CalDavService {
         ) ?? -1;
 
       if (existingOverrideIdx >= 0) {
-        // Re-drag: update existing override in-place
+        // Replace the existing override. Keep its RECURRENCE-ID.
         const existingOverride = calendar.events![existingOverrideIdx];
         calendar.events![existingOverrideIdx] = {
           ...overrideEvent,

@@ -276,7 +276,7 @@ class TestStaleAttendeeWrite:
 @pytest.mark.django_db
 @pytest.mark.xdist_group("caldav")
 class TestOccurrenceOverride:
-    """The override of one occurrence comes without an EXDATE.
+    """A new override must not add an EXDATE to the master.
 
     An attendee answers one occurrence with an override in its copy.
     SabreDAV sends a REPLY to the organizer and updates the copy of the

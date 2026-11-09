@@ -1,8 +1,6 @@
 /**
  * CalDavService.createOverrideInstance adds or replaces the override of
- * an occurrence. It finds the existing override also when its
- * RECURRENCE-ID is not in the timezone of the series. It does not add an
- * EXDATE to the master.
+ * an occurrence.
  */
 import type { Mock } from "vitest";
 import { convertIcsCalendar } from "ts-ics";
