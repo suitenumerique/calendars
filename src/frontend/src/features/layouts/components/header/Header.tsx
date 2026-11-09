@@ -7,7 +7,7 @@ import {
   useResponsive,
 } from "@gouvfr-lasuite/ui-components";
 import { useAuth } from "@/features/auth/Auth";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "@tanstack/react-router";
 import { fetchAPI } from "@/features/api/fetchApi";
@@ -126,9 +126,9 @@ export const LanguagePickerUserMenu = () => {
   const { i18n } = useTranslation();
   const { config } = useConfig();
   const { user, refreshUser } = useAuth();
-  const pickerLanguages = useMemo(
-    () => getPickerLanguages(config.LANGUAGES ?? [], Object.keys(i18n.options.resources ?? {})),
-    [config.LANGUAGES, i18n.options.resources],
+  const pickerLanguages = getPickerLanguages(
+    config.LANGUAGES ?? [],
+    Object.keys(i18n.options.resources ?? {}),
   );
   const [selectedLanguage, setSelectedLanguage] = useState(user?.language);
 
@@ -145,8 +145,11 @@ export const LanguagePickerUserMenu = () => {
     }
   }, [user?.language, i18n]);
 
-  // resolvedLanguage is the language that the UI shows. It is undefined
-  // when i18next finds no translations for the detected language.
+  // The UI kit picker reads its first language, so it cannot render without one.
+  if (pickerLanguages.length === 0) return null;
+
+  // Use the language of the translations that i18next resolves. It can be a
+  // fallback language. If there is none, use the requested language.
   const languages = getPickerOptions(
     pickerLanguages,
     selectedLanguage,
@@ -154,8 +157,7 @@ export const LanguagePickerUserMenu = () => {
   );
 
   const onChange = (value: string) => {
-    // The option of a UI language that the config does not offer only shows
-    // the current state. The user cannot select it.
+    // Ignore a click on the option for a UI language that the config does not offer.
     if (!pickerLanguages.some((language) => language.value === value)) return;
     setSelectedLanguage(value);
     i18n.changeLanguage(value).catch((err) => {
@@ -170,9 +172,6 @@ export const LanguagePickerUserMenu = () => {
       });
     }
   };
-
-  // The UI kit picker reads its first language, so it cannot render without one.
-  if (pickerLanguages.length === 0) return null;
 
   return <LanguagePicker languages={languages} size="small" onChange={onChange} compact />;
 };

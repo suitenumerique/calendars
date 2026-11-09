@@ -19,7 +19,7 @@ export interface ApiConfig {
   FEATURE_EVENT_SCHEDULING?: boolean;
   FEATURE_MESSAGES_INTEGRATION?: boolean;
   CALENDAR_INVITATION_FROM_EMAIL?: string | null;
-  /** The languages that the instance offers, as [code, English name] pairs. */
+  /** The configured languages, as [code, display name] pairs. */
   LANGUAGES?: [string, string][];
   theme_customization?: ThemeCustomization;
 }

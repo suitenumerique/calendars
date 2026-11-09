@@ -65,6 +65,12 @@ describe("getPickerLanguages", () => {
     ]);
   });
 
+  it("uses the configured name when Intl has no native name", () => {
+    expect(getPickerLanguages([["xx-xx", "Test language"]], ["xx"])).toEqual([
+      { value: "xx-xx", label: "Test language", shortLabel: "XX" },
+    ]);
+  });
+
   it("returns no entry when no language has translations", () => {
     expect(getPickerLanguages(CONFIGURED, [])).toEqual([]);
   });

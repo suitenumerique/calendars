@@ -22,12 +22,17 @@ export const toCunninghamLocale = (language: string) =>
   CUNNINGHAM_LOCALES[splitLocaleCode(language).language.toLowerCase()] ??
   capitalizeRegion(language);
 
-export type PickerLanguage = { label: string; value: string; shortLabel: string };
+type PickerLanguage = { label: string; value: string; shortLabel: string };
 
-/** Name of a language in that language, for example "français" for "fr". */
+/**
+ * Native name of a language, with a capital first letter.
+ * Returns the fallback when Intl has no name for the language.
+ */
 const nativeName = (language: string, fallback: string) => {
   try {
-    const name = new Intl.DisplayNames([language], { type: "language" }).of(language);
+    const name = new Intl.DisplayNames([language], { type: "language", fallback: "none" }).of(
+      language,
+    );
     return name ? name.charAt(0).toLocaleUpperCase(language) + name.slice(1) : fallback;
   } catch {
     return fallback;
@@ -40,8 +45,9 @@ const toPickerLanguage = (value: string, name: string): PickerLanguage => {
 };
 
 /**
- * Picker entries for the configured languages that have translations.
- * The configured names are in English, so each label is the native name.
+ * Picker entries for the configured languages that have translations, in
+ * the config order. Each label is the native name of the language. When Intl
+ * has no native name, the label is the configured name.
  */
 export const getPickerLanguages = (
   configured: [string, string][],
@@ -52,10 +58,9 @@ export const getPickerLanguages = (
     .map(([value, name]) => toPickerLanguage(value, name));
 
 /**
- * Picker value to check: the user language, or else the value with the same
- * language subtag as the UI language. A user without a saved language sees
- * the UI in the detected language, so the picker must show that language.
- * The picker ignores a saved language that it does not offer.
+ * Picker value to check. It is the saved language of the user when the
+ * values include it. If not, it is the value with the same primary subtag as
+ * the UI language. It is undefined when no value matches.
  */
 export const getPickerLanguage = (
   userLanguage: string | null | undefined,
@@ -68,10 +73,11 @@ export const getPickerLanguage = (
 };
 
 /**
- * Picker options, with the language of the UI checked. When the offered
- * languages do not include the UI language, an option for the UI language
- * comes first. Without a checked option, the UI kit shows its first option
- * as the current language.
+ * Picker options with one option checked. The checked option is the saved
+ * language when it is offered. If not, it is the offered language that
+ * matches the UI language. When no offered language matches, a checked
+ * option for the UI language comes first. Without it, the UI kit shows the
+ * first offered language as the current language.
  */
 export const getPickerOptions = (
   offered: PickerLanguage[],
