@@ -25,6 +25,12 @@ export const toCunninghamLocale = (language: string) =>
 type PickerLanguage = { label: string; value: string; shortLabel: string };
 
 /**
+ * Primary subtag of a language code, in lowercase.
+ * The case of a language code has no meaning.
+ */
+const primarySubtag = (language: string) => splitLocaleCode(language).language.toLowerCase();
+
+/**
  * Native name of a language, with a capital first letter.
  * Returns the fallback when Intl has no name for the language.
  */
@@ -40,7 +46,7 @@ const nativeName = (language: string, fallback: string) => {
 };
 
 const toPickerLanguage = (value: string, name: string): PickerLanguage => {
-  const { language } = splitLocaleCode(value);
+  const language = primarySubtag(value);
   return { value, label: nativeName(language, name), shortLabel: language.toUpperCase() };
 };
 
@@ -54,7 +60,7 @@ export const getPickerLanguages = (
   translated: string[],
 ): PickerLanguage[] =>
   configured
-    .filter(([value]) => translated.includes(splitLocaleCode(value).language))
+    .filter(([value]) => translated.includes(primarySubtag(value)))
     .map(([value, name]) => toPickerLanguage(value, name));
 
 /**
@@ -68,8 +74,8 @@ export const getPickerLanguage = (
   values: string[],
 ): string | undefined => {
   if (userLanguage && values.includes(userLanguage)) return userLanguage;
-  const language = splitLocaleCode(uiLanguage).language.toLowerCase();
-  return values.find((value) => splitLocaleCode(value).language === language);
+  const language = primarySubtag(uiLanguage);
+  return values.find((value) => primarySubtag(value) === language);
 };
 
 /**

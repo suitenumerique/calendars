@@ -40,6 +40,10 @@ describe("getPickerLanguage", () => {
     expect(getPickerLanguage(null, ui, VALUES)).toBe(expected);
   });
 
+  it("matches a value with an uppercase language subtag", () => {
+    expect(getPickerLanguage(null, "fr", ["EN-us", "FR-fr"])).toBe("FR-fr");
+  });
+
   it("ignores a user language that the picker does not offer", () => {
     expect(getPickerLanguage("es-es", "fr", VALUES)).toBe("fr-fr");
   });
@@ -62,6 +66,12 @@ describe("getPickerLanguages", () => {
       { value: "en-us", label: "English", shortLabel: "EN" },
       { value: "fr-fr", label: "Français", shortLabel: "FR" },
       { value: "nl-nl", label: "Nederlands", shortLabel: "NL" },
+    ]);
+  });
+
+  it("keeps a configured language with an uppercase language subtag", () => {
+    expect(getPickerLanguages([["FR-fr", "French"]], ["en", "fr", "nl"])).toEqual([
+      { value: "FR-fr", label: "Français", shortLabel: "FR" },
     ]);
   });
 
