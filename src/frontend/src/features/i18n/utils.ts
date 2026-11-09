@@ -34,6 +34,11 @@ const nativeName = (language: string, fallback: string) => {
   }
 };
 
+const toPickerLanguage = (value: string, name: string): PickerLanguage => {
+  const { language } = splitLocaleCode(value);
+  return { value, label: nativeName(language, name), shortLabel: language.toUpperCase() };
+};
+
 /**
  * Picker entries for the configured languages that have translations.
  * The configured names are in English, so each label is the native name.
@@ -42,11 +47,9 @@ export const getPickerLanguages = (
   configured: [string, string][],
   translated: string[],
 ): PickerLanguage[] =>
-  configured.flatMap(([value, name]) => {
-    const { language } = splitLocaleCode(value);
-    if (!translated.includes(language)) return [];
-    return [{ value, label: nativeName(language, name), shortLabel: language.toUpperCase() }];
-  });
+  configured
+    .filter(([value]) => translated.includes(splitLocaleCode(value).language))
+    .map(([value, name]) => toPickerLanguage(value, name));
 
 /**
  * Picker value to check: the user language, or else the value with the same
@@ -62,4 +65,28 @@ export const getPickerLanguage = (
   if (userLanguage && values.includes(userLanguage)) return userLanguage;
   const language = splitLocaleCode(uiLanguage).language.toLowerCase();
   return values.find((value) => splitLocaleCode(value).language === language);
+};
+
+/**
+ * Picker options, with the language of the UI checked. When the offered
+ * languages do not include the UI language, an option for the UI language
+ * comes first. Without a checked option, the UI kit shows its first option
+ * as the current language.
+ */
+export const getPickerOptions = (
+  offered: PickerLanguage[],
+  userLanguage: string | null | undefined,
+  uiLanguage: string,
+): (PickerLanguage & { isChecked: boolean })[] => {
+  const checked = getPickerLanguage(
+    userLanguage,
+    uiLanguage,
+    offered.map(({ value }) => value),
+  );
+  const options = offered.map((language) => ({
+    ...language,
+    isChecked: language.value === checked,
+  }));
+  if (checked) return options;
+  return [{ ...toPickerLanguage(uiLanguage, uiLanguage), isChecked: true }, ...options];
 };

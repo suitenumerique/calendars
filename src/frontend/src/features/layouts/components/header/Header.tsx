@@ -14,7 +14,7 @@ import { fetchAPI } from "@/features/api/fetchApi";
 import { Feedback } from "@/features/feedback/Feedback";
 import { Gaufre } from "@/features/ui/components/gaufre/Gaufre";
 import { useConfig } from "@/features/config/ConfigProvider";
-import { getPickerLanguage, getPickerLanguages } from "@/features/i18n/utils";
+import { getPickerLanguages, getPickerOptions } from "@/features/i18n/utils";
 import { DynamicCalendarLogo } from "@/features/ui/components/logo";
 import { UserProfile } from "@/features/ui/components/user/UserProfile";
 import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
@@ -147,17 +147,16 @@ export const LanguagePickerUserMenu = () => {
 
   // resolvedLanguage is the language that the UI shows. It is undefined
   // when i18next finds no translations for the detected language.
-  const checkedLanguage = getPickerLanguage(
+  const languages = getPickerOptions(
+    pickerLanguages,
     selectedLanguage,
     i18n.resolvedLanguage ?? i18n.language,
-    pickerLanguages.map(({ value }) => value),
   );
-  const languages = pickerLanguages.map((language) => ({
-    ...language,
-    isChecked: language.value === checkedLanguage,
-  }));
 
   const onChange = (value: string) => {
+    // The option of a UI language that the config does not offer only shows
+    // the current state. The user cannot select it.
+    if (!pickerLanguages.some((language) => language.value === value)) return;
     setSelectedLanguage(value);
     i18n.changeLanguage(value).catch((err) => {
       console.error("Error changing language", err);
@@ -171,6 +170,9 @@ export const LanguagePickerUserMenu = () => {
       });
     }
   };
+
+  // The UI kit picker reads its first language, so it cannot render without one.
+  if (pickerLanguages.length === 0) return null;
 
   return <LanguagePicker languages={languages} size="small" onChange={onChange} compact />;
 };

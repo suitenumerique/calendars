@@ -1,4 +1,9 @@
-import { getPickerLanguage, getPickerLanguages, toCunninghamLocale } from "../utils";
+import {
+  getPickerLanguage,
+  getPickerLanguages,
+  getPickerOptions,
+  toCunninghamLocale,
+} from "../utils";
 
 describe("toCunninghamLocale", () => {
   it.each([
@@ -62,5 +67,28 @@ describe("getPickerLanguages", () => {
 
   it("returns no entry when no language has translations", () => {
     expect(getPickerLanguages(CONFIGURED, [])).toEqual([]);
+  });
+});
+
+describe("getPickerOptions", () => {
+  const FRENCH = { value: "fr-fr", label: "Français", shortLabel: "FR" };
+  const DUTCH = { value: "nl-nl", label: "Nederlands", shortLabel: "NL" };
+
+  it("checks the offered language of the UI", () => {
+    expect(getPickerOptions([FRENCH, DUTCH], null, "nl")).toEqual([
+      { ...FRENCH, isChecked: false },
+      { ...DUTCH, isChecked: true },
+    ]);
+  });
+
+  it.each([
+    ["the user has no language", null],
+    ["the user language is not offered", "en-us"],
+  ])("adds a checked option for a UI language that is not offered, when %s", (_, userLanguage) => {
+    expect(getPickerOptions([FRENCH, DUTCH], userLanguage, "en")).toEqual([
+      { value: "en", label: "English", shortLabel: "EN", isChecked: true },
+      { ...FRENCH, isChecked: false },
+      { ...DUTCH, isChecked: false },
+    ]);
   });
 });
