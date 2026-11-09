@@ -48,6 +48,7 @@ import {
   NS,
   parseCalendarComponents,
   parseInviteSharees,
+  isReadOnlyShareAccess,
   parseInviteOrganizerEmail,
   parseCalendarOrder,
   getCalendarUrlFromEventUrl,
@@ -250,6 +251,7 @@ export class CalDavService {
     const mailboxEmail = ownerType === "MAILBOX" ? parseInviteOrganizerEmail(rawInvite) : undefined;
     const syncManaged = props?.calendarSyncManaged === "true";
     const hidden = props?.calendarHidden === "true";
+    const readOnly = isReadOnlyShareAccess(props?.shareAccess);
 
     const displayname = (props as Record<string, unknown> | undefined)?.displayname;
     const displayName =
@@ -270,6 +272,7 @@ export class CalDavService {
       mailboxEmail,
       syncManaged,
       hidden,
+      readOnly,
       sharees,
       ctag: (props as Record<string, string | undefined> | undefined)?.getctag,
       syncToken: (props as Record<string, string | undefined> | undefined)?.syncToken,

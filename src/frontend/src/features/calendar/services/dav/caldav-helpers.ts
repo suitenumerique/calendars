@@ -206,6 +206,15 @@ export function parseSharePrivilege(access: unknown, shareAccess?: string): Shar
   return "read";
 }
 
+/**
+ * Tells if a ``{DAV:}share-access`` value gives read access only.
+ * A free/busy share has read access at this level.
+ * It returns false for a missing or unknown value.
+ */
+export function isReadOnlyShareAccess(shareAccess: unknown): boolean {
+  return typeof shareAccess === "object" && shareAccess !== null && "read" in shareAccess;
+}
+
 export type ShareeXmlParams = {
   href: string;
   displayName?: string;
@@ -356,6 +365,7 @@ export const CALENDAR_PROPS = {
   [`${NS.DAV}:sync-token`]: {},
   [`${NS.CALDAV}:schedule-calendar-transp`]: {},
   [`${NS.CALENDAR_SERVER}:invite`]: {},
+  [`${NS.DAV}:share-access`]: {},
   "LS:calendar-owner-type": {},
   "LS:share-access-map": {},
   "LS:calendar-sync-managed": {},

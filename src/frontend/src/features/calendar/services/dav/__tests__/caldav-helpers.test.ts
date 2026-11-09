@@ -13,6 +13,7 @@ import {
   buildProppatchXml,
   buildCalendarQueryXml,
   parseSharePrivilege,
+  isReadOnlyShareAccess,
   buildShareRequestXml,
   buildUnshareRequestXml,
   parseCalendarComponents,
@@ -403,6 +404,22 @@ describe("caldav-helpers", () => {
   // Response Parsing Helpers
   // ============================================================================
   describe("Response Parsing Helpers", () => {
+    describe("isReadOnlyShareAccess", () => {
+      it("is true for a read share", () => {
+        expect(isReadOnlyShareAccess({ read: {} })).toBe(true);
+      });
+
+      it("is false for an owner or a read-write share", () => {
+        expect(isReadOnlyShareAccess({ sharedOwner: {} })).toBe(false);
+        expect(isReadOnlyShareAccess({ notShared: {} })).toBe(false);
+        expect(isReadOnlyShareAccess({ readWrite: {} })).toBe(false);
+      });
+
+      it("is false when the value is missing", () => {
+        expect(isReadOnlyShareAccess(undefined)).toBe(false);
+      });
+    });
+
     describe("parseCalendarComponents", () => {
       it("returns undefined for empty input", () => {
         expect(parseCalendarComponents(null)).toBeUndefined();

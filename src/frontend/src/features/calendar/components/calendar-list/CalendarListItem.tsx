@@ -75,7 +75,7 @@ export const CalendarListItem = ({
           onDeleteForMailbox={onDeleteForMailbox ? () => onDeleteForMailbox(calendar) : undefined}
           onHide={onHide && !isOwner ? () => onHide(calendar) : undefined}
           onShare={onShare ? () => onShare(calendar) : undefined}
-          onImport={onImport ? () => onImport(calendar) : undefined}
+          onImport={onImport && !calendar.readOnly ? () => onImport(calendar) : undefined}
           onSubscription={onSubscription ? () => onSubscription(calendar) : undefined}
           onMoveUp={onMoveUp ? () => onMoveUp(calendar) : undefined}
           onMoveDown={onMoveDown ? () => onMoveDown(calendar) : undefined}

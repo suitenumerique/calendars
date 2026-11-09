@@ -81,6 +81,8 @@ export type CalDavCalendar = {
    * directly instead of issuing a second PROPFIND.
    */
   sharees?: CalDavSharee[];
+  /** The user cannot add or change events in the calendar. */
+  readOnly?: boolean;
   resourcetype?: string[];
 };
 
