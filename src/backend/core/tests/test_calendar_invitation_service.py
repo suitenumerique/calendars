@@ -436,6 +436,76 @@ class TestEmailTemplateLayout:
         assert "When:" in html_en
 
 
+# REPLY sent by the attendee (Bob) to the organizer (Alice)
+ICS_REPLY = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+METHOD:REPLY
+BEGIN:VEVENT
+UID:test-reply-1
+DTSTART:20260210T140000Z
+DTEND:20260210T150000Z
+SUMMARY:Simple meeting
+ORGANIZER;CN=Alice:mailto:alice@example.com
+ATTENDEE;CN=Bob;PARTSTAT=ACCEPTED:mailto:Bob@Example.com
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR"""
+
+
+@pytest.mark.django_db
+class TestReplyEmail:
+    """The reply email names the attendee that answers, not the organizer."""
+
+    def test_parse_takes_the_given_attendee(self):
+        event = ICalendarParser.parse(ICS_REPLY, "bob@example.com")
+        assert event.attendee_email == "bob@example.com"
+        assert event.attendee_name == "Bob"
+        assert event.organizer_email == "alice@example.com"
+
+    def test_parse_request_still_matches_the_recipient(self):
+        event = ICalendarParser.parse(ICS_WITH_URL, "bob@example.com")
+        assert event.attendee_email == "bob@example.com"
+        assert event.attendee_name == "Bob"
+
+    @staticmethod
+    def _send_reply(icalendar_data):
+        service = CalendarInvitationService()
+        with patch.object(
+            CalendarInvitationService, "_send_email", return_value=True
+        ) as mock_send_email:
+            result = service.send_invitation(
+                sender_email="mailto:bob@example.com",
+                recipient_email="mailto:alice@example.com",
+                method="REPLY",
+                icalendar_data=icalendar_data,
+            )
+        assert result is True
+        return mock_send_email.call_args.kwargs
+
+    def test_reply_email_body_names_the_attendee(self):
+        kwargs = self._send_reply(ICS_REPLY)
+
+        assert kwargs["to_email"] == "alice@example.com"
+        for body in (kwargs["text_body"], kwargs["html_body"]):
+            assert "Bob (bob@example.com)" in body
+            assert "alice@example.com" not in body
+
+    def test_reply_email_names_the_sender_when_another_attendee_is_first(self):
+        # A delegation REPLY can list the delegate before the sender.
+        ics = ICS_REPLY.replace(
+            "ATTENDEE;CN=Bob",
+            "ATTENDEE;CN=Carol;PARTSTAT=NEEDS-ACTION:mailto:carol@example.com\n"
+            "ATTENDEE;CN=Bob",
+        )
+
+        kwargs = self._send_reply(ics)
+
+        for body in (kwargs["text_body"], kwargs["html_body"]):
+            assert "Bob (bob@example.com)" in body
+            assert "Carol" not in body
+
+
 # ICS template for mailbox invitation tests
 ICS_MAILBOX_INVITE = """BEGIN:VCALENDAR
 VERSION:2.0
