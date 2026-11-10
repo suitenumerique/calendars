@@ -15,6 +15,7 @@ import { EventModal } from "../scheduler/EventModal";
 import { useCalendarContext } from "../../contexts";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
 import { Building, Clock, Plus, Puzzle, Settings } from "@gouvfr-lasuite/ui-components/icons";
+import { getDefaultCalendar } from "@/features/calendar/utils/default-calendar";
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**
@@ -48,8 +49,7 @@ export const LeftPanel = () => {
   const { selectedDate, setSelectedDate, orderedCalendars, caldavService, adapter, calendarRef } =
     useCalendarContext();
 
-  // Get default calendar URL — first in the displayed order (sidebar top).
-  const defaultCalendarUrl = orderedCalendars[0]?.url || "";
+  const defaultCalendarUrl = getDefaultCalendar(orderedCalendars)?.url || "";
 
   // Create default event with rounded times
   const defaultEvent = useMemo(() => {

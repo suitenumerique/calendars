@@ -37,6 +37,7 @@ import type { CalDavExtendedProps } from "../../services/dav/EventCalendarAdapte
 import type { EventCalendarEvent } from "../../services/dav/types/event-calendar";
 
 import type { SchedulerProps, EventModalState, MobileListEvent } from "./types";
+import { getDefaultCalendar } from "@/features/calendar/utils/default-calendar";
 
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -88,11 +89,9 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
 
   // Initialize calendar URL from context
   useEffect(() => {
-    if (orderedCalendars.length > 0 && !calendarUrl) {
-      // Default to the first calendar in the displayed order (top of the
-      // sidebar), not the raw server order.
-      const firstCalendar = orderedCalendars[0];
-      setCalendarUrl(defaultCalendarUrl || firstCalendar.url);
+    const defaultCalendar = getDefaultCalendar(orderedCalendars);
+    if (defaultCalendar && !calendarUrl) {
+      setCalendarUrl(defaultCalendarUrl || defaultCalendar.url);
     }
   }, [orderedCalendars, defaultCalendarUrl, calendarUrl]);
 
@@ -276,7 +275,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     const endDate = new Date(startDate);
     endDate.setHours(startDate.getHours() + 1);
 
-    const defaultUrl = calendarUrl || orderedCalendars[0]?.url || "";
+    const defaultUrl = calendarUrl || getDefaultCalendar(orderedCalendars)?.url || "";
 
     setModalState({
       isOpen: true,
