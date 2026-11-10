@@ -47,10 +47,6 @@ export const getCalendarGroup = (calendar: CalDavCalendar): CalendarGroup => {
 export const compareCalendarGroups = (a: CalDavCalendar, b: CalDavCalendar): number =>
   GROUP_RANK[getCalendarGroup(a)] - GROUP_RANK[getCalendarGroup(b)];
 
-/** Tell if the user treats the calendar as their own: they own it, or they act for the mailbox that owns it. */
-export const isOwnCalendar = (calendar: CalDavCalendar): boolean =>
-  getCalendarGroup(calendar) !== "shared";
-
 export const getCalendarDeleteMode = (calendar: CalDavCalendar): CalendarDeleteMode => {
   if (!isCalendarOwner(calendar)) {
     return "leave";

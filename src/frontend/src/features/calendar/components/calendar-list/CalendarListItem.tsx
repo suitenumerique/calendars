@@ -47,7 +47,9 @@ export const CalendarListItem = ({
           checked={isVisible}
           onChange={() => onToggleVisibility(calendar.url)}
           label=""
-          aria-label={`${t("calendar.list.showCalendar")} ${calendar.displayName || ""}`}
+          aria-label={t("calendar.list.showCalendar", {
+            name: calendar.displayName || t("calendar.list.unnamed"),
+          })}
         />
       </div>
       <div className="calendar-list__name-wrapper">

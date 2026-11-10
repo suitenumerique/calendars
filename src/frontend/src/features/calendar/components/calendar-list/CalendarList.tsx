@@ -11,8 +11,8 @@ import { useCalendarContext } from "../../contexts";
 import { setupCalendar } from "@/features/mailbox/api";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import {
+  getCalendarGroup,
   isMailboxCalendarAdmin,
-  isOwnCalendar,
 } from "@/features/calendar/utils/calendar-ownership";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { CalendarModal } from "./CalendarModal";
@@ -111,9 +111,11 @@ export const CalendarList = () => {
   };
   // A hidden calendar is a calendar that the user can show again.
   const canDismissOnboarding = orderedCalendars.length > 0 || hiddenCalendars.length > 0;
+  // The user acts for a mailbox calendar as for an own one.
+  const isUsersCalendar = (calendar: CalDavCalendar) => getCalendarGroup(calendar) !== "shared";
   const showOnboarding =
     !isCalendarLoading &&
-    !orderedCalendars.some(isOwnCalendar) &&
+    !orderedCalendars.some(isUsersCalendar) &&
     (!canDismissOnboarding || !isOnboardingDismissed);
 
   // Wrap save to handle mailbox calendar creation
@@ -240,7 +242,7 @@ export const CalendarList = () => {
                     : undefined
                 }
                 onHide={handleHide}
-                onShare={isOwnCalendar(calendar) ? handleOpenShareModal : undefined}
+                onShare={isUsersCalendar(calendar) ? handleOpenShareModal : undefined}
                 onImport={handleOpenImportModal}
                 onSubscription={handleOpenSubscriptionModal}
                 onMoveUp={idx > 0 ? handleMoveUp : undefined}

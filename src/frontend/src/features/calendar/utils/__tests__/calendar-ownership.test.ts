@@ -4,7 +4,6 @@ import {
   getCalendarGroup,
   isCalendarOwner,
   isMailboxCalendarAdmin,
-  isOwnCalendar,
 } from "../calendar-ownership";
 import type { Mailbox, MailboxRole } from "@/features/mailbox/types";
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
@@ -67,32 +66,6 @@ describe("getCalendarDeleteMode", () => {
     expect(
       getCalendarDeleteMode(calendar({ resourcetype: ["calendar", "shared"], sharees: [sharee] })),
     ).toBe("leave");
-  });
-});
-
-describe("isOwnCalendar", () => {
-  it("returns true for an owned calendar that the user shares", () => {
-    expect(
-      isOwnCalendar(calendar({ resourcetype: ["collection", "calendar", "sharedOwner"] })),
-    ).toBe(true);
-  });
-
-  it("returns false for a calendar shared with the user", () => {
-    expect(isOwnCalendar(calendar({ resourcetype: ["collection", "calendar", "shared"] }))).toBe(
-      false,
-    );
-  });
-
-  it("returns true for the calendar of a mailbox the user belongs to", () => {
-    expect(
-      isOwnCalendar(
-        calendar({
-          resourcetype: ["collection", "calendar", "shared"],
-          ownerType: "MAILBOX",
-          syncManaged: true,
-        }),
-      ),
-    ).toBe(true);
   });
 });
 
