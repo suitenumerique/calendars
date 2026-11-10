@@ -799,17 +799,18 @@ export class CalDavService {
   /**
    * Create or replace the override of one occurrence of a recurring event.
    *
-   * If no override exists, the method adds a VEVENT with a RECURRENCE-ID
-   * to the same ICS resource. It also adds an EXDATE for the occurrence to
-   * the master. If an override exists, the method replaces it.
+   * The RECURRENCE-ID of the override identifies the occurrence that it
+   * replaces. The method does not add an EXDATE to the master: SabreDAV
+   * reads a new EXDATE from an attendee as a decline of the occurrence.
+   * The method keeps the EXDATEs that the master already has.
    *
-   * `occurrenceDate` is the wall-clock time of the occurrence in the
-   * timezone of the series. The UTC fields of the date hold this time
-   * ("fake UTC").
+   * `occurrenceDate` identifies the original occurrence, also when the
+   * override moves it. The UTC fields of the date hold the wall-clock
+   * time in the timezone of the series ("fake UTC").
    *
-   * Limitation: in the hour that repeats when DST ends, two occurrences
-   * can have the same wall-clock time. The method cannot tell them apart,
-   * so they share one override.
+   * Limitation: the method compares wall-clock times. In the hour that
+   * repeats when DST ends, two occurrences can have the same wall-clock
+   * time. The method cannot tell them apart, so they share one override.
    */
   async createOverrideInstance(
     eventUrl: string,
@@ -869,7 +870,7 @@ export class CalDavService {
         ) ?? -1;
 
       if (existingOverrideIdx >= 0) {
-        // Re-drag: update existing override in-place, EXDATE already exists
+        // Replace the existing override. Keep its RECURRENCE-ID.
         const existingOverride = calendar.events![existingOverrideIdx];
         calendar.events![existingOverrideIdx] = {
           ...overrideEvent,
@@ -878,15 +879,6 @@ export class CalDavService {
           sequence: (existingOverride.sequence ?? 0) + 1,
         };
       } else {
-        // First override: add EXDATE + new override VEVENT
-        const newExdate: IcsDateObject = {
-          date: occurrenceFakeUtc,
-          type: sourceEvent.start.type,
-          local: occurrenceLocal,
-        };
-
-        sourceEvent.exceptionDates = [...(sourceEvent.exceptionDates ?? []), newExdate];
-
         const overrideVevent: IcsEvent = {
           ...overrideEvent,
           recurrenceRule: undefined,
@@ -1349,9 +1341,8 @@ export class CalDavService {
    * The method reads the event from the server, because a local copy can
    * be stale. It applies the response of the attendee to that copy and
    * keeps the details that the organizer controls. The write increments
-   * SEQUENCE. For one occurrence, it adds or updates an override, and adds
-   * an EXDATE to the master for a new override. It writes with the ETag of
-   * the read.
+   * SEQUENCE. For one occurrence, it adds or updates an override. It does
+   * not add an EXDATE to the master. It writes with the ETag of the read.
    *
    * A 412 means that the precondition of the write failed: the event
    * changed or was deleted after the read. The method then reads and

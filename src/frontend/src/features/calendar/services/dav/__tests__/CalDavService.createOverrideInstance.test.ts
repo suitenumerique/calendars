@@ -1,7 +1,6 @@
 /**
- * CalDavService.createOverrideInstance replaces the existing override of
- * an occurrence, also when its RECURRENCE-ID is not in the timezone of
- * the series.
+ * CalDavService.createOverrideInstance adds or replaces the override of
+ * an occurrence.
  */
 import type { Mock } from "vitest";
 import { convertIcsCalendar } from "ts-ics";
@@ -101,5 +100,44 @@ describe("CalDavService.createOverrideInstance", () => {
     expect(body.match(/^RECURRENCE-ID/gm)).toHaveLength(2);
     expect(body).toMatch(/^RECURRENCE-ID[^:\r\n]*:20261103T090000Z\r?$/m);
     expect(body).toMatch(/^RECURRENCE-ID[^:\r\n]*TZID=Europe\/Paris:20261103T090000\r?$/m);
+  });
+
+  it("adds an override without an EXDATE on the master", async () => {
+    fetchMock.mockResolvedValueOnce(response(200, ICS)).mockResolvedValueOnce(response(204));
+    const master = convertIcsCalendar(undefined, ICS).events!.find((e) => !e.recurrenceId)!;
+
+    const result = await new CalDavService().createOverrideInstance(
+      EVENT_URL,
+      master,
+      new Date(Date.UTC(2026, 10, 10, 9, 0, 0)),
+    );
+
+    expect(result.success).toBe(true);
+    const body = (fetchMock.mock.calls[1][1] as RequestInit).body as string;
+    expect(body).not.toMatch(/^EXDATE/m);
+    expect(body.match(/^RECURRENCE-ID/gm)).toHaveLength(2);
+    expect(body).toMatch(/^RECURRENCE-ID[^:\r\n]*TZID=Europe\/Paris:20261110T090000\r?$/m);
+  });
+
+  it("keeps an EXDATE that an older version added", async () => {
+    // Older versions added an EXDATE with each override. The call must
+    // replace the override and keep the EXDATE.
+    const withExdate = ICS.replace(
+      "RRULE:FREQ=WEEKLY",
+      "RRULE:FREQ=WEEKLY\r\nEXDATE:20261103T080000Z",
+    );
+    fetchMock.mockResolvedValueOnce(response(200, withExdate)).mockResolvedValueOnce(response(204));
+    const override = convertIcsCalendar(undefined, withExdate).events!.find((e) => e.recurrenceId)!;
+
+    const result = await new CalDavService().createOverrideInstance(
+      EVENT_URL,
+      override,
+      new Date(Date.UTC(2026, 10, 3, 9, 0, 0)),
+    );
+
+    expect(result.success).toBe(true);
+    const body = (fetchMock.mock.calls[1][1] as RequestInit).body as string;
+    expect(body.match(/^EXDATE/gm)).toHaveLength(1);
+    expect(body.match(/^RECURRENCE-ID/gm)).toHaveLength(1);
   });
 });
