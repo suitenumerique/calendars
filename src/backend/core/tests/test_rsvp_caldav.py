@@ -125,7 +125,9 @@ class TestRSVPDoesNotRestoreEvents:
                 "a": "accepted",
             }
         )
-        request = RequestFactory().post("/rsvp/", {"token": token})
+        request = RequestFactory(HTTP_ACCEPT_LANGUAGE="en").post(
+            "/rsvp/", {"token": token}
+        )
         return RSVPConfirmView.as_view()(request)
 
     def test_cancelled_event_is_not_updated(self):
