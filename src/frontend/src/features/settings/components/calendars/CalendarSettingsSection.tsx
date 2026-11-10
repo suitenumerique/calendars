@@ -4,7 +4,6 @@ import type { CalDavCalendar } from "@/features/calendar/services/dav/types/cald
 import { CalendarSettingsRow } from "./CalendarSettingsRow";
 
 interface CalendarSettingsSectionProps {
-  title: string;
   /** The text that replaces the list when it is empty. */
   emptyText: string;
   calendars: CalDavCalendar[];
@@ -12,13 +11,11 @@ interface CalendarSettingsSectionProps {
 }
 
 export const CalendarSettingsSection = ({
-  title,
   emptyText,
   calendars,
   renderActions,
 }: CalendarSettingsSectionProps) => (
   <section className="calendar-settings__section">
-    <h3 className="calendar-settings__section-title">{title}</h3>
     {calendars.length === 0 ? (
       <p className="calendar-settings__empty">{emptyText}</p>
     ) : (

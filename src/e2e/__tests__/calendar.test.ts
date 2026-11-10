@@ -122,12 +122,12 @@ test.describe('Calendar Application', () => {
       await expect(calendarList).toBeVisible({ timeout: 10000 })
     })
 
-    test('should display "My Calendars" section', async ({ page }) => {
+    test('should display the calendar list title', async ({ page }) => {
       await page.waitForLoadState('networkidle')
 
-      // Look for "My calendars" or "Mes agendas" text
-      const myCalendarsSection = page.locator('text=/my calendars|mes agendas|mes calendriers/i')
-      await expect(myCalendarsSection).toBeVisible({ timeout: 10000 })
+      const listTitle = page.locator('.calendar-list__section-title')
+      await expect(listTitle).toBeVisible({ timeout: 10000 })
+      await expect(listTitle).toHaveText(/^(calendars|calendriers|kalenders)$/i)
     })
 
     test('should have add calendar button', async ({ page }) => {

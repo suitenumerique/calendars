@@ -91,7 +91,6 @@ export const CalendarSettings = () => {
 
       {!(isLoading && calendars.length === 0) && (
         <CalendarSettingsSection
-          title={t("calendar.list.myCalendars")}
           emptyText={t("settings.calendars.noCalendar")}
           calendars={calendars}
           renderActions={renderActions}

@@ -273,7 +273,7 @@
         },
         "list": {
           "defaultCalendarName": "My calendar",
-          "myCalendars": "My calendars",
+          "title": "Calendars",
           "shared": "(shared)",
           "mailboxCalendar": "Linked to mailbox: {{email}}",
           "unnamed": "Unnamed calendar",
@@ -1302,7 +1302,7 @@
         },
         "list": {
           "defaultCalendarName": "Mon calendrier",
-          "myCalendars": "Mes calendriers",
+          "title": "Calendriers",
           "shared": "(partagé)",
           "unnamed": "Calendrier sans nom",
           "mailboxCalendar": "Lié à la boîte : {{email}}",
@@ -2078,7 +2078,7 @@
         },
         "list": {
           "defaultCalendarName": "Mijn kalender",
-          "myCalendars": "Mijn kalenders",
+          "title": "Kalenders",
           "shared": "(gedeeld)",
           "unnamed": "Naamloze kalender",
           "mailboxCalendar": "Gekoppeld aan mailbox: {{email}}",

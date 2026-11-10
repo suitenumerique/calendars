@@ -213,7 +213,7 @@ export const CalendarList = () => {
       <div className="calendar-list">
         <div className="calendar-list__section">
           <div className="calendar-list__section-header">
-            <span className="calendar-list__section-title">{t("calendar.list.myCalendars")}</span>
+            <span className="calendar-list__section-title">{t("calendar.list.title")}</span>
             <button
               className="calendar-list__add-btn"
               onClick={handleOpenCreateModal}
