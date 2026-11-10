@@ -12,7 +12,7 @@ interface CalendarSettingsActionsProps {
   onSetHidden: (calendar: CalDavCalendar, hidden: boolean) => Promise<unknown>;
   /** Set it when the user owns the calendar. */
   onDelete?: (calendar: CalDavCalendar) => void;
-  /** Set it when the user can leave the calendar. */
+  /** Set it for a sharee. The menu drops it for a sync-managed calendar. */
   onLeave?: (calendar: CalDavCalendar) => void;
   /** Set it when the user is an admin of the mailbox of the calendar. */
   onDeleteForMailbox?: (calendar: CalDavCalendar) => void;

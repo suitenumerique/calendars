@@ -11,7 +11,7 @@ interface CalendarSettingsMenuProps {
   /** Asks to confirm that the user leaves the calendar. Set it for a sharee only. */
   onLeave?: () => void;
   syncManaged?: boolean;
-  /** Deletes the calendar for every user of the mailbox. Set it for a mailbox admin only. */
+  /** Asks to confirm the delete for every user of the mailbox. Set it for a mailbox admin only. */
   onDeleteForMailbox?: () => void;
 }
 

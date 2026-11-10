@@ -24,9 +24,9 @@ export const isCalendarOwner = (calendar: CalDavCalendar): boolean =>
   !(calendar.resourcetype ?? []).includes("shared");
 
 /**
- * The place of a calendar in a list: the user's own calendars, then the
- * calendars of the mailboxes the user belongs to, then the calendars
- * that others share with the user.
+ * The category of a calendar: the user owns it, a mailbox the user
+ * belongs to owns it, or another user shares it. It selects the icon of
+ * the calendar and breaks ties in the sort.
  */
 export type CalendarGroup = "own" | "mailbox" | "shared";
 

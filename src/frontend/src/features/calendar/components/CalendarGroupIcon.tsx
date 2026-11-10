@@ -10,8 +10,10 @@ interface CalendarGroupIconProps {
 }
 
 /**
- * The icon next to a calendar name: an envelope for a mailbox calendar,
- * two people for a calendar that others share with the user. An own
+ * The icon next to a calendar name: an envelope for the calendar of a
+ * mailbox the user belongs to, two people for a calendar that others
+ * share with the user. A mailbox calendar that an admin shared with the
+ * user, outside the mailbox membership, gets the two people. An own
  * calendar gets none.
  */
 export const CalendarGroupIcon = ({ calendar, className }: CalendarGroupIconProps) => {
