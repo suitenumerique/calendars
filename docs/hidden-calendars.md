@@ -7,7 +7,9 @@ or in the user's CalDAV clients.
 
 The web app offers "Hide this calendar" in the calendar menu. The page
 Settings › Calendars (`/settings/calendars`) lists all the calendars of
-the user, hidden ones included, and shows them again.
+the user, hidden ones included, and shows them again. The page also
+lets the user delete a calendar they own, or leave a calendar that a
+colleague shares with them.
 
 Hiding is not the checkbox of the sidebar. The checkbox only changes
 the display in one browser.

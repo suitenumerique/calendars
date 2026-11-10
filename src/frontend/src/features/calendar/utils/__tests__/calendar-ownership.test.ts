@@ -1,7 +1,8 @@
 import {
+  compareCalendarGroups,
   getCalendarDeleteMode,
+  getCalendarGroup,
   isCalendarOwner,
-  belongsInMyCalendars,
   isMailboxCalendarAdmin,
 } from "../calendar-ownership";
 import type { Mailbox, MailboxRole } from "@/features/mailbox/types";
@@ -68,25 +69,42 @@ describe("getCalendarDeleteMode", () => {
   });
 });
 
-describe("belongsInMyCalendars", () => {
-  it("returns true for an owned calendar that the user shares", () => {
-    expect(
-      belongsInMyCalendars(calendar({ resourcetype: ["collection", "calendar", "sharedOwner"] })),
-    ).toBe(true);
+describe("getCalendarGroup", () => {
+  const shared = ["collection", "calendar", "shared"];
+
+  it("puts an owner instance in the own group", () => {
+    expect(getCalendarGroup(calendar({ resourcetype: ["collection", "calendar"] }))).toBe("own");
   });
 
-  it("returns false for a calendar shared with the user", () => {
+  it("puts the calendar of a mailbox the user belongs to in the mailbox group", () => {
     expect(
-      belongsInMyCalendars(calendar({ resourcetype: ["collection", "calendar", "shared"] })),
-    ).toBe(false);
+      getCalendarGroup(calendar({ resourcetype: shared, ownerType: "MAILBOX", syncManaged: true })),
+    ).toBe("mailbox");
   });
 
-  it("returns true for a mailbox calendar", () => {
-    expect(
-      belongsInMyCalendars(
-        calendar({ resourcetype: ["collection", "calendar", "shared"], ownerType: "MAILBOX" }),
-      ),
-    ).toBe(true);
+  it("puts a mailbox calendar that an admin shared with the user in the shared group", () => {
+    expect(getCalendarGroup(calendar({ resourcetype: shared, ownerType: "MAILBOX" }))).toBe(
+      "shared",
+    );
+  });
+
+  it("puts a calendar that a user shares in the shared group", () => {
+    expect(getCalendarGroup(calendar({ resourcetype: shared }))).toBe("shared");
+  });
+});
+
+describe("compareCalendarGroups", () => {
+  it("orders own, then mailbox, then shared", () => {
+    const own = calendar({ resourcetype: ["collection", "calendar"] });
+    const mailbox = calendar({
+      resourcetype: ["collection", "calendar", "shared"],
+      ownerType: "MAILBOX",
+      syncManaged: true,
+    });
+    const shared = calendar({ resourcetype: ["collection", "calendar", "shared"] });
+
+    expect([shared, mailbox, own].sort(compareCalendarGroups)).toEqual([own, mailbox, shared]);
+    expect(compareCalendarGroups(own, own)).toBe(0);
   });
 });
 

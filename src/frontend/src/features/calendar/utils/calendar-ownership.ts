@@ -24,13 +24,28 @@ export const isCalendarOwner = (calendar: CalDavCalendar): boolean =>
   !(calendar.resourcetype ?? []).includes("shared");
 
 /**
- * Tell if the calendar goes in the "My calendars" section.
- *
- * This is about display, not ownership. A mailbox calendar is a sharee
- * instance, but the user acts for the mailbox, so it goes there too.
+ * The category of a calendar: the user owns it, a mailbox the user
+ * belongs to owns it, or another user shares it. It selects the icon of
+ * the calendar and breaks ties in the sort.
  */
-export const belongsInMyCalendars = (calendar: CalDavCalendar): boolean =>
-  calendar.ownerType === "MAILBOX" || isCalendarOwner(calendar);
+export type CalendarGroup = "own" | "mailbox" | "shared";
+
+const GROUP_RANK: Record<CalendarGroup, number> = { own: 0, mailbox: 1, shared: 2 };
+
+/**
+ * A mailbox calendar is a sharee instance. The user acts for the mailbox
+ * only through the membership that Messages syncs. A mailbox admin can
+ * also share the calendar with an outside user, who sees it as shared.
+ */
+export const getCalendarGroup = (calendar: CalDavCalendar): CalendarGroup => {
+  if (isCalendarOwner(calendar)) return "own";
+  if (calendar.ownerType === "MAILBOX" && calendar.syncManaged) return "mailbox";
+  return "shared";
+};
+
+/** Order two calendars by group. Returns 0 inside a group. */
+export const compareCalendarGroups = (a: CalDavCalendar, b: CalDavCalendar): number =>
+  GROUP_RANK[getCalendarGroup(a)] - GROUP_RANK[getCalendarGroup(b)];
 
 export const getCalendarDeleteMode = (calendar: CalDavCalendar): CalendarDeleteMode => {
   if (!isCalendarOwner(calendar)) {

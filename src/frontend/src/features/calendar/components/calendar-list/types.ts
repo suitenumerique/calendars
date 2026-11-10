@@ -51,11 +51,8 @@ export interface CalendarItemMenuProps {
   onMoveDown?: () => void;
 }
 
-/**
- * Props for the DeleteConfirmModal component.
- */
 export interface DeleteConfirmModalProps {
-  isOpen: boolean;
+  /** The calendar to delete or to leave. The modal is open when it is set. */
   calendar: CalDavCalendar | null;
   onConfirm: () => void;
   onCancel: () => void;
@@ -77,8 +74,6 @@ export interface CalendarListItemProps {
   calendar: CalDavCalendar;
   isVisible: boolean;
   isMenuOpen: boolean;
-  /** Mailbox email if this calendar is mailbox-backed; undefined otherwise. */
-  mailboxEmail?: string;
   onToggleVisibility: (url: string) => void;
   onMenuToggle: (url: string) => void;
   onEdit: (calendar: CalDavCalendar) => void;
@@ -112,13 +107,4 @@ export interface CalendarModalState {
 export interface ShareModalState {
   isOpen: boolean;
   calendar: CalDavCalendar | null;
-}
-
-/**
- * State for the delete confirmation.
- */
-export interface DeleteState {
-  isOpen: boolean;
-  calendar: CalDavCalendar | null;
-  isLoading: boolean;
 }

@@ -4,16 +4,18 @@ import { Button, Icon, IconType } from "@gouvfr-lasuite/ui-components";
 import type { CalDavCalendar } from "@/features/calendar/services/dav/types/caldav-service";
 import { isCalendarOwner } from "@/features/calendar/utils/calendar-ownership";
 import { CalendarHiddenToggle } from "./CalendarHiddenToggle";
-import { MailboxCalendarMenu } from "./MailboxCalendarMenu";
+import { CalendarSettingsMenu } from "./CalendarSettingsMenu";
 
 interface CalendarSettingsActionsProps {
   calendar: CalDavCalendar;
   onEdit: (calendar: CalDavCalendar) => void;
   onSetHidden: (calendar: CalDavCalendar, hidden: boolean) => Promise<unknown>;
+  /** Set it when the user owns the calendar. */
+  onDelete?: (calendar: CalDavCalendar) => void;
+  /** Set it for a sharee. The menu drops it for a sync-managed calendar. */
+  onLeave?: (calendar: CalDavCalendar) => void;
   /** Set it when the user is an admin of the mailbox of the calendar. */
   onDeleteForMailbox?: (calendar: CalDavCalendar) => void;
-  /** Keeps a slot for the mailbox menu, so that the buttons of all rows align. */
-  withMenuSlot: boolean;
 }
 
 /**
@@ -25,8 +27,9 @@ export const CalendarSettingsActions = ({
   calendar,
   onEdit,
   onSetHidden,
+  onDelete,
+  onLeave,
   onDeleteForMailbox,
-  withMenuSlot,
 }: CalendarSettingsActionsProps) => {
   const { t } = useTranslation();
   const hidden = Boolean(calendar.hidden);
@@ -49,13 +52,14 @@ export const CalendarSettingsActions = ({
           <CalendarHiddenToggle hidden={hidden} onToggle={() => onSetHidden(calendar, !hidden)} />
         )}
       </span>
-      {withMenuSlot && (
-        <span className="calendar-settings__action">
-          {onDeleteForMailbox && (
-            <MailboxCalendarMenu onDeleteForMailbox={() => onDeleteForMailbox(calendar)} />
-          )}
-        </span>
-      )}
+      <span className="calendar-settings__action">
+        <CalendarSettingsMenu
+          onDelete={onDelete ? () => onDelete(calendar) : undefined}
+          onLeave={onLeave ? () => onLeave(calendar) : undefined}
+          syncManaged={calendar.syncManaged}
+          onDeleteForMailbox={onDeleteForMailbox ? () => onDeleteForMailbox(calendar) : undefined}
+        />
+      </span>
     </>
   );
 };

@@ -1,33 +1,14 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Select } from "@gouvfr-lasuite/ui-components";
-import { Mail } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { CalDavCalendar } from "@/features/calendar/services/dav/types/caldav-service";
-import { DEFAULT_EVENT_COLOR } from "@/features/calendar/constants";
+import { CalendarOption } from "./CalendarOption";
 
 interface CalendarSelectProps {
   calendars: CalDavCalendar[];
   value: string;
   onChange: (url: string) => void;
-}
-
-function CalendarOption({
-  name,
-  color,
-  mailboxEmail,
-}: {
-  name: string;
-  color: string;
-  mailboxEmail?: string;
-}) {
-  return (
-    <span className="calendar-select__option">
-      <span className="calendar-select__color" style={{ backgroundColor: color }} />
-      {name}
-      {mailboxEmail && <Mail className="calendar-list__mailbox-icon" aria-label={mailboxEmail} />}
-    </span>
-  );
 }
 
 export function CalendarSelect({ calendars, value, onChange }: CalendarSelectProps) {
@@ -36,11 +17,7 @@ export function CalendarSelect({ calendars, value, onChange }: CalendarSelectPro
   const options = useMemo(
     () =>
       calendars.map((cal) => {
-        const name = cal.displayName || cal.url;
-        const color = cal.color || DEFAULT_EVENT_COLOR;
-        const optionJsx = (
-          <CalendarOption name={name} color={color} mailboxEmail={cal.mailboxEmail} />
-        );
+        const optionJsx = <CalendarOption calendar={cal} />;
         return {
           value: cal.url,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

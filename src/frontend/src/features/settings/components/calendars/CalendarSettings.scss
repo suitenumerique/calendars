@@ -20,12 +20,6 @@
     margin-bottom: var(--c--globals--spacings--lg);
   }
 
-  &__section-title {
-    margin: 0 0 var(--c--globals--spacings--xs);
-    font-size: var(--c--globals--font--sizes--md);
-    font-weight: var(--c--globals--font--weights--bold);
-  }
-
   &__empty {
     margin: 0;
     color: var(--c--contextuals--content--semantic--neutral--tertiary);
@@ -68,26 +62,23 @@
     }
   }
 
-  &__mailbox {
-    display: flex;
-    align-items: center;
-    gap: var(--c--globals--spacings--3xs);
-    min-width: 0;
-    font-size: var(--c--globals--font--sizes--sm);
-    color: var(--c--contextuals--content--semantic--neutral--tertiary);
-  }
-
   &__mailbox-email {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: var(--c--globals--font--sizes--sm);
+    color: var(--c--contextuals--content--semantic--neutral--tertiary);
   }
 
-  &__mailbox-icon {
-    width: 0.875rem;
-    height: 0.875rem;
+  &__group-icon {
+    display: inline-flex;
     flex-shrink: 0;
     color: var(--c--contextuals--content--semantic--neutral--tertiary);
+
+    svg {
+      width: 0.875rem;
+      height: 0.875rem;
+    }
   }
 
   &__actions {

@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Mail } from "@gouvfr-lasuite/ui-components/icons";
 
+import { CalendarGroupIcon } from "@/features/calendar/components/CalendarGroupIcon";
 import { DEFAULT_EVENT_COLOR } from "@/features/calendar/constants";
 import type { CalDavCalendar } from "@/features/calendar/services/dav/types/caldav-service";
+import { getCalendarGroup } from "@/features/calendar/utils/calendar-ownership";
 
 interface CalendarSettingsRowProps {
   calendar: CalDavCalendar;
@@ -23,14 +24,9 @@ export const CalendarSettingsRow = ({ calendar, actions }: CalendarSettingsRowPr
       <span className={nameClassName} title={calendar.displayName || undefined}>
         {calendar.displayName || t("calendar.list.unnamed")}
       </span>
-      {calendar.mailboxEmail && (
-        <span
-          className="calendar-settings__mailbox"
-          title={t("calendar.list.mailboxCalendar", { email: calendar.mailboxEmail })}
-        >
-          <Mail className="calendar-settings__mailbox-icon" aria-hidden />
-          <span className="calendar-settings__mailbox-email">{calendar.mailboxEmail}</span>
-        </span>
+      <CalendarGroupIcon calendar={calendar} className="calendar-settings__group-icon" />
+      {getCalendarGroup(calendar) === "mailbox" && (
+        <span className="calendar-settings__mailbox-email">{calendar.mailboxEmail}</span>
       )}
       {actions && <div className="calendar-settings__actions">{actions}</div>}
     </li>
