@@ -1378,10 +1378,24 @@ class TestImportSharedCalendarE2E:
         )
         sharee_path = self._share(owner, owner_path, sharee, privilege)
 
-        result = ICSImportService().import_events(sharee, sharee_path, ICS_SINGLE_EVENT)
+        with patch.object(
+            ICSImportService,
+            "_failed_import_code",
+            wraps=ICSImportService._failed_import_code,  # pylint: disable=protected-access
+        ) as failed:
+            result = ICSImportService().import_events(
+                sharee, sharee_path, ICS_SINGLE_EVENT
+            )
 
         assert result.imported_count == imported
-        assert (result.error_code is None) == bool(imported)
+        if imported:
+            assert result.error_code is None
+            failed.assert_not_called()
+        else:
+            assert result.error_code == "unavailable"
+            (response,) = failed.call_args.args
+            assert response.status_code == 403
+            assert response.json() == {"error": "No write access to this calendar"}
         events = CalDAVClient().get_events(
             owner,
             owner_path,
