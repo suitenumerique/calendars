@@ -4,6 +4,7 @@
  * Factorized utilities for XML building, DAV requests, and error handling.
  */
 
+import { ShareAccess } from "./types/caldav-service";
 import type { SharePrivilege, CalDavResponse } from "./types/caldav-service";
 
 /** XML namespace prefix lookup used when building prop keys in PROPFIND
@@ -212,7 +213,7 @@ export function parseSharePrivilege(access: unknown, shareAccess?: string): Shar
  * It returns false for a missing or unknown value.
  */
 export function isReadOnlyShareAccess(shareAccess: unknown): boolean {
-  return typeof shareAccess === "object" && shareAccess !== null && "read" in shareAccess;
+  return typeof shareAccess === "object" && shareAccess !== null && ShareAccess.READ in shareAccess;
 }
 
 export type ShareeXmlParams = {

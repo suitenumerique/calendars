@@ -155,6 +155,18 @@ export type EventFilter = {
 
 export type SharePrivilege = "freebusy" | "read" | "read-write" | "admin";
 
+/**
+ * A value of the ``{DAV:}share-access`` property, as the XML parser gives
+ * it: the element name in camelCase.
+ */
+export enum ShareAccess {
+  SHARED_OWNER = "sharedOwner",
+  NOT_SHARED = "notShared",
+  READ = "read",
+  READ_WRITE = "readWrite",
+  NO_ACCESS = "noAccess",
+}
+
 export type ShareStatus = "pending" | "accepted" | "declined";
 
 export type CalDavSharee = {

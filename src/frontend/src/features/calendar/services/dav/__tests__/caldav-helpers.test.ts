@@ -20,6 +20,7 @@ import {
   parseCalendarOrder,
   getCalendarUrlFromEventUrl,
 } from "../caldav-helpers";
+import { ShareAccess } from "../types/caldav-service";
 import { parseDavErrorMessage } from "@/features/calendar/utils/DavClient";
 
 describe("caldav-helpers", () => {
@@ -406,13 +407,13 @@ describe("caldav-helpers", () => {
   describe("Response Parsing Helpers", () => {
     describe("isReadOnlyShareAccess", () => {
       it("is true for a read share", () => {
-        expect(isReadOnlyShareAccess({ read: {} })).toBe(true);
+        expect(isReadOnlyShareAccess({ [ShareAccess.READ]: {} })).toBe(true);
       });
 
       it("is false for an owner or a read-write share", () => {
-        expect(isReadOnlyShareAccess({ sharedOwner: {} })).toBe(false);
-        expect(isReadOnlyShareAccess({ notShared: {} })).toBe(false);
-        expect(isReadOnlyShareAccess({ readWrite: {} })).toBe(false);
+        expect(isReadOnlyShareAccess({ [ShareAccess.SHARED_OWNER]: {} })).toBe(false);
+        expect(isReadOnlyShareAccess({ [ShareAccess.NOT_SHARED]: {} })).toBe(false);
+        expect(isReadOnlyShareAccess({ [ShareAccess.READ_WRITE]: {} })).toBe(false);
       });
 
       it("is false when the value is missing", () => {
