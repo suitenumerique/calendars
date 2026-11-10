@@ -1,5 +1,7 @@
 import {
+  compareCalendarGroups,
   getCalendarDeleteMode,
+  getCalendarGroup,
   isCalendarOwner,
   isMailboxCalendarAdmin,
   isOwnCalendar,
@@ -81,12 +83,55 @@ describe("isOwnCalendar", () => {
     );
   });
 
-  it("returns true for a mailbox calendar", () => {
+  it("returns true for the calendar of a mailbox the user belongs to", () => {
     expect(
       isOwnCalendar(
-        calendar({ resourcetype: ["collection", "calendar", "shared"], ownerType: "MAILBOX" }),
+        calendar({
+          resourcetype: ["collection", "calendar", "shared"],
+          ownerType: "MAILBOX",
+          syncManaged: true,
+        }),
       ),
     ).toBe(true);
+  });
+});
+
+describe("getCalendarGroup", () => {
+  const shared = ["collection", "calendar", "shared"];
+
+  it("puts an owner instance in the own group", () => {
+    expect(getCalendarGroup(calendar({ resourcetype: ["collection", "calendar"] }))).toBe("own");
+  });
+
+  it("puts the calendar of a mailbox the user belongs to in the mailbox group", () => {
+    expect(
+      getCalendarGroup(calendar({ resourcetype: shared, ownerType: "MAILBOX", syncManaged: true })),
+    ).toBe("mailbox");
+  });
+
+  it("puts a mailbox calendar that an admin shared with the user in the shared group", () => {
+    expect(getCalendarGroup(calendar({ resourcetype: shared, ownerType: "MAILBOX" }))).toBe(
+      "shared",
+    );
+  });
+
+  it("puts a calendar that a user shares in the shared group", () => {
+    expect(getCalendarGroup(calendar({ resourcetype: shared }))).toBe("shared");
+  });
+});
+
+describe("compareCalendarGroups", () => {
+  it("orders own, then mailbox, then shared", () => {
+    const own = calendar({ resourcetype: ["collection", "calendar"] });
+    const mailbox = calendar({
+      resourcetype: ["collection", "calendar", "shared"],
+      ownerType: "MAILBOX",
+      syncManaged: true,
+    });
+    const shared = calendar({ resourcetype: ["collection", "calendar", "shared"] });
+
+    expect([shared, mailbox, own].sort(compareCalendarGroups)).toEqual([own, mailbox, shared]);
+    expect(compareCalendarGroups(own, own)).toBe(0);
   });
 });
 

@@ -5,7 +5,7 @@
  * calendar must create one.
  */
 
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCalendarContext } from "../../contexts";
 import { setupCalendar } from "@/features/mailbox/api";
@@ -230,7 +230,6 @@ export const CalendarList = () => {
                 calendar={calendar}
                 isVisible={visibleCalendarUrls.has(calendar.url)}
                 isMenuOpen={openMenuUrl === calendar.url}
-                mailboxEmail={calendar.mailboxEmail}
                 onToggleVisibility={toggleCalendarVisibility}
                 onMenuToggle={handleMenuToggle}
                 onEdit={handleOpenEditModal}

@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { CalDavService } from "../services/dav/CalDavService";
 import { EventCalendarAdapter } from "../services/dav/EventCalendarAdapter";
 import { caldavServerUrl } from "../utils/DavClient";
+import { sortCalendars } from "../utils/calendar-sort";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useAuth } from "@/features/auth/Auth";
 import { deleteMailboxCalendar as deleteMailboxCalendarApi } from "@/features/mailbox/api";
@@ -147,18 +148,7 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     [allCalendars],
   );
 
-  // Sort by `calendar-order` ascending (missing = end), tie-broken by
-  // displayName so the order is stable for never-reordered calendars.
-  const orderedCalendars = useMemo(
-    () =>
-      [...davCalendars].sort((a, b) => {
-        const ao = a.order ?? Number.POSITIVE_INFINITY;
-        const bo = b.order ?? Number.POSITIVE_INFINITY;
-        if (ao !== bo) return ao - bo;
-        return a.displayName.localeCompare(b.displayName);
-      }),
-    [davCalendars],
-  );
+  const orderedCalendars = useMemo(() => sortCalendars(davCalendars), [davCalendars]);
 
   // A failed refresh keeps the calendars of the last fetch. An empty list
   // would show the onboarding, as if the user had no calendar.

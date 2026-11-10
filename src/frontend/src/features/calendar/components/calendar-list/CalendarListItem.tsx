@@ -5,8 +5,8 @@
 
 import { useTranslation } from "react-i18next";
 import { Checkbox } from "@gouvfr-lasuite/ui-components";
-import { Mail } from "@gouvfr-lasuite/ui-components/icons";
 import { CalendarItemMenu } from "./CalendarItemMenu";
+import { CalendarGroupIcon } from "../CalendarGroupIcon";
 
 import { DEFAULT_EVENT_COLOR } from "@/features/calendar/constants";
 import { isCalendarOwner } from "@/features/calendar/utils/calendar-ownership";
@@ -19,7 +19,6 @@ export const CalendarListItem = ({
   calendar,
   isVisible,
   isMenuOpen,
-  mailboxEmail,
   onToggleVisibility,
   onMenuToggle,
   onEdit,
@@ -55,14 +54,7 @@ export const CalendarListItem = ({
         <span className="calendar-list__name" title={calendar.displayName || undefined}>
           {calendar.displayName || t("calendar.list.unnamed")}
         </span>
-        {mailboxEmail && (
-          <Mail
-            className="calendar-list__mailbox-icon"
-            aria-label={t("calendar.list.mailboxCalendar", {
-              email: mailboxEmail,
-            })}
-          />
-        )}
+        <CalendarGroupIcon calendar={calendar} className="calendar-list__group-icon" />
       </div>
       <div className="calendar-list__item-actions">
         <CalendarItemMenu

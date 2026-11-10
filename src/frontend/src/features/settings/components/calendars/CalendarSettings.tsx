@@ -14,9 +14,9 @@ import {
   isCalendarOwner,
   isMailboxCalendarAdmin,
 } from "@/features/calendar/utils/calendar-ownership";
+import { sortCalendars } from "@/features/calendar/utils/calendar-sort";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import { addErrorToast } from "@/features/ui/components/toaster/Toaster";
-import { sortCalendarsForSettings } from "../../calendar-settings-sort";
 import { CalendarSettingsHeader } from "./CalendarSettingsHeader";
 import { CalendarSettingsSection } from "./CalendarSettingsSection";
 import { CalendarSettingsActions } from "./CalendarSettingsActions";
@@ -40,7 +40,7 @@ export const CalendarSettings = () => {
   const { availableMailboxes } = useMailboxContext();
 
   const calendars = useMemo(
-    () => sortCalendarsForSettings([...davCalendars, ...hiddenCalendars]),
+    () => sortCalendars([...davCalendars, ...hiddenCalendars]),
     [davCalendars, hiddenCalendars],
   );
 
