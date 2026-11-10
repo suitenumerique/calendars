@@ -386,7 +386,7 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
         }
         [list[idx], list[swapWith]] = [list[swapWith], list[idx]];
 
-        // Rewrite the whole list as 0, 1, 2, … — small contiguous
+        // Rewrite the whole list as 0, 1, 2, and so on. Small contiguous
         // integers are the conventional values for this property, so
         // the order stays consistent if a user reorders the same
         // calendars in another CalDAV client. PROPPATCHes are skipped

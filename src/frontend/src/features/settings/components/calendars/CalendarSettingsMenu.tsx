@@ -3,8 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Button, DropdownMenu } from "@gouvfr-lasuite/ui-components";
 import { More, Trash } from "@gouvfr-lasuite/ui-components/icons";
 
-import { getDeleteMenuEntry } from "@/features/calendar/components/calendar-list/utils";
-
 interface CalendarSettingsMenuProps {
   /** Asks to confirm that the user leaves the calendar. Set it for a sharee only. */
   onLeave?: () => void;
@@ -12,7 +10,7 @@ interface CalendarSettingsMenuProps {
   onDeleteForMailbox?: () => void;
 }
 
-/** The menu of a calendar row. It holds the leave action, or the delete action of a mailbox admin. */
+/** The menu of a calendar row. The delete for every mailbox user replaces the leave action. */
 export const CalendarSettingsMenu = ({
   onLeave,
   onDeleteForMailbox,
@@ -20,10 +18,13 @@ export const CalendarSettingsMenu = ({
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
 
-  const entry = getDeleteMenuEntry({ onLeave, onDeleteForMailbox });
-  if (!entry?.callback) return null;
+  const callback = onDeleteForMailbox ?? onLeave;
+  if (!callback) return null;
 
-  const options = [{ label: t(entry.labelKey), icon: <Trash />, callback: entry.callback }];
+  const labelKey = onDeleteForMailbox
+    ? "calendar.list.deleteForMailbox"
+    : "calendar.list.leaveCalendar";
+  const options = [{ label: t(labelKey), icon: <Trash />, callback }];
 
   return (
     <DropdownMenu options={options} isOpen={isOpen} onOpenChange={setIsOpen}>
