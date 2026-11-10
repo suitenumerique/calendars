@@ -5,20 +5,14 @@
 
 import { useState, useCallback } from "react";
 
-import type {
-  CalDavCalendar,
-  CalDavCalendarCreate,
-  CalDavCalendarUpdate,
-} from "../../../services/dav/types/caldav-service";
+import type { CalendarContextType } from "../../../contexts/CalendarContext";
+import type { CalDavCalendar } from "../../../services/dav/types/caldav-service";
 import type { ShareModalState } from "../types";
 import { useCalendarModal } from "./useCalendarModal";
 
 interface UseCalendarListStateProps {
-  createCalendar: (params: CalDavCalendarCreate) => Promise<{ success: boolean; error?: string }>;
-  updateCalendar: (
-    url: string,
-    options: CalDavCalendarUpdate,
-  ) => Promise<{ success: boolean; error?: string }>;
+  createCalendar: CalendarContextType["createCalendar"];
+  updateCalendar: CalendarContextType["updateCalendar"];
 }
 
 export const useCalendarListState = ({
