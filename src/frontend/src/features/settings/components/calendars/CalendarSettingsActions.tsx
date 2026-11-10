@@ -4,15 +4,17 @@ import { Button, Icon, IconType } from "@gouvfr-lasuite/ui-components";
 import type { CalDavCalendar } from "@/features/calendar/services/dav/types/caldav-service";
 import { isCalendarOwner } from "@/features/calendar/utils/calendar-ownership";
 import { CalendarHiddenToggle } from "./CalendarHiddenToggle";
-import { MailboxCalendarMenu } from "./MailboxCalendarMenu";
+import { CalendarSettingsMenu } from "./CalendarSettingsMenu";
 
 interface CalendarSettingsActionsProps {
   calendar: CalDavCalendar;
   onEdit: (calendar: CalDavCalendar) => void;
   onSetHidden: (calendar: CalDavCalendar, hidden: boolean) => Promise<unknown>;
+  /** Set it when the user can leave the calendar. */
+  onLeave?: (calendar: CalDavCalendar) => void;
   /** Set it when the user is an admin of the mailbox of the calendar. */
   onDeleteForMailbox?: (calendar: CalDavCalendar) => void;
-  /** Keeps a slot for the mailbox menu, so that the buttons of all rows align. */
+  /** Keeps a slot for the menu, so that the buttons of all rows align. */
   withMenuSlot: boolean;
 }
 
@@ -25,6 +27,7 @@ export const CalendarSettingsActions = ({
   calendar,
   onEdit,
   onSetHidden,
+  onLeave,
   onDeleteForMailbox,
   withMenuSlot,
 }: CalendarSettingsActionsProps) => {
@@ -51,9 +54,10 @@ export const CalendarSettingsActions = ({
       </span>
       {withMenuSlot && (
         <span className="calendar-settings__action">
-          {onDeleteForMailbox && (
-            <MailboxCalendarMenu onDeleteForMailbox={() => onDeleteForMailbox(calendar)} />
-          )}
+          <CalendarSettingsMenu
+            onLeave={onLeave ? () => onLeave(calendar) : undefined}
+            onDeleteForMailbox={onDeleteForMailbox ? () => onDeleteForMailbox(calendar) : undefined}
+          />
         </span>
       )}
     </>

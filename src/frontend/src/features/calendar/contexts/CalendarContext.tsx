@@ -15,7 +15,6 @@ import { caldavServerUrl } from "../utils/DavClient";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useAuth } from "@/features/auth/Auth";
 import { deleteMailboxCalendar as deleteMailboxCalendarApi } from "@/features/mailbox/api";
-import { belongsInMyCalendars } from "../utils/calendar-ownership";
 import { setCalendarHiddenAndRefresh } from "./set-calendar-hidden";
 
 import type {
@@ -56,11 +55,11 @@ export interface CalendarContextType {
   adapter: EventCalendarAdapter;
   /** The calendars that the user did not hide (see `CalDavCalendar.hidden`). */
   davCalendars: CalDavCalendar[];
-  ownedCalendars: CalDavCalendar[];
-  sharedCalendars: CalDavCalendar[];
-  // Owned then shared, each sorted by `order` — the exact order shown in
-  // the sidebar. Use this (not raw `davCalendars`) anywhere a flat,
-  // sidebar-consistent calendar list is needed (e.g. the event modal).
+  /**
+   * The calendars that the user did not hide, in the order of the
+   * sidebar. Use this, not `davCalendars`, for a list that the user sees,
+   * such as the event modal.
+   */
   orderedCalendars: CalDavCalendar[];
   /** The calendars that the user hid (see `CalDavCalendar.hidden`). */
   hiddenCalendars: CalDavCalendar[];
@@ -148,33 +147,17 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     [allCalendars],
   );
 
-  const { ownedCalendars, sharedCalendars } = useMemo(() => {
-    // Sort by `calendar-order` ascending (missing = end), tie-broken by
-    // displayName so the order is stable for never-reordered calendars.
-    const byOrder = (a: CalDavCalendar, b: CalDavCalendar) => {
-      const ao = a.order ?? Number.POSITIVE_INFINITY;
-      const bo = b.order ?? Number.POSITIVE_INFINITY;
-      if (ao !== bo) return ao - bo;
-      return a.displayName.localeCompare(b.displayName);
-    };
-    const owned: CalDavCalendar[] = [];
-    const shared: CalDavCalendar[] = [];
-    for (const cal of davCalendars) {
-      if (belongsInMyCalendars(cal)) {
-        owned.push(cal);
-      } else {
-        shared.push(cal);
-      }
-    }
-    owned.sort(byOrder);
-    shared.sort(byOrder);
-    return { ownedCalendars: owned, sharedCalendars: shared };
-  }, [davCalendars]);
-
-  // Flat, sidebar-consistent ordering (owned then shared).
+  // Sort by `calendar-order` ascending (missing = end), tie-broken by
+  // displayName so the order is stable for never-reordered calendars.
   const orderedCalendars = useMemo(
-    () => [...ownedCalendars, ...sharedCalendars],
-    [ownedCalendars, sharedCalendars],
+    () =>
+      [...davCalendars].sort((a, b) => {
+        const ao = a.order ?? Number.POSITIVE_INFINITY;
+        const bo = b.order ?? Number.POSITIVE_INFINITY;
+        if (ao !== bo) return ao - bo;
+        return a.displayName.localeCompare(b.displayName);
+      }),
+    [davCalendars],
   );
 
   // A failed refresh keeps the calendars of the last fetch. An empty list
@@ -385,40 +368,34 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     ): Promise<{ success: boolean; error?: string }> => {
       // Re-entry guard: a second click while the first move's PROPPATCHes
       // and refresh are still in flight would compute against stale state
-      // (the closure captures ownedCalendars/sharedCalendars at call time)
-      // and could swap the same pair twice or assign duplicate orders.
+      // (the closure captures orderedCalendars at call time) and could
+      // swap the same pair twice or assign duplicate orders.
       if (movingRef.current) {
         return { success: false, error: "Move already in progress" };
       }
       movingRef.current = true;
       try {
-        // Pick the bucket the calendar lives in (owned vs shared). Moves
-        // are confined to the bucket the user sees on screen — the
-        // buckets render as separate sections, so cross-bucket reorder
-        // would be meaningless.
-        const bucket = ownedCalendars.some((c) => c.url === calendarUrl)
-          ? [...ownedCalendars]
-          : [...sharedCalendars];
-        const idx = bucket.findIndex((c) => c.url === calendarUrl);
+        const list = [...orderedCalendars];
+        const idx = list.findIndex((c) => c.url === calendarUrl);
         if (idx === -1) {
           return { success: false, error: "Calendar not found" };
         }
         const swapWith = direction === "up" ? idx - 1 : idx + 1;
-        if (swapWith < 0 || swapWith >= bucket.length) {
+        if (swapWith < 0 || swapWith >= list.length) {
           return { success: false, error: "Out of bounds" };
         }
-        [bucket[idx], bucket[swapWith]] = [bucket[swapWith], bucket[idx]];
+        [list[idx], list[swapWith]] = [list[swapWith], list[idx]];
 
-        // Rewrite the whole bucket as 0, 1, 2, … — small contiguous
+        // Rewrite the whole list as 0, 1, 2, … — small contiguous
         // integers are the conventional values for this property, so
         // the order stays consistent if a user reorders the same
         // calendars in another CalDAV client. PROPPATCHes are skipped
         // for calendars whose value already matches, so a single swap
         // typically touches just the two moved siblings.
         const updates: Promise<{ success: boolean; error?: string }>[] = [];
-        for (let i = 0; i < bucket.length; i++) {
-          if (bucket[i].order !== i) {
-            updates.push(caldavService.updateCalendar(bucket[i].url, { order: i }));
+        for (let i = 0; i < list.length; i++) {
+          if (list[i].order !== i) {
+            updates.push(caldavService.updateCalendar(list[i].url, { order: i }));
           }
         }
         try {
@@ -447,7 +424,7 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
         movingRef.current = false;
       }
     },
-    [caldavService, ownedCalendars, sharedCalendars, refreshCalendars],
+    [caldavService, orderedCalendars, refreshCalendars],
   );
 
   const setCalendarHidden = useCallback(
@@ -526,8 +503,6 @@ export const CalendarContextProvider = ({ children }: CalendarContextProviderPro
     caldavService,
     adapter,
     davCalendars,
-    ownedCalendars,
-    sharedCalendars,
     orderedCalendars,
     hiddenCalendars,
     visibleCalendarUrls,

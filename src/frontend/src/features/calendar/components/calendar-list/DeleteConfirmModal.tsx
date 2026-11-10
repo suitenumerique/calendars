@@ -10,7 +10,6 @@ import { getCalendarDeleteMode } from "@/features/calendar/utils/calendar-owners
 import type { DeleteConfirmModalProps } from "./types";
 
 export const DeleteConfirmModal = ({
-  isOpen,
   calendar,
   onConfirm,
   onCancel,
@@ -24,7 +23,7 @@ export const DeleteConfirmModal = ({
 
   return (
     <Modal
-      isOpen={isOpen}
+      isOpen={calendar !== null}
       onClose={onCancel}
       size={ModalSize.SMALL}
       title={t(`${keyPrefix}.title`)}

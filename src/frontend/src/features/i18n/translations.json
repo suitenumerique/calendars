@@ -45,8 +45,7 @@
         "calendars": {
           "title": "Calendars",
           "description": "Edit your calendars and choose the ones you see. Hidden calendars do not appear in the calendar view or in your other calendar apps, and send no reminders. You keep your access.",
-          "noOwnedCalendar": "You have no calendar.",
-          "noSharedCalendar": "Nobody shares a calendar with you.",
+          "noCalendar": "You have no calendar.",
           "mobileLink": "Calendar settings",
           "hideTooltip": "Hide this calendar here and in your other calendar apps",
           "showTooltip": "Show this calendar again"
@@ -275,7 +274,6 @@
         "list": {
           "defaultCalendarName": "My calendar",
           "myCalendars": "My calendars",
-          "sharedCalendars": "Shared calendars",
           "shared": "(shared)",
           "mailboxCalendar": "Linked to mailbox: {{email}}",
           "unnamed": "Unnamed calendar",
@@ -812,8 +810,7 @@
         "calendars": {
           "title": "Calendriers",
           "description": "Modifiez vos calendriers et choisissez ceux que vous voyez. Les calendriers masqués n'apparaissent ni dans la vue calendrier ni dans vos autres applications d'agenda, et n'envoient pas de rappels. Vous gardez votre accès.",
-          "noOwnedCalendar": "Vous n'avez aucun calendrier.",
-          "noSharedCalendar": "Personne ne partage de calendrier avec vous.",
+          "noCalendar": "Vous n'avez aucun calendrier.",
           "mobileLink": "Paramètres des calendriers",
           "hideTooltip": "Masquer ce calendrier ici et dans vos autres applications d'agenda",
           "showTooltip": "Afficher à nouveau ce calendrier"
@@ -1306,7 +1303,6 @@
         "list": {
           "defaultCalendarName": "Mon calendrier",
           "myCalendars": "Mes calendriers",
-          "sharedCalendars": "Calendriers partagés",
           "shared": "(partagé)",
           "unnamed": "Calendrier sans nom",
           "mailboxCalendar": "Lié à la boîte : {{email}}",
@@ -1843,8 +1839,7 @@
         "calendars": {
           "title": "Kalenders",
           "description": "Bewerk je kalenders en kies welke je ziet. Verborgen kalenders verschijnen niet in de kalenderweergave of in je andere agenda-apps en sturen geen herinneringen. Je behoudt je toegang.",
-          "noOwnedCalendar": "Je hebt geen kalender.",
-          "noSharedCalendar": "Niemand deelt een kalender met je.",
+          "noCalendar": "Je hebt geen kalender.",
           "mobileLink": "Kalenderinstellingen",
           "hideTooltip": "Deze kalender hier en in je andere agenda-apps verbergen",
           "showTooltip": "Deze kalender weer tonen"
@@ -2084,7 +2079,6 @@
         "list": {
           "defaultCalendarName": "Mijn kalender",
           "myCalendars": "Mijn kalenders",
-          "sharedCalendars": "Gedeelde kalenders",
           "shared": "(gedeeld)",
           "unnamed": "Naamloze kalender",
           "mailboxCalendar": "Gekoppeld aan mailbox: {{email}}",

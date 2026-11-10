@@ -1,6 +1,6 @@
 /**
  * CalendarList component - List of calendars with visibility toggles.
- * It prompts users without an owned calendar to create one. Users
+ * It prompts users without a calendar of their own to create one. Users
  * with shared or hidden calendars can dismiss the prompt. Users with no
  * calendar must create one.
  */
@@ -10,7 +10,10 @@ import { useTranslation } from "react-i18next";
 import { useCalendarContext } from "../../contexts";
 import { setupCalendar } from "@/features/mailbox/api";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
-import { isMailboxCalendarAdmin } from "@/features/calendar/utils/calendar-ownership";
+import {
+  isMailboxCalendarAdmin,
+  isOwnCalendar,
+} from "@/features/calendar/utils/calendar-ownership";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { CalendarModal } from "./CalendarModal";
 import { CalendarShareModal } from "./CalendarShareModal";
@@ -20,6 +23,7 @@ import { ImportEventsModal } from "./ImportEventsModal";
 import { SubscriptionUrlModal } from "./SubscriptionUrlModal";
 import { CalendarListItem } from "./CalendarListItem";
 import { CalendarHiddenToast } from "./CalendarHiddenToast";
+import { useCalendarDelete } from "./hooks/useCalendarDelete";
 import { useCalendarHiding } from "./hooks/useCalendarHiding";
 import { useCalendarListState } from "./hooks/useCalendarListState";
 import { useMailboxCalendarDelete } from "./hooks/useMailboxCalendarDelete";
@@ -31,8 +35,7 @@ import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
 export const CalendarList = () => {
   const { t } = useTranslation();
   const {
-    ownedCalendars,
-    sharedCalendars,
+    orderedCalendars,
     hiddenCalendars,
     visibleCalendarUrls,
     toggleCalendarVisibility,
@@ -57,10 +60,8 @@ export const CalendarList = () => {
 
   const {
     modalState,
-    deleteState,
     shareModalState,
-    isMyCalendarsExpanded,
-    isSharedCalendarsExpanded,
+    isExpanded,
     openMenuUrl,
     handleOpenCreateModal,
     handleOpenEditModal,
@@ -68,19 +69,12 @@ export const CalendarList = () => {
     handleSaveCalendar,
     handleOpenShareModal,
     handleCloseShareModal,
-    handleOpenDeleteModal,
-    handleCloseDeleteModal,
-    handleConfirmDelete,
     handleMenuToggle,
     handleCloseMenu,
-    handleToggleMyCalendars,
-    handleToggleSharedCalendars,
-  } = useCalendarListState({
-    createCalendar,
-    updateCalendar,
-    deleteCalendar,
-    onDeleteError: handleDeleteError,
-  });
+    handleToggleExpanded,
+  } = useCalendarListState({ createCalendar, updateCalendar });
+
+  const calendarDelete = useCalendarDelete({ deleteCalendar, onError: handleDeleteError });
 
   const { availableMailboxes } = useMailboxContext();
   const mailboxDelete = useMailboxCalendarDelete({
@@ -118,10 +112,10 @@ export const CalendarList = () => {
     saveOnboardingDismissed();
   };
   // A hidden calendar is a calendar that the user can show again.
-  const canDismissOnboarding = sharedCalendars.length > 0 || hiddenCalendars.length > 0;
+  const canDismissOnboarding = orderedCalendars.length > 0 || hiddenCalendars.length > 0;
   const showOnboarding =
     !isCalendarLoading &&
-    ownedCalendars.length === 0 &&
+    !orderedCalendars.some(isOwnCalendar) &&
     (!canDismissOnboarding || !isOnboardingDismissed);
 
   // Wrap save to handle mailbox calendar creation
@@ -223,12 +217,12 @@ export const CalendarList = () => {
           <div className="calendar-list__section-header">
             <button
               className="calendar-list__toggle-btn"
-              onClick={handleToggleMyCalendars}
-              aria-expanded={isMyCalendarsExpanded}
+              onClick={handleToggleExpanded}
+              aria-expanded={isExpanded}
             >
               <ChevronDown
                 className={`calendar-list__toggle-icon ${
-                  isMyCalendarsExpanded ? "calendar-list__toggle-icon--expanded" : ""
+                  isExpanded ? "calendar-list__toggle-icon--expanded" : ""
                 }`}
               />
               <span className="calendar-list__section-title">{t("calendar.list.myCalendars")}</span>
@@ -242,9 +236,9 @@ export const CalendarList = () => {
               <Plus />
             </button>
           </div>
-          {isMyCalendarsExpanded && (
+          {isExpanded && (
             <div className="calendar-list__items">
-              {ownedCalendars.map((calendar, idx) => (
+              {orderedCalendars.map((calendar, idx) => (
                 <CalendarListItem
                   key={calendar.url}
                   calendar={calendar}
@@ -254,68 +248,24 @@ export const CalendarList = () => {
                   onToggleVisibility={toggleCalendarVisibility}
                   onMenuToggle={handleMenuToggle}
                   onEdit={handleOpenEditModal}
-                  onDelete={handleOpenDeleteModal}
+                  onDelete={calendarDelete.open}
                   onDeleteForMailbox={
                     isMailboxCalendarAdmin(calendar, availableMailboxes)
                       ? mailboxDelete.open
                       : undefined
                   }
                   onHide={handleHide}
-                  onShare={handleOpenShareModal}
+                  onShare={isOwnCalendar(calendar) ? handleOpenShareModal : undefined}
                   onImport={handleOpenImportModal}
                   onSubscription={handleOpenSubscriptionModal}
                   onMoveUp={idx > 0 ? handleMoveUp : undefined}
-                  onMoveDown={idx < ownedCalendars.length - 1 ? handleMoveDown : undefined}
+                  onMoveDown={idx < orderedCalendars.length - 1 ? handleMoveDown : undefined}
                   onCloseMenu={handleCloseMenu}
                 />
               ))}
             </div>
           )}
         </div>
-
-        {sharedCalendars.length > 0 && (
-          <div className="calendar-list__section">
-            <div className="calendar-list__section-header">
-              <button
-                className="calendar-list__toggle-btn"
-                onClick={handleToggleSharedCalendars}
-                aria-expanded={isSharedCalendarsExpanded}
-              >
-                <ChevronDown
-                  className={`calendar-list__toggle-icon ${
-                    isSharedCalendarsExpanded ? "calendar-list__toggle-icon--expanded" : ""
-                  }`}
-                />
-                <span className="calendar-list__section-title">
-                  {t("calendar.list.sharedCalendars")}
-                </span>
-              </button>
-            </div>
-            {isSharedCalendarsExpanded && (
-              <div className="calendar-list__items">
-                {sharedCalendars.map((calendar, idx) => (
-                  <CalendarListItem
-                    key={calendar.url}
-                    calendar={calendar}
-                    isVisible={visibleCalendarUrls.has(calendar.url)}
-                    isMenuOpen={openMenuUrl === calendar.url}
-                    mailboxEmail={calendar.mailboxEmail}
-                    onToggleVisibility={toggleCalendarVisibility}
-                    onMenuToggle={handleMenuToggle}
-                    onEdit={handleOpenEditModal}
-                    onDelete={handleOpenDeleteModal}
-                    onHide={handleHide}
-                    onImport={handleOpenImportModal}
-                    onSubscription={handleOpenSubscriptionModal}
-                    onMoveUp={idx > 0 ? handleMoveUp : undefined}
-                    onMoveDown={idx < sharedCalendars.length - 1 ? handleMoveDown : undefined}
-                    onCloseMenu={handleCloseMenu}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <CalendarModal
@@ -343,11 +293,10 @@ export const CalendarList = () => {
       />
 
       <DeleteConfirmModal
-        isOpen={deleteState.isOpen}
-        calendar={deleteState.calendar}
-        onConfirm={handleConfirmDelete}
-        onCancel={handleCloseDeleteModal}
-        isLoading={deleteState.isLoading}
+        calendar={calendarDelete.calendar}
+        onConfirm={calendarDelete.confirm}
+        onCancel={calendarDelete.close}
+        isLoading={calendarDelete.isLoading}
       />
 
       <MailboxCalendarDeleteModal
