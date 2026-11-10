@@ -12,40 +12,10 @@
     margin-bottom: 0.5rem;
   }
 
-  &__toggle-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 0.25rem 0;
-
-    &:hover {
-      .calendar-list__section-title {
-        color: var(--c--theme--colors--greyscale-700);
-      }
-    }
-  }
-
-  &__toggle-icon {
-    width: 1.125rem;
-    height: 1.125rem;
-    flex-shrink: 0;
-    color: var(--c--theme--colors--greyscale-600);
-    transition: transform 0.2s ease;
-    transform: rotate(-90deg);
-
-    &--expanded {
-      transform: rotate(0deg);
-    }
-  }
-
   &__section-title {
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--c--theme--colors--greyscale-800);
-    transition: color 0.15s;
   }
 
   &__add-btn {

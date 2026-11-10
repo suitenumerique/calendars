@@ -28,7 +28,7 @@ import { useCalendarHiding } from "./hooks/useCalendarHiding";
 import { useCalendarListState } from "./hooks/useCalendarListState";
 import { useMailboxCalendarDelete } from "./hooks/useMailboxCalendarDelete";
 import { extractCaldavPath, loadOnboardingDismissed, saveOnboardingDismissed } from "./utils";
-import { Plus, ChevronDown } from "@gouvfr-lasuite/ui-components/icons";
+import { Plus } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { CalDavCalendar } from "../../services/dav/types/caldav-service";
 
@@ -61,7 +61,6 @@ export const CalendarList = () => {
   const {
     modalState,
     shareModalState,
-    isExpanded,
     openMenuUrl,
     handleOpenCreateModal,
     handleOpenEditModal,
@@ -71,7 +70,6 @@ export const CalendarList = () => {
     handleCloseShareModal,
     handleMenuToggle,
     handleCloseMenu,
-    handleToggleExpanded,
   } = useCalendarListState({ createCalendar, updateCalendar });
 
   const calendarDelete = useCalendarDelete({ deleteCalendar, onError: handleDeleteError });
@@ -215,18 +213,7 @@ export const CalendarList = () => {
       <div className="calendar-list">
         <div className="calendar-list__section">
           <div className="calendar-list__section-header">
-            <button
-              className="calendar-list__toggle-btn"
-              onClick={handleToggleExpanded}
-              aria-expanded={isExpanded}
-            >
-              <ChevronDown
-                className={`calendar-list__toggle-icon ${
-                  isExpanded ? "calendar-list__toggle-icon--expanded" : ""
-                }`}
-              />
-              <span className="calendar-list__section-title">{t("calendar.list.myCalendars")}</span>
-            </button>
+            <span className="calendar-list__section-title">{t("calendar.list.myCalendars")}</span>
             <button
               className="calendar-list__add-btn"
               onClick={handleOpenCreateModal}
@@ -236,35 +223,33 @@ export const CalendarList = () => {
               <Plus />
             </button>
           </div>
-          {isExpanded && (
-            <div className="calendar-list__items">
-              {orderedCalendars.map((calendar, idx) => (
-                <CalendarListItem
-                  key={calendar.url}
-                  calendar={calendar}
-                  isVisible={visibleCalendarUrls.has(calendar.url)}
-                  isMenuOpen={openMenuUrl === calendar.url}
-                  mailboxEmail={calendar.mailboxEmail}
-                  onToggleVisibility={toggleCalendarVisibility}
-                  onMenuToggle={handleMenuToggle}
-                  onEdit={handleOpenEditModal}
-                  onDelete={calendarDelete.open}
-                  onDeleteForMailbox={
-                    isMailboxCalendarAdmin(calendar, availableMailboxes)
-                      ? mailboxDelete.open
-                      : undefined
-                  }
-                  onHide={handleHide}
-                  onShare={isOwnCalendar(calendar) ? handleOpenShareModal : undefined}
-                  onImport={handleOpenImportModal}
-                  onSubscription={handleOpenSubscriptionModal}
-                  onMoveUp={idx > 0 ? handleMoveUp : undefined}
-                  onMoveDown={idx < orderedCalendars.length - 1 ? handleMoveDown : undefined}
-                  onCloseMenu={handleCloseMenu}
-                />
-              ))}
-            </div>
-          )}
+          <div className="calendar-list__items">
+            {orderedCalendars.map((calendar, idx) => (
+              <CalendarListItem
+                key={calendar.url}
+                calendar={calendar}
+                isVisible={visibleCalendarUrls.has(calendar.url)}
+                isMenuOpen={openMenuUrl === calendar.url}
+                mailboxEmail={calendar.mailboxEmail}
+                onToggleVisibility={toggleCalendarVisibility}
+                onMenuToggle={handleMenuToggle}
+                onEdit={handleOpenEditModal}
+                onDelete={calendarDelete.open}
+                onDeleteForMailbox={
+                  isMailboxCalendarAdmin(calendar, availableMailboxes)
+                    ? mailboxDelete.open
+                    : undefined
+                }
+                onHide={handleHide}
+                onShare={isOwnCalendar(calendar) ? handleOpenShareModal : undefined}
+                onImport={handleOpenImportModal}
+                onSubscription={handleOpenSubscriptionModal}
+                onMoveUp={idx > 0 ? handleMoveUp : undefined}
+                onMoveDown={idx < orderedCalendars.length - 1 ? handleMoveDown : undefined}
+                onCloseMenu={handleCloseMenu}
+              />
+            ))}
+          </div>
         </div>
       </div>
 

@@ -38,7 +38,6 @@ export const useCalendarListState = ({
     calendar: null,
   });
 
-  const [isExpanded, setIsExpanded] = useState(true);
   const [openMenuUrl, setOpenMenuUrl] = useState<string | null>(null);
 
   // Share modal handlers
@@ -62,17 +61,10 @@ export const useCalendarListState = ({
     setOpenMenuUrl(null);
   }, []);
 
-  const handleToggleExpanded = useCallback(() => {
-    setIsExpanded((prev) => !prev);
-  }, []);
-
   return {
     // Modal state
     modalState,
     shareModalState,
-
-    // Expansion state
-    isExpanded,
     openMenuUrl,
 
     // Modal handlers
@@ -88,8 +80,5 @@ export const useCalendarListState = ({
     // Menu handlers
     handleMenuToggle,
     handleCloseMenu,
-
-    // Expansion handler
-    handleToggleExpanded,
   };
 };
