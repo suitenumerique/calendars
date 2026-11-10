@@ -1,8 +1,3 @@
-/**
- * useCalendarListState hook.
- * Manages state and handlers for the CalendarList component.
- */
-
 import { useState, useCallback } from "react";
 
 import type { CalendarContextType } from "../../../contexts/CalendarContext";
@@ -15,6 +10,7 @@ interface UseCalendarListStateProps {
   updateCalendar: CalendarContextType["updateCalendar"];
 }
 
+/** Holds the edit modal, the share modal and the open menu of the sidebar list. */
 export const useCalendarListState = ({
   createCalendar,
   updateCalendar,
