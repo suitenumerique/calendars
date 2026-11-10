@@ -28,7 +28,7 @@ import { Meet, Pin, Calendar, Edit, Lock } from "@gouvfr-lasuite/ui-components/i
 import type { IcsEvent, IcsOrganizer } from "ts-ics";
 
 import type { EventModalProps, RecurringDeleteOption, RecurringEditOption } from "./types";
-import { getDefaultCalendar } from "@/features/calendar/utils/default-calendar";
+import { getDefaultCalendar } from "@/features/calendar/utils/calendar-order";
 
 export const EventModal = ({
   isOpen,

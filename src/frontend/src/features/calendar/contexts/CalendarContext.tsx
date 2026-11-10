@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { CalDavService } from "../services/dav/CalDavService";
 import { EventCalendarAdapter } from "../services/dav/EventCalendarAdapter";
 import { caldavServerUrl } from "../utils/DavClient";
-import { sortCalendars } from "../utils/calendar-sort";
+import { sortCalendars } from "../utils/calendar-order";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { useAuth } from "@/features/auth/Auth";
 import { deleteMailboxCalendar as deleteMailboxCalendarApi } from "@/features/mailbox/api";

@@ -15,7 +15,7 @@ import { EventModal } from "../scheduler/EventModal";
 import { useCalendarContext } from "../../contexts";
 import { useLeftPanel } from "@/features/layouts/contexts/LeftPanelContext";
 import { Building, Clock, Plus, Puzzle, Settings } from "@gouvfr-lasuite/ui-components/icons";
-import { getDefaultCalendar } from "@/features/calendar/utils/default-calendar";
+import { getDefaultCalendar } from "@/features/calendar/utils/calendar-order";
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /**

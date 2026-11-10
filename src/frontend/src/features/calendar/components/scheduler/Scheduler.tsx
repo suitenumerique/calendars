@@ -37,7 +37,7 @@ import type { CalDavExtendedProps } from "../../services/dav/EventCalendarAdapte
 import type { EventCalendarEvent } from "../../services/dav/types/event-calendar";
 
 import type { SchedulerProps, EventModalState, MobileListEvent } from "./types";
-import { getDefaultCalendar } from "@/features/calendar/utils/default-calendar";
+import { getDefaultCalendar } from "@/features/calendar/utils/calendar-order";
 
 const BROWSER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 

@@ -14,7 +14,7 @@ import {
   isCalendarOwner,
   isMailboxCalendarAdmin,
 } from "@/features/calendar/utils/calendar-ownership";
-import { sortCalendars } from "@/features/calendar/utils/calendar-sort";
+import { sortCalendars } from "@/features/calendar/utils/calendar-order";
 import { useMailboxContext } from "@/features/mailbox/MailboxContext";
 import { addErrorToast } from "@/features/ui/components/toaster/Toaster";
 import { CalendarSettingsHeader } from "./CalendarSettingsHeader";
