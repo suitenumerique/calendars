@@ -24,6 +24,7 @@ namespace Calendars\SabreDav;
 
 use Sabre\DAV\Server;
 use Sabre\DAV\ServerPlugin;
+use Sabre\DAV\Sharing\Plugin as SharingPlugin;
 use Sabre\DAV\UUIDUtil;
 use Sabre\CalDAV\Backend\PDO as CalDAVBackend;
 use Sabre\VObject;
@@ -1217,6 +1218,20 @@ class InternalApiPlugin extends ServerPlugin
             $response->setBody(json_encode(['error' => 'Calendar not found']));
             return false;
         }
+        // This endpoint writes directly to the backend, so it skips the
+        // ACL checks of a CalDAV PUT. Only the owner and read-write
+        // sharees can add events.
+        $writeAccess = [
+            SharingPlugin::ACCESS_SHAREDOWNER,
+            SharingPlugin::ACCESS_NOTSHARED,
+            SharingPlugin::ACCESS_READWRITE,
+        ];
+        if (!in_array($calendarInfo['access'], $writeAccess, true)) {
+            $response->setStatus(403);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['error' => 'No write access to this calendar']));
+            return false;
+        }
         $calendarId = $calendarInfo['id'];
         $supportedComponents = $calendarInfo['supportedComponents'];
 
@@ -1605,7 +1620,7 @@ class InternalApiPlugin extends ServerPlugin
      * ``VTODO`` / ``VJOURNAL`` items in a VEVENT-only calendar by
      * sidestepping ``CalDAV\Plugin::validateICalendar``.
      *
-     * @return array|null ``['id' => mixed, 'supportedComponents' => string[]]``
+     * @return array|null ``['id' => mixed, 'supportedComponents' => string[], 'access' => int]``
      */
     private function resolveCalendarInfo(string $principalUri, string $calendarUri)
     {
@@ -1636,6 +1651,7 @@ class InternalApiPlugin extends ServerPlugin
             return [
                 'id' => $calendar['id'],
                 'supportedComponents' => $supported,
+                'access' => $calendar['share-access'] ?? SharingPlugin::ACCESS_NOTSHARED,
             ];
         }
 

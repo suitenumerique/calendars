@@ -13,12 +13,14 @@ import {
   buildProppatchXml,
   buildCalendarQueryXml,
   parseSharePrivilege,
+  isReadOnlyShareAccess,
   buildShareRequestXml,
   buildUnshareRequestXml,
   parseCalendarComponents,
   parseCalendarOrder,
   getCalendarUrlFromEventUrl,
 } from "../caldav-helpers";
+import { ShareAccess } from "../types/caldav-service";
 import { parseDavErrorMessage } from "@/features/calendar/utils/DavClient";
 
 describe("caldav-helpers", () => {
@@ -403,6 +405,22 @@ describe("caldav-helpers", () => {
   // Response Parsing Helpers
   // ============================================================================
   describe("Response Parsing Helpers", () => {
+    describe("isReadOnlyShareAccess", () => {
+      it("is true for a read share", () => {
+        expect(isReadOnlyShareAccess({ [ShareAccess.READ]: {} })).toBe(true);
+      });
+
+      it("is false for an owner or a read-write share", () => {
+        expect(isReadOnlyShareAccess({ [ShareAccess.SHARED_OWNER]: {} })).toBe(false);
+        expect(isReadOnlyShareAccess({ [ShareAccess.NOT_SHARED]: {} })).toBe(false);
+        expect(isReadOnlyShareAccess({ [ShareAccess.READ_WRITE]: {} })).toBe(false);
+      });
+
+      it("is false when the value is missing", () => {
+        expect(isReadOnlyShareAccess(undefined)).toBe(false);
+      });
+    });
+
     describe("parseCalendarComponents", () => {
       it("returns undefined for empty input", () => {
         expect(parseCalendarComponents(null)).toBeUndefined();
