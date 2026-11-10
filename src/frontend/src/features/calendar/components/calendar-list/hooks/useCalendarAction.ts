@@ -28,12 +28,12 @@ export const useCalendarAction = ({ run, errorMessage, onError }: UseCalendarAct
 
   const confirm = useCallback(async () => {
     if (!calendar) return;
-    const request = run(calendar);
-    if (!request) return;
 
     setIsLoading(true);
     let success = false;
     try {
+      const request = run(calendar);
+      if (!request) return;
       ({ success } = await request);
     } catch (error) {
       console.error(errorMessage, error);
