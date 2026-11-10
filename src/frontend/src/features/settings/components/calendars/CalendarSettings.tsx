@@ -64,25 +64,20 @@ export const CalendarSettings = () => {
   const { modalState, handleOpenEditModal, handleCloseModal, handleSaveCalendar } =
     useCalendarModal({ createCalendar, updateCalendar });
 
-  const canDeleteForMailbox = (calendar: CalDavCalendar) =>
-    isMailboxCalendarAdmin(calendar, availableMailboxes);
-  // A sync-managed calendar comes back at the next sync, so the user hides it instead.
-  const canLeave = (calendar: CalDavCalendar) =>
-    !isCalendarOwner(calendar) && !calendar.syncManaged;
-  const withMenuSlot = calendars.some(
-    (calendar) => canDeleteForMailbox(calendar) || canLeave(calendar),
-  );
-
-  const renderActions = (calendar: CalDavCalendar): ReactNode => (
-    <CalendarSettingsActions
-      calendar={calendar}
-      onEdit={handleOpenEditModal}
-      onSetHidden={setHidden}
-      onLeave={canLeave(calendar) ? calendarDelete.open : undefined}
-      onDeleteForMailbox={canDeleteForMailbox(calendar) ? mailboxDelete.open : undefined}
-      withMenuSlot={withMenuSlot}
-    />
-  );
+  const renderActions = (calendar: CalDavCalendar): ReactNode => {
+    const isOwner = isCalendarOwner(calendar);
+    const isAdmin = isMailboxCalendarAdmin(calendar, availableMailboxes);
+    return (
+      <CalendarSettingsActions
+        calendar={calendar}
+        onEdit={handleOpenEditModal}
+        onSetHidden={setHidden}
+        onDelete={isOwner ? calendarDelete.open : undefined}
+        onLeave={isOwner ? undefined : calendarDelete.open}
+        onDeleteForMailbox={isAdmin ? mailboxDelete.open : undefined}
+      />
+    );
+  };
 
   return (
     <div className="calendar-settings">
