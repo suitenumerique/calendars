@@ -1,14 +1,14 @@
 # Django calendars
 
 # ---- base image to inherit from ----
-FROM python:3.14.8-alpine@sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72 AS base
+FROM python:3.14.10-alpine@sha256:a18b20ad69e74df6cf6d2e1b1a260d7a1ecf5380fd83b310f83ba88c461cf894 AS base
 
 # Upgrade pip to its latest release to speed up dependencies installation
 # We must do taht to avoid having an outdated pip version with security issues
 RUN python -m pip install --upgrade pip setuptools
 
 # Bump to force an apk refresh + security upgrade of the base OS.
-ENV MIN_UPDATE_DATE="2026-10-21"
+ENV MIN_UPDATE_DATE="2026-11-12"
 
 # Upgrade system packages to install security updates
 RUN apk update && \

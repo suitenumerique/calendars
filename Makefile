@@ -36,7 +36,7 @@ MANAGE              = $(COMPOSE_RUN_APP) python manage.py
 MANAGE_EXEC         = $(COMPOSE_EXEC_APP) python manage.py
 PSQL_E2E            = ./bin/postgres_e2e
 # Keep in sync with src/caldav/Dockerfile and bin/scalingo_postfrontend
-COMPOSER_IMAGE      = composer:2.10.3@sha256:af98f42dfff7c68ba8d53c2164fd9fde1087b7d449514baa38c418b1f6bc4bac
+COMPOSER_IMAGE      = composer:2.10.3@sha256:2cf275428757e5435a667bfc0d038b14520ca02be2b1b70d44a05c8c19e2de48
 
 # ==============================================================================
 # RULES
