@@ -19,6 +19,7 @@
  */
 
 import type {
+  IcsAlarm,
   IcsCalendar,
   IcsClassType,
   IcsDateObject,
@@ -129,6 +130,8 @@ export type CalDavExtendedProps = {
   status?: string;
   /** Event visibility / CLASS (PUBLIC | PRIVATE | CONFIDENTIAL | …) */
   class?: IcsClassType;
+  /** The reminders (VALARM) of the event */
+  alarms?: IcsAlarm[];
   /** Event location */
   location?: string;
   /** Event description */
@@ -295,6 +298,7 @@ export class EventCalendarAdapter {
       sequence: icsEvent.sequence,
       status: icsEvent.status,
       class: icsEvent.class,
+      alarms: icsEvent.alarms,
       location: icsEvent.location,
       description: icsEvent.description,
       organizer: icsEvent.organizer
@@ -456,6 +460,9 @@ export class EventCalendarAdapter {
     // Carry CLASS (visibility) back so editing an event preserves its
     // PRIVATE/CONFIDENTIAL setting instead of silently resetting it.
     if (extProps.class) icsEvent.class = extProps.class;
+    // Carry the alarms back too. Without them, an edit or a drag of the
+    // event deletes its reminders.
+    if (extProps.alarms?.length) icsEvent.alarms = extProps.alarms;
     if (extProps.categories) icsEvent.categories = extProps.categories;
     if (extProps.priority != null) icsEvent.priority = String(extProps.priority);
     // SECURITY: re-sanitize on the way out too. The forward path
