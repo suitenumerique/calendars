@@ -236,7 +236,14 @@
             "1day": "1 day before",
             "1week": "1 week before",
             "untitled": "Untitled event",
-            "notificationBody": "Starts at {{time}}"
+            "notificationBody": "Starts at {{time}}",
+            "remove": "Remove reminder",
+            "atStart": "At the start of the event",
+            "atEnd": "At the end of the event",
+            "beforeStart": "{{duration}} before",
+            "afterStart": "{{duration}} after the start",
+            "beforeEnd": "{{duration}} before the end",
+            "afterEnd": "{{duration}} after the end"
           },
           "status": {
             "label": "Status",
@@ -1268,7 +1275,14 @@
             "1day": "1 jour avant",
             "1week": "1 semaine avant",
             "untitled": "Événement sans titre",
-            "notificationBody": "Commence à {{time}}"
+            "notificationBody": "Commence à {{time}}",
+            "remove": "Supprimer le rappel",
+            "atStart": "Au début de l'événement",
+            "atEnd": "À la fin de l'événement",
+            "beforeStart": "{{duration}} avant",
+            "afterStart": "{{duration}} après le début",
+            "beforeEnd": "{{duration}} avant la fin",
+            "afterEnd": "{{duration}} après la fin"
           },
           "status": {
             "label": "Statut",
@@ -2047,7 +2061,14 @@
             "1day": "1 dag voor",
             "1week": "1 week voor",
             "untitled": "Naamloos evenement",
-            "notificationBody": "Begint om {{time}}"
+            "notificationBody": "Begint om {{time}}",
+            "remove": "Herinnering verwijderen",
+            "atStart": "Bij het begin van het evenement",
+            "atEnd": "Aan het einde van het evenement",
+            "beforeStart": "{{duration}} voor",
+            "afterStart": "{{duration}} na het begin",
+            "beforeEnd": "{{duration}} voor het einde",
+            "afterEnd": "{{duration}} na het einde"
           },
           "status": {
             "label": "Status",
