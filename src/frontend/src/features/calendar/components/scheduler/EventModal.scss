@@ -159,6 +159,11 @@
   flex-direction: column;
   gap: 0.5rem;
 
+  // The column stretches its children. The button keeps its own width.
+  &__add {
+    align-self: flex-start;
+  }
+
   &__item {
     display: flex;
     align-items: center;

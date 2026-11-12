@@ -93,6 +93,7 @@ export const RemindersSection = ({
       label={t("calendar.event.sections.addReminder")}
       isEmpty={alarms.length === 0}
       alwaysOpen={alwaysOpen}
+      iconAlign="flex-start"
       isExpanded={isExpanded}
       onToggle={onToggle}
     >
@@ -111,11 +112,13 @@ export const RemindersSection = ({
           return (
             <div key={`${value}-${index}`} className="reminders-section__item">
               <Select
-                label=""
+                label={t("calendar.event.reminders.label")}
+                hideLabel
                 value={value}
                 onChange={(e) => handleChange(index, String(e.target.value))}
                 options={options}
                 clearable={false}
+                variant="classic"
                 fullWidth
               />
               <button
@@ -129,8 +132,14 @@ export const RemindersSection = ({
             </div>
           );
         })}
-        <Button size="small" color="neutral" onClick={handleAdd}>
-          <Plus />
+        <Button
+          className="reminders-section__add"
+          size="small"
+          color="neutral"
+          variant="tertiary"
+          icon={<Plus />}
+          onClick={handleAdd}
+        >
           {t("calendar.event.sections.addReminder")}
         </Button>
       </div>
