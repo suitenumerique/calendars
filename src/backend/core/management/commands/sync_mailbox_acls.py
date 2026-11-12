@@ -8,16 +8,18 @@ Usage:
     python manage.py sync_mailbox_acls                        # all users
     python manage.py sync_mailbox_acls --email alice@co       # one user
     python manage.py sync_mailbox_acls --mailbox contact@co   # one mailbox
+    python manage.py sync_mailbox_acls --enqueue              # all users, in the worker
 """
 
 import logging
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from core.services.messages_service import MessagesServiceError
 from core.services.setup_service import SetupService
+from core.tasks import sync_all_mailbox_acls
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -37,10 +39,22 @@ class Command(BaseCommand):
             "--mailbox",
             help="Sync all users of this mailbox (by mailbox email).",
         )
+        parser.add_argument(
+            "--enqueue",
+            action="store_true",
+            help="Send the sync of all users to the worker and exit.",
+        )
 
     def handle(self, *args, **options):
         if not settings.FEATURE_MESSAGES_INTEGRATION:
             self.stderr.write("FEATURE_MESSAGES_INTEGRATION is disabled.")
+            return
+
+        if options.get("enqueue"):
+            if options.get("email") or options.get("mailbox"):
+                raise CommandError("--enqueue syncs all users.")
+            message = sync_all_mailbox_acls.send()
+            self.stdout.write(f"Enqueued mailbox sync {message.message_id}.")
             return
 
         # Eagerly probe ``service.messages`` so a missing Messages

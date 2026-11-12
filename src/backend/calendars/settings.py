@@ -1064,7 +1064,11 @@ class Test(Base):
     DRAMATIQ_BROKER = {
         "BROKER": "core.task_utils.EagerBroker",
         "OPTIONS": {},
+        # EagerBroker only runs CurrentMessage and Results. The other
+        # middlewares are here so that actors can declare their options.
         "MIDDLEWARE": [
+            "dramatiq.middleware.AgeLimit",
+            "dramatiq.middleware.TimeLimit",
             "dramatiq.middleware.CurrentMessage",
             "dramatiq.middleware.Retries",
         ],

@@ -109,7 +109,12 @@ share: it sets the access and the `is_sync_managed` flag.
 
 **Recurring background sync**: schedule `sync_all_mailbox_acls` via cron
 (or call the management command periodically). It iterates users with
-organizations and resyncs their mailbox shares.
+organizations and resyncs their mailbox shares. On Scalingo, `cron.json`
+runs `sync_mailbox_acls --enqueue` every 15 minutes. The command sends
+the task to the worker and exits. The worker runs the sync, because it
+has the internal CalDAV server. The interval sets the revocation delay:
+a user removed from a mailbox keeps access for up to about 20 minutes
+(the interval plus the 5 minute Messages cache).
 
 **Sync commands**:
 
@@ -117,6 +122,7 @@ organizations and resyncs their mailbox shares.
 python manage.py sync_mailbox_acls                          # all users
 python manage.py sync_mailbox_acls --email alice@company.com   # one user
 python manage.py sync_mailbox_acls --mailbox contact@company.com  # one mailbox
+python manage.py sync_mailbox_acls --enqueue                # all users, in the worker
 ```
 
 ## Calendar Creation
