@@ -52,7 +52,21 @@ def import_events_task(user_id, caldav_path, ics_data_hex):
     }
 
 
-@register_task(queue="sync")
+# The cron runs this task every 15 minutes, and the next run does the
+# same work. Thus a failed run is not retried, and a message older than
+# 15 minutes is dropped.
+# The time limit only stops a stuck run. It does not follow the cron
+# interval: the task syncs users in a fixed order, so a limit shorter
+# than a run would never sync the last users.
+# Two runs can overlap. This is accepted: each run sends the full state
+# of each user, and CalDAV applies it idempotently.
+@register_task(
+    queue="sync",
+    time_limit=60 * 60 * 1000,
+    max_age=15 * 60 * 1000,
+    max_retries=0,
+    store_results=False,
+)
 def sync_all_mailbox_acls():
     """Sync Messages mailbox ACLs for all users.
 
@@ -94,4 +108,9 @@ def sync_all_mailbox_acls():
             logger.exception("sync_all_mailbox_acls: failed for user %s", user.pk)
             errors += 1
 
-    logger.info("sync_all_mailbox_acls: synced %d users, %d errors", total, errors)
+    logger.log(
+        logging.WARNING if errors else logging.INFO,
+        "sync_all_mailbox_acls: synced %d users, %d errors",
+        total,
+        errors,
+    )

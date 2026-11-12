@@ -420,3 +420,51 @@ class TestImportFullRoundTrip:
         assert data["status"] == "SUCCESS"
         assert data["result"]["skipped_count"] == 2
         assert data["result"]["errors"] == ["Event A", "Event B"]
+
+
+class TestSyncMailboxAclsEnqueue:
+    """Tests for the --enqueue option of the sync_mailbox_acls command."""
+
+    COMMAND_MODULE = "core.management.commands.sync_mailbox_acls"
+
+    def test_enqueue_sends_the_task(self, settings):
+        """--enqueue sends the sync task and does not sync in place."""
+        from django.core.management import call_command  # noqa: PLC0415
+
+        settings.FEATURE_MESSAGES_INTEGRATION = True
+
+        with (
+            patch(f"{self.COMMAND_MODULE}.sync_all_mailbox_acls") as mock_task,
+            patch(f"{self.COMMAND_MODULE}.SetupService") as mock_service,
+        ):
+            mock_task.send.return_value = MagicMock(message_id="msg-1")
+            call_command("sync_mailbox_acls", "--enqueue")
+
+        mock_task.send.assert_called_once_with()
+        mock_service.assert_not_called()
+
+    def test_enqueue_with_email_fails(self, settings):
+        """--enqueue refuses a single user."""
+        from django.core.management import call_command  # noqa: PLC0415
+        from django.core.management.base import CommandError  # noqa: PLC0415
+
+        settings.FEATURE_MESSAGES_INTEGRATION = True
+
+        with patch(f"{self.COMMAND_MODULE}.sync_all_mailbox_acls") as mock_task:
+            with pytest.raises(CommandError):
+                call_command(
+                    "sync_mailbox_acls", "--enqueue", "--email", "a@example.com"
+                )
+
+        mock_task.send.assert_not_called()
+
+    def test_enqueue_with_feature_disabled(self, settings):
+        """--enqueue sends nothing when the Messages integration is off."""
+        from django.core.management import call_command  # noqa: PLC0415
+
+        settings.FEATURE_MESSAGES_INTEGRATION = False
+
+        with patch(f"{self.COMMAND_MODULE}.sync_all_mailbox_acls") as mock_task:
+            call_command("sync_mailbox_acls", "--enqueue")
+
+        mock_task.send.assert_not_called()
