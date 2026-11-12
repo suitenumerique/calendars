@@ -13,6 +13,7 @@ and this project adheres to
 ### Added
 
 - ✨(auth) add silent login support
+- ✨(front) add event reminders with in-app and browser notifications
 
 ## [0.1.0] - 2026-06-18
 

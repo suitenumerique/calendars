@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { IcsEvent } from "ts-ics";
 
 import { useCalendarContext } from "../contexts/CalendarContext";
+import { isCalendarOwner } from "../utils/calendar-ownership";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import {
   buildAlarmMap,
@@ -27,14 +28,15 @@ const BACKFILL_MS = 5 * 60_000;
 
 /**
  * Drives in-app + browser notifications for event reminders (VALARM) while
- * the app is open. It independently polls a near-term window across all
- * visible calendars — the calendar grid only loads the range currently in
- * view, which would otherwise miss reminders for today while browsing
- * another month.
+ * the app is open. It independently polls a near-term window across the
+ * visible calendars that the user owns — the calendar grid only loads the
+ * range currently in view, which would otherwise miss reminders for today
+ * while browsing another month. A shared calendar is left out: its alarms
+ * belong to its owner.
  */
 export const useEventReminders = () => {
   const { t, i18n } = useTranslation();
-  const { caldavService, visibleCalendarUrls, isConnected } = useCalendarContext();
+  const { caldavService, davCalendars, visibleCalendarUrls, isConnected } = useCalendarContext();
 
   const upcomingRef = useRef<{ event: IcsEvent; calendarUrl: string }[]>([]);
   const firedRef = useRef<Map<string, number>>(new Map());
@@ -43,11 +45,6 @@ export const useEventReminders = () => {
   tRef.current = t;
   const localeRef = useRef(i18n.language);
   localeRef.current = i18n.language;
-
-  // Restore the already-fired keys so a reload doesn't replay reminders.
-  useEffect(() => {
-    firedRef.current = loadFiredReminders(Date.now());
-  }, []);
 
   // Notification permission is requested from a user gesture (saving an
   // event with a reminder), not here — browsers ignore/deny prompts that
@@ -79,6 +76,14 @@ export const useEventReminders = () => {
   const tick = useCallback(() => {
     const now = Date.now();
     const due = collectDueReminders(upcomingRef.current, now, BACKFILL_MS);
+    if (due.length === 0) return;
+
+    // Read the store again on each pass. A reload or another tab can
+    // have fired a reminder since the last pass.
+    for (const [key, firedAt] of loadFiredReminders(now)) {
+      firedRef.current.set(key, firedAt);
+    }
+
     let changed = false;
     for (const reminder of due) {
       if (firedRef.current.has(reminder.key)) continue;
@@ -90,7 +95,9 @@ export const useEventReminders = () => {
   }, [fire]);
 
   const fetchUpcoming = useCallback(async () => {
-    const urls = [...visibleCalendarUrls];
+    const urls = davCalendars
+      .filter((calendar) => isCalendarOwner(calendar) && visibleCalendarUrls.has(calendar.url))
+      .map((calendar) => calendar.url);
     if (urls.length === 0) {
       upcomingRef.current = [];
       return;
@@ -125,7 +132,7 @@ export const useEventReminders = () => {
 
     const results = await Promise.all(urls.map(fetchCalendar));
     upcomingRef.current = results.flat().filter(({ event }) => event.alarms?.length);
-  }, [caldavService, visibleCalendarUrls]);
+  }, [caldavService, davCalendars, visibleCalendarUrls]);
 
   useEffect(() => {
     if (!isConnected) return;

@@ -31,6 +31,7 @@ import type { IcsEvent, IcsOrganizer } from "ts-ics";
 
 import type { EventModalProps, RecurringDeleteOption, RecurringEditOption } from "./types";
 import { getDefaultCalendar } from "@/features/calendar/utils/calendar-order";
+import { isCalendarOwner } from "@/features/calendar/utils/calendar-ownership";
 
 export const EventModal = ({
   isOpen,
@@ -85,6 +86,11 @@ export const EventModal = ({
     mode,
     availableResources,
   });
+
+  // A reminder is personal. In a shared calendar, the alarm would fire
+  // for each user who can see the event.
+  const selectedCalendar = calendars.find((c) => c.url === form.selectedCalendarUrl);
+  const canSetReminders = !!selectedCalendar && isCalendarOwner(selectedCalendar);
 
   // Organizer that tracks the *currently selected* calendar in the
   // dropdown — this is what gets written into the ICS on save and
@@ -180,11 +186,20 @@ export const EventModal = ({
     try {
       const icsEvent = form.toIcsEvent();
 
+      if (!canSetReminders) {
+        // The form cannot edit the alarms here. Keep the alarms that the
+        // event already has in this calendar, and drop all others.
+        icsEvent.alarms =
+          form.selectedCalendarUrl === calendarUrl && event?.alarms?.length
+            ? event.alarms
+            : undefined;
+      }
+
       // Saving an event with a reminder is the user gesture we use to ask
       // for notification permission (browsers ignore prompts that aren't
       // tied to an interaction). Fire-and-forget — reminders still surface
       // as in-app toasts if the user declines.
-      if (form.alarms.length > 0) {
+      if (canSetReminders && form.alarms.length > 0) {
         void ensureNotificationPermission();
       }
 
@@ -314,11 +329,15 @@ export const EventModal = ({
         icon: <Lock />,
         label: t("calendar.event.visibility.label"),
       },
-      {
-        id: "reminders" as const,
-        icon: <Bell />,
-        label: t("calendar.event.sections.addReminder"),
-      },
+      ...(canSetReminders
+        ? [
+            {
+              id: "reminders" as const,
+              icon: <Bell />,
+              label: t("calendar.event.sections.addReminder"),
+            },
+          ]
+        : []),
       ...(availableResources.length > 0
         ? [
             {
@@ -338,7 +357,7 @@ export const EventModal = ({
           ]
         : []),
     ],
-    [t, meetBaseUrl, availableResources.length, isSchedulingEnabled],
+    [t, meetBaseUrl, availableResources.length, isSchedulingEnabled, canSetReminders],
   );
 
   return (
@@ -522,7 +541,7 @@ export const EventModal = ({
               alwaysOpen
             />
           )}
-          {form.isSectionExpanded("reminders") && (
+          {canSetReminders && form.isSectionExpanded("reminders") && (
             <RemindersSection alarms={form.alarms} onChange={form.setAlarms} alwaysOpen />
           )}
           {isInvited && mode === "edit" && onRespondToInvitation && (
