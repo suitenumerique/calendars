@@ -10,12 +10,12 @@
 import {
   convertIcsCalendar,
   convertIcsTimezone,
-  generateIcsCalendar,
   type IcsCalendar,
   type IcsDateObject,
   type IcsEvent,
 } from "ts-ics";
 import { davRequest } from "@/features/calendar/utils/DavClient";
+import { serializeIcsCalendar } from "./helpers/serialize-ics";
 import type {
   CalDavCredentials,
   CalDavAccount,
@@ -594,7 +594,7 @@ export class CalDavService {
 
       // Regenerate ICS with the updated event
       this.validateTimezones(calendar);
-      const updatedIcsText = generateIcsCalendar(calendar);
+      const updatedIcsText = serializeIcsCalendar(calendar);
 
       // PUT the updated event back
       const updateResult = await davRequest({
@@ -691,7 +691,7 @@ export class CalDavService {
       }
 
       this.validateTimezones(calendar);
-      const updatedIcsText = generateIcsCalendar(calendar);
+      const updatedIcsText = serializeIcsCalendar(calendar);
 
       // PUT the updated ICS
       const updateResult = await davRequest({
@@ -776,7 +776,7 @@ export class CalDavService {
       }
 
       this.validateTimezones(calendar);
-      const updatedIcsText = generateIcsCalendar(calendar);
+      const updatedIcsText = serializeIcsCalendar(calendar);
 
       // PUT the updated ICS
       const updateResult = await davRequest({
@@ -896,7 +896,7 @@ export class CalDavService {
       }
 
       this.validateTimezones(calendar);
-      const updatedIcsText = generateIcsCalendar(calendar);
+      const updatedIcsText = serializeIcsCalendar(calendar);
 
       // PUT the updated ICS
       const updateResult = await davRequest({
@@ -995,7 +995,7 @@ export class CalDavService {
       };
 
       this.validateTimezones(icsCalendar);
-      const iCalString = generateIcsCalendar(icsCalendar);
+      const iCalString = serializeIcsCalendar(icsCalendar);
 
       const eventUrl = `${params.calendarUrl}${event.uid}.ics`;
       const response = await davRequest({
@@ -1125,7 +1125,7 @@ export class CalDavService {
       }
 
       this.validateTimezones(icsCalendar);
-      const iCalString = generateIcsCalendar(icsCalendar);
+      const iCalString = serializeIcsCalendar(icsCalendar);
 
       const ifMatchEtag = params.etag ?? cachedEvent?.etag;
 
@@ -1535,7 +1535,7 @@ export class CalDavService {
     const written = await davRequest({
       url: eventUrl,
       method: "PUT",
-      body: generateIcsCalendar(calendar),
+      body: serializeIcsCalendar(calendar),
       contentType: "text/calendar; charset=utf-8",
       headers: etag ? { "If-Match": etag } : undefined,
     });
