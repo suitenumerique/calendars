@@ -169,7 +169,5 @@ ENV TRANSLATIONS_JSON_PATH=/app/translations.json
 # The default command runs gunicorn WSGI server in calendars' main module
 CMD ["gunicorn", "-c", "/app/gunicorn.conf.py", "calendars.wsgi:application"]
 
-# The check calls the container IP. ALLOWED_HOSTS always includes this IP,
-# also when DJANGO_ALLOWED_HOSTS holds only wildcards such as "*".
 HEALTHCHECK --interval=30s --timeout=2s --start-period=30s \
   CMD ["python", "-c", "import socket; from urllib.request import urlopen; urlopen(f'http://{socket.gethostbyname(socket.gethostname())}:8000/__heartbeat__/', timeout=2)"]

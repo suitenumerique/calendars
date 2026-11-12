@@ -23,7 +23,7 @@ logger = getLogger(__name__)
 
 
 def heartbeat(request):
-    """Return 200 when the application runs and the database is reachable."""
+    """Healthcheck endpoint to verify that the application is running and DB is reachable."""
     try:
         connection.ensure_connection()
     except OperationalError as e:
