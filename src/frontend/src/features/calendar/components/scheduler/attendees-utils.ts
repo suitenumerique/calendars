@@ -40,7 +40,7 @@ export interface ParsedAttendeeList {
 const LIST_ENTRY = /(?:"[^"]*"|[^,;\n\r\t])+/g;
 const NAMED_ADDRESS = /([^<>]*)<([^<>]*)>/g;
 
-const splitWords = (text: string): string[] => text.match(/"[^"]*"|\S+/g) ?? [];
+const splitWords = (text: string): string[] => text.match(/(?:"[^"]*"|\S)+/g) ?? [];
 
 // A quoted address before `<` is a name, as in `'jane@x.org' <jane@x.org>`.
 const isPlainAddress = (word: string): boolean => isValidEmail(word) && !/^["']/.test(word);

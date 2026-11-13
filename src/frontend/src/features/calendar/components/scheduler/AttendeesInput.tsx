@@ -102,13 +102,8 @@ export function AttendeesInput({
         return;
       }
 
-      if (added.length === 0) {
-        const alreadyAdded = parsed.attendees.some(({ email }) => present.has(email));
-        setError(
-          alreadyAdded
-            ? t("calendar.attendees.alreadyAdded")
-            : t("calendar.attendees.cannotAddOrganizer"),
-        );
+      if (parsed.attendees.length === 1 && parsed.attendees[0].email === organizerAddress) {
+        setError(t("calendar.attendees.cannotAddOrganizer"));
         return;
       }
 
@@ -130,6 +125,7 @@ export function AttendeesInput({
     const before = value.slice(0, selectionStart ?? value.length);
     const after = value.slice(selectionEnd ?? value.length);
     setInputValue(before + pasted.replace(/[\r\n]+/g, ", ") + after);
+    setHighlightedIndex(-1);
     setError(null);
   }, []);
 

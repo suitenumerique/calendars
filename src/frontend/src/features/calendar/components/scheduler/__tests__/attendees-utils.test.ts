@@ -153,6 +153,13 @@ describe("attendees-utils", () => {
       ]);
     });
 
+    it("keeps an address with a quoted local part", () => {
+      expect(parseAttendeeList('"john"@x.org, b@x.org').attendees).toEqual([
+        { email: '"john"@x.org' },
+        { email: "b@x.org" },
+      ]);
+    });
+
     it("reads a quoted address as the name of a named entry", () => {
       expect(
         parseAttendeeList(
