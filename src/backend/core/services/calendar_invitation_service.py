@@ -20,7 +20,7 @@ from typing import Optional
 from urllib.parse import urlencode, urlparse
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives, get_connection
 from django.core.signing import TimestampSigner
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -31,6 +31,10 @@ from core.models import User
 from core.services.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
+
+
+class InvitationNotSentError(Exception):
+    """No part of the email was sent, so a new attempt cannot send it twice."""
 
 
 class _CalendarEmail(EmailMultiAlternatives):
@@ -471,6 +475,10 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
 
         Returns:
             True if email was sent successfully, False otherwise
+
+        Raises:
+            InvitationNotSentError: the SMTP server or the Messages mailbox
+                is not available, and nothing was sent
         """
         # Clean email addresses (remove mailto: prefix)
         sender = sender_email.replace("mailto:", "").strip()
@@ -565,6 +573,8 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 event_uid=event.uid,
             )
 
+        except InvitationNotSentError:
+            raise
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "Failed to send calendar invitation to %s: %s", recipient, e
@@ -772,6 +782,14 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         sender, Reply-To is the organizer so replies bypass the system
         address.
         """
+        connection = get_connection(fail_silently=False)
+        try:
+            connection.open()
+        except Exception as e:
+            raise InvitationNotSentError(
+                f"Cannot connect to the SMTP server: {e}"
+            ) from e
+
         try:
             from_addr = (
                 settings.CALENDAR_INVITATION_FROM_EMAIL or settings.DEFAULT_FROM_EMAIL
@@ -787,6 +805,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 ics_method=ics_method,
                 itip_enabled=settings.CALENDAR_ITIP_ENABLED,
             )
+            email.connection = connection
             email.send(fail_silently=False)
 
             logger.info(
@@ -803,6 +822,8 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 "Failed to send calendar invitation email to %s: %s", to_email, e
             )
             return False
+        finally:
+            connection.close()
 
     def _send_via_messages(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -830,15 +851,11 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             messages = MessagesService()
             mailbox = messages.get_mailbox_by_email(mailbox_email)
             if not mailbox:
-                logger.error(
-                    "Mailbox %s not found in Messages (lookup may have errored — "
-                    "check earlier 'fetch_mailboxes failed' lines), cannot send "
-                    "invitation to %s (uid: %s)",
-                    mailbox_email,
-                    to_email,
-                    event_uid,
+                # The lookup returns nothing also on a network error.
+                raise InvitationNotSentError(
+                    f"Mailbox {mailbox_email} not found in Messages, cannot send "
+                    f"the invitation to {to_email} (uid: {event_uid})"
                 )
-                return False
 
             mailbox_id = mailbox.get("id")
             if not mailbox_id:
@@ -896,6 +913,8 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 )
             return success
 
+        except InvitationNotSentError:
+            raise
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "Failed to send via Messages for %s -> %s (uid: %s)",

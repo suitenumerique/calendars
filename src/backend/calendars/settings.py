@@ -141,6 +141,10 @@ class Base(Configuration):
     EMAIL_USE_SSL = values.BooleanValue(
         False, environ_name="EMAIL_USE_SSL", environ_prefix=None
     )
+    # Seconds. Without a timeout, a stalled SMTP server blocks a worker.
+    EMAIL_TIMEOUT = values.IntegerValue(
+        30, environ_name="EMAIL_TIMEOUT", environ_prefix=None
+    )
     DEFAULT_FROM_EMAIL = values.Value(
         "noreply@example.com", environ_name="DEFAULT_FROM_EMAIL", environ_prefix=None
     )
@@ -628,7 +632,7 @@ class Base(Configuration):
             "dramatiq.middleware.Retries",
             "dramatiq.middleware.CurrentMessage",
             "django_dramatiq.middleware.DbConnectionsMiddleware",
-            "django_dramatiq.middleware.AdminMiddleware",
+            "core.task_utils.AdminMiddleware",
         ],
     }
     DRAMATIQ_RESULT_BACKEND = {

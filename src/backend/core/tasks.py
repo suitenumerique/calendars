@@ -7,7 +7,10 @@ from dataclasses import asdict
 
 from django.conf import settings
 
-from core.services.calendar_invitation_service import calendar_invitation_service
+from core.services.calendar_invitation_service import (
+    InvitationNotSentError,
+    calendar_invitation_service,
+)
 from core.services.import_service import ICSImportService
 from core.task_utils import register_task, set_task_progress
 
@@ -57,8 +60,24 @@ def import_events_task(user_id, caldav_path, ics_data_hex):
     }
 
 
-# No retry: a retry after a partial failure can send the same email twice.
-@register_task(queue="default", max_retries=0, store_results=False)
+INVITATION_SEND_RETRIES = 6
+
+
+def _retry_when_not_sent(retries, exception):
+    """Retry only when nothing was sent, so that no email goes out twice."""
+    return (
+        isinstance(exception, InvitationNotSentError)
+        and retries < INVITATION_SEND_RETRIES
+    )
+
+
+# The retries wait 1, 2, 4, 8, 16 and 32 minutes (about 1 hour in total).
+@register_task(
+    queue="default",
+    retry_when=_retry_when_not_sent,
+    min_backoff=60_000,
+    store_results=False,
+)
 def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
     sender_email,
     recipient_email,

@@ -13,6 +13,7 @@ from django.core.cache import cache
 from django.utils import timezone
 
 import dramatiq
+from django_dramatiq.middleware import AdminMiddleware as DramatiqAdminMiddleware
 from dramatiq.brokers.stub import StubBroker
 from dramatiq.middleware import CurrentMessage
 
@@ -63,6 +64,31 @@ class CeleryCompatActor(dramatiq.Actor):
         """Dispatch the task asynchronously, returning a Task wrapper."""
         message = self.send(*args, **kwargs)
         return Task(message)
+
+
+class AdminMiddleware(DramatiqAdminMiddleware):
+    """Task admin middleware that does not keep the done email tasks.
+
+    The task table keeps the full message of each task. An email task
+    message holds the ICS data of an event, so a done email task is
+    deleted. A failed email task stays, for inspection.
+    """
+
+    DELETE_WHEN_DONE = frozenset({"send_invitation_task"})
+
+    def after_process_message(self, broker, message, *, exception=None, **kwargs):
+        if (
+            exception is None
+            and kwargs.get("status") is None
+            and message.actor_name in self.DELETE_WHEN_DONE
+        ):
+            from django_dramatiq.models import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+                Task as TaskRecord,
+            )
+
+            TaskRecord.tasks.filter(id=message.message_id).delete()
+            return
+        super().after_process_message(broker, message, exception=exception, **kwargs)
 
 
 # ---------------------------------------------------------------------------
