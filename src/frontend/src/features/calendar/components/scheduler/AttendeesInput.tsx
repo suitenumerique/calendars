@@ -1,8 +1,20 @@
-import { useState, useCallback, useRef, useEffect, type KeyboardEvent } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  type ClipboardEvent,
+  type KeyboardEvent,
+} from "react";
 import { Input, Badge } from "@gouvfr-lasuite/ui-components";
 import { useTranslation } from "react-i18next";
 import { useUserSearch, type UserSearchResult } from "@/features/users/hooks/useUserSearch";
-import { filterSuggestions, isValidEmail } from "./attendees-utils";
+import {
+  filterSuggestions,
+  isValidEmail,
+  parseAttendeeList,
+  toAttendeeName,
+} from "./attendees-utils";
 import { getBadgeType, getPartstatIcon } from "./partstatBadge";
 import { CircleCheck, XMark } from "@gouvfr-lasuite/ui-components/icons";
 
@@ -31,14 +43,17 @@ export function AttendeesInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data: searchResults, isLoading: isSearching } = useUserSearch(inputValue);
+  // A list of addresses is not a search query.
+  const isList =
+    /[,;<>]/.test(inputValue) || (inputValue.includes("@") && /\s/.test(inputValue.trim()));
+  const { data: searchResults, isLoading: isSearching } = useUserSearch(isList ? "" : inputValue);
 
   // Filter out already-added attendees and the organizer
   const suggestions = filterSuggestions(searchResults ?? [], attendees, organizerEmail);
 
   // Show suggestions when we have results or are searching with enough chars
   const trimmedInput = inputValue.trim();
-  const shouldShowDropdown = showSuggestions && trimmedInput.length >= 3 && !isSearching;
+  const shouldShowDropdown = showSuggestions && !isList && trimmedInput.length >= 3 && !isSearching;
   const hasNoResults =
     shouldShowDropdown && suggestions.length === 0 && searchResults !== undefined;
 
@@ -60,48 +75,68 @@ export function AttendeesInput({
     return () => onPendingInvalidChange?.(false);
   }, [trimmedInput, onPendingInvalidChange]);
 
-  const addAttendeeByEmail = useCallback(
-    (email: string, fullName?: string) => {
-      const normalized = email.trim().toLowerCase();
-      if (!normalized) return;
+  const addAttendees = useCallback(
+    (text: string, fullName?: string) => {
+      const parsed = parseAttendeeList(text);
 
-      if (!isValidEmail(normalized)) {
-        setError(t("calendar.attendees.invalidEmail"));
+      if (parsed.attendees.length === 0) {
+        if (parsed.invalid.length > 0) setError(t("calendar.attendees.invalidEmail"));
         return;
       }
 
-      if (attendees.some((a) => a.email.toLowerCase() === normalized)) {
-        setError(t("calendar.attendees.alreadyAdded"));
-        return;
-      }
+      const present = new Set(attendees.map((a) => a.email.toLowerCase()));
+      const organizerAddress = organizerEmail?.toLowerCase();
+      const added = parsed.attendees
+        .filter(({ email }) => !present.has(email) && email !== organizerAddress)
+        .map(({ email, name = fullName }): IcsAttendee => {
+          const safeName = name && toAttendeeName(name);
+          return {
+            email,
+            partstat: "NEEDS-ACTION",
+            rsvp: true,
+            role: "REQ-PARTICIPANT",
+            ...(safeName && { name: safeName }),
+          };
+        });
 
-      if (organizerEmail && normalized === organizerEmail.toLowerCase()) {
+      if (added.length > 0) onChange([...attendees, ...added]);
+
+      const hasInvalid = parsed.invalid.length > 0;
+      const onlyOrganizer =
+        parsed.attendees.length === 1 && parsed.attendees[0].email === organizerAddress;
+      if (!hasInvalid && onlyOrganizer) {
         setError(t("calendar.attendees.cannotAddOrganizer"));
         return;
       }
 
-      const newAttendee: IcsAttendee = {
-        email: normalized,
-        partstat: "NEEDS-ACTION",
-        rsvp: true,
-        role: "REQ-PARTICIPANT",
-        ...(fullName && { cn: fullName }),
-      };
-
-      onChange([...attendees, newAttendee]);
-      setInputValue("");
-      setError(null);
+      setInputValue(parsed.invalid.join(", "));
+      setError(hasInvalid ? t("calendar.attendees.invalidEmail") : null);
       setShowSuggestions(false);
       setHighlightedIndex(-1);
     },
     [attendees, onChange, organizerEmail, t],
   );
 
+  // A single-line input drops line breaks, which joins the addresses of a pasted list.
+  const handlePaste = useCallback((e: ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text");
+    if (!/[\r\n]/.test(pasted)) return;
+
+    e.preventDefault();
+    const { value, selectionStart, selectionEnd } = e.currentTarget;
+    const before = value.slice(0, selectionStart ?? value.length);
+    const after = value.slice(selectionEnd ?? value.length);
+    const text = before + pasted.replace(/[\r\n]+/g, ", ") + after;
+    setInputValue(text.replace(/^[,\s]+|[,\s]+$/g, ""));
+    setHighlightedIndex(-1);
+    setError(null);
+  }, []);
+
   const selectSuggestion = useCallback(
     (user: UserSearchResult) => {
-      addAttendeeByEmail(user.email, user.full_name);
+      addAttendees(user.email, user.full_name);
     },
-    [addAttendeeByEmail],
+    [addAttendees],
   );
 
   const removeAttendee = useCallback(
@@ -113,6 +148,9 @@ export function AttendeesInput({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
+      // Enter confirms an IME composition, it does not submit the field.
+      if (e.nativeEvent.isComposing) return;
+
       if (e.key === "Escape") {
         setShowSuggestions(false);
         setHighlightedIndex(-1);
@@ -139,18 +177,11 @@ export function AttendeesInput({
         if (shouldShowDropdown && highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
           selectSuggestion(suggestions[highlightedIndex]);
         } else {
-          addAttendeeByEmail(inputValue);
+          addAttendees(inputValue);
         }
       }
     },
-    [
-      shouldShowDropdown,
-      suggestions,
-      highlightedIndex,
-      selectSuggestion,
-      addAttendeeByEmail,
-      inputValue,
-    ],
+    [shouldShowDropdown, suggestions, highlightedIndex, selectSuggestion, addAttendees, inputValue],
   );
 
   return (
@@ -170,6 +201,7 @@ export function AttendeesInput({
             if (error) setError(null);
           }}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           onFocus={() => setShowSuggestions(true)}
           state={error ? "error" : "default"}
           text={error || undefined}
