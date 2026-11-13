@@ -38,7 +38,9 @@ export function AttendeesInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data: searchResults, isLoading: isSearching } = useUserSearch(inputValue);
+  // A list of addresses is not a search query.
+  const isList = parseAttendeeList(inputValue).attendees.length > 1;
+  const { data: searchResults, isLoading: isSearching } = useUserSearch(isList ? "" : inputValue);
 
   // Filter out already-added attendees and the organizer
   const suggestions = filterSuggestions(searchResults ?? [], attendees, organizerEmail);
@@ -118,23 +120,18 @@ export function AttendeesInput({
     [attendees, onChange, organizerEmail, t],
   );
 
-  const handlePaste = useCallback(
-    (e: ClipboardEvent<HTMLInputElement>) => {
-      const pasted = e.clipboardData.getData("text");
-      // A single plain token stays a normal paste, so the user search works.
-      if (!/[\s,;<>]/.test(pasted.trim())) return;
+  // A single-line input drops line breaks, which joins the addresses of a pasted list.
+  const handlePaste = useCallback((e: ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData("text").trim();
+    if (!/[\r\n]/.test(pasted)) return;
 
-      const { value, selectionStart, selectionEnd } = e.currentTarget;
-      const before = value.slice(0, selectionStart ?? value.length);
-      const after = value.slice(selectionEnd ?? value.length);
-      const text = before + pasted + after;
-      if (parseAttendeeList(text).attendees.length === 0) return;
-
-      e.preventDefault();
-      addAttendees(text);
-    },
-    [addAttendees],
-  );
+    e.preventDefault();
+    const { value, selectionStart, selectionEnd } = e.currentTarget;
+    const before = value.slice(0, selectionStart ?? value.length);
+    const after = value.slice(selectionEnd ?? value.length);
+    setInputValue(before + pasted.replace(/[\r\n]+/g, ", ") + after);
+    setError(null);
+  }, []);
 
   const selectSuggestion = useCallback(
     (user: UserSearchResult) => {
