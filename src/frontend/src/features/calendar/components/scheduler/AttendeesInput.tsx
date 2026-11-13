@@ -1,8 +1,15 @@
-import { useState, useCallback, useRef, useEffect, type KeyboardEvent } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  type ClipboardEvent,
+  type KeyboardEvent,
+} from "react";
 import { Input, Badge } from "@gouvfr-lasuite/ui-components";
 import { useTranslation } from "react-i18next";
 import { useUserSearch, type UserSearchResult } from "@/features/users/hooks/useUserSearch";
-import { filterSuggestions, isValidEmail } from "./attendees-utils";
+import { filterSuggestions, isValidEmail, parseAttendeeList } from "./attendees-utils";
 import { getBadgeType, getPartstatIcon } from "./partstatBadge";
 import { CircleCheck, XMark } from "@gouvfr-lasuite/ui-components/icons";
 
@@ -60,35 +67,49 @@ export function AttendeesInput({
     return () => onPendingInvalidChange?.(false);
   }, [trimmedInput, onPendingInvalidChange]);
 
-  const addAttendeeByEmail = useCallback(
-    (email: string, fullName?: string) => {
-      const normalized = email.trim().toLowerCase();
-      if (!normalized) return;
+  const addAttendees = useCallback(
+    (text: string, fullName?: string) => {
+      const parsed = parseAttendeeList(text);
 
-      if (!isValidEmail(normalized)) {
+      if (parsed.attendees.length === 0) {
+        if (parsed.invalid.length > 0) setError(t("calendar.attendees.invalidEmail"));
+        return;
+      }
+
+      const present = new Set(attendees.map((a) => a.email.toLowerCase()));
+      const organizerAddress = organizerEmail?.toLowerCase();
+      const added = parsed.attendees
+        .filter(({ email }) => !present.has(email) && email !== organizerAddress)
+        .map(
+          ({ email, cn = fullName }): IcsAttendee => ({
+            email,
+            partstat: "NEEDS-ACTION",
+            rsvp: true,
+            role: "REQ-PARTICIPANT",
+            ...(cn && { cn }),
+          }),
+        );
+
+      if (added.length > 0) onChange([...attendees, ...added]);
+
+      if (parsed.invalid.length > 0) {
+        setInputValue(parsed.invalid.join(", "));
         setError(t("calendar.attendees.invalidEmail"));
+        setShowSuggestions(false);
+        setHighlightedIndex(-1);
         return;
       }
 
-      if (attendees.some((a) => a.email.toLowerCase() === normalized)) {
-        setError(t("calendar.attendees.alreadyAdded"));
+      if (added.length === 0) {
+        const alreadyAdded = parsed.attendees.some(({ email }) => present.has(email));
+        setError(
+          alreadyAdded
+            ? t("calendar.attendees.alreadyAdded")
+            : t("calendar.attendees.cannotAddOrganizer"),
+        );
         return;
       }
 
-      if (organizerEmail && normalized === organizerEmail.toLowerCase()) {
-        setError(t("calendar.attendees.cannotAddOrganizer"));
-        return;
-      }
-
-      const newAttendee: IcsAttendee = {
-        email: normalized,
-        partstat: "NEEDS-ACTION",
-        rsvp: true,
-        role: "REQ-PARTICIPANT",
-        ...(fullName && { cn: fullName }),
-      };
-
-      onChange([...attendees, newAttendee]);
       setInputValue("");
       setError(null);
       setShowSuggestions(false);
@@ -97,11 +118,29 @@ export function AttendeesInput({
     [attendees, onChange, organizerEmail, t],
   );
 
+  const handlePaste = useCallback(
+    (e: ClipboardEvent<HTMLInputElement>) => {
+      const pasted = e.clipboardData.getData("text");
+      // A single plain token stays a normal paste, so the user search works.
+      if (!/[\s,;<>]/.test(pasted.trim())) return;
+
+      const { value, selectionStart, selectionEnd } = e.currentTarget;
+      const before = value.slice(0, selectionStart ?? value.length);
+      const after = value.slice(selectionEnd ?? value.length);
+      const text = before + pasted + after;
+      if (parseAttendeeList(text).attendees.length === 0) return;
+
+      e.preventDefault();
+      addAttendees(text);
+    },
+    [addAttendees],
+  );
+
   const selectSuggestion = useCallback(
     (user: UserSearchResult) => {
-      addAttendeeByEmail(user.email, user.full_name);
+      addAttendees(user.email, user.full_name);
     },
-    [addAttendeeByEmail],
+    [addAttendees],
   );
 
   const removeAttendee = useCallback(
@@ -139,18 +178,11 @@ export function AttendeesInput({
         if (shouldShowDropdown && highlightedIndex >= 0 && highlightedIndex < suggestions.length) {
           selectSuggestion(suggestions[highlightedIndex]);
         } else {
-          addAttendeeByEmail(inputValue);
+          addAttendees(inputValue);
         }
       }
     },
-    [
-      shouldShowDropdown,
-      suggestions,
-      highlightedIndex,
-      selectSuggestion,
-      addAttendeeByEmail,
-      inputValue,
-    ],
+    [shouldShowDropdown, suggestions, highlightedIndex, selectSuggestion, addAttendees, inputValue],
   );
 
   return (
@@ -170,6 +202,7 @@ export function AttendeesInput({
             if (error) setError(null);
           }}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           onFocus={() => setShowSuggestions(true)}
           state={error ? "error" : "default"}
           text={error || undefined}

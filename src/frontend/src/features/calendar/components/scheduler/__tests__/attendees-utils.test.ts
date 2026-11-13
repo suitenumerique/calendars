@@ -1,4 +1,4 @@
-import { filterSuggestions, isValidEmail } from "../attendees-utils";
+import { filterSuggestions, isValidEmail, parseAttendeeList } from "../attendees-utils";
 
 import type { UserSearchResult } from "@/features/users/hooks/useUserSearch";
 import type { IcsAttendee } from "ts-ics";
@@ -95,6 +95,105 @@ describe("attendees-utils", () => {
 
     it("returns empty array for empty results", () => {
       expect(filterSuggestions([], [])).toEqual([]);
+    });
+  });
+
+  describe("parseAttendeeList", () => {
+    const emails = (text: string) => parseAttendeeList(text).attendees.map((a) => a.email);
+
+    it("parses a single address", () => {
+      expect(parseAttendeeList(" user@example.com ")).toEqual({
+        attendees: [{ email: "user@example.com" }],
+        invalid: [],
+      });
+    });
+
+    it("returns nothing for an empty string", () => {
+      expect(parseAttendeeList("  ")).toEqual({ attendees: [], invalid: [] });
+    });
+
+    it("splits on comma, semicolon, newline, tab and space", () => {
+      expect(emails("a@x.org, b@x.org; c@x.org\nd@x.org\r\ne@x.org\tf@x.org g@x.org")).toEqual([
+        "a@x.org",
+        "b@x.org",
+        "c@x.org",
+        "d@x.org",
+        "e@x.org",
+        "f@x.org",
+        "g@x.org",
+      ]);
+    });
+
+    it("ignores empty entries", () => {
+      expect(parseAttendeeList("a@x.org,, ;\n b@x.org,")).toEqual({
+        attendees: [{ email: "a@x.org" }, { email: "b@x.org" }],
+        invalid: [],
+      });
+    });
+
+    it("normalizes to lowercase", () => {
+      expect(emails("Alice@Org.COM")).toEqual(["alice@org.com"]);
+    });
+
+    it("removes duplicates case-insensitively", () => {
+      expect(emails("a@x.org, A@X.org; a@x.org")).toEqual(["a@x.org"]);
+    });
+
+    it("reads the name and the address of a named entry", () => {
+      expect(parseAttendeeList("Jane Doe <Jane@x.org>, <b@x.org>").attendees).toEqual([
+        { email: "jane@x.org", cn: "Jane Doe" },
+        { email: "b@x.org" },
+      ]);
+    });
+
+    it("keeps a separator inside a quoted name", () => {
+      expect(parseAttendeeList('"Doe, Jane" <jane@x.org>; b@x.org').attendees).toEqual([
+        { email: "jane@x.org", cn: "Doe, Jane" },
+        { email: "b@x.org" },
+      ]);
+    });
+
+    it("reads a quoted address as the name of a named entry", () => {
+      expect(
+        parseAttendeeList(
+          `"jane@x.org" <jane@x.org>; 'bob@x.org' <bob@x.org>; "Al al@old.org" <al@x.org>`,
+        ),
+      ).toEqual({
+        attendees: [
+          { email: "jane@x.org", cn: "jane@x.org" },
+          { email: "bob@x.org", cn: "bob@x.org" },
+          { email: "al@x.org", cn: "Al al@old.org" },
+        ],
+        invalid: [],
+      });
+    });
+
+    it("separates plain addresses from named entries without a separator", () => {
+      expect(
+        parseAttendeeList("o'neil@x.org Jane Doe <jane@x.org> Bob <bob@x.org> c@x.org oops"),
+      ).toEqual({
+        attendees: [
+          { email: "o'neil@x.org" },
+          { email: "jane@x.org", cn: "Jane Doe" },
+          { email: "bob@x.org", cn: "Bob" },
+          { email: "c@x.org" },
+        ],
+        invalid: ["oops"],
+      });
+    });
+
+    it("returns the invalid tokens as written", () => {
+      expect(parseAttendeeList("a@x.org, Not-An-Email; Jane <jane@>\nb@x.org")).toEqual({
+        attendees: [{ email: "a@x.org" }, { email: "b@x.org" }],
+        invalid: ["Not-An-Email", "Jane <jane@>"],
+      });
+    });
+
+    it("keeps an entry with an unclosed quote", () => {
+      expect(parseAttendeeList('"abc, a@x.org')).toEqual({
+        attendees: [{ email: "a@x.org" }],
+        invalid: ['"abc'],
+      });
     });
   });
 });
