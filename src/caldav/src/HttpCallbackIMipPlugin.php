@@ -12,7 +12,11 @@ namespace Calendars\SabreDav;
 
 use Sabre\CalDAV\Schedule\IMipPlugin;
 use Sabre\DAV\Server;
+use Sabre\HTTP\RequestInterface;
+use Sabre\HTTP\ResponseInterface;
+use Sabre\VObject\Component\VCalendar;
 use Sabre\VObject\ITip\Message;
+use Sabre\VObject\Reader;
 
 class HttpCallbackIMipPlugin extends IMipPlugin
 {
@@ -38,6 +42,13 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      * @var string
      */
     private $callbackUrl;
+
+    /**
+     * Attendee emails of the stored events that this request updates.
+     * Keys are event UIDs. Values are sets of lowercase emails.
+     * @var array<string, array<string, true>>
+     */
+    private $previousAttendees = [];
 
     /**
      * Constructor
@@ -66,6 +77,67 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     {
         parent::initialize($server);
         $this->server = $server;
+        // Priority 90 runs before the scheduling plugin (priority 100).
+        $server->on('calendarObjectChange', [$this, 'rememberPreviousAttendees'], 90);
+    }
+
+    /**
+     * Keep the attendees of the stored event before it is overwritten.
+     *
+     * A new event has no previous attendees.
+     *
+     * @return void
+     */
+    public function rememberPreviousAttendees(
+        RequestInterface $request,
+        ResponseInterface $response,
+        VCalendar $vCal,
+        $calendarPath,
+        &$modified,
+        $isNew
+    ) {
+        if ($isNew) {
+            foreach ($vCal->VEVENT ?? [] as $vevent) {
+                $this->previousAttendees[(string) $vevent->UID] = [];
+            }
+            return;
+        }
+
+        try {
+            $node = $this->server->tree->getNodeForPath($request->getPath());
+            $stored = Reader::read($node->get());
+        } catch (\Exception $e) {
+            error_log("[HttpCallbackIMipPlugin] Failed to read the stored event: " . $e->getMessage());
+            return;
+        }
+
+        foreach ($stored->VEVENT ?? [] as $vevent) {
+            $uid = (string) $vevent->UID;
+            $this->previousAttendees[$uid] = $this->previousAttendees[$uid] ?? [];
+            foreach ($vevent->ATTENDEE ?? [] as $attendee) {
+                $this->previousAttendees[$uid][$this->normalizeEmail($attendee->getValue())] = true;
+            }
+        }
+        $stored->destroy();
+    }
+
+    /**
+     * Tell if the recipient of a REQUEST is not on the stored event.
+     *
+     * All the recipients of a created event are new attendees.
+     */
+    private function isNewAttendee(Message $iTipMessage): bool
+    {
+        if ('REQUEST' !== $iTipMessage->method || !isset($this->previousAttendees[$iTipMessage->uid])) {
+            return false;
+        }
+        $recipient = $this->normalizeEmail($iTipMessage->recipient);
+        return !isset($this->previousAttendees[$iTipMessage->uid][$recipient]);
+    }
+
+    private function normalizeEmail(string $address): string
+    {
+        return strtolower(preg_replace('/^mailto:/i', '', trim($address)));
     }
 
     /**
@@ -126,6 +198,10 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         $senderEmail = substr($iTipMessage->sender, 7); // strip 'mailto:'
         if ($this->isSenderMailbox($senderEmail)) {
             $headers[] = 'X-LS-Is-Mailbox: true';
+        }
+
+        if ($this->isNewAttendee($iTipMessage)) {
+            $headers[] = 'X-LS-New-Attendee: true';
         }
 
         // Pass org_id so Django can include it in RSVP tokens.

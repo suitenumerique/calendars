@@ -560,6 +560,7 @@ class CalDAVSchedulingCallbackView(View):
         # Security: this endpoint is gated by X-LS-Api-Key (CALDAV_INBOUND_API_KEY),
         # so the header cannot be spoofed by external callers.
         is_mailbox = request.headers.get("X-LS-Is-Mailbox") == "true"
+        is_new_attendee = request.headers.get("X-LS-New-Attendee") == "true"
         org_id = request.headers.get("X-LS-Org-Id", "")
         via = "messages" if is_mailbox else "smtp"
 
@@ -580,6 +581,7 @@ class CalDAVSchedulingCallbackView(View):
                 icalendar_data=icalendar_data,
                 is_mailbox=is_mailbox,
                 org_id=org_id,
+                is_new_attendee=is_new_attendee,
             )
 
             if success:
