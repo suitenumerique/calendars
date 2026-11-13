@@ -57,6 +57,10 @@ export const getEventEndMs = (event: IcsEvent, startMs: number): number => {
   return startMs;
 };
 
+/** Whether the trigger of the alarm counts from the end of the event (RELATED=END). */
+export const isEndRelative = (alarm: IcsAlarm): boolean =>
+  alarm.trigger?.type === "relative" && alarm.trigger.options?.related === "END";
+
 /**
  * Resolve the absolute instant at which an alarm should fire.
  *
@@ -139,11 +143,7 @@ export const collectDueReminders = (
       const action = (alarm.action ?? "DISPLAY").toUpperCase();
       if (!CLIENT_ACTIONS.has(action)) continue;
 
-      // A trigger with RELATED=END counts from the end of the event.
-      const anchorMs =
-        alarm.trigger?.type === "relative" && alarm.trigger.options?.related === "END"
-          ? getEventEndMs(event, eventInstantMs)
-          : eventInstantMs;
+      const anchorMs = isEndRelative(alarm) ? getEventEndMs(event, eventInstantMs) : eventInstantMs;
       const triggerMs = getAlarmTriggerMs(alarm, anchorMs);
       if (triggerMs == null) continue;
       if (triggerMs > nowMs) continue; // not due yet

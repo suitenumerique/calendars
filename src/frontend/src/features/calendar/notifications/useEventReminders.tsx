@@ -8,6 +8,8 @@ import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster"
 import {
   buildAlarmMap,
   collectDueReminders,
+  getEventEndMs,
+  isEndRelative,
   withMasterAlarms,
   type DueReminder,
 } from "./reminderUtils";
@@ -53,13 +55,21 @@ export const useEventReminders = () => {
 
   const fire = useCallback((reminder: DueReminder) => {
     const tr = tRef.current;
-    const title = reminder.event.summary?.trim() || tr("calendar.event.reminders.untitled");
+    const { event, eventInstantMs } = reminder;
+    const title = event.summary?.trim() || tr("calendar.event.reminders.untitled");
+    // A reminder that counts from the end of the event shows the end time.
+    const endRelative = isEndRelative(reminder.alarm);
     const time = new Intl.DateTimeFormat(localeRef.current, {
       weekday: "short",
       hour: "2-digit",
       minute: "2-digit",
-    }).format(new Date(reminder.eventInstantMs));
-    const body = tr("calendar.event.reminders.notificationBody", { time });
+    }).format(new Date(endRelative ? getEventEndMs(event, eventInstantMs) : eventInstantMs));
+    const body = tr(
+      endRelative
+        ? "calendar.event.reminders.notificationBodyEnd"
+        : "calendar.event.reminders.notificationBody",
+      { time },
+    );
 
     showBrowserNotification(title, body, reminder.key);
     addToast(
