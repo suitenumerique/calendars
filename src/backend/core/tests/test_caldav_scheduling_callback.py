@@ -4,11 +4,12 @@
 
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.test import Client
 
 import pytest
 
-from core.tasks import send_invitation_task
+from core.tasks import InvitationSendError, send_invitation_task
 
 CALLBACK_PATH = "/api/v1.0/caldav-scheduling-callback/"
 API_KEY = "callback-test-key"
@@ -49,40 +50,47 @@ def _post_callback():
     )
 
 
-def test_callback_queues_the_email():
-    with patch("core.api.viewsets_caldav.send_invitation_task.delay") as mock_delay:
-        response = _post_callback()
+DELAY = "core.tasks.send_invitation_task.delay"
+SEND = "core.services.calendar_invitation_service.CalendarInvitationService.send_invitation"
 
-    assert response.status_code == 202
-    mock_delay.assert_called_once_with(
+
+def _send(icalendar_key):
+    send_invitation_task.fn(
         sender_email="alice@example.com",
         recipient_email="bob@example.com",
         method="REQUEST",
-        icalendar_data=ICS_REQUEST,
-        is_mailbox=True,
-        org_id="org-1",
-        is_new_attendee=True,
+        icalendar_key=icalendar_key,
     )
 
 
+def test_callback_queues_the_email():
+    with patch(DELAY) as mock_delay:
+        response = _post_callback()
+
+    assert response.status_code == 202
+    mock_delay.assert_called_once()
+    kwargs = mock_delay.call_args.kwargs
+    icalendar_key = kwargs.pop("icalendar_key")
+    assert kwargs == {
+        "sender_email": "alice@example.com",
+        "recipient_email": "bob@example.com",
+        "method": "REQUEST",
+        "is_mailbox": True,
+        "org_id": "org-1",
+        "is_new_attendee": True,
+    }
+    assert cache.get(icalendar_key) == ICS_REQUEST
+
+
 def test_callback_does_not_send_the_email_itself():
-    with (
-        patch("core.api.viewsets_caldav.send_invitation_task.delay"),
-        patch(
-            "core.services.calendar_invitation_service"
-            ".CalendarInvitationService.send_invitation"
-        ) as mock_send,
-    ):
+    with patch(DELAY), patch(SEND) as mock_send:
         _post_callback()
 
     mock_send.assert_not_called()
 
 
 def test_callback_fails_when_the_queue_fails():
-    with patch(
-        "core.api.viewsets_caldav.send_invitation_task.delay",
-        side_effect=ConnectionError("redis is down"),
-    ):
+    with patch(DELAY, side_effect=ConnectionError("redis is down")):
         response = _post_callback()
 
     assert response.status_code == 500
@@ -90,3 +98,29 @@ def test_callback_fails_when_the_queue_fails():
 
 def test_send_invitation_task_does_not_retry():
     assert send_invitation_task.options["max_retries"] == 0
+
+
+def test_send_invitation_task_sends_and_removes_the_data():
+    cache.set("invitation_data:test", ICS_REQUEST)
+
+    with patch(SEND, return_value=True) as mock_send:
+        _send("invitation_data:test")
+
+    assert mock_send.call_args.kwargs["icalendar_data"] == ICS_REQUEST
+    assert cache.get("invitation_data:test") is None
+
+
+def test_send_invitation_task_fails_when_the_send_fails():
+    cache.set("invitation_data:test", ICS_REQUEST)
+
+    with patch(SEND, return_value=False), pytest.raises(InvitationSendError):
+        _send("invitation_data:test")
+
+    assert cache.get("invitation_data:test") is None
+
+
+def test_send_invitation_task_fails_when_the_data_is_missing():
+    with patch(SEND) as mock_send, pytest.raises(InvitationSendError):
+        _send("invitation_data:missing")
+
+    mock_send.assert_not_called()
