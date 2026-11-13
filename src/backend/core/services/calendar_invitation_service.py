@@ -28,6 +28,7 @@ from django.utils import timezone
 import icalendar
 
 from core.models import User
+from core.services.invitation_video_link import add_video_link
 from core.services.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
@@ -708,6 +709,9 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         calendar object — our own RSVP web links handle responses instead.
         """
         itip_enabled = settings.CALENDAR_ITIP_ENABLED
+
+        if method == self.METHOD_REQUEST:
+            icalendar_data = add_video_link(icalendar_data)
 
         if itip_enabled:
             if "METHOD:" not in icalendar_data.upper():

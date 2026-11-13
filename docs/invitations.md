@@ -97,6 +97,11 @@ Steps:
    attachment includes `METHOD:REQUEST` for iTIP-aware clients
    (Outlook, Apple Mail). If False (default), the METHOD is stripped
    and web RSVP links are used instead.
+   For REQUEST, `add_video_link()` copies the video link from `URL`
+   to the properties that most clients show: a marked block at the
+   end of `DESCRIPTION`, `LOCATION` when it is empty, and
+   `CONFERENCE` (RFC 7986). The stored event does not change. The
+   frontend removes the block when it shows an event.
 5. **Send** — multipart email with HTML + plain text + ICS attachment.
    Reply-To is set to the organizer's email.
 
