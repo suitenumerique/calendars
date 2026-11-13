@@ -24,12 +24,12 @@ export const isValidEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
-export interface ParsedAttendee {
+interface ParsedAttendee {
   email: string;
   cn?: string;
 }
 
-export interface ParsedAttendeeList {
+interface ParsedAttendeeList {
   /** Valid addresses, in lowercase, without duplicates. */
   attendees: ParsedAttendee[];
   /** Tokens that are not a valid address, as the user wrote them. */

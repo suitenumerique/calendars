@@ -94,21 +94,16 @@ export function AttendeesInput({
 
       if (added.length > 0) onChange([...attendees, ...added]);
 
-      if (parsed.invalid.length > 0) {
-        setInputValue(parsed.invalid.join(", "));
-        setError(t("calendar.attendees.invalidEmail"));
-        setShowSuggestions(false);
-        setHighlightedIndex(-1);
-        return;
-      }
-
-      if (parsed.attendees.length === 1 && parsed.attendees[0].email === organizerAddress) {
+      const hasInvalid = parsed.invalid.length > 0;
+      const onlyOrganizer =
+        parsed.attendees.length === 1 && parsed.attendees[0].email === organizerAddress;
+      if (!hasInvalid && onlyOrganizer) {
         setError(t("calendar.attendees.cannotAddOrganizer"));
         return;
       }
 
-      setInputValue("");
-      setError(null);
+      setInputValue(parsed.invalid.join(", "));
+      setError(hasInvalid ? t("calendar.attendees.invalidEmail") : null);
       setShowSuggestions(false);
       setHighlightedIndex(-1);
     },
