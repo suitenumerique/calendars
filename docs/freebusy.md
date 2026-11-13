@@ -176,7 +176,8 @@ Enforces freebusy privacy server-side:
 - Applies `CLASS:CONFIDENTIAL` treatment regardless of the event's
   actual `CLASS` value
 - Blocks COPY from freebusy calendars (prevents data exfiltration)
-- Strips VALARM components for all non-owner sharees
+- Strips VALARM components for read-only sharees. Sharees with write
+  access see the alarms of the owner, like the event details.
 
 This means **all CalDAV clients see busy blocks**, not event details.
 No client-side logic needed.
