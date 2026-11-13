@@ -168,3 +168,6 @@ ENV TRANSLATIONS_JSON_PATH=/app/translations.json
 
 # The default command runs gunicorn WSGI server in calendars' main module
 CMD ["gunicorn", "-c", "/app/gunicorn.conf.py", "calendars.wsgi:application"]
+
+HEALTHCHECK --interval=30s --timeout=2s --start-period=30s \
+  CMD ["python", "-c", "import socket; from urllib.request import Request, urlopen; urlopen(Request('http://localhost:8000/__heartbeat__/', headers={'Host': socket.gethostbyname(socket.gethostname()), 'X-Forwarded-Proto': 'https'}), timeout=2)"]

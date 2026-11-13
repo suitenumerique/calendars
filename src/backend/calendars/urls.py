@@ -1,9 +1,14 @@
 """URL configuration for the calendars project"""
 
+from logging import getLogger
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+from django.db import connection
+from django.db.utils import OperationalError
+from django.http import HttpResponse
 from django.urls import include, path, re_path
 
 from drf_spectacular.views import (
@@ -14,10 +19,24 @@ from drf_spectacular.views import (
 
 from core.api.viewsets_caldav import CalDAVDiscoveryView
 
+logger = getLogger(__name__)
+
+
+def heartbeat(request):
+    """Healthcheck endpoint to verify that the application is running and DB is reachable."""
+    try:
+        connection.ensure_connection()
+    except OperationalError as e:
+        logger.error("Database error: %s", e)
+        return HttpResponse("DB Unavailable", status=500)
+    return HttpResponse("OK")
+
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     # CalDAV discovery - must be at root level per RFC 6764
     path(".well-known/caldav", CalDAVDiscoveryView.as_view(), name="caldav-discovery"),
+    path("__heartbeat__/", heartbeat, name="healthcheck"),
     path("", include("core.urls")),
 ]
 
