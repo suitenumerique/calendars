@@ -196,6 +196,13 @@ describe("attendees-utils", () => {
       });
     });
 
+    it("parses a long list of addresses with a quoted local part quickly", () => {
+      const list = Array.from({ length: 250 }, (_, i) => `"user${i}"@x.org`).join(" ");
+      const start = performance.now();
+      expect(parseAttendeeList(list).attendees).toHaveLength(250);
+      expect(performance.now() - start).toBeLessThan(500);
+    });
+
     it("reads a quoted address as the name of a named entry", () => {
       expect(
         parseAttendeeList(
