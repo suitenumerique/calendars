@@ -24,9 +24,16 @@ export const isValidEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
+/**
+ * Make a display name safe for the CN parameter of an attendee.
+ * ts-ics writes the name without quotes, so the name cannot contain
+ * a quote, a colon, a semicolon or a comma.
+ */
+export const toAttendeeName = (name: string): string => name.replace(/[":;,\s]+/g, " ").trim();
+
 interface ParsedAttendee {
   email: string;
-  cn?: string;
+  name?: string;
 }
 
 interface ParsedAttendeeList {
@@ -56,7 +63,7 @@ export function parseAttendeeList(text: string): ParsedAttendeeList {
   const invalid: string[] = [];
   const seen = new Set<string>();
 
-  const add = (token: string, address: string, cn?: string) => {
+  const add = (token: string, address: string, name?: string) => {
     const email = address.trim().toLowerCase();
     if (!isValidEmail(email)) {
       invalid.push(token);
@@ -64,7 +71,7 @@ export function parseAttendeeList(text: string): ParsedAttendeeList {
     }
     if (seen.has(email)) return;
     seen.add(email);
-    attendees.push({ email, ...(cn && { cn }) });
+    attendees.push({ email, ...(name && { name }) });
   };
 
   const addPlain = (words: string[]) => words.forEach((word) => add(word, word));
@@ -81,9 +88,9 @@ export function parseAttendeeList(text: string): ParsedAttendeeList {
       while (nameStart > 0 && !isPlainAddress(words[nameStart - 1])) nameStart--;
       addPlain(words.slice(0, nameStart));
 
-      const name = words.slice(nameStart).join(" ");
-      const cn = name.replace(/^(["'])(.*)\1$/, "$2").trim();
-      add(`${name} <${match[2]}>`.trim(), match[2], cn);
+      const rawName = words.slice(nameStart).join(" ");
+      const name = rawName.replace(/^(["'])(.*)\1$/, "$2").trim();
+      add(`${rawName} <${match[2]}>`.trim(), match[2], name);
       end = match.index + match[0].length;
     }
     addPlain(splitWords(entry.slice(end)));

@@ -1,4 +1,9 @@
-import { filterSuggestions, isValidEmail, parseAttendeeList } from "../attendees-utils";
+import {
+  filterSuggestions,
+  isValidEmail,
+  parseAttendeeList,
+  toAttendeeName,
+} from "../attendees-utils";
 
 import type { UserSearchResult } from "@/features/users/hooks/useUserSearch";
 import type { IcsAttendee } from "ts-ics";
@@ -98,6 +103,16 @@ describe("attendees-utils", () => {
     });
   });
 
+  describe("toAttendeeName", () => {
+    it("keeps a plain name", () => {
+      expect(toAttendeeName("Jane Doe")).toBe("Jane Doe");
+    });
+
+    it("removes the characters that break the CN parameter", () => {
+      expect(toAttendeeName('Doe, Jane "JD": boss; x')).toBe("Doe Jane JD boss x");
+    });
+  });
+
   describe("parseAttendeeList", () => {
     const emails = (text: string) => parseAttendeeList(text).attendees.map((a) => a.email);
 
@@ -141,14 +156,14 @@ describe("attendees-utils", () => {
 
     it("reads the name and the address of a named entry", () => {
       expect(parseAttendeeList("Jane Doe <Jane@x.org>, <b@x.org>").attendees).toEqual([
-        { email: "jane@x.org", cn: "Jane Doe" },
+        { email: "jane@x.org", name: "Jane Doe" },
         { email: "b@x.org" },
       ]);
     });
 
     it("keeps a separator inside a quoted name", () => {
       expect(parseAttendeeList('"Doe, Jane" <jane@x.org>; b@x.org').attendees).toEqual([
-        { email: "jane@x.org", cn: "Doe, Jane" },
+        { email: "jane@x.org", name: "Doe, Jane" },
         { email: "b@x.org" },
       ]);
     });
@@ -162,14 +177,14 @@ describe("attendees-utils", () => {
 
     it("separates an address with a quoted local part from a named entry", () => {
       expect(parseAttendeeList('"john"@x.org Jane <jane@x.org>')).toEqual({
-        attendees: [{ email: '"john"@x.org' }, { email: "jane@x.org", cn: "Jane" }],
+        attendees: [{ email: '"john"@x.org' }, { email: "jane@x.org", name: "Jane" }],
         invalid: [],
       });
     });
 
     it("keeps a malformed part before a named entry as invalid", () => {
       expect(parseAttendeeList("bad <broken <a@x.org>")).toEqual({
-        attendees: [{ email: "a@x.org", cn: "broken" }],
+        attendees: [{ email: "a@x.org", name: "broken" }],
         invalid: ["bad", "<"],
       });
     });
@@ -181,9 +196,9 @@ describe("attendees-utils", () => {
         ),
       ).toEqual({
         attendees: [
-          { email: "jane@x.org", cn: "jane@x.org" },
-          { email: "bob@x.org", cn: "bob@x.org" },
-          { email: "al@x.org", cn: "Al al@old.org" },
+          { email: "jane@x.org", name: "jane@x.org" },
+          { email: "bob@x.org", name: "bob@x.org" },
+          { email: "al@x.org", name: "Al al@old.org" },
         ],
         invalid: [],
       });
@@ -195,8 +210,8 @@ describe("attendees-utils", () => {
       ).toEqual({
         attendees: [
           { email: "o'neil@x.org" },
-          { email: "jane@x.org", cn: "Jane Doe" },
-          { email: "bob@x.org", cn: "Bob" },
+          { email: "jane@x.org", name: "Jane Doe" },
+          { email: "bob@x.org", name: "Bob" },
           { email: "c@x.org" },
         ],
         invalid: ["oops"],

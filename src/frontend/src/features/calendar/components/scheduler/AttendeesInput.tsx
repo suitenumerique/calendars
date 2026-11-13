@@ -9,7 +9,12 @@ import {
 import { Input, Badge } from "@gouvfr-lasuite/ui-components";
 import { useTranslation } from "react-i18next";
 import { useUserSearch, type UserSearchResult } from "@/features/users/hooks/useUserSearch";
-import { filterSuggestions, isValidEmail, parseAttendeeList } from "./attendees-utils";
+import {
+  filterSuggestions,
+  isValidEmail,
+  parseAttendeeList,
+  toAttendeeName,
+} from "./attendees-utils";
 import { getBadgeType, getPartstatIcon } from "./partstatBadge";
 import { CircleCheck, XMark } from "@gouvfr-lasuite/ui-components/icons";
 
@@ -83,15 +88,16 @@ export function AttendeesInput({
       const organizerAddress = organizerEmail?.toLowerCase();
       const added = parsed.attendees
         .filter(({ email }) => !present.has(email) && email !== organizerAddress)
-        .map(
-          ({ email, cn = fullName }): IcsAttendee => ({
+        .map(({ email, name = fullName }): IcsAttendee => {
+          const safeName = name && toAttendeeName(name);
+          return {
             email,
             partstat: "NEEDS-ACTION",
             rsvp: true,
             role: "REQ-PARTICIPANT",
-            ...(cn && { cn }),
-          }),
-        );
+            ...(safeName && { name: safeName }),
+          };
+        });
 
       if (added.length > 0) onChange([...attendees, ...added]);
 
