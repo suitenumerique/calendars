@@ -18,6 +18,12 @@ const LOCATION_PREFIXES_TO_STRIP = ["Pour participer à la visioconférence, cli
 const CONFERENCE_BLOCK_RE =
   /-::~:~::~:~[:~]*::~:~::-\s*\n.*?(https:\/\/\S+).*?\n.*?-::~:~::~:~[:~]*::~:~::-/s;
 
+/**
+ * Video link block that our invitations add to the description.
+ * Keep the marker in sync with invitation_video_link.py.
+ */
+const VIDEO_LINK_BLOCK_RE = /-::~ video ~::-\s*\n\s*(https?:\/\/\S+)\s*\n\s*-::~ video ~::-/;
+
 const URL_RE = /https?:\/\/[^\s]+/i;
 
 // ---------------------------------------------------------------------------
@@ -40,8 +46,9 @@ export type EventDisplayFields = {
  * Applies in order:
  *  1. Trim whitespace on all fields
  *  2. Strip known prefixes from location
- *  3. Extract embedded conference URL from description → url (if url empty)
- *  4. Deduplicate: desc==location → empty desc,
+ *  3. Remove our video link block from description → url (if url empty)
+ *  4. Extract embedded conference URL from description → url (if url empty)
+ *  5. Deduplicate: desc==location → empty desc,
  *     location==url → empty location, desc==url → empty desc
  */
 export const cleanEventForDisplay = (raw: EventDisplayFields): EventDisplayFields => {
@@ -49,9 +56,13 @@ export const cleanEventForDisplay = (raw: EventDisplayFields): EventDisplayField
   let location = stripLocationPrefixes(raw.location.trim());
   let url = raw.url.trim();
 
+  const videoLink = extractBlock(description, VIDEO_LINK_BLOCK_RE);
+  description = videoLink.description;
+  url ||= videoLink.url ?? "";
+
   // Extract embedded conference block from description
   if (!url) {
-    const extracted = extractConferenceBlock(description);
+    const extracted = extractBlock(description, CONFERENCE_BLOCK_RE);
     if (extracted.url) {
       description = extracted.description;
       url = extracted.url;
@@ -87,8 +98,8 @@ const stripLocationPrefixes = (value: string): string => {
   return value;
 };
 
-const extractConferenceBlock = (text: string): { description: string; url: string | null } => {
-  const match = text.match(CONFERENCE_BLOCK_RE);
+const extractBlock = (text: string, block: RegExp): { description: string; url: string | null } => {
+  const match = text.match(block);
   if (!match) return { description: text, url: null };
   return {
     description: text.replace(match[0], "").trim(),
