@@ -78,7 +78,9 @@ export function parseAttendeeList(text: string): ParsedAttendeeList {
 
   for (const entry of text.match(LIST_ENTRY) ?? []) {
     let end = 0;
-    for (const match of entry.matchAll(NAMED_ADDRESS)) {
+    // Without `<` there is no named entry, and the search is slow on a long entry.
+    const named = entry.includes("<") ? entry.matchAll(NAMED_ADDRESS) : [];
+    for (const match of named) {
       // A malformed part before the match, as in `bad <broken <a@x.org>`.
       addPlain(splitWords(entry.slice(end, match.index)));
 
