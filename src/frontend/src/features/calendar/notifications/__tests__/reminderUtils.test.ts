@@ -145,6 +145,31 @@ describe("collectDueReminders", () => {
     const event = makeEvent();
     expect(collectDueReminders([{ event, calendarUrl: "/c/" }], start, BACKFILL)).toHaveLength(0);
   });
+
+  it("counts a RELATED=END trigger from the end of the event", () => {
+    const endRelative: IcsAlarm = {
+      action: "DISPLAY",
+      trigger: {
+        type: "relative",
+        value: { before: true, minutes: 10 },
+        options: { related: "END" },
+      },
+    };
+    const end = start + 60 * MIN;
+    const withEnd = makeEvent({
+      end: { type: "DATE-TIME", date: new Date(end) },
+      alarms: [endRelative],
+    });
+    const withDuration = makeEvent({ duration: { hours: 1 }, alarms: [endRelative] });
+
+    for (const event of [withEnd, withDuration]) {
+      const events = [{ event, calendarUrl: "/c/" }];
+      expect(collectDueReminders(events, start - 10 * MIN + 30_000, BACKFILL)).toHaveLength(0);
+      const due = collectDueReminders(events, end - 10 * MIN + 30_000, BACKFILL);
+      expect(due).toHaveLength(1);
+      expect(due[0].triggerMs).toBe(end - 10 * MIN);
+    }
+  });
 });
 
 describe("buildAlarmMap / withMasterAlarms", () => {

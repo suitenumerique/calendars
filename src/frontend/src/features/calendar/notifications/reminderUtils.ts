@@ -3,7 +3,7 @@
  * fireable reminders. Kept free of React / browser APIs so they can be
  * unit-tested in isolation.
  */
-import type { IcsAlarm, IcsEvent } from "ts-ics";
+import type { IcsAlarm, IcsDateObject, IcsDuration, IcsEvent } from "ts-ics";
 
 const MS = {
   second: 1_000,
@@ -21,6 +21,22 @@ const MS = {
  */
 const CLIENT_ACTIONS = new Set(["DISPLAY", "AUDIO"]);
 
+const durationMs = (d: IcsDuration): number =>
+  (d.weeks || 0) * MS.week +
+  (d.days || 0) * MS.day +
+  (d.hours || 0) * MS.hour +
+  (d.minutes || 0) * MS.minute +
+  (d.seconds || 0) * MS.second;
+
+const dateTimeMs = (value: IcsDateObject | undefined): number | null => {
+  const date = value?.date;
+  if (!(date instanceof Date)) return null;
+  if (value?.type === "DATE") {
+    return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()).getTime();
+  }
+  return date.getTime();
+};
+
 /**
  * Absolute instant (ms since epoch) of an event's start, or null.
  *
@@ -29,25 +45,29 @@ const CLIENT_ACTIONS = new Set(["DISPLAY", "AUDIO"]);
  * reminder fires relative to the user's day rather than being shifted by
  * their UTC offset.
  */
-export const getEventInstantMs = (event: IcsEvent): number | null => {
-  const date = event.start?.date;
-  if (!(date instanceof Date)) return null;
-  if (event.start?.type === "DATE") {
-    return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()).getTime();
-  }
-  return date.getTime();
+export const getEventInstantMs = (event: IcsEvent): number | null => dateTimeMs(event.start);
+
+/**
+ * Absolute instant (ms since epoch) of the end of an event that starts at
+ * `startMs`. An event with no DTEND and no DURATION ends when it starts.
+ */
+export const getEventEndMs = (event: IcsEvent, startMs: number): number => {
+  if (event.end) return dateTimeMs(event.end) ?? startMs;
+  if (event.duration) return startMs + durationMs(event.duration);
+  return startMs;
 };
 
 /**
  * Resolve the absolute instant at which an alarm should fire.
  *
- * - Relative triggers are interpreted against the event start; `before`
- *   (a "-PT15M"-style duration) fires earlier, otherwise later.
+ * - Relative triggers are interpreted against `anchorMs`, the start or
+ *   the end of the event; `before` (a "-PT15M"-style duration) fires
+ *   earlier, otherwise later.
  * - Absolute triggers carry their own datetime.
  *
  * Returns null when the trigger cannot be resolved.
  */
-export const getAlarmTriggerMs = (alarm: IcsAlarm, eventInstantMs: number): number | null => {
+export const getAlarmTriggerMs = (alarm: IcsAlarm, anchorMs: number): number | null => {
   const trigger = alarm.trigger;
   if (!trigger) return null;
 
@@ -58,14 +78,9 @@ export const getAlarmTriggerMs = (alarm: IcsAlarm, eventInstantMs: number): numb
 
   const d = trigger.value;
   if (!d) return null;
-  const magnitude =
-    (d.weeks || 0) * MS.week +
-    (d.days || 0) * MS.day +
-    (d.hours || 0) * MS.hour +
-    (d.minutes || 0) * MS.minute +
-    (d.seconds || 0) * MS.second;
+  const magnitude = durationMs(d);
   // `before === false`/undefined means the duration is "after start".
-  return d.before === false ? eventInstantMs + magnitude : eventInstantMs - magnitude;
+  return d.before === false ? anchorMs + magnitude : anchorMs - magnitude;
 };
 
 /** A reminder that is ready to be shown to the user. */
@@ -124,7 +139,12 @@ export const collectDueReminders = (
       const action = (alarm.action ?? "DISPLAY").toUpperCase();
       if (!CLIENT_ACTIONS.has(action)) continue;
 
-      const triggerMs = getAlarmTriggerMs(alarm, eventInstantMs);
+      // A trigger with RELATED=END counts from the end of the event.
+      const anchorMs =
+        alarm.trigger?.type === "relative" && alarm.trigger.options?.related === "END"
+          ? getEventEndMs(event, eventInstantMs)
+          : eventInstantMs;
+      const triggerMs = getAlarmTriggerMs(alarm, anchorMs);
       if (triggerMs == null) continue;
       if (triggerMs > nowMs) continue; // not due yet
       if (triggerMs < nowMs - backfillMs) continue; // due too long ago
