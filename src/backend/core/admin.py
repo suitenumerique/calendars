@@ -1,5 +1,6 @@
 """Admin classes and registrations for core app."""
 
+import json
 import secrets
 
 from django.contrib import admin
@@ -8,6 +9,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
+from django.utils.html import format_html
 from django.utils.text import Truncator
 
 from django_dramatiq import admin as dramatiq_admin
@@ -216,12 +218,14 @@ class ChannelAdmin(admin.ModelAdmin):
 
 # django_dramatiq lists each task by its full message, with all the task
 # arguments. Some arguments hold a full ICS file, so show a short summary.
+# It also shows the message and the traceback without HTML escaping, and
+# the ICS file comes from the event author.
 admin.site.unregister(Task)
 
 
 @admin.register(Task)
 class TaskAdmin(dramatiq_admin.TaskAdmin):
-    """Task admin with a short summary of each task in the list."""
+    """Task admin with a short summary and escaped task details."""
 
     list_display = (
         "summary",
@@ -237,3 +241,15 @@ class TaskAdmin(dramatiq_admin.TaskAdmin):
     def summary(self, task):
         """Return the task message, cut to 120 characters."""
         return Truncator(str(task)).chars(120)
+
+    def message_details(self, instance):
+        """Return the task message as escaped JSON."""
+        details = json.dumps(instance.message._asdict(), indent=4, default=str)
+        return format_html("<pre>{}</pre>", details)
+
+    def traceback(self, instance):
+        """Return the escaped traceback of a failed task."""
+        traceback = instance.message.options.get("traceback")
+        if not traceback:
+            return None
+        return format_html("<pre>{}</pre>", traceback)
