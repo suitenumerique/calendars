@@ -13,6 +13,7 @@ namespace Calendars\SabreDav;
 use Sabre\CalDAV\Schedule\IMipPlugin;
 use Sabre\DAV\Server;
 use Sabre\VObject\ITip\Message;
+use Sabre\VObject\Reader;
 
 class HttpCallbackIMipPlugin extends IMipPlugin
 {
@@ -38,6 +39,13 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      * @var string
      */
     private $callbackUrl;
+
+    /**
+     * Attendee emails of the stored events that this request updates.
+     * Keys are event UIDs. Values are sets of lowercase emails.
+     * @var array<string, array<string, true>>
+     */
+    private $previousAttendees = [];
 
     /**
      * Constructor
@@ -66,6 +74,57 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     {
         parent::initialize($server);
         $this->server = $server;
+        // Priority 90 runs before the CalDAV plugin, which schedules the
+        // iTip messages in its own beforeWriteContent handler.
+        $server->on('beforeWriteContent', [$this, 'rememberPreviousAttendees'], 90);
+    }
+
+    /**
+     * Keep the attendees of the stored event before it is overwritten.
+     *
+     * Signature: ($path, \Sabre\DAV\IFile $node, &$data, &$modified)
+     *
+     * @return void
+     */
+    public function rememberPreviousAttendees($path, $node, &$data, &$modified = false)
+    {
+        if (!$node instanceof \Sabre\CalDAV\ICalendarObject) {
+            return;
+        }
+
+        try {
+            $vcalendar = Reader::read($node->get());
+        } catch (\Exception $e) {
+            return;
+        }
+
+        foreach ($vcalendar->VEVENT ?? [] as $vevent) {
+            $uid = (string) $vevent->UID;
+            $this->previousAttendees[$uid] = $this->previousAttendees[$uid] ?? [];
+            foreach ($vevent->ATTENDEE ?? [] as $attendee) {
+                $this->previousAttendees[$uid][$this->normalizeEmail($attendee->getValue())] = true;
+            }
+        }
+    }
+
+    /**
+     * Tell if the recipient of a REQUEST is not on the stored event.
+     *
+     * Returns false when the event is new: then all attendees get an
+     * invitation, because the SEQUENCE is 0.
+     */
+    private function isNewAttendee(Message $iTipMessage): bool
+    {
+        if ('REQUEST' !== $iTipMessage->method || !isset($this->previousAttendees[$iTipMessage->uid])) {
+            return false;
+        }
+        $recipient = $this->normalizeEmail($iTipMessage->recipient);
+        return !isset($this->previousAttendees[$iTipMessage->uid][$recipient]);
+    }
+
+    private function normalizeEmail(string $address): string
+    {
+        return strtolower(preg_replace('/^mailto:/i', '', trim($address)));
     }
 
     /**
@@ -126,6 +185,10 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         $senderEmail = substr($iTipMessage->sender, 7); // strip 'mailto:'
         if ($this->isSenderMailbox($senderEmail)) {
             $headers[] = 'X-LS-Is-Mailbox: true';
+        }
+
+        if ($this->isNewAttendee($iTipMessage)) {
+            $headers[] = 'X-LS-New-Attendee: true';
         }
 
         // Pass org_id so Django can include it in RSVP tokens.

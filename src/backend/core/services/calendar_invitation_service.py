@@ -445,7 +445,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
     def __init__(self):
         self.parser = ICalendarParser()
 
-    def send_invitation(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def send_invitation(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
         self,
         sender_email: str,
         recipient_email: str,
@@ -453,6 +453,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         icalendar_data: str,
         is_mailbox: bool = False,
         org_id: str = "",
+        is_new_attendee: bool = False,
     ) -> bool:
         """
         Send a calendar invitation email.
@@ -464,6 +465,9 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             icalendar_data: Raw iCalendar data
             is_mailbox: If True, send via Messages API from mailbox email
             org_id: Organization ID for RSVP token (from CalDAV request)
+            is_new_attendee: If True, the recipient is not on the previous
+                version of the event, so the email is an invitation and not
+                an update
 
         Returns:
             True if email was sent successfully, False otherwise
@@ -490,6 +494,8 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             t = TranslationService.t
             summary = event.summary or t("email.noTitle", lang)
 
+            is_update = event.sequence > 0 and not is_new_attendee
+
             # Determine email type and get appropriate subject/content
             if method == self.METHOD_CANCEL:
                 subject = t("email.subject.cancel", lang, summary=summary)
@@ -497,7 +503,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             elif method == self.METHOD_REPLY:
                 subject = t("email.subject.reply", lang, summary=summary)
                 template_prefix = "calendar_invitation_reply"
-            elif event.sequence > 0:
+            elif is_update:
                 subject = t("email.subject.update", lang, summary=summary)
                 template_prefix = "calendar_invitation_update"
             else:
@@ -505,7 +511,9 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 template_prefix = "calendar_invitation"
 
             # Build context for templates
-            context = self._build_template_context(event, method, lang, org_id=org_id)
+            context = self._build_template_context(
+                event, method, lang, org_id=org_id, is_update=is_update
+            )
 
             # Render email bodies
             text_body = render_to_string(f"emails/{template_prefix}.txt", context)
@@ -615,10 +623,22 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             for action in ("accepted", "tentative", "declined")
         }
 
-    def _build_template_context(
-        self, event: EventDetails, method: str, lang: str = "fr", org_id: str = ""
+    def _build_template_context(  # pylint: disable=too-many-arguments
+        self,
+        event: EventDetails,
+        method: str,
+        lang: str = "fr",
+        org_id: str = "",
+        *,
+        is_update: bool | None = None,
     ) -> dict:
-        """Build context dictionary for email templates."""
+        """Build context dictionary for email templates.
+
+        When ``is_update`` is None, a SEQUENCE above 0 makes a REQUEST an
+        update.
+        """
+        if is_update is None:
+            is_update = event.sequence > 0
         t = TranslationService.t
         summary = event.summary or t("email.noTitle", lang)
         start_str, end_str, time_str = self._format_event_dates(event, lang)
@@ -635,7 +655,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             type_key = "cancel"
         elif method == self.METHOD_REPLY:
             type_key = "reply"
-        elif event.sequence > 0:
+        elif is_update:
             type_key = "update"
         else:
             type_key = "invitation"
@@ -650,7 +670,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             "start_date": start_str,
             "end_date": end_str,
             "time_str": time_str,
-            "is_update": event.sequence > 0,
+            "is_update": is_update,
             "is_cancel": method == self.METHOD_CANCEL,
             "app_name": settings.APP_NAME,
             "app_url": settings.APP_URL,

@@ -371,6 +371,83 @@ END:VCALENDAR"""
             server.shutdown()
             server.server_close()
 
+    def test_scheduling_callback_flags_attendee_added_on_update(  # pylint: disable=too-many-locals
+        self,
+    ):
+        """An update that adds an attendee sends X-LS-New-Attendee for
+        that attendee only. The attendee that is already on the event
+        gets an update without the header."""
+        organizer = factories.UserFactory(email="organizer-new-attendee@example.com")
+        service = CalendarService()
+        caldav_path = service.create_calendar(
+            organizer, name="New Attendee Calendar", color="#00aa00"
+        )
+
+        server, _port, callback_data = create_test_server()
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        time.sleep(0.5)
+
+        try:
+            client = service._get_client(organizer)  # pylint: disable=protected-access
+            calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
+
+            try:
+                caldav_calendar = client.calendar(url=calendar_url)
+
+                dtstart = datetime.now() + timedelta(days=3)
+                known = "known@external-a.test"
+                added = "added@external-b.test"
+                event_uid = f"new-attendee-{datetime.now().timestamp()}"
+
+                def ical(start, attendees, sequence):
+                    lines = "\n".join(
+                        f"ATTENDEE;RSVP=TRUE:mailto:{email}" for email in attendees
+                    )
+                    end = start + timedelta(hours=1)
+                    return f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test Client//EN
+BEGIN:VEVENT
+UID:{event_uid}
+DTSTART:{start.strftime("%Y%m%dT%H%M%SZ")}
+DTEND:{end.strftime("%Y%m%dT%H%M%SZ")}
+SUMMARY:Event with an added attendee
+SEQUENCE:{sequence}
+ORGANIZER;CN=Organizer:mailto:{organizer.email}
+{lines}
+END:VEVENT
+END:VCALENDAR"""
+
+                event = caldav_calendar.save_event(ical(dtstart, [known], 0))
+                _wait_for_callbacks(callback_data, expected_count=1)
+                assert len(callback_data["requests"]) == 1
+                assert (
+                    "X-LS-New-Attendee" not in callback_data["requests"][0]["headers"]
+                )
+
+                callback_data["requests"] = []
+
+                # Move the event so that the known attendee also gets a
+                # message.
+                event.data = ical(dtstart + timedelta(hours=1), [known, added], 1)
+                event.save()
+                _wait_for_callbacks(callback_data, expected_count=2)
+
+                flags = {
+                    re.sub(
+                        r"(?i)^mailto:", "", r["headers"].get("X-LS-Recipient", "")
+                    ): r["headers"].get("X-LS-New-Attendee")
+                    for r in callback_data["requests"]
+                }
+                assert flags == {known: None, added: "true"}
+
+            except NotFoundError:
+                pytest.skip("Calendar not found - CalDAV server may not be running")
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_scheduling_callback_fires_cancel_when_deleting_event_with_attendee(  # pylint: disable=too-many-locals,too-many-statements
         self,
     ):

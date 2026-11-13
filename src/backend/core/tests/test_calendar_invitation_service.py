@@ -506,6 +506,41 @@ class TestReplyEmail:
             assert "Carol" not in body
 
 
+@pytest.mark.django_db
+class TestNewAttendeeOnUpdatedEvent:
+    """An attendee added to an updated event gets an invitation."""
+
+    ICS_UPDATED = ICS_WITH_URL.replace("SEQUENCE:0", "SEQUENCE:2")
+
+    @staticmethod
+    def _send_request(icalendar_data, **kwargs):
+        service = CalendarInvitationService()
+        with patch.object(
+            CalendarInvitationService, "_send_email", return_value=True
+        ) as mock_send_email:
+            result = service.send_invitation(
+                sender_email="mailto:alice@example.com",
+                recipient_email="mailto:bob@example.com",
+                method="REQUEST",
+                icalendar_data=icalendar_data,
+                **kwargs,
+            )
+        assert result is True
+        return mock_send_email.call_args.kwargs
+
+    def test_known_attendee_gets_an_update(self):
+        kwargs = self._send_request(self.ICS_UPDATED)
+
+        assert kwargs["subject"].startswith("Invitation modifiée")
+
+    def test_new_attendee_gets_an_invitation(self):
+        kwargs = self._send_request(self.ICS_UPDATED, is_new_attendee=True)
+
+        assert not kwargs["subject"].startswith("Invitation modifiée")
+        assert kwargs["subject"].startswith("Invitation")
+        assert "modifi" not in kwargs["html_body"]
+
+
 # ICS template for mailbox invitation tests
 ICS_MAILBOX_INVITE = """BEGIN:VCALENDAR
 VERSION:2.0
