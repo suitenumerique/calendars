@@ -189,6 +189,13 @@ describe("attendees-utils", () => {
       });
     });
 
+    it("ignores an address in angle brackets inside a quoted name", () => {
+      expect(parseAttendeeList('"Jane <old@x.org>" <jane@x.org>')).toEqual({
+        attendees: [{ email: "jane@x.org", name: "Jane <old@x.org>" }],
+        invalid: [],
+      });
+    });
+
     it("reads a quoted address as the name of a named entry", () => {
       expect(
         parseAttendeeList(

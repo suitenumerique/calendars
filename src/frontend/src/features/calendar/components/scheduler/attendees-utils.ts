@@ -45,7 +45,7 @@ interface ParsedAttendeeList {
 
 // A quoted name can contain a separator, for example "Doe, Jane" <jane@x.org>.
 const LIST_ENTRY = /(?:"[^"]*"|[^,;\n\r\t])+/g;
-const NAMED_ADDRESS = /([^<>]*)<([^<>]*)>/g;
+const NAMED_ADDRESS = /((?:"[^"]*"|[^<>])*)<([^<>]*)>/g;
 
 const splitWords = (text: string): string[] => text.match(/(?:"[^"]*"|\S)+/g) ?? [];
 
