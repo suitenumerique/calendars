@@ -113,14 +113,15 @@ export function AttendeesInput({
 
   // A single-line input drops line breaks, which joins the addresses of a pasted list.
   const handlePaste = useCallback((e: ClipboardEvent<HTMLInputElement>) => {
-    const pasted = e.clipboardData.getData("text").trim();
+    const pasted = e.clipboardData.getData("text");
     if (!/[\r\n]/.test(pasted)) return;
 
     e.preventDefault();
     const { value, selectionStart, selectionEnd } = e.currentTarget;
     const before = value.slice(0, selectionStart ?? value.length);
     const after = value.slice(selectionEnd ?? value.length);
-    setInputValue(before + pasted.replace(/[\r\n]+/g, ", ") + after);
+    const text = before + pasted.replace(/[\r\n]+/g, ", ") + after;
+    setInputValue(text.replace(/^[,\s]+|[,\s]+$/g, ""));
     setHighlightedIndex(-1);
     setError(null);
   }, []);
@@ -141,6 +142,9 @@ export function AttendeesInput({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
+      // Enter confirms an IME composition, it does not submit the field.
+      if (e.nativeEvent.isComposing) return;
+
       if (e.key === "Escape") {
         setShowSuggestions(false);
         setHighlightedIndex(-1);
