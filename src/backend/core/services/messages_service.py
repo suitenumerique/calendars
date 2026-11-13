@@ -111,7 +111,7 @@ class MessagesService:
             return data["results"]
         return data
 
-    def _fetch_mailboxes(self, cache_key, default, *, use_cache=True, **params):
+    def _fetch_mailboxes(self, cache_key, *, use_cache=True, **params):
         """Fetch from provisioning/mailboxes/ with caching.
 
         With ``use_cache=False``, the result comes from Messages. It also
@@ -121,9 +121,8 @@ class MessagesService:
         user-specific fields (role) when queried by user_email, but not
         when queried by email. Do not share cache keys across query shapes.
 
-        Transient ``RequestException`` is logged and swallowed (returns
-        ``default``). The caller cannot distinguish transient errors from
-        a missing mailbox — see the warning logged here for correlation.
+        Raises MessagesServiceError when the request fails. An empty list
+        is always a real answer from Messages.
         """
         cached = cache.get(cache_key) if use_cache else None
         if cached is not None:
@@ -134,26 +133,25 @@ class MessagesService:
 
         try:
             results = self._get_results("/api/v1.0/provisioning/mailboxes/", params)
-            cache.set(cache_key, results, MAILBOX_CACHE_TTL)
-            return results
         except requests.RequestException as exc:
-            logger.error(
-                "Messages API fetch_mailboxes failed (cache_key=%s): %s — "
-                "callers will see this as 'mailbox not found'",
-                cache_key,
-                exc,
-            )
-            return default
+            raise MessagesServiceError(
+                f"Messages API fetch_mailboxes failed: {exc}"
+            ) from exc
+        cache.set(cache_key, results, MAILBOX_CACHE_TTL)
+        return results
 
     def get_user_mailboxes(self, user_email, *, use_cache=True):
         """Fetch mailboxes the user has access to, with all users of each.
 
         Each mailbox includes the user's ``role`` and a ``users`` array.
         Cached separately from get_mailbox_by_email (different response shape).
+
+        Raises MessagesServiceError when the lookup fails. Callers must not
+        read a failed lookup as "no mailboxes": the ACL sync then removes
+        all the shares of the user.
         """
         return self._fetch_mailboxes(
             f"messages:by_user:{user_email}",
-            [],
             use_cache=use_cache,
             user_email=user_email,
         )
@@ -163,10 +161,15 @@ class MessagesService:
 
         Returns dict with mailbox info or None. No ``role`` field in response.
         Cached separately from get_user_mailboxes (different response shape).
+        A failed lookup also returns None.
         """
-        results = self._fetch_mailboxes(
-            f"messages:by_email:{mailbox_email}", [], email=mailbox_email
-        )
+        try:
+            results = self._fetch_mailboxes(
+                f"messages:by_email:{mailbox_email}", email=mailbox_email
+            )
+        except MessagesServiceError:
+            logger.exception("Messages mailbox lookup failed")
+            return None
         return results[0] if results else None
 
     def submit_raw_message(  # pylint: disable=too-many-arguments,too-many-positional-arguments
