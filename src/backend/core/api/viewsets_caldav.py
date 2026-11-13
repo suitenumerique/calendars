@@ -22,7 +22,7 @@ from core.entitlements import EntitlementsUnavailableError, get_user_entitlement
 from core.enums import ChannelScopeLevel
 from core.models import Channel, User, urlsafe_to_uuid
 from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy_path
-from core.tasks import queue_invitation
+from core.tasks import send_invitation_task
 
 logger = logging.getLogger(__name__)
 
@@ -574,7 +574,7 @@ class CalDAVSchedulingCallbackView(View):
 
         # Queue the email so that the CalDAV request does not wait for it.
         try:
-            queue_invitation(
+            send_invitation_task.delay(
                 sender_email=sender,
                 recipient_email=recipient,
                 method=method,

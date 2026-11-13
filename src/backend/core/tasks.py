@@ -4,19 +4,14 @@
 
 import logging
 from dataclasses import asdict
-from uuid import uuid4
 
 from django.conf import settings
-from django.core.cache import cache
 
 from core.services.calendar_invitation_service import calendar_invitation_service
 from core.services.import_service import ICSImportService
 from core.task_utils import register_task, set_task_progress
 
 logger = logging.getLogger(__name__)
-
-# Same duration as the Dramatiq dead message TTL.
-INVITATION_DATA_TIMEOUT = 7 * 24 * 3600
 
 
 class InvitationSendError(Exception):
@@ -62,8 +57,9 @@ def import_events_task(user_id, caldav_path, ics_data_hex):
     }
 
 
-def queue_invitation(  # noqa: PLR0913  # pylint: disable=too-many-arguments
-    *,
+# No retry: a retry after a partial failure can send the same email twice.
+@register_task(queue="default", max_retries=0, store_results=False)
+def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
     sender_email,
     recipient_email,
     method,
@@ -72,60 +68,17 @@ def queue_invitation(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     org_id="",
     is_new_attendee=False,
 ):
-    """Queue one calendar email.
-
-    The iCalendar data goes to the cache, not to the task message. The
-    message stays small in the task admin and in the worker logs, and the
-    task table does not keep the event.
-    """
-    icalendar_key = f"invitation_data:{uuid4().hex}"
-    cache.set(icalendar_key, icalendar_data, timeout=INVITATION_DATA_TIMEOUT)
-    send_invitation_task.delay(
+    """Send one calendar email for an iTIP message from the CalDAV server."""
+    via = "messages" if is_mailbox else "smtp"
+    success = calendar_invitation_service.send_invitation(
         sender_email=sender_email,
         recipient_email=recipient_email,
         method=method,
-        icalendar_key=icalendar_key,
+        icalendar_data=icalendar_data,
         is_mailbox=is_mailbox,
         org_id=org_id,
         is_new_attendee=is_new_attendee,
     )
-
-
-# No retry: a retry after a partial failure can send the same email twice.
-@register_task(queue="default", max_retries=0, store_results=False)
-def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
-    sender_email,
-    recipient_email,
-    method,
-    icalendar_key,
-    is_mailbox=False,
-    org_id="",
-    is_new_attendee=False,
-):
-    """Send one calendar email for an iTIP message from the CalDAV server.
-
-    ``icalendar_key`` is the cache key of the iCalendar data.
-    """
-    via = "messages" if is_mailbox else "smtp"
-    icalendar_data = cache.get(icalendar_key)
-    if icalendar_data is None:
-        raise InvitationSendError(
-            f"No calendar data for {method}: {sender_email} -> {recipient_email} "
-            f"(via {via})"
-        )
-
-    try:
-        success = calendar_invitation_service.send_invitation(
-            sender_email=sender_email,
-            recipient_email=recipient_email,
-            method=method,
-            icalendar_data=icalendar_data,
-            is_mailbox=is_mailbox,
-            org_id=org_id,
-            is_new_attendee=is_new_attendee,
-        )
-    finally:
-        cache.delete(icalendar_key)
     if not success:
         # Raise so that the task shows as failed. The worker logs the error.
         raise InvitationSendError(

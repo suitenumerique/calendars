@@ -8,6 +8,10 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
+from django.utils.text import Truncator
+
+from django_dramatiq import admin as dramatiq_admin
+from django_dramatiq.models import Task
 
 from . import models
 
@@ -208,3 +212,28 @@ class ChannelAdmin(admin.ModelAdmin):
         return TemplateResponse(
             request, "admin/core/channel/regenerated_tokens.html", context
         )
+
+
+# django_dramatiq lists each task by its full message, with all the task
+# arguments. Some arguments hold a full ICS file, so show a short summary.
+admin.site.unregister(Task)
+
+
+@admin.register(Task)
+class TaskAdmin(dramatiq_admin.TaskAdmin):
+    """Task admin with a short summary of each task in the list."""
+
+    list_display = (
+        "summary",
+        "status",
+        "eta",
+        "created_at",
+        "updated_at",
+        "queue_name",
+        "actor_name",
+    )
+
+    @admin.display(description="Task")
+    def summary(self, task):
+        """Return the task message, cut to 120 characters."""
+        return Truncator(str(task)).chars(120)
