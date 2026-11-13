@@ -12,6 +12,9 @@ namespace Calendars\SabreDav;
 
 use Sabre\CalDAV\Schedule\IMipPlugin;
 use Sabre\DAV\Server;
+use Sabre\HTTP\RequestInterface;
+use Sabre\HTTP\ResponseInterface;
+use Sabre\VObject\Component\VCalendar;
 use Sabre\VObject\ITip\Message;
 use Sabre\VObject\Reader;
 
@@ -74,70 +77,48 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     {
         parent::initialize($server);
         $this->server = $server;
-        // Priority 90 runs before the CalDAV plugin, which schedules the
-        // iTip messages in its own beforeCreateFile and beforeWriteContent
-        // handlers.
-        $server->on('beforeCreateFile', [$this, 'rememberNewEvent'], 90);
-        $server->on('beforeWriteContent', [$this, 'rememberPreviousAttendees'], 90);
-    }
-
-    /**
-     * Record a created event with no previous attendees.
-     *
-     * Signature: ($path, &$data, \Sabre\DAV\ICollection $parent, &$modified)
-     *
-     * @return void
-     */
-    public function rememberNewEvent($path, &$data, $parentNode = null, &$modified = false)
-    {
-        if (!$parentNode instanceof \Sabre\CalDAV\ICalendar) {
-            return;
-        }
-
-        if (is_resource($data)) {
-            $content = stream_get_contents($data);
-            rewind($data);
-        } else {
-            $content = (string) $data;
-        }
-
-        try {
-            $vcalendar = Reader::read($content);
-        } catch (\Exception $e) {
-            return;
-        }
-
-        foreach ($vcalendar->VEVENT ?? [] as $vevent) {
-            $this->previousAttendees[(string) $vevent->UID] = [];
-        }
+        // Priority 90 runs before the scheduling plugin (priority 100).
+        $server->on('calendarObjectChange', [$this, 'rememberPreviousAttendees'], 90);
     }
 
     /**
      * Keep the attendees of the stored event before it is overwritten.
      *
-     * Signature: ($path, \Sabre\DAV\IFile $node, &$data, &$modified)
+     * A new event has no previous attendees.
      *
      * @return void
      */
-    public function rememberPreviousAttendees($path, $node, &$data, &$modified = false)
-    {
-        if (!$node instanceof \Sabre\CalDAV\ICalendarObject) {
+    public function rememberPreviousAttendees(
+        RequestInterface $request,
+        ResponseInterface $response,
+        VCalendar $vCal,
+        $calendarPath,
+        &$modified,
+        $isNew
+    ) {
+        if ($isNew) {
+            foreach ($vCal->VEVENT ?? [] as $vevent) {
+                $this->previousAttendees[(string) $vevent->UID] = [];
+            }
             return;
         }
 
         try {
-            $vcalendar = Reader::read($node->get());
+            $node = $this->server->tree->getNodeForPath($request->getPath());
+            $stored = Reader::read($node->get());
         } catch (\Exception $e) {
+            error_log("[HttpCallbackIMipPlugin] Failed to read the stored event: " . $e->getMessage());
             return;
         }
 
-        foreach ($vcalendar->VEVENT ?? [] as $vevent) {
+        foreach ($stored->VEVENT ?? [] as $vevent) {
             $uid = (string) $vevent->UID;
             $this->previousAttendees[$uid] = $this->previousAttendees[$uid] ?? [];
             foreach ($vevent->ATTENDEE ?? [] as $attendee) {
                 $this->previousAttendees[$uid][$this->normalizeEmail($attendee->getValue())] = true;
             }
         }
+        $stored->destroy();
     }
 
     /**
