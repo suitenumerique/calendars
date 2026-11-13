@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Input, Modal, ModalSize, Icon, IconType } from "@gouvfr-lasuite/ui-components";
+import {
+  Button,
+  Input,
+  Modal,
+  ModalSize,
+  Icon,
+  IconType,
+  Spinner,
+} from "@gouvfr-lasuite/ui-components";
 import { CalendarSelect } from "./CalendarSelect";
 import { useAuth } from "@/features/auth/Auth";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
@@ -331,6 +339,7 @@ export const EventModal = ({
       <Modal
         isOpen={isOpen}
         onClose={onClose}
+        preventClose={isLoading}
         size={isMobile ? ModalSize.FULL : ModalSize.MEDIUM}
         stickyFooter
         title={mode === "create" ? t("calendar.event.createTitle") : t("calendar.event.editTitle")}
@@ -338,7 +347,7 @@ export const EventModal = ({
           // Single footer slot so the section pills and the action buttons
           // share one sticky footer: pills on top, buttons below. Only the
           // fields in the scroller above overflow.
-          <div className="event-modal__footer">
+          <div className="event-modal__footer" inert={isLoading}>
             <SectionPills
               pills={pills}
               isSectionExpanded={form.isSectionExpanded}
@@ -358,6 +367,7 @@ export const EventModal = ({
                 </Button>
                 <Button
                   color="brand"
+                  icon={isLoading ? <Spinner size="sm" /> : undefined}
                   onClick={handleSave}
                   disabled={
                     isLoading ||
@@ -367,14 +377,14 @@ export const EventModal = ({
                     attendeesPendingInvalid
                   }
                 >
-                  {isLoading ? "..." : t("calendar.event.save")}
+                  {t("calendar.event.save")}
                 </Button>
               </div>
             </div>
           </div>
         }
       >
-        <div className="event-modal__content">
+        <div className="event-modal__content" inert={isLoading}>
           <SectionRow icon={<Edit />} label={t("calendar.event.calendar")} alwaysOpen={true}>
             <Input
               label={t("calendar.event.title")}
