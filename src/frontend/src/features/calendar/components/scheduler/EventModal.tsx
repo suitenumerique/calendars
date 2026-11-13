@@ -421,6 +421,15 @@ export const EventModal = ({
               {t("calendar.event.endBeforeStart")}
             </p>
           )}
+          {isInvited && mode === "edit" && onRespondToInvitation && (
+            <InvitationResponseSection
+              organizer={event?.organizer}
+              currentStatus={currentParticipationStatus}
+              isLoading={isLoading}
+              eventStatus={event?.status}
+              onRespond={handleRespondToInvitation}
+            />
+          )}
           {form.isSectionExpanded("recurrence") && (
             <RecurrenceSection
               recurrence={form.recurrence}
@@ -505,15 +514,6 @@ export const EventModal = ({
               visibility={form.visibility}
               onChange={form.setVisibility}
               alwaysOpen
-            />
-          )}
-          {isInvited && mode === "edit" && onRespondToInvitation && (
-            <InvitationResponseSection
-              organizer={event?.organizer}
-              currentStatus={currentParticipationStatus}
-              isLoading={isLoading}
-              eventStatus={event?.status}
-              onRespond={handleRespondToInvitation}
             />
           )}
         </div>
