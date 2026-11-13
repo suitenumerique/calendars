@@ -39,7 +39,7 @@ export function AttendeesInput({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // A list of addresses is not a search query.
-  const isList = parseAttendeeList(inputValue).attendees.length > 1;
+  const isList = /[,;<>]/.test(inputValue) || inputValue.split("@").length > 2;
   const { data: searchResults, isLoading: isSearching } = useUserSearch(isList ? "" : inputValue);
 
   // Filter out already-added attendees and the organizer
@@ -47,7 +47,7 @@ export function AttendeesInput({
 
   // Show suggestions when we have results or are searching with enough chars
   const trimmedInput = inputValue.trim();
-  const shouldShowDropdown = showSuggestions && trimmedInput.length >= 3 && !isSearching;
+  const shouldShowDropdown = showSuggestions && !isList && trimmedInput.length >= 3 && !isSearching;
   const hasNoResults =
     shouldShowDropdown && suggestions.length === 0 && searchResults !== undefined;
 

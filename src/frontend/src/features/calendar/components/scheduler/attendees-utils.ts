@@ -42,8 +42,8 @@ const NAMED_ADDRESS = /([^<>]*)<([^<>]*)>/g;
 
 const splitWords = (text: string): string[] => text.match(/(?:"[^"]*"|\S)+/g) ?? [];
 
-// A quoted address before `<` is a name, as in `'jane@x.org' <jane@x.org>`.
-const isPlainAddress = (word: string): boolean => isValidEmail(word) && !/^["']/.test(word);
+// A fully quoted address before `<` is a name, as in `'jane@x.org' <jane@x.org>`.
+const isPlainAddress = (word: string): boolean => isValidEmail(word) && !/^(["']).*\1$/.test(word);
 
 /**
  * Parse a list of email addresses.
@@ -72,6 +72,9 @@ export function parseAttendeeList(text: string): ParsedAttendeeList {
   for (const entry of text.match(LIST_ENTRY) ?? []) {
     let end = 0;
     for (const match of entry.matchAll(NAMED_ADDRESS)) {
+      // A malformed part before the match, as in `bad <broken <a@x.org>`.
+      addPlain(splitWords(entry.slice(end, match.index)));
+
       const words = splitWords(match[1]);
       // The name starts after the last plain address, as in `a@x.org Jane <jane@x.org>`.
       let nameStart = words.length;

@@ -160,6 +160,20 @@ describe("attendees-utils", () => {
       ]);
     });
 
+    it("separates an address with a quoted local part from a named entry", () => {
+      expect(parseAttendeeList('"john"@x.org Jane <jane@x.org>')).toEqual({
+        attendees: [{ email: '"john"@x.org' }, { email: "jane@x.org", cn: "Jane" }],
+        invalid: [],
+      });
+    });
+
+    it("keeps a malformed part before a named entry as invalid", () => {
+      expect(parseAttendeeList("bad <broken <a@x.org>")).toEqual({
+        attendees: [{ email: "a@x.org", cn: "broken" }],
+        invalid: ["bad", "<"],
+      });
+    });
+
     it("reads a quoted address as the name of a named entry", () => {
       expect(
         parseAttendeeList(
