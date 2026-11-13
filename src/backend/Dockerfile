@@ -170,4 +170,4 @@ ENV TRANSLATIONS_JSON_PATH=/app/translations.json
 CMD ["gunicorn", "-c", "/app/gunicorn.conf.py", "calendars.wsgi:application"]
 
 HEALTHCHECK --interval=30s --timeout=2s --start-period=30s \
-  CMD ["python", "-c", "import os; from urllib.request import Request, urlopen; urlopen(Request('http://localhost:8000/__heartbeat__/', headers={'Host': os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost').split(',')[0].strip(), 'X-Forwarded-Proto': 'https'}), timeout=2)"]
+  CMD ["python", "-c", "import socket; from urllib.request import Request, urlopen; urlopen(Request('http://localhost:8000/__heartbeat__/', headers={'Host': socket.gethostbyname(socket.gethostname()), 'X-Forwarded-Proto': 'https'}), timeout=2)"]
