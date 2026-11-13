@@ -39,7 +39,8 @@ export function AttendeesInput({
   const containerRef = useRef<HTMLDivElement>(null);
 
   // A list of addresses is not a search query.
-  const isList = /[,;<>]/.test(inputValue) || inputValue.split("@").length > 2;
+  const isList =
+    /[,;<>]/.test(inputValue) || (inputValue.includes("@") && /\s/.test(inputValue.trim()));
   const { data: searchResults, isLoading: isSearching } = useUserSearch(isList ? "" : inputValue);
 
   // Filter out already-added attendees and the organizer
