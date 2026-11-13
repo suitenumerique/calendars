@@ -371,12 +371,18 @@ END:VCALENDAR"""
             server.shutdown()
             server.server_close()
 
-    def test_scheduling_callback_flags_attendee_added_on_update(  # pylint: disable=too-many-locals
-        self,
+    @pytest.mark.parametrize("move", [False, True])
+    def test_scheduling_callback_flags_new_attendees(  # pylint: disable=too-many-locals
+        self, move
     ):
-        """An update that adds an attendee sends X-LS-New-Attendee for
-        that attendee only. The attendee that is already on the event
-        gets an update without the header."""
+        """X-LS-New-Attendee marks the attendees that are not on the
+        stored event.
+
+        On a create, all attendees are new, also when SEQUENCE is above 0
+        (for example an imported event). On an update that only adds an
+        attendee, only the added attendee gets a message. When the update
+        also moves the event, the known attendee gets an update without
+        the header."""
         organizer = factories.UserFactory(email="organizer-new-attendee@example.com")
         service = CalendarService()
         caldav_path = service.create_calendar(
@@ -419,28 +425,27 @@ ORGANIZER;CN=Organizer:mailto:{organizer.email}
 END:VEVENT
 END:VCALENDAR"""
 
-                event = caldav_calendar.save_event(ical(dtstart, [known], 0))
+                def new_attendee_flags():
+                    return {
+                        re.sub(
+                            r"(?i)^mailto:", "", r["headers"].get("X-LS-Recipient", "")
+                        ): r["headers"].get("X-LS-New-Attendee")
+                        for r in callback_data["requests"]
+                    }
+
+                event = caldav_calendar.save_event(ical(dtstart, [known], 3))
                 _wait_for_callbacks(callback_data, expected_count=1)
-                assert len(callback_data["requests"]) == 1
-                assert (
-                    "X-LS-New-Attendee" not in callback_data["requests"][0]["headers"]
-                )
+                assert new_attendee_flags() == {known: "true"}
 
                 callback_data["requests"] = []
 
-                # Move the event so that the known attendee also gets a
-                # message.
-                event.data = ical(dtstart + timedelta(hours=1), [known, added], 1)
+                new_start = dtstart + timedelta(hours=1) if move else dtstart
+                event.data = ical(new_start, [known, added], 4)
                 event.save()
-                _wait_for_callbacks(callback_data, expected_count=2)
+                _wait_for_callbacks(callback_data, expected_count=2, timeout=1.0)
 
-                flags = {
-                    re.sub(
-                        r"(?i)^mailto:", "", r["headers"].get("X-LS-Recipient", "")
-                    ): r["headers"].get("X-LS-New-Attendee")
-                    for r in callback_data["requests"]
-                }
-                assert flags == {known: None, added: "true"}
+                expected = {known: None, added: "true"} if move else {added: "true"}
+                assert new_attendee_flags() == expected
 
             except NotFoundError:
                 pytest.skip("Calendar not found - CalDAV server may not be running")

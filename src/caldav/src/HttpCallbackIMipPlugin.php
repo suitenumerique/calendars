@@ -75,8 +75,41 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         parent::initialize($server);
         $this->server = $server;
         // Priority 90 runs before the CalDAV plugin, which schedules the
-        // iTip messages in its own beforeWriteContent handler.
+        // iTip messages in its own beforeCreateFile and beforeWriteContent
+        // handlers.
+        $server->on('beforeCreateFile', [$this, 'rememberNewEvent'], 90);
         $server->on('beforeWriteContent', [$this, 'rememberPreviousAttendees'], 90);
+    }
+
+    /**
+     * Record a created event with no previous attendees.
+     *
+     * Signature: ($path, &$data, \Sabre\DAV\ICollection $parent, &$modified)
+     *
+     * @return void
+     */
+    public function rememberNewEvent($path, &$data, $parentNode = null, &$modified = false)
+    {
+        if (!$parentNode instanceof \Sabre\CalDAV\ICalendar) {
+            return;
+        }
+
+        if (is_resource($data)) {
+            $content = stream_get_contents($data);
+            rewind($data);
+        } else {
+            $content = (string) $data;
+        }
+
+        try {
+            $vcalendar = Reader::read($content);
+        } catch (\Exception $e) {
+            return;
+        }
+
+        foreach ($vcalendar->VEVENT ?? [] as $vevent) {
+            $this->previousAttendees[(string) $vevent->UID] = [];
+        }
     }
 
     /**
@@ -110,8 +143,7 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     /**
      * Tell if the recipient of a REQUEST is not on the stored event.
      *
-     * Returns false when the event is new: then all attendees get an
-     * invitation, because the SEQUENCE is 0.
+     * All the recipients of a created event are new attendees.
      */
     private function isNewAttendee(Message $iTipMessage): bool
     {
