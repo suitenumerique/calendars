@@ -803,11 +803,11 @@ class TestMailboxCallbackTwoExternalAttendees:
             resp_a = self._post_callback(client, self.ATTENDEE_A)
             resp_b = self._post_callback(client, self.ATTENDEE_B)
 
-        assert resp_a.status_code == 200, (
+        assert resp_a.status_code == 202, (
             f"First callback (recipient {self.ATTENDEE_A}) failed: "
             f"{resp_a.status_code} {resp_a.content!r}"
         )
-        assert resp_b.status_code == 200, (
+        assert resp_b.status_code == 202, (
             f"Second callback (recipient {self.ATTENDEE_B}) failed: "
             f"{resp_b.status_code} {resp_b.content!r}. "
             "If the first succeeded and this failed, the Django callback "
