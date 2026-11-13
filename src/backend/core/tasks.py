@@ -7,6 +7,7 @@ from dataclasses import asdict
 
 from django.conf import settings
 
+from core.services.calendar_invitation_service import calendar_invitation_service
 from core.services.import_service import ICSImportService
 from core.task_utils import register_task, set_task_progress
 
@@ -50,6 +51,47 @@ def import_events_task(user_id, caldav_path, ics_data_hex):
         "result": result_dict,
         "error": None,
     }
+
+
+# No retry: a retry after a partial failure can send the same email twice.
+@register_task(queue="default", max_retries=0, store_results=False)
+def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    sender_email,
+    recipient_email,
+    method,
+    icalendar_data,
+    is_mailbox=False,
+    org_id="",
+    is_new_attendee=False,
+):
+    """Send one calendar email for an iTIP message from the CalDAV server."""
+    via = "messages" if is_mailbox else "smtp"
+    success = calendar_invitation_service.send_invitation(
+        sender_email=sender_email,
+        recipient_email=recipient_email,
+        method=method,
+        icalendar_data=icalendar_data,
+        is_mailbox=is_mailbox,
+        org_id=org_id,
+        is_new_attendee=is_new_attendee,
+    )
+    if not success:
+        logger.error(
+            "Failed to send calendar %s: %s -> %s (via %s)",
+            method,
+            sender_email,
+            recipient_email,
+            via,
+        )
+        return
+
+    logger.info(
+        "Sent calendar %s: %s -> %s (via %s)",
+        method,
+        sender_email,
+        recipient_email,
+        via,
+    )
 
 
 @register_task(queue="sync")

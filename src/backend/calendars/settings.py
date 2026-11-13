@@ -1062,6 +1062,7 @@ class Test(Base):
         "OPTIONS": {},
         "MIDDLEWARE": [
             "dramatiq.middleware.CurrentMessage",
+            "dramatiq.middleware.Retries",
         ],
     }
     DRAMATIQ_RESULT_BACKEND = {
