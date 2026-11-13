@@ -72,9 +72,20 @@ class AdminMiddleware(DramatiqAdminMiddleware):
     The task table keeps the full message of each task. An email task
     message holds the ICS data of an event, so a done email task is
     deleted. A failed email task stays, for inspection.
+
+    The record of an email task starts when the worker runs it, not when
+    it is queued. Dramatiq creates the record after it publishes the
+    message, so a slow producer can recreate the record of a task that
+    is already done. A retry is queued with a delay, so it still shows
+    as delayed.
     """
 
     DELETE_WHEN_DONE = frozenset({"send_invitation_task"})
+
+    def after_enqueue(self, broker, message, delay):
+        if not delay and message.actor_name in self.DELETE_WHEN_DONE:
+            return
+        super().after_enqueue(broker, message, delay)
 
     def after_process_message(self, broker, message, *, exception=None, **kwargs):
         if (

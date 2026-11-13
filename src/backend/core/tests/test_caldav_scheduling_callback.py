@@ -198,3 +198,29 @@ def test_admin_middleware_keeps_a_failed_email_task():
     )
 
     assert Task.tasks.get(id=message.message_id).status == Task.STATUS_FAILED
+
+
+@pytest.mark.django_db
+def test_admin_middleware_does_not_recreate_a_done_email_task():
+    """A late enqueue hook does not bring back the record of a done task."""
+    message = _record_task()
+    middleware = AdminMiddleware()
+    middleware.after_process_message(None, message)
+
+    middleware.after_enqueue(None, message, None)
+
+    assert not Task.tasks.filter(id=message.message_id).exists()
+
+
+@pytest.mark.django_db
+def test_admin_middleware_records_a_delayed_retry():
+    message = send_invitation_task.message(
+        sender_email="alice@example.com",
+        recipient_email="bob@example.com",
+        method="REQUEST",
+        icalendar_data=ICS_REQUEST,
+    )
+
+    AdminMiddleware().after_enqueue(None, message, 60_000)
+
+    assert Task.tasks.get(id=message.message_id).status == Task.STATUS_DELAYED
