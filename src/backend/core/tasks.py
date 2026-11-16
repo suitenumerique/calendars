@@ -4,8 +4,11 @@
 
 import logging
 from dataclasses import asdict
+from datetime import UTC, datetime
 
 from django.conf import settings
+
+from dramatiq.middleware import CurrentMessage
 
 from core.services.calendar_invitation_service import (
     InvitationNotSentError,
@@ -89,6 +92,13 @@ def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments
 ):
     """Send one calendar email for an iTIP message from the CalDAV server."""
     via = "messages" if is_mailbox else "smtp"
+    # The Date header is the time of the save, also after a retry.
+    message = CurrentMessage.get_current_message()
+    email_date = (
+        datetime.fromtimestamp(message.message_timestamp / 1000, tz=UTC)
+        if message
+        else None
+    )
     success = calendar_invitation_service.send_invitation(
         sender_email=sender_email,
         recipient_email=recipient_email,
@@ -97,6 +107,7 @@ def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         is_mailbox=is_mailbox,
         org_id=org_id,
         is_new_attendee=is_new_attendee,
+        email_date=email_date,
     )
     if not success:
         # Raise so that the task shows as failed. The worker logs the error.

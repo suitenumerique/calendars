@@ -17,7 +17,7 @@ from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from email import encoders
 from email.mime.base import MIMEBase
-from email.utils import make_msgid
+from email.utils import formatdate, make_msgid
 from typing import Optional
 from urllib.parse import urlencode, urlparse
 
@@ -360,6 +360,7 @@ def _build_calendar_email(  # noqa: PLR0913  # pylint: disable=too-many-argument
     ics_content: str,
     ics_method: str,
     itip_enabled: bool,
+    email_date: Optional[datetime] = None,
 ) -> _CalendarEmail:
     """Build the canonical iMIP calendar email — single source of truth
     for BOTH the SMTP and Messages paths.
@@ -368,8 +369,9 @@ def _build_calendar_email(  # noqa: PLR0913  # pylint: disable=too-many-argument
     ``email.message().as_bytes()`` and POSTs the bytes. Building from
     the same function guarantees both recipients see the same MIME
     structure, the same ``Date`` / ``Message-ID`` (Django generates Date
-    inside ``message()``; we inject Message-ID explicitly via
-    ``extra_headers`` so its domain is ours, not the container's), and
+    inside ``message()`` when ``email_date`` is None; we inject Message-ID
+    explicitly via ``extra_headers`` so its domain is ours, not the
+    container's), and
     the same iMIP ``method=`` on the ``text/calendar`` Content-Type —
     historically the Messages path was missing all three.
 
@@ -404,6 +406,11 @@ def _build_calendar_email(  # noqa: PLR0913  # pylint: disable=too-many-argument
     # leak the container hostname). When ``Message-ID`` is in
     # ``extra_headers``, Django bypasses the auto-injection.
     extra_headers = {"Message-ID": make_msgid(domain=_message_id_domain())}
+    # Without a Date header, Django uses the time of the build.
+    if email_date is not None:
+        extra_headers["Date"] = formatdate(
+            email_date.timestamp(), localtime=settings.EMAIL_USE_LOCALTIME
+        )
 
     email = _CalendarEmail(
         subject=subject,
@@ -476,6 +483,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         is_mailbox: bool = False,
         org_id: str = "",
         is_new_attendee: bool = False,
+        email_date: Optional[datetime] = None,
     ) -> bool:
         """
         Send a calendar invitation email.
@@ -490,6 +498,8 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             is_new_attendee: If True, the recipient is not on the previous
                 version of the event, so the email is an invitation and not
                 an update
+            email_date: The Date header of the email. If None, it is the
+                time of the send
 
         Returns:
             True if email was sent successfully, False otherwise
@@ -578,6 +588,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                     ics_content=ics_content,
                     ics_method=method,
                     event_uid=event.uid,
+                    email_date=email_date,
                 )
 
             return self._send_email(
@@ -589,6 +600,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 ics_content=ics_content,
                 ics_method=method,
                 event_uid=event.uid,
+                email_date=email_date,
             )
 
         except InvitationNotSentError:
@@ -793,6 +805,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         ics_content: str,
         ics_method: str,
         event_uid: str,
+        email_date: Optional[datetime] = None,
     ) -> bool:
         """Send via SMTP using Django's email backend.
 
@@ -825,6 +838,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 ics_content=ics_content,
                 ics_method=ics_method,
                 itip_enabled=settings.CALENDAR_ITIP_ENABLED,
+                email_date=email_date,
             )
             connection.send_messages([email])
 
@@ -859,6 +873,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         ics_content: str,
         ics_method: str,
         event_uid: str,
+        email_date: Optional[datetime] = None,
     ) -> bool:
         """Send via the Messages API from a mailbox.
 
@@ -915,6 +930,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 ics_content=ics_content,
                 ics_method=ics_method,
                 itip_enabled=settings.CALENDAR_ITIP_ENABLED,
+                email_date=email_date,
             )
             # ``message()`` builds the SafeMIMEMultipart and adds Date.
             # ``linesep="\r\n"`` forces CRLF line endings (RFC 5322 §2.1)

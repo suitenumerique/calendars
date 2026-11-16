@@ -2,6 +2,7 @@
 
 # pylint: disable=missing-function-docstring
 
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 from django.test import Client
@@ -117,3 +118,26 @@ def test_send_invitation_task_fails_when_the_send_fails():
             method="REQUEST",
             icalendar_data=ICS_REQUEST,
         )
+
+
+def test_send_invitation_task_dates_the_email_when_it_is_queued():
+    message = send_invitation_task.message(
+        sender_email="alice@example.com",
+        recipient_email="bob@example.com",
+        method="REQUEST",
+        icalendar_data=ICS_REQUEST,
+    )
+    message = message.copy(message_timestamp=1_773_135_000_000)
+    with (
+        patch("core.tasks.CurrentMessage.get_current_message", return_value=message),
+        patch(
+            "core.services.calendar_invitation_service"
+            ".CalendarInvitationService.send_invitation",
+            return_value=True,
+        ) as mock_send,
+    ):
+        send_invitation_task.fn(**message.kwargs)
+
+    assert mock_send.call_args.kwargs["email_date"] == datetime(
+        2026, 3, 10, 9, 30, tzinfo=UTC
+    )
