@@ -11,6 +11,7 @@ server (sabre/dav) needs to send invitations to external attendees.
 import logging
 import re
 import smtplib
+import ssl
 from dataclasses import dataclass
 from datetime import date, datetime
 from datetime import timezone as dt_timezone
@@ -27,6 +28,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 import icalendar
+import requests
 
 from core.models import User
 from core.services.translation_service import TranslationService
@@ -801,6 +803,9 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         connection = get_connection(fail_silently=False)
         try:
             connection.open()
+        except (smtplib.SMTPAuthenticationError, ssl.SSLCertVerificationError):
+            # A retry does not fix a configuration error.
+            raise
         except OSError as e:
             raise InvitationNotSentError(
                 f"Cannot connect to the SMTP server: {e}"
@@ -868,13 +873,23 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             )
 
             messages = MessagesService()
-            mailbox = messages.get_mailbox_by_email(mailbox_email)
-            if not mailbox:
-                # The lookup returns nothing also on a network error.
-                raise InvitationNotSentError(
-                    f"Mailbox {mailbox_email} not found in Messages, cannot send "
-                    f"the invitation to {to_email} (uid: {event_uid})"
+            try:
+                mailbox = messages.get_mailbox_by_email(
+                    mailbox_email, raise_errors=True
                 )
+            except requests.RequestException as e:
+                raise InvitationNotSentError(
+                    f"Cannot look up the mailbox {mailbox_email} in Messages: {e}"
+                ) from e
+            if not mailbox:
+                logger.error(
+                    "Mailbox %s not found in Messages, cannot send the invitation "
+                    "to %s (uid: %s)",
+                    mailbox_email,
+                    to_email,
+                    event_uid,
+                )
+                return False
 
             mailbox_id = mailbox.get("id")
             if not mailbox_id:

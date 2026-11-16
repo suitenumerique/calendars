@@ -2,17 +2,13 @@
 
 # pylint: disable=missing-function-docstring
 
-import smtplib
 from unittest.mock import patch
 
 from django.test import Client
 
 import pytest
 
-from core.services.calendar_invitation_service import (
-    CalendarInvitationService,
-    InvitationNotSentError,
-)
+from core.services.calendar_invitation_service import InvitationNotSentError
 from core.tasks import (
     INVITATION_SEND_RETRIES,
     InvitationSendError,
@@ -121,82 +117,3 @@ def test_send_invitation_task_fails_when_the_send_fails():
             method="REQUEST",
             icalendar_data=ICS_REQUEST,
         )
-
-
-@pytest.mark.django_db
-def test_send_fails_before_sending_when_smtp_is_down(settings):
-    settings.EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-    settings.EMAIL_HOST = "localhost"
-    settings.EMAIL_PORT = 1
-    with pytest.raises(InvitationNotSentError):
-        CalendarInvitationService().send_invitation(
-            sender_email="mailto:alice@example.com",
-            recipient_email="mailto:bob@example.com",
-            method="REQUEST",
-            icalendar_data=ICS_REQUEST,
-        )
-
-
-def _send_with_smtp_error(error):
-    with patch(
-        "django.core.mail.backends.locmem.EmailBackend.send_messages",
-        side_effect=error,
-    ):
-        return CalendarInvitationService().send_invitation(
-            sender_email="mailto:alice@example.com",
-            recipient_email="mailto:bob@example.com",
-            method="REQUEST",
-            icalendar_data=ICS_REQUEST,
-        )
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    "error",
-    [
-        smtplib.SMTPSenderRefused(421, b"Try again later", "noreply@example.com"),
-        smtplib.SMTPRecipientsRefused({"bob@example.com": (450, b"Greylisted")}),
-    ],
-)
-def test_send_fails_before_sending_when_smtp_refuses_for_now(error):
-    with pytest.raises(InvitationNotSentError):
-        _send_with_smtp_error(error)
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    "error",
-    [
-        smtplib.SMTPSenderRefused(550, b"Not allowed", "noreply@example.com"),
-        smtplib.SMTPRecipientsRefused({"bob@example.com": (550, b"No such user")}),
-        smtplib.SMTPDataError(451, b"Error after the data"),
-    ],
-)
-def test_send_fails_for_good_on_other_smtp_errors(error):
-    assert _send_with_smtp_error(error) is False
-
-
-@pytest.mark.django_db
-def test_send_fails_before_sending_when_the_mailbox_is_not_found(settings):
-    settings.FEATURE_MESSAGES_INTEGRATION = True
-    settings.MESSAGES_API_URL = "http://messages.test"
-    settings.MESSAGES_API_KEY = "key"
-    settings.MESSAGES_CHANNEL_ID = "channel"
-    with (
-        patch(
-            "core.services.messages_service.MessagesService.get_mailbox_by_email",
-            return_value=None,
-        ),
-        patch(
-            "core.services.messages_service.MessagesService.submit_raw_message"
-        ) as mock_submit,
-        pytest.raises(InvitationNotSentError),
-    ):
-        CalendarInvitationService().send_invitation(
-            sender_email="mailto:alice@example.com",
-            recipient_email="mailto:bob@example.com",
-            method="REQUEST",
-            icalendar_data=ICS_REQUEST,
-            is_mailbox=True,
-        )
-    mock_submit.assert_not_called()

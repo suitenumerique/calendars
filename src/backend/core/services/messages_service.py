@@ -111,7 +111,9 @@ class MessagesService:
             return data["results"]
         return data
 
-    def _fetch_mailboxes(self, cache_key, default, *, use_cache=True, **params):
+    def _fetch_mailboxes(  # pylint: disable=too-many-arguments
+        self, cache_key, default, *, use_cache=True, raise_errors=False, **params
+    ):
         """Fetch from provisioning/mailboxes/ with caching.
 
         With ``use_cache=False``, the result comes from Messages. It also
@@ -124,6 +126,8 @@ class MessagesService:
         Transient ``RequestException`` is logged and swallowed (returns
         ``default``). The caller cannot distinguish transient errors from
         a missing mailbox — see the warning logged here for correlation.
+        With ``raise_errors=True``, the ``RequestException`` goes to the
+        caller.
         """
         cached = cache.get(cache_key) if use_cache else None
         if cached is not None:
@@ -137,6 +141,8 @@ class MessagesService:
             cache.set(cache_key, results, MAILBOX_CACHE_TTL)
             return results
         except requests.RequestException as exc:
+            if raise_errors:
+                raise
             logger.error(
                 "Messages API fetch_mailboxes failed (cache_key=%s): %s — "
                 "callers will see this as 'mailbox not found'",
@@ -158,14 +164,19 @@ class MessagesService:
             user_email=user_email,
         )
 
-    def get_mailbox_by_email(self, mailbox_email):
+    def get_mailbox_by_email(self, mailbox_email, *, raise_errors=False):
         """Look up a mailbox by its email address.
 
         Returns dict with mailbox info or None. No ``role`` field in response.
         Cached separately from get_user_mailboxes (different response shape).
+        With ``raise_errors=True``, a failed request raises
+        ``requests.RequestException`` instead of returning None.
         """
         results = self._fetch_mailboxes(
-            f"messages:by_email:{mailbox_email}", [], email=mailbox_email
+            f"messages:by_email:{mailbox_email}",
+            [],
+            raise_errors=raise_errors,
+            email=mailbox_email,
         )
         return results[0] if results else None
 
