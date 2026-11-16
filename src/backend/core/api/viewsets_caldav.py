@@ -22,7 +22,7 @@ from core.entitlements import EntitlementsUnavailableError, get_user_entitlement
 from core.enums import ChannelScopeLevel
 from core.models import Channel, User, urlsafe_to_uuid
 from core.services.caldav_service import CalDAVHTTPClient, validate_caldav_proxy_path
-from core.services.calendar_invitation_service import calendar_invitation_service
+from core.tasks import send_invitation_task
 
 logger = logging.getLogger(__name__)
 
@@ -492,7 +492,7 @@ class CalDAVSchedulingCallbackView(View):
 
     http_method_names = ["post"]
 
-    def post(self, request, *args, **kwargs):  # noqa: PLR0911  # pylint: disable=too-many-return-statements
+    def post(self, request, *args, **kwargs):
         """Handle scheduling messages from CalDAV server."""
         # Authenticate via API key
         api_key = request.headers.get("X-LS-Api-Key", "").strip()
@@ -572,9 +572,9 @@ class CalDAVSchedulingCallbackView(View):
             via,
         )
 
-        # Send the invitation/notification email
+        # Queue the email so that the CalDAV request does not wait for it.
         try:
-            success = calendar_invitation_service.send_invitation(
+            send_invitation_task.delay(
                 sender_email=sender,
                 recipient_email=recipient,
                 method=method,
@@ -583,38 +583,12 @@ class CalDAVSchedulingCallbackView(View):
                 org_id=org_id,
                 is_new_attendee=is_new_attendee,
             )
-
-            if success:
-                logger.info(
-                    "Sent calendar %s: %s -> %s (via %s)",
-                    method,
-                    sender,
-                    recipient,
-                    via,
-                )
-                return HttpResponse(
-                    status=200,
-                    content="OK",
-                    content_type="text/plain",
-                )
-
-            logger.error(
-                "Failed to send calendar %s: %s -> %s (via %s)",
-                method,
-                sender,
-                recipient,
-                via,
-            )
-            return HttpResponse(
-                status=500,
-                content="Failed to send email",
-                content_type="text/plain",
-            )
-
         except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.exception("Error processing CalDAV scheduling callback: %s", e)
+            logger.exception("Failed to queue the calendar email: %s", e)
             return HttpResponse(
                 status=500,
                 content="Internal server error",
                 content_type="text/plain",
             )
+
+        return HttpResponse(status=202, content="Accepted", content_type="text/plain")

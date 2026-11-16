@@ -4,13 +4,24 @@
 
 import logging
 from dataclasses import asdict
+from datetime import UTC, datetime
 
 from django.conf import settings
 
+from dramatiq.middleware import CurrentMessage
+
+from core.services.calendar_invitation_service import (
+    InvitationNotSentError,
+    calendar_invitation_service,
+)
 from core.services.import_service import ICSImportService
 from core.task_utils import register_task, set_task_progress
 
 logger = logging.getLogger(__name__)
+
+
+class InvitationSendError(Exception):
+    """The server did not accept the calendar email, or the result is unknown."""
 
 
 @register_task(queue="import")
@@ -50,6 +61,72 @@ def import_events_task(user_id, caldav_path, ics_data_hex):
         "result": result_dict,
         "error": None,
     }
+
+
+INVITATION_SEND_RETRIES = 6
+
+
+def _retry_when_not_sent(retries, exception):
+    """Retry only when the server did not accept the email.
+
+    Then a retry cannot send the same email twice.
+    """
+    return (
+        isinstance(exception, InvitationNotSentError)
+        and retries < INVITATION_SEND_RETRIES
+    )
+
+
+# The task retries 6 times. The wait doubles at each retry, with a random
+# part. The first wait is 30 to 60 seconds.
+@register_task(
+    queue="default",
+    retry_when=_retry_when_not_sent,
+    min_backoff=60_000,
+    store_results=False,
+)
+def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    sender_email,
+    recipient_email,
+    method,
+    icalendar_data,
+    is_mailbox=False,
+    org_id="",
+    is_new_attendee=False,
+):
+    """Send one calendar email for an iTIP message from the CalDAV server."""
+    via = "messages" if is_mailbox else "smtp"
+    # The Date header is the time of the save, also after a retry.
+    message = CurrentMessage.get_current_message()
+    email_date = (
+        datetime.fromtimestamp(message.message_timestamp / 1000, tz=UTC)
+        if message
+        else None
+    )
+    success = calendar_invitation_service.send_invitation(
+        sender_email=sender_email,
+        recipient_email=recipient_email,
+        method=method,
+        icalendar_data=icalendar_data,
+        is_mailbox=is_mailbox,
+        org_id=org_id,
+        is_new_attendee=is_new_attendee,
+        email_date=email_date,
+    )
+    if not success:
+        # Raise so that the task shows as failed. The worker logs the error.
+        raise InvitationSendError(
+            f"Failed to send calendar {method}: {sender_email} -> {recipient_email} "
+            f"(via {via})"
+        )
+
+    logger.info(
+        "Sent calendar %s: %s -> %s (via %s)",
+        method,
+        sender_email,
+        recipient_email,
+        via,
+    )
 
 
 @register_task(queue="sync")

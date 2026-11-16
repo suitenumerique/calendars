@@ -3,6 +3,7 @@
 # pylint: disable=missing-function-docstring,protected-access,too-many-lines
 
 import re
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from django.template.loader import render_to_string
@@ -615,7 +616,9 @@ class TestMailboxInvitationRouting:
             )
 
         assert result is True, "Invitation should succeed via Messages API"
-        mock_messages.get_mailbox_by_email.assert_called_once_with("team@company.com")
+        mock_messages.get_mailbox_by_email.assert_called_once_with(
+            "team@company.com", raise_errors=True
+        )
         mock_messages.submit_raw_message.assert_called_once()
         mock_send_email.assert_not_called()
 
@@ -803,11 +806,11 @@ class TestMailboxCallbackTwoExternalAttendees:
             resp_a = self._post_callback(client, self.ATTENDEE_A)
             resp_b = self._post_callback(client, self.ATTENDEE_B)
 
-        assert resp_a.status_code == 200, (
+        assert resp_a.status_code == 202, (
             f"First callback (recipient {self.ATTENDEE_A}) failed: "
             f"{resp_a.status_code} {resp_a.content!r}"
         )
-        assert resp_b.status_code == 200, (
+        assert resp_b.status_code == 202, (
             f"Second callback (recipient {self.ATTENDEE_B}) failed: "
             f"{resp_b.status_code} {resp_b.content!r}. "
             "If the first succeeded and this failed, the Django callback "
@@ -874,6 +877,15 @@ class TestSmtpMessagesParity:
             "MIME must carry a Message-ID — without it, downstream MTAs "
             "may dedup two invitations as the same message"
         )
+
+    def test_date_header_is_the_given_email_date(self, settings):
+        """A retried email keeps the time of the save in its Date header."""
+        settings.EMAIL_USE_LOCALTIME = False
+        email_date = datetime(2026, 3, 10, 9, 30, tzinfo=UTC)
+
+        mime = self._build(email_date=email_date).message()
+
+        assert mime["Date"] == "Tue, 10 Mar 2026 09:30:00 -0000"
 
     def test_two_invitations_get_distinct_message_ids(self):
         """Belt-and-braces on the reported bug: each per-recipient build

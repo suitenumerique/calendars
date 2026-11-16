@@ -10,27 +10,49 @@ server (sabre/dav) needs to send invitations to external attendees.
 
 import logging
 import re
+import smtplib
+import ssl
 from dataclasses import dataclass
 from datetime import date, datetime
 from datetime import timezone as dt_timezone
 from email import encoders
 from email.mime.base import MIMEBase
-from email.utils import make_msgid
+from email.utils import formatdate, make_msgid
 from typing import Optional
 from urllib.parse import urlencode, urlparse
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives, get_connection
 from django.core.signing import TimestampSigner
 from django.template.loader import render_to_string
 from django.utils import timezone
 
 import icalendar
+import requests
 
 from core.models import User
 from core.services.translation_service import TranslationService
 
 logger = logging.getLogger(__name__)
+
+
+class InvitationNotSentError(Exception):
+    """The server did not accept the email, so a retry is safe."""
+
+
+def _is_temporary_refusal(error: Exception) -> bool:
+    """Return True when the SMTP server refuses the email for now (4xx code).
+
+    The server refuses the sender, all the recipients, or the data. After a
+    4xx answer, the server does not deliver the email (RFC 5321, 4.2.5).
+    """
+    if isinstance(error, (smtplib.SMTPSenderRefused, smtplib.SMTPDataError)):
+        codes = [error.smtp_code]
+    elif isinstance(error, smtplib.SMTPRecipientsRefused):
+        codes = [code for code, _ in error.recipients.values()]
+    else:
+        return False
+    return bool(codes) and all(400 <= code < 500 for code in codes)
 
 
 class _CalendarEmail(EmailMultiAlternatives):
@@ -338,18 +360,12 @@ def _build_calendar_email(  # noqa: PLR0913  # pylint: disable=too-many-argument
     ics_content: str,
     ics_method: str,
     itip_enabled: bool,
+    email_date: Optional[datetime] = None,
 ) -> _CalendarEmail:
-    """Build the canonical iMIP calendar email — single source of truth
-    for BOTH the SMTP and Messages paths.
+    """Build the email for the SMTP and the Messages transports.
 
-    The SMTP path calls ``email.send()``; the Messages path calls
-    ``email.message().as_bytes()`` and POSTs the bytes. Building from
-    the same function guarantees both recipients see the same MIME
-    structure, the same ``Date`` / ``Message-ID`` (Django generates Date
-    inside ``message()``; we inject Message-ID explicitly via
-    ``extra_headers`` so its domain is ours, not the container's), and
-    the same iMIP ``method=`` on the ``text/calendar`` Content-Type —
-    historically the Messages path was missing all three.
+    The two transports get the same MIME structure and the same header
+    rules.
 
     MIME layout (when ITIP is enabled):
 
@@ -382,6 +398,11 @@ def _build_calendar_email(  # noqa: PLR0913  # pylint: disable=too-many-argument
     # leak the container hostname). When ``Message-ID`` is in
     # ``extra_headers``, Django bypasses the auto-injection.
     extra_headers = {"Message-ID": make_msgid(domain=_message_id_domain())}
+    # Without a Date header, Django uses the time of the build.
+    if email_date is not None:
+        extra_headers["Date"] = formatdate(
+            email_date.timestamp(), localtime=settings.EMAIL_USE_LOCALTIME
+        )
 
     email = _CalendarEmail(
         subject=subject,
@@ -454,6 +475,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         is_mailbox: bool = False,
         org_id: str = "",
         is_new_attendee: bool = False,
+        email_date: Optional[datetime] = None,
     ) -> bool:
         """
         Send a calendar invitation email.
@@ -468,9 +490,15 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             is_new_attendee: If True, the recipient is not on the previous
                 version of the event, so the email is an invitation and not
                 an update
+            email_date: The Date header of the email. If None, it is the
+                time of the send
 
         Returns:
             True if email was sent successfully, False otherwise
+
+        Raises:
+            InvitationNotSentError: the SMTP server or the Messages mailbox
+                is not available, and the server did not accept the email
         """
         # Clean email addresses (remove mailto: prefix)
         sender = sender_email.replace("mailto:", "").strip()
@@ -552,6 +580,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                     ics_content=ics_content,
                     ics_method=method,
                     event_uid=event.uid,
+                    email_date=email_date,
                 )
 
             return self._send_email(
@@ -563,8 +592,11 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 ics_content=ics_content,
                 ics_method=method,
                 event_uid=event.uid,
+                email_date=email_date,
             )
 
+        except InvitationNotSentError:
+            raise
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "Failed to send calendar invitation to %s: %s", recipient, e
@@ -765,6 +797,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         ics_content: str,
         ics_method: str,
         event_uid: str,
+        email_date: Optional[datetime] = None,
     ) -> bool:
         """Send via SMTP using Django's email backend.
 
@@ -772,6 +805,25 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         sender, Reply-To is the organizer so replies bypass the system
         address.
         """
+        connection = get_connection(fail_silently=False)
+        try:
+            connection.open()
+        except smtplib.SMTPAuthenticationError as e:
+            # A 4xx code is a temporary failure (RFC 4954). Another code is a
+            # configuration error, and a retry does not fix it.
+            if not 400 <= e.smtp_code < 500:
+                raise
+            raise InvitationNotSentError(
+                f"The SMTP server cannot check the login for now: {e}"
+            ) from e
+        except ssl.SSLCertVerificationError:
+            # A retry does not fix a configuration error.
+            raise
+        except OSError as e:
+            raise InvitationNotSentError(
+                f"Cannot connect to the SMTP server: {e}"
+            ) from e
+
         try:
             from_addr = (
                 settings.CALENDAR_INVITATION_FROM_EMAIL or settings.DEFAULT_FROM_EMAIL
@@ -786,8 +838,9 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 ics_content=ics_content,
                 ics_method=ics_method,
                 itip_enabled=settings.CALENDAR_ITIP_ENABLED,
+                email_date=email_date,
             )
-            email.send(fail_silently=False)
+            connection.send_messages([email])
 
             logger.info(
                 "Calendar invitation sent via SMTP: %s -> %s (method: %s, uid: %s)",
@@ -799,10 +852,16 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             return True
 
         except Exception as e:  # pylint: disable=broad-exception-caught
+            if _is_temporary_refusal(e):
+                raise InvitationNotSentError(
+                    f"The SMTP server refuses the email for now: {e}"
+                ) from e
             logger.exception(
                 "Failed to send calendar invitation email to %s: %s", to_email, e
             )
             return False
+        finally:
+            connection.close()
 
     def _send_via_messages(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -814,6 +873,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         ics_content: str,
         ics_method: str,
         event_uid: str,
+        email_date: Optional[datetime] = None,
     ) -> bool:
         """Send via the Messages API from a mailbox.
 
@@ -828,12 +888,18 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             )
 
             messages = MessagesService()
-            mailbox = messages.get_mailbox_by_email(mailbox_email)
+            try:
+                mailbox = messages.get_mailbox_by_email(
+                    mailbox_email, raise_errors=True
+                )
+            except requests.RequestException as e:
+                raise InvitationNotSentError(
+                    f"Cannot look up the mailbox {mailbox_email} in Messages: {e}"
+                ) from e
             if not mailbox:
                 logger.error(
-                    "Mailbox %s not found in Messages (lookup may have errored — "
-                    "check earlier 'fetch_mailboxes failed' lines), cannot send "
-                    "invitation to %s (uid: %s)",
+                    "Mailbox %s not found in Messages, cannot send the invitation "
+                    "to %s (uid: %s)",
                     mailbox_email,
                     to_email,
                     event_uid,
@@ -864,6 +930,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 ics_content=ics_content,
                 ics_method=ics_method,
                 itip_enabled=settings.CALENDAR_ITIP_ENABLED,
+                email_date=email_date,
             )
             # ``message()`` builds the SafeMIMEMultipart and adds Date.
             # ``linesep="\r\n"`` forces CRLF line endings (RFC 5322 §2.1)
@@ -896,6 +963,8 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 )
             return success
 
+        except InvitationNotSentError:
+            raise
         except Exception:  # pylint: disable=broad-exception-caught
             logger.exception(
                 "Failed to send via Messages for %s -> %s (uid: %s)",
