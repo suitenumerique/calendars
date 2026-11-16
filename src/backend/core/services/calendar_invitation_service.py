@@ -43,10 +43,10 @@ class InvitationNotSentError(Exception):
 def _is_temporary_refusal(error: Exception) -> bool:
     """Return True when the SMTP server refuses the email for now (4xx code).
 
-    The server refuses the sender, or all the recipients, before it gets
-    the email data.
+    The server refuses the sender, all the recipients, or the data. After a
+    4xx answer, the server does not deliver the email (RFC 5321, 4.2.5).
     """
-    if isinstance(error, smtplib.SMTPSenderRefused):
+    if isinstance(error, (smtplib.SMTPSenderRefused, smtplib.SMTPDataError)):
         codes = [error.smtp_code]
     elif isinstance(error, smtplib.SMTPRecipientsRefused):
         codes = [code for code, _ in error.recipients.values()]

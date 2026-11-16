@@ -80,6 +80,7 @@ def _send_with_smtp_error(error):
     [
         smtplib.SMTPSenderRefused(421, b"Try again later", "noreply@example.com"),
         smtplib.SMTPRecipientsRefused({"bob@example.com": (450, b"Greylisted")}),
+        smtplib.SMTPDataError(451, b"Try again later"),
     ],
 )
 def test_send_fails_before_sending_when_smtp_refuses_for_now(error):
@@ -93,7 +94,8 @@ def test_send_fails_before_sending_when_smtp_refuses_for_now(error):
     [
         smtplib.SMTPSenderRefused(550, b"Not allowed", "noreply@example.com"),
         smtplib.SMTPRecipientsRefused({"bob@example.com": (550, b"No such user")}),
-        smtplib.SMTPDataError(451, b"Error after the data"),
+        smtplib.SMTPDataError(554, b"Rejected"),
+        smtplib.SMTPServerDisconnected("Connection lost after the data"),
     ],
 )
 def test_send_fails_for_good_on_other_smtp_errors(error):
