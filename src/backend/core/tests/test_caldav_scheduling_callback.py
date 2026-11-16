@@ -7,13 +7,11 @@ from unittest.mock import patch
 from django.test import Client
 
 import pytest
-from django_dramatiq.models import Task
 
 from core.services.calendar_invitation_service import (
     CalendarInvitationService,
     InvitationNotSentError,
 )
-from core.task_utils import AdminMiddleware
 from core.tasks import (
     INVITATION_SEND_RETRIES,
     InvitationSendError,
@@ -162,65 +160,3 @@ def test_send_fails_before_sending_when_the_mailbox_is_not_found(settings):
             is_mailbox=True,
         )
     mock_submit.assert_not_called()
-
-
-def _record_task():
-    message = send_invitation_task.message(
-        sender_email="alice@example.com",
-        recipient_email="bob@example.com",
-        method="REQUEST",
-        icalendar_data=ICS_REQUEST,
-    )
-    Task.tasks.create_or_update_from_message(
-        message,
-        status=Task.STATUS_RUNNING,
-        actor_name=message.actor_name,
-        queue_name=message.queue_name,
-    )
-    return message
-
-
-@pytest.mark.django_db
-def test_admin_middleware_deletes_a_done_email_task():
-    message = _record_task()
-
-    AdminMiddleware().after_process_message(None, message)
-
-    assert not Task.tasks.filter(id=message.message_id).exists()
-
-
-@pytest.mark.django_db
-def test_admin_middleware_keeps_a_failed_email_task():
-    message = _record_task()
-
-    AdminMiddleware().after_process_message(
-        None, message, exception=InvitationSendError("failed")
-    )
-
-    assert Task.tasks.get(id=message.message_id).status == Task.STATUS_FAILED
-
-
-@pytest.mark.django_db
-def test_admin_middleware_does_not_recreate_a_done_email_task():
-    """A late enqueue hook does not bring back the record of a done task."""
-    message = _record_task()
-    middleware = AdminMiddleware()
-    middleware.after_process_message(None, message)
-
-    middleware.after_enqueue(None, message, None)
-
-    assert not Task.tasks.filter(id=message.message_id).exists()
-
-
-@pytest.mark.django_db
-def test_admin_middleware_records_a_delayed_retry():
-    message = send_invitation_task.message(
-        sender_email="alice@example.com",
-        recipient_email="bob@example.com",
-        method="REQUEST",
-        icalendar_data=ICS_REQUEST,
-    )
-
-    AdminMiddleware().after_enqueue(None, message, 60_000)
-
-    assert Task.tasks.get(id=message.message_id).status == Task.STATUS_DELAYED

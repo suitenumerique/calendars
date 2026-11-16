@@ -785,7 +785,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         connection = get_connection(fail_silently=False)
         try:
             connection.open()
-        except Exception as e:
+        except OSError as e:
             raise InvitationNotSentError(
                 f"Cannot connect to the SMTP server: {e}"
             ) from e
@@ -805,8 +805,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
                 ics_method=ics_method,
                 itip_enabled=settings.CALENDAR_ITIP_ENABLED,
             )
-            email.connection = connection
-            email.send(fail_silently=False)
+            connection.send_messages([email])
 
             logger.info(
                 "Calendar invitation sent via SMTP: %s -> %s (method: %s, uid: %s)",
