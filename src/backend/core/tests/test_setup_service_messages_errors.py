@@ -117,7 +117,7 @@ def test_sync_mailbox_lookup_failure_sends_no_sync():
         MessagesService, "_request", side_effect=requests.HTTPError("503")
     ):
         with pytest.raises(MessagesServiceError):
-            service.sync_mailbox(factories.UserFactory(), "team@example.com")
+            service.sync_mailbox("team@example.com")
 
     internal_request.assert_not_called()
 

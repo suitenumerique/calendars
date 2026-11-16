@@ -255,14 +255,11 @@ class SetupService:
 
         # Fan out to the rest of the mailbox users. The caller's sharee
         # row already exists (with their picked color) thanks to
-        # caller_email above; sync_mailbox will leave it alone because
+        # caller_email above; the sync will leave it alone because
         # ON CONFLICT only refreshes ``access``, not ``calendarcolor``.
         # The calendar exists at this point, so a failed fan-out does not
         # fail the setup. The next sync shares it with the other users.
-        try:
-            self.sync_mailbox(user, mailbox_email, users=user_mailbox.get("users", []))
-        except MailboxSyncError:
-            logger.exception("Failed to share a new mailbox calendar")
+        self.sync_mailbox(mailbox_email, users=user_mailbox.get("users", []))
 
         return {
             "calendar_path": (f"calendars/users/{user.email}/{caller_calendar_uri}"),
@@ -392,17 +389,21 @@ class SetupService:
     # Sync from mailbox side: for all users of a given mailbox
     # ------------------------------------------------------------------
 
-    def sync_mailbox(self, caller, mailbox_email, users=None):
-        """Sync shares for all users of a mailbox. One internal API call.
+    def sync_mailbox(self, mailbox_email, users=None):
+        """Sync the shares of each Calendars user of a mailbox.
 
         Args:
-            caller: A user object for authenticating internal API calls.
             mailbox_email: The mailbox email to sync.
             users: Optional list of {"email", "role"} dicts. If not provided,
                    fetched from Messages via get_mailbox_by_email().
 
+        The list of users only selects the users to sync. Each user sync
+        locks the user and gets the mailboxes of the user again. Thus an
+        old list cannot restore a share that a newer user sync removed.
+        A failed user sync is logged and does not stop the others.
+
         Returns:
-            Number of shares synced.
+            Number of users synced.
 
         Raises MessagesServiceError when the Messages lookup fails.
         """
@@ -410,24 +411,18 @@ class SetupService:
             mailbox = self.messages.get_mailbox_by_email(mailbox_email)
             users = mailbox.get("users", []) if mailbox else []
 
-        shares = []
-        for mb_user in users:
-            mb_user_email = mb_user.get("email", "")
-            mb_user_role = mb_user.get("role", MailboxRole.VIEWER)
-            if not mb_user_email:
+        emails = [mb_user["email"] for mb_user in users if mb_user.get("email")]
+        synced = 0
+        for user in User.objects.filter(email__in=emails, organization__isnull=False):
+            try:
+                self.sync_user_mailboxes(user)
+            except (MessagesServiceError, MailboxSyncError):
+                logger.exception(
+                    "Failed to sync user %s of mailbox %s", user.pk, mailbox_email
+                )
                 continue
-            # One share entry per user: the CalDAV side fans it out to
-            # every calendar under the mailbox principal.
-            shares.append(
-                {
-                    "user_email": mb_user_email,
-                    "mailbox_email": mailbox_email,
-                    "privilege": ROLE_TO_PRIVILEGE.get(mb_user_role, "read"),
-                }
-            )
-
-        synced = self._sync_acls(caller, shares)
-        return len(synced)
+            synced += 1
+        return synced
 
     # ------------------------------------------------------------------
     # Internal helpers

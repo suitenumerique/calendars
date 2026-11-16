@@ -60,11 +60,14 @@ def test_sync_user_mailboxes_without_mailbox_raises():
 @override_settings(FEATURE_MESSAGES_INTEGRATION=True)
 def test_setup_mailbox_ignores_a_failed_fan_out():
     """The setup returns the new calendar when the share fan-out fails."""
-    service = _service(mock.Mock(side_effect=requests.ConnectionError("refused")))
+    internal_request = mock.Mock(side_effect=requests.ConnectionError("refused"))
+    service = _service(internal_request)
     user = factories.UserFactory()
+    other = factories.UserFactory()
+    mailbox = {**MAILBOX, "users": [{"email": user.email}, {"email": other.email}]}
 
     with (
-        mock.patch.object(service, "_get_user_mailbox", return_value=MAILBOX),
+        mock.patch.object(service, "_get_user_mailbox", return_value=mailbox),
         mock.patch(
             "core.services.setup_service._resolve_mailbox_org_id",
             return_value="org-id",
@@ -78,6 +81,7 @@ def test_setup_mailbox_ignores_a_failed_fan_out():
         result = service.setup(user, "Team", mailbox_email=MAILBOX["email"])
 
     assert result["calendar_path"] == f"calendars/users/{user.email}/cal-uri"
+    assert internal_request.call_count == 2
 
 
 @override_settings(FEATURE_MESSAGES_INTEGRATION=True)
@@ -151,3 +155,34 @@ def test_sync_user_mailboxes_waits_for_a_running_sync():
     assert not errors
     assert len(applied) == 2
     assert applied[-1] == []
+
+
+@override_settings(FEATURE_MESSAGES_INTEGRATION=True)
+def test_sync_mailbox_does_not_restore_a_revoked_share():
+    """A mailbox sync with an old user list does not restore a share.
+
+    The mailbox sync reads "Alice is a member". Then Alice is removed
+    from the mailbox, and her user sync removes her share. The mailbox
+    sync must not then send the share of its old list to CalDAV.
+    """
+    alice = factories.UserFactory()
+    applied = []
+
+    def internal_request(*args, json, **kwargs):  # pylint: disable=redefined-outer-name
+        applied.append(json)
+        return mock.Mock(status_code=200, json=mock.Mock(return_value={"active": []}))
+
+    service = _service(mock.Mock(side_effect=internal_request))
+    service.messages.get_user_mailboxes.return_value = []
+
+    def get_mailbox_by_email(mailbox_email):
+        snapshot = {"email": mailbox_email, "users": [{"email": alice.email}]}
+        service.sync_user_mailboxes(alice)
+        return snapshot
+
+    service.messages.get_mailbox_by_email.side_effect = get_mailbox_by_email
+
+    synced = service.sync_mailbox(MAILBOX["email"])
+
+    assert applied[-1] == {"shares": [], "full_sync_users": [alice.email]}
+    assert synced == 1
