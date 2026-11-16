@@ -66,6 +66,20 @@ def test_send_fails_for_good_on_smtp_configuration_errors(error):
         assert _send() is False
 
 
+@pytest.mark.django_db
+def test_send_fails_before_sending_when_smtp_login_fails_for_now():
+    with (
+        patch(
+            "django.core.mail.backends.locmem.EmailBackend.open",
+            side_effect=smtplib.SMTPAuthenticationError(
+                454, b"Temporary authentication failure"
+            ),
+        ),
+        pytest.raises(InvitationNotSentError),
+    ):
+        _send()
+
+
 def _send_with_smtp_error(error):
     with patch(
         "django.core.mail.backends.locmem.EmailBackend.send_messages",

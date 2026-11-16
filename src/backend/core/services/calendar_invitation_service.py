@@ -816,7 +816,15 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         connection = get_connection(fail_silently=False)
         try:
             connection.open()
-        except (smtplib.SMTPAuthenticationError, ssl.SSLCertVerificationError):
+        except smtplib.SMTPAuthenticationError as e:
+            # A 4xx code is a temporary failure (RFC 4954). Another code is a
+            # configuration error, and a retry does not fix it.
+            if not 400 <= e.smtp_code < 500:
+                raise
+            raise InvitationNotSentError(
+                f"The SMTP server cannot check the login for now: {e}"
+            ) from e
+        except ssl.SSLCertVerificationError:
             # A retry does not fix a configuration error.
             raise
         except OSError as e:
