@@ -87,10 +87,12 @@ class AdminMiddleware(DramatiqAdminMiddleware):
             return
         super().after_enqueue(broker, message, delay)
 
-    def after_process_message(self, broker, message, *, exception=None, **kwargs):
+    def after_process_message(  # pylint: disable=too-many-arguments
+        self, broker, message, *, result=None, exception=None, status=None
+    ):
         if (
             exception is None
-            and kwargs.get("status") is None
+            and status is None
             and message.actor_name in self.DELETE_WHEN_DONE
         ):
             from django_dramatiq.models import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
@@ -99,7 +101,9 @@ class AdminMiddleware(DramatiqAdminMiddleware):
 
             TaskRecord.tasks.filter(id=message.message_id).delete()
             return
-        super().after_process_message(broker, message, exception=exception, **kwargs)
+        super().after_process_message(
+            broker, message, result=result, exception=exception, status=status
+        )
 
 
 # ---------------------------------------------------------------------------

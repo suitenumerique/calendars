@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class InvitationSendError(Exception):
-    """A calendar email was not sent."""
+    """The server did not accept the calendar email, or the result is unknown."""
 
 
 @register_task(queue="import")
@@ -67,14 +67,18 @@ INVITATION_SEND_RETRIES = 6
 
 
 def _retry_when_not_sent(retries, exception):
-    """Retry only when nothing was sent, so that no email goes out twice."""
+    """Retry only when the server did not accept the email.
+
+    Then a retry cannot send the same email twice.
+    """
     return (
         isinstance(exception, InvitationNotSentError)
         and retries < INVITATION_SEND_RETRIES
     )
 
 
-# The retries wait 1, 2, 4, 8, 16 and 32 minutes (about 1 hour in total).
+# The task retries 6 times. The wait doubles at each retry, with a random
+# part. The first wait is 30 to 60 seconds.
 @register_task(
     queue="default",
     retry_when=_retry_when_not_sent,

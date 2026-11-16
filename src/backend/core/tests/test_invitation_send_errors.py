@@ -1,7 +1,7 @@
 """Tests for the errors of a calendar email send.
 
-An error before the email goes out raises InvitationNotSentError, so the
-task retries. Other errors are final.
+When the server does not accept the email, the send raises
+InvitationNotSentError, and the task retries. Other errors are final.
 """
 
 # pylint: disable=missing-function-docstring
@@ -45,7 +45,7 @@ def _send(**kwargs):
 
 
 @pytest.mark.django_db
-def test_send_fails_before_sending_when_smtp_is_down(settings):
+def test_send_can_be_retried_when_smtp_is_down(settings):
     settings.EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
     settings.EMAIL_HOST = "localhost"
     settings.EMAIL_PORT = 1
@@ -67,7 +67,7 @@ def test_send_fails_for_good_on_smtp_configuration_errors(error):
 
 
 @pytest.mark.django_db
-def test_send_fails_before_sending_when_smtp_login_fails_for_now():
+def test_send_can_be_retried_when_smtp_login_fails_for_now():
     with (
         patch(
             "django.core.mail.backends.locmem.EmailBackend.open",
@@ -97,7 +97,7 @@ def _send_with_smtp_error(error):
         smtplib.SMTPDataError(451, b"Try again later"),
     ],
 )
-def test_send_fails_before_sending_when_smtp_refuses_for_now(error):
+def test_send_can_be_retried_when_smtp_refuses_for_now(error):
     with pytest.raises(InvitationNotSentError):
         _send_with_smtp_error(error)
 
@@ -158,7 +158,7 @@ def _http_error(status):
         requests.exceptions.SSLError("certificate verify failed"),
     ],
 )
-def test_send_fails_before_sending_when_the_mailbox_lookup_fails(error):
+def test_send_can_be_retried_when_the_mailbox_lookup_fails(error):
     with pytest.raises(InvitationNotSentError):
         _send_via_messages({"side_effect": error})
 

@@ -22,9 +22,9 @@ logger = logging.getLogger(__name__)
 
 MAILBOX_CACHE_TTL = 300  # 5 minutes
 
-# One retry on transient failures (5xx or connection error). Bounded so a
-# Messages outage can't snowball into a stuck callback. Backoff is short
-# because SabreDAV's iTip callback is synchronous on the user's PUT.
+# On a temporary failure (5xx or connection error), the submit retries one
+# time after a short wait. A retry after a lost answer can send the email
+# twice, so there is only one retry.
 SUBMIT_RETRY_BACKOFF_SECONDS = 0.5
 SUBMIT_TIMEOUT_SECONDS = 15
 
@@ -111,8 +111,8 @@ class MessagesService:
             return data["results"]
         return data
 
-    def _fetch_mailboxes(  # pylint: disable=too-many-arguments
-        self, cache_key, default, *, use_cache=True, raise_errors=False, **params
+    def _fetch_mailboxes(
+        self, cache_key, *, use_cache=True, raise_errors=False, **params
     ):
         """Fetch from provisioning/mailboxes/ with caching.
 
@@ -123,11 +123,11 @@ class MessagesService:
         user-specific fields (role) when queried by user_email, but not
         when queried by email. Do not share cache keys across query shapes.
 
-        Transient ``RequestException`` is logged and swallowed (returns
-        ``default``). The caller cannot distinguish transient errors from
-        a missing mailbox — see the warning logged here for correlation.
-        With ``raise_errors=True``, the ``RequestException`` goes to the
-        caller.
+        By default, the method logs a request error (``RequestException``:
+        network error, timeout, error answer such as 403, certificate error)
+        and returns ``[]``. Then the caller cannot tell a request error from
+        a missing mailbox. With ``raise_errors=True``, the method raises the
+        request error.
         """
         cached = cache.get(cache_key) if use_cache else None
         if cached is not None:
@@ -149,7 +149,7 @@ class MessagesService:
                 cache_key,
                 exc,
             )
-            return default
+            return []
 
     def get_user_mailboxes(self, user_email, *, use_cache=True):
         """Fetch mailboxes the user has access to, with all users of each.
@@ -159,7 +159,6 @@ class MessagesService:
         """
         return self._fetch_mailboxes(
             f"messages:by_user:{user_email}",
-            [],
             use_cache=use_cache,
             user_email=user_email,
         )
@@ -169,12 +168,13 @@ class MessagesService:
 
         Returns dict with mailbox info or None. No ``role`` field in response.
         Cached separately from get_user_mailboxes (different response shape).
-        With ``raise_errors=True``, a failed request raises
-        ``requests.RequestException`` instead of returning None.
+        By default, a request error returns None, the same as a missing
+        mailbox.
+        With ``raise_errors=True``, a request error raises
+        ``requests.RequestException``.
         """
         results = self._fetch_mailboxes(
             f"messages:by_email:{mailbox_email}",
-            [],
             raise_errors=raise_errors,
             email=mailbox_email,
         )
@@ -194,10 +194,9 @@ class MessagesService:
         structure, From/To/Subject headers). This method only handles the
         HTTP boundary: sanitization, authentication, retry, and observability.
 
-        Retries once on connection errors or 5xx responses. The single retry
-        is bounded by ``SUBMIT_RETRY_BACKOFF_SECONDS`` because SabreDAV's
-        iTip callback is synchronous on the user's PUT — open-ended retry
-        would stall the request.
+        Retries one time on a connection error or a 5xx answer, after
+        ``SUBMIT_RETRY_BACKOFF_SECONDS``. A retry after a lost answer can
+        send the email twice, so there is only one retry.
 
         Logs the response status code and a body excerpt on every outcome
         so a Messages backend that returns 2xx with a rejection payload

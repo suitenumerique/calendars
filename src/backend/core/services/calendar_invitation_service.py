@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 class InvitationNotSentError(Exception):
-    """No part of the email was sent, so a new attempt cannot send it twice."""
+    """The server did not accept the email, so a retry is safe."""
 
 
 def _is_temporary_refusal(error: Exception) -> bool:
@@ -362,18 +362,10 @@ def _build_calendar_email(  # noqa: PLR0913  # pylint: disable=too-many-argument
     itip_enabled: bool,
     email_date: Optional[datetime] = None,
 ) -> _CalendarEmail:
-    """Build the canonical iMIP calendar email — single source of truth
-    for BOTH the SMTP and Messages paths.
+    """Build the email for the SMTP and the Messages transports.
 
-    The SMTP path calls ``email.send()``; the Messages path calls
-    ``email.message().as_bytes()`` and POSTs the bytes. Building from
-    the same function guarantees both recipients see the same MIME
-    structure, the same ``Date`` / ``Message-ID`` (Django generates Date
-    inside ``message()`` when ``email_date`` is None; we inject Message-ID
-    explicitly via ``extra_headers`` so its domain is ours, not the
-    container's), and
-    the same iMIP ``method=`` on the ``text/calendar`` Content-Type —
-    historically the Messages path was missing all three.
+    The two transports get the same MIME structure and the same header
+    rules.
 
     MIME layout (when ITIP is enabled):
 
@@ -506,7 +498,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
 
         Raises:
             InvitationNotSentError: the SMTP server or the Messages mailbox
-                is not available, and nothing was sent
+                is not available, and the server did not accept the email
         """
         # Clean email addresses (remove mailto: prefix)
         sender = sender_email.replace("mailto:", "").strip()
