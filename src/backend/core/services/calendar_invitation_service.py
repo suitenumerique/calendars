@@ -10,6 +10,7 @@ server (sabre/dav) needs to send invitations to external attendees.
 
 import logging
 import re
+import smtplib
 from dataclasses import dataclass
 from datetime import date, datetime
 from datetime import timezone as dt_timezone
@@ -35,6 +36,21 @@ logger = logging.getLogger(__name__)
 
 class InvitationNotSentError(Exception):
     """No part of the email was sent, so a new attempt cannot send it twice."""
+
+
+def _is_temporary_refusal(error: Exception) -> bool:
+    """Return True when the SMTP server refuses the email for now (4xx code).
+
+    The server refuses the sender, or all the recipients, before it gets
+    the email data.
+    """
+    if isinstance(error, smtplib.SMTPSenderRefused):
+        codes = [error.smtp_code]
+    elif isinstance(error, smtplib.SMTPRecipientsRefused):
+        codes = [code for code, _ in error.recipients.values()]
+    else:
+        return False
+    return bool(codes) and all(400 <= code < 500 for code in codes)
 
 
 class _CalendarEmail(EmailMultiAlternatives):
@@ -817,6 +833,10 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             return True
 
         except Exception as e:  # pylint: disable=broad-exception-caught
+            if _is_temporary_refusal(e):
+                raise InvitationNotSentError(
+                    f"The SMTP server refuses the email for now: {e}"
+                ) from e
             logger.exception(
                 "Failed to send calendar invitation email to %s: %s", to_email, e
             )

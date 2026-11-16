@@ -2,6 +2,7 @@
 
 # pylint: disable=missing-function-docstring
 
+import smtplib
 from unittest.mock import patch
 
 from django.test import Client
@@ -134,6 +135,45 @@ def test_send_fails_before_sending_when_smtp_is_down(settings):
             method="REQUEST",
             icalendar_data=ICS_REQUEST,
         )
+
+
+def _send_with_smtp_error(error):
+    with patch(
+        "django.core.mail.backends.locmem.EmailBackend.send_messages",
+        side_effect=error,
+    ):
+        return CalendarInvitationService().send_invitation(
+            sender_email="mailto:alice@example.com",
+            recipient_email="mailto:bob@example.com",
+            method="REQUEST",
+            icalendar_data=ICS_REQUEST,
+        )
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "error",
+    [
+        smtplib.SMTPSenderRefused(421, b"Try again later", "noreply@example.com"),
+        smtplib.SMTPRecipientsRefused({"bob@example.com": (450, b"Greylisted")}),
+    ],
+)
+def test_send_fails_before_sending_when_smtp_refuses_for_now(error):
+    with pytest.raises(InvitationNotSentError):
+        _send_with_smtp_error(error)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "error",
+    [
+        smtplib.SMTPSenderRefused(550, b"Not allowed", "noreply@example.com"),
+        smtplib.SMTPRecipientsRefused({"bob@example.com": (550, b"No such user")}),
+        smtplib.SMTPDataError(451, b"Error after the data"),
+    ],
+)
+def test_send_fails_for_good_on_other_smtp_errors(error):
+    assert _send_with_smtp_error(error) is False
 
 
 @pytest.mark.django_db
