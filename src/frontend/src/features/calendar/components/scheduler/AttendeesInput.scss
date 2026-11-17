@@ -39,6 +39,25 @@
     }
   }
 
+  &__enter {
+    display: flex;
+    padding: 2px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--c--theme--colors--greyscale-400);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--c--theme--colors--greyscale-700);
+    }
+
+    svg {
+      width: 1rem;
+      height: 1rem;
+    }
+  }
+
   &__suggestions {
     position: absolute;
     top: 100%;

@@ -485,6 +485,8 @@
           "viewProfile": "View profile",
           "cannotRemoveOrganizer": "Cannot remove organizer",
           "noResults": "No users found",
+          "pressEnter_one": "Press Enter to add this address",
+          "pressEnter_other": "Press Enter to add these {{count}} addresses",
           "sentFrom": "Invitation will be sent from {{email}}"
         },
         "resources": {
@@ -1514,6 +1516,8 @@
           "viewProfile": "Voir le profil",
           "cannotRemoveOrganizer": "Impossible de retirer l'organisateur",
           "noResults": "Aucun utilisateur trouvé",
+          "pressEnter_one": "Appuyez sur Entrée pour ajouter cette adresse",
+          "pressEnter_other": "Appuyez sur Entrée pour ajouter ces {{count}} adresses",
           "sentFrom": "L'invitation sera envoyée depuis {{email}}"
         },
         "resources": {
@@ -2290,6 +2294,8 @@
           "viewProfile": "Profiel bekijken",
           "cannotRemoveOrganizer": "Kan organisator niet verwijderen",
           "noResults": "Geen gebruikers gevonden",
+          "pressEnter_one": "Druk op Enter om dit adres toe te voegen",
+          "pressEnter_other": "Druk op Enter om deze {{count}} adressen toe te voegen",
           "sentFrom": "Uitnodiging wordt verzonden vanaf {{email}}"
         },
         "resources": {

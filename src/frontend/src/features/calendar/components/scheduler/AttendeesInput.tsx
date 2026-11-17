@@ -3,6 +3,7 @@ import {
   useCallback,
   useRef,
   useEffect,
+  useMemo,
   type ClipboardEvent,
   type KeyboardEvent,
 } from "react";
@@ -16,7 +17,7 @@ import {
   toAttendeeName,
 } from "./attendees-utils";
 import { getBadgeType, getPartstatIcon } from "./partstatBadge";
-import { CircleCheck, XMark } from "@gouvfr-lasuite/ui-components/icons";
+import { CircleCheck, Enter, XMark } from "@gouvfr-lasuite/ui-components/icons";
 
 import type { IcsAttendee, IcsOrganizer } from "ts-ics";
 
@@ -56,6 +57,14 @@ export function AttendeesInput({
   const shouldShowDropdown = showSuggestions && !isList && trimmedInput.length >= 3 && !isSearching;
   const hasNoResults =
     shouldShowDropdown && suggestions.length === 0 && searchResults !== undefined;
+
+  const pendingCount = useMemo(() => {
+    if (trimmedInput === "") return 0;
+    const present = new Set(attendees.map((a) => a.email.toLowerCase()));
+    present.add(organizerEmail?.toLowerCase() ?? "");
+    return parseAttendeeList(trimmedInput).attendees.filter(({ email }) => !present.has(email))
+      .length;
+  }, [trimmedInput, attendees, organizerEmail]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -205,6 +214,19 @@ export function AttendeesInput({
           onFocus={() => setShowSuggestions(true)}
           state={error ? "error" : "default"}
           text={error || undefined}
+          rightIcon={
+            pendingCount > 0 ? (
+              <button
+                type="button"
+                className="attendees-input__enter"
+                onClick={() => addAttendees(inputValue)}
+                aria-label={t("calendar.attendees.pressEnter", { count: pendingCount })}
+                title={t("calendar.attendees.pressEnter", { count: pendingCount })}
+              >
+                <Enter />
+              </button>
+            ) : undefined
+          }
         />
 
         {(shouldShowDropdown && suggestions.length > 0) || hasNoResults ? (
