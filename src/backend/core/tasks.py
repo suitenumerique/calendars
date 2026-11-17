@@ -178,7 +178,11 @@ def sync_all_mailbox_acls():
     total = 0
     errors = 0
     # A user without an email cannot have mailbox access.
-    users = User.objects.exclude(email__isnull=True).exclude(email="")
+    users = (
+        User.objects.exclude(email__isnull=True)
+        .exclude(email="")
+        .select_related("organization")
+    )
     for user in users.iterator():
         try:
             service.sync_user_mailboxes(user)

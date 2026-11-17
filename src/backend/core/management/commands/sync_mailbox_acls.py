@@ -100,7 +100,7 @@ class Command(BaseCommand):
         synced = 0
         errors = 0
 
-        for user in users.iterator():
+        for user in users.select_related("organization").iterator():
             try:
                 result = service.sync_user_mailboxes(user)
                 n_calendars = len(result.get("active_mailbox_calendars", []))

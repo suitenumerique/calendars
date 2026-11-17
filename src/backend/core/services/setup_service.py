@@ -400,7 +400,8 @@ class SetupService:
         users = mailbox.get("users", []) if mailbox else []
         emails = [mb_user["email"] for mb_user in users if mb_user.get("email")]
         synced = 0
-        for user in User.objects.filter(email__in=emails):
+        members = User.objects.filter(email__in=emails).select_related("organization")
+        for user in members:
             try:
                 self.sync_user_mailboxes(user)
             except (MessagesServiceError, MailboxSyncError):
