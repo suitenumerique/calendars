@@ -19,6 +19,7 @@ from rest_framework.test import APIClient
 
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
+from core.models import Organization
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
 
 pytestmark = [
@@ -4311,13 +4312,16 @@ class TestMailboxCalendarTransparency:
         assert _is_busy(_freebusy_of(q_client, querier.email, member.email))
 
     def test_transparent_instances_do_not_make_members_busy(self):
-        """The mailbox events do not make the members busy."""
-        users, _, uris = _setup_mailbox_members(
+        """The mailbox events make the mailbox busy, but not its members."""
+        users, mailbox_email, uris = _setup_mailbox_members(
             "transp-true", "creator", "member", "querier", transparent=True
         )
         (creator, creator_client, _), (member, _, _), (querier, q_client, _) = users
         _put_event(creator_client, creator.email, uris[creator.email], "true-ev")
 
+        mailbox_org = Organization.objects.get(external_id="transp-true.com")
+        colleague, c_client, _ = _create_user_with_calendar(mailbox_org, "colleague")
+        assert _is_busy(_freebusy_of(c_client, colleague.email, mailbox_email))
         assert not _is_busy(_freebusy_of(q_client, querier.email, creator.email))
         assert not _is_busy(_freebusy_of(q_client, querier.email, member.email))
 
