@@ -616,9 +616,7 @@ class TestMailboxInvitationRouting:
             )
 
         assert result is True, "Invitation should succeed via Messages API"
-        mock_messages.get_mailbox_by_email.assert_called_once_with(
-            "team@company.com", raise_errors=True
-        )
+        mock_messages.get_mailbox_by_email.assert_called_once_with("team@company.com")
         mock_messages.submit_raw_message.assert_called_once()
         mock_send_email.assert_not_called()
 

@@ -28,7 +28,6 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 import icalendar
-import requests
 
 from core.models import User
 from core.services.translation_service import TranslationService
@@ -885,14 +884,13 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         try:
             from core.services.messages_service import (  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
                 MessagesService,
+                MessagesServiceError,
             )
 
             messages = MessagesService()
             try:
-                mailbox = messages.get_mailbox_by_email(
-                    mailbox_email, raise_errors=True
-                )
-            except requests.RequestException as e:
+                mailbox = messages.get_mailbox_by_email(mailbox_email)
+            except MessagesServiceError as e:
                 raise InvitationNotSentError(
                     f"Cannot look up the mailbox {mailbox_email} in Messages: {e}"
                 ) from e
