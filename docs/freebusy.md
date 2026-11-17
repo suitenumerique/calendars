@@ -254,8 +254,8 @@ does not change.
 ### UI
 
 The "Include in availability" checkbox in the calendar edit modal
-toggles this property via PROPPATCH. It is checked (opaque) for
-calendars you own and unchecked for shared calendars.
+toggles this property via PROPPATCH. It shows the current value of the
+instance. A new instance gets the default value above.
 
 Apple Calendar exposes this as "Show in availability" in calendar
 settings. Thunderbird and DAVx5 also support it natively.
