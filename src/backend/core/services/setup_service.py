@@ -277,9 +277,7 @@ class SetupService:
         ``calendar_uri`` is the URI of the user's own instance, under
         ``calendars/users/{user.email}/``.
         """
-        # The delete is destructive, so the role comes from Messages and not
-        # from the cache. A demoted admin cannot delete.
-        user_mailbox = self._get_user_mailbox(user, mailbox_email, use_cache=False)
+        user_mailbox = self._get_user_mailbox(user, mailbox_email)
         user_role = user_mailbox.get("role", MailboxRole.VIEWER)
         if user_role != MailboxRole.ADMIN:
             raise MailboxAdminRequiredError(
@@ -428,8 +426,12 @@ class SetupService:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_user_mailbox(self, user, mailbox_email, *, use_cache=True):
+    def _get_user_mailbox(self, user, mailbox_email):
         """Return the Messages data of a mailbox that the user can access.
+
+        The data comes from Messages and not from the cache, so a demoted
+        user loses the role at once. The cache stays unchanged, because
+        only the ACL sync writes it.
 
         Raises an error when the Messages integration is disabled or the
         user has no role on the mailbox.
@@ -438,9 +440,7 @@ class SetupService:
             raise MessagesDisabledError("Messages integration is not enabled")
 
         try:
-            mailboxes = self.messages.get_user_mailboxes(
-                user.email, use_cache=use_cache
-            )
+            mailboxes = self.messages.get_user_mailboxes(user.email, use_cache=False)
         except MessagesServiceError as exc:
             # Access cannot be checked, so deny it.
             raise MailboxAccessDeniedError(

@@ -114,8 +114,10 @@ class MessagesService:
     def _fetch_mailboxes(self, cache_key, *, use_cache=True, **params):
         """Fetch from provisioning/mailboxes/ with caching.
 
-        With ``use_cache=False``, the result comes from Messages. It also
-        refreshes the cache.
+        With ``use_cache=False``, the result comes from Messages, and the
+        cache stays unchanged. A caller outside the ACL sync must not write
+        the cache: its answer can be older than the answer of a sync that
+        ends first, and the next sync then restores a revoked share.
 
         Cache keys MUST be distinct per query shape — the response includes
         user-specific fields (role) when queried by user_email, but not
@@ -137,7 +139,8 @@ class MessagesService:
             raise MessagesServiceError(
                 f"Messages API fetch_mailboxes failed: {exc}"
             ) from exc
-        cache.set(cache_key, results, MAILBOX_CACHE_TTL)
+        if use_cache:
+            cache.set(cache_key, results, MAILBOX_CACHE_TTL)
         return results
 
     def get_user_mailboxes(self, user_email, *, use_cache=True):

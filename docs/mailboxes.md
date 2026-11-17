@@ -131,6 +131,8 @@ of the list are not synced. Opening the app also syncs the user.
 The syncs of one user run one at a time: each sync locks the user row
 during the Messages lookup and the CalDAV update. Thus two syncs of a
 user apply their Messages answers in the order of the lookups. Only the
+user sync writes the cached Messages answer of a user: the access checks
+of the setup and of the delete ask Messages and keep the cache. Only the
 user sync writes shares: a mailbox sync (`--mailbox`, or the creation of
 a mailbox calendar) runs the user sync of each mailbox user.
 
