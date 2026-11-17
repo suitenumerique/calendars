@@ -112,9 +112,25 @@ share: it sets the access and the `is_sync_managed` flag.
 organizations and resyncs their mailbox shares. On Scalingo, `cron.json`
 runs `sync_mailbox_acls --enqueue` every 15 minutes. The command sends
 the task to the worker and exits. The worker runs the sync, because it
-has the internal CalDAV server. The interval sets the revocation delay:
-a user removed from a mailbox keeps access for up to about 20 minutes
-(the interval plus the 5 minute Messages cache).
+has the internal CalDAV server.
+
+The revocation delay is not bounded. When a user is removed from a
+mailbox, the user keeps access until the sync reaches them. This delay
+is the sum of:
+
+- the wait for the next cron run (up to 15 minutes),
+- the time the task waits in the queue (the worker drops a task older
+  than 15 minutes),
+- the time to sync the users before them in the run,
+- the age of the cached Messages answer (up to 5 minutes).
+
+With a healthy worker and a short run, the delay is about 20 minutes.
+A run stops after one hour. If a run takes longer, the users at the end
+of the list are not synced. Opening the app also syncs the user.
+
+The syncs of one user run one at a time: each sync locks the user row
+during the Messages lookup and the CalDAV update. Thus two syncs of a
+user apply their Messages answers in the order of the lookups.
 
 **Sync commands**:
 

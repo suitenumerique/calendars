@@ -1,8 +1,11 @@
-"""Tests for SetupService errors when CalDAV does not apply a mailbox ACL sync."""
+"""Tests for the mailbox ACL sync of SetupService against CalDAV."""
 
 import logging
+import threading
+import time
 from unittest import mock
 
+from django.db import connection
 from django.test import override_settings
 
 import pytest
@@ -78,17 +81,73 @@ def test_setup_mailbox_ignores_a_failed_fan_out():
 
 
 @override_settings(FEATURE_MESSAGES_INTEGRATION=True)
-def test_sync_all_mailbox_acls_counts_caldav_errors():
+def test_sync_all_mailbox_acls_counts_caldav_errors(core_caplog):
     """The sync task counts a CalDAV error and logs a warning."""
     factories.UserFactory(organization=factories.OrganizationFactory())
     service = _service(mock.Mock(side_effect=requests.ConnectionError("refused")))
 
-    with (
-        mock.patch("core.services.setup_service.SetupService", return_value=service),
-        mock.patch("core.tasks.logger") as mock_logger,
-    ):
+    with mock.patch("core.services.setup_service.SetupService", return_value=service):
         sync_all_mailbox_acls()
 
-    mock_logger.log.assert_called_once_with(
-        logging.WARNING, "sync_all_mailbox_acls: synced %d users, %d errors", 0, 1
-    )
+    assert (
+        "core.tasks",
+        logging.WARNING,
+        "sync_all_mailbox_acls: synced 0 users, 1 errors",
+    ) in core_caplog.record_tuples
+
+
+def _sync_in_thread(service, user, errors):
+    try:
+        service.sync_user_mailboxes(user)
+    except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+        errors.append(exc)
+    finally:
+        connection.close()
+
+
+@pytest.mark.django_db(transaction=True)
+@override_settings(FEATURE_MESSAGES_INTEGRATION=True)
+def test_sync_user_mailboxes_waits_for_a_running_sync():
+    """An older Messages answer does not reach CalDAV after a newer one.
+
+    The first sync reads "member of the mailbox" and waits. The second
+    sync reads "removed from the mailbox". The removal must reach CalDAV
+    last, or the first sync restores the share.
+    """
+    user = factories.UserFactory()
+    first_lookup_started = threading.Event()
+    release_first_lookup = threading.Event()
+    applied = []
+    errors = []
+
+    def get_user_mailboxes(*args, **kwargs):
+        if not first_lookup_started.is_set():
+            first_lookup_started.set()
+            release_first_lookup.wait(timeout=5)
+            return [MAILBOX]
+        return []
+
+    def internal_request(*args, json, **kwargs):  # pylint: disable=redefined-outer-name
+        applied.append(json["shares"])
+        return mock.Mock(status_code=200, json=mock.Mock(return_value={"active": []}))
+
+    service = _service(mock.Mock(side_effect=internal_request))
+    service.messages.get_user_mailboxes.side_effect = get_user_mailboxes
+
+    first = threading.Thread(target=_sync_in_thread, args=(service, user, errors))
+    first.start()
+    assert first_lookup_started.wait(timeout=5)
+    second = threading.Thread(target=_sync_in_thread, args=(service, user, errors))
+    second.start()
+
+    # Give the second sync the time to reach CalDAV if nothing stops it.
+    time.sleep(0.5)
+    assert not applied
+
+    release_first_lookup.set()
+    first.join(timeout=5)
+    second.join(timeout=5)
+
+    assert not errors
+    assert len(applied) == 2
+    assert applied[-1] == []

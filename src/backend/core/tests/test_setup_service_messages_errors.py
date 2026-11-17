@@ -4,6 +4,7 @@ A failed lookup must not look like "no mailboxes". Otherwise the sync
 removes all the sync-managed shares of the user.
 """
 
+import logging
 from unittest import mock
 
 from django.core.cache import cache
@@ -17,6 +18,8 @@ from core.services.setup_service import SetupService
 from core.tasks import sync_all_mailbox_acls
 
 pytestmark = pytest.mark.django_db
+
+SYNC_SUMMARY = "sync_all_mailbox_acls: synced {} users, {} errors"
 
 
 @pytest.fixture(autouse=True)
@@ -78,7 +81,7 @@ def test_messages_empty_answer_removes_the_shares():
     )
 
 
-def test_sync_task_counts_a_messages_failure():
+def test_sync_task_counts_a_messages_failure(core_caplog):
     """The sync task counts a Messages error and sends no sync to CalDAV."""
     factories.UserFactory(organization=factories.OrganizationFactory())
     service, internal_request = _service()
@@ -88,11 +91,12 @@ def test_sync_task_counts_a_messages_failure():
         mock.patch.object(
             MessagesService, "_request", side_effect=requests.ConnectionError("down")
         ),
-        mock.patch("core.tasks.logger") as mock_logger,
     ):
         sync_all_mailbox_acls()
 
-    assert mock_logger.log.call_args.args[2:] == (0, 1)
+    assert ("core.tasks", logging.WARNING, SYNC_SUMMARY.format(0, 1)) in (
+        core_caplog.record_tuples
+    )
     internal_request.assert_not_called()
 
 
@@ -103,6 +107,39 @@ def test_mailbox_lookup_by_email_failure_raises():
     ):
         with pytest.raises(MessagesServiceError):
             MessagesService().get_mailbox_by_email("team@example.com")
+
+
+def test_sync_mailbox_lookup_failure_sends_no_sync():
+    """A failed lookup by mailbox email raises and sends no sync to CalDAV."""
+    service, internal_request = _service()
+
+    with mock.patch.object(
+        MessagesService, "_request", side_effect=requests.HTTPError("503")
+    ):
+        with pytest.raises(MessagesServiceError):
+            service.sync_mailbox(factories.UserFactory(), "team@example.com")
+
+    internal_request.assert_not_called()
+
+
+def test_sync_task_skips_users_without_email(core_caplog):
+    """The sync task does not count a user without an email."""
+    org = factories.OrganizationFactory()
+    factories.UserFactory(organization=org, email="")
+    factories.UserFactory(organization=org)
+    service, _ = _service()
+
+    with (
+        mock.patch("core.services.setup_service.SetupService", return_value=service),
+        mock.patch.object(
+            MessagesService, "_request", return_value=_messages_answer([])
+        ),
+    ):
+        sync_all_mailbox_acls()
+
+    assert ("core.tasks", logging.INFO, SYNC_SUMMARY.format(1, 0)) in (
+        core_caplog.record_tuples
+    )
 
 
 @pytest.mark.parametrize("email", [None, ""])

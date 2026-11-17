@@ -135,8 +135,8 @@ def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments
 # The time limit only stops a stuck run. It does not follow the cron
 # interval: the task syncs users in a fixed order, so a limit shorter
 # than a run would never sync the last users.
-# Two runs can overlap. This is accepted: each run sends the full state
-# of each user, and CalDAV applies it idempotently.
+# Two runs can overlap. SetupService.sync_user_mailboxes locks the user,
+# so two syncs of one user do not interleave.
 @register_task(
     queue="sync",
     time_limit=60 * 60 * 1000,
@@ -177,7 +177,13 @@ def sync_all_mailbox_acls():
     # Future: sync based on mailboxes instead of users for efficiency.
     total = 0
     errors = 0
-    for user in User.objects.filter(organization__isnull=False).iterator():
+    # A user without an email cannot have mailbox access.
+    users = (
+        User.objects.filter(organization__isnull=False)
+        .exclude(email__isnull=True)
+        .exclude(email="")
+    )
+    for user in users.iterator():
         try:
             service.sync_user_mailboxes(user)
             total += 1
