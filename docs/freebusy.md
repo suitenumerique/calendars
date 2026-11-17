@@ -243,18 +243,18 @@ whether it contributes to free/busy. Only this property controls
 availability.
 
 Calendars you own start opaque. Calendars shared with you start
-transparent, so they do not make you busy. This also applies to
-mailbox calendars that the Messages sync shares with you. To count
-one in your availability, mark it opaque. The sync keeps your choice.
-The mailbox's own instance stays opaque, so the mailbox's availability
-does not change. Events you attend still make you busy: the invitation
-goes to a calendar you own.
+transparent, so they do not make you busy. Mailbox calendars that the
+Messages sync shares with you start transparent for a team mailbox,
+and opaque for a person's mailbox (see [mailboxes.md](mailboxes.md)).
+You can change the setting, and the sync keeps your choice. The
+mailbox's own instance stays opaque, so the mailbox's availability
+does not change.
 
 ### UI
 
 The "Include in availability" checkbox in the calendar edit modal
 toggles this property via PROPPATCH. It is checked (opaque) for
-calendars you own and unchecked for shared and mailbox calendars.
+calendars you own and unchecked for shared calendars.
 
 Apple Calendar exposes this as "Show in availability" in calendar
 settings. Thunderbird and DAVx5 also support it natively.

@@ -95,6 +95,21 @@ class MailboxOrgUnresolvedError(SetupServiceError):
     code = "mailbox_org_unresolved"
 
 
+def _starts_transparent(user_email, mailbox):
+    """Return True when the mailbox calendar of a user starts transparent.
+
+    A transparent calendar does not make the user busy. A team mailbox
+    starts transparent, so its events do not make all its users busy. The
+    own mailbox of a user starts opaque, so its events make the user busy.
+
+    Messages sets ``is_identity`` to False only for a mailbox that is not
+    a person. When the field is missing, the mailbox counts as a person.
+    """
+    if mailbox.get("is_identity", True):
+        return False
+    return user_email.lower() != mailbox.get("email", "").lower()
+
+
 def _resolve_mailbox_org_id(mailbox_data):
     """Resolve the mailbox's organization PK from a Messages response.
 
@@ -238,6 +253,7 @@ class SetupService:
             org_id=org_id,
             color=color,
             caller_email=user.email,
+            caller_transparent=_starts_transparent(user.email, user_mailbox),
         )
         # ``calendar_uri`` is the owner-side URI (under the mailbox
         # principal); ``caller_calendar_uri`` is the URI the caller can
@@ -250,7 +266,7 @@ class SetupService:
         # row already exists (with their picked color) thanks to
         # caller_email above; sync_mailbox will leave it alone because
         # ON CONFLICT only refreshes ``access``, not ``calendarcolor``.
-        self.sync_mailbox(user, mailbox_email, users=user_mailbox.get("users", []))
+        self.sync_mailbox(user, mailbox_email, mailbox=user_mailbox)
 
         return {
             "calendar_path": (f"calendars/users/{user.email}/{caller_calendar_uri}"),
@@ -348,6 +364,7 @@ class SetupService:
                     "user_email": user.email,
                     "mailbox_email": mb_email,
                     "privilege": ROLE_TO_PRIVILEGE.get(mb_role, "read"),
+                    "transparent": _starts_transparent(user.email, mailbox),
                 }
             )
 
@@ -376,21 +393,22 @@ class SetupService:
     # Sync from mailbox side: for all users of a given mailbox
     # ------------------------------------------------------------------
 
-    def sync_mailbox(self, caller, mailbox_email, users=None):
+    def sync_mailbox(self, caller, mailbox_email, mailbox=None):
         """Sync shares for all users of a mailbox. One internal API call.
 
         Args:
             caller: A user object for authenticating internal API calls.
             mailbox_email: The mailbox email to sync.
-            users: Optional list of {"email", "role"} dicts. If not provided,
-                   fetched from Messages via get_mailbox_by_email().
+            mailbox: Optional Messages data of the mailbox, with its
+                     ``users`` list. If not provided, fetched from Messages
+                     via get_mailbox_by_email().
 
         Returns:
             Number of shares synced.
         """
-        if users is None:
-            mailbox = self.messages.get_mailbox_by_email(mailbox_email)
-            users = mailbox.get("users", []) if mailbox else []
+        if mailbox is None:
+            mailbox = self.messages.get_mailbox_by_email(mailbox_email) or {}
+        users = mailbox.get("users", [])
 
         shares = []
         for mb_user in users:
@@ -405,6 +423,7 @@ class SetupService:
                     "user_email": mb_user_email,
                     "mailbox_email": mailbox_email,
                     "privilege": ROLE_TO_PRIVILEGE.get(mb_user_role, "read"),
+                    "transparent": _starts_transparent(mb_user_email, mailbox),
                 }
             )
 
@@ -444,6 +463,7 @@ class SetupService:
         org_id,
         color=None,
         caller_email=None,
+        caller_transparent=False,
     ):
         """Create a calendar (and principal if needed) via internal API.
 
@@ -461,6 +481,7 @@ class SetupService:
             payload["color"] = color
         if caller_email:
             payload["caller_email"] = caller_email
+            payload["caller_transparent"] = caller_transparent
         try:
             resp = self._http.internal_request(
                 "POST",

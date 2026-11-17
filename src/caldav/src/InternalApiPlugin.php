@@ -656,6 +656,9 @@ class InternalApiPlugin extends ServerPlugin
      *       chosen ``color``. Used by the mailbox setup flow so the
      *       caller sees the new calendar with their picked color
      *       immediately, without waiting for sync-mailbox-acls.
+     *   "caller_transparent": true,           (optional, defaults to false)
+     *       When true, the caller instance starts transparent: its
+     *       events do not make the caller busy.
      * }
      */
     private function handleCreateCalendar($request, $response)
@@ -692,6 +695,15 @@ class InternalApiPlugin extends ServerPlugin
         $callerEmail = $body['caller_email'] ?? null;
         if ($callerEmail === '') {
             $callerEmail = null;
+        }
+        $callerTransparent = $body['caller_transparent'] ?? false;
+        if (!is_bool($callerTransparent)) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'Invalid field: caller_transparent (must be boolean)',
+            ]));
+            return false;
         }
         $isMailbox = ($calendarUserType === PrincipalBackend::TYPE_MAILBOX);
         $principalUri = ($isMailbox ? 'principals/mailboxes/' : 'principals/users/') . $email;
@@ -751,8 +763,7 @@ class InternalApiPlugin extends ServerPlugin
             // the freshly-allocated UUID for the sharee row, not the
             // owner-side ``$newUri``. We surface it in the response so
             // callers (Python setup service, tests) don't have to do
-            // a follow-up PROPFIND just to discover it. The instance
-            // starts transparent, like the ones the sync creates.
+            // a follow-up PROPFIND just to discover it.
             $callerCalendarUri = $newUri;
             if ($isMailbox && !$callerIsOwner && $callerEmail !== null) {
                 $cidStmt = $this->pdo->prepare(
@@ -769,7 +780,7 @@ class InternalApiPlugin extends ServerPlugin
                     . ' (calendarid, principaluri, access, uri, displayname,'
                     . '  calendarcolor, share_href, share_displayname,'
                     . '  share_invitestatus, transparent, is_sync_managed)'
-                    . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 1, TRUE)'
+                    . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, ?, TRUE)'
                 );
                 $sharee->execute([
                     $calendarId,
@@ -780,6 +791,7 @@ class InternalApiPlugin extends ServerPlugin
                     $color,
                     'mailto:' . $callerEmail,
                     $callerEmail,
+                    $callerTransparent ? 1 : 0,
                 ]);
             }
 
@@ -933,7 +945,7 @@ class InternalApiPlugin extends ServerPlugin
      *     {"user_email": "alice@co", "mailbox_email": "contact@co",
      *      "privilege": "read-write"},
      *     {"user_email": "bob@co", "mailbox_email": "contact@co",
-     *      "privilege": "read"}
+     *      "privilege": "read", "transparent": true}
      *   ],
      *   "full_sync_users": ["alice@co"]
      * }
@@ -944,6 +956,11 @@ class InternalApiPlugin extends ServerPlugin
      * calendars (the second create allocates a UUID URI), and Messages
      * tracks access per mailbox — not per calendar — so the share
      * naturally applies to all of them.
+     *
+     * "transparent" is optional and defaults to false. When true, a new
+     * instance starts transparent: its events do not make the user busy.
+     * The sync never changes the transparency of an existing instance,
+     * so the choice of the user stays.
      *
      * "shares" is a flat list of all desired sync-managed shares.
      * "full_sync_users" lists users whose stale shares should be removed
@@ -1002,6 +1019,14 @@ class InternalApiPlugin extends ServerPlugin
                     ]));
                     return false;
                 }
+            }
+            if (!is_bool($share['transparent'] ?? false)) {
+                $response->setStatus(400);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode([
+                    'error' => "shares[$i] invalid transparent: must be boolean",
+                ]));
+                return false;
             }
             if (!in_array($share['privilege'], ['read', 'read-write'], true)) {
                 $response->setStatus(400);
@@ -1119,6 +1144,7 @@ class InternalApiPlugin extends ServerPlugin
                         'share_href' => 'mailto:' . $userEmail,
                         'share_displayname' => $userEmail,
                         'color' => '#3788d8',
+                        'transparent' => ($share['transparent'] ?? false) ? 1 : 0,
                     ];
                     $active[] = [
                         'user_email' => $userEmail,
@@ -1130,14 +1156,13 @@ class InternalApiPlugin extends ServerPlugin
             }
 
             // 5. Prepare upsert statement (reused across all users).
-            // New sharees start transparent, like SabreDAV shares, so
-            // mailbox events do not make them busy. The update does not
-            // touch ``transparent``, so the user's own choice stays.
+            // The update does not touch ``transparent``, so the choice
+            // of the user stays.
             $upsertStmt = $this->pdo->prepare(
                 'INSERT INTO calendarinstances '
                 . '(calendarid, principaluri, access, uri, displayname, calendarcolor, '
                 . 'share_href, share_displayname, share_invitestatus, transparent, is_sync_managed) '
-                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 1, TRUE) '
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, ?, TRUE) '
                 . 'ON CONFLICT (principaluri, calendarid) '
                 . 'DO UPDATE SET access = EXCLUDED.access, share_href = EXCLUDED.share_href, '
                 . 'is_sync_managed = TRUE'
@@ -1163,6 +1188,7 @@ class InternalApiPlugin extends ServerPlugin
                         $calendarId, $principal, $d['access'], UUIDUtil::getUUID(),
                         $d['displayname'], $d['color'],
                         $d['share_href'], $d['share_displayname'],
+                        $d['transparent'],
                     ]);
                 }
 

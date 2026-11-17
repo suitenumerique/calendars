@@ -247,9 +247,12 @@ Messages. These instances expose `LS:calendar-sync-managed`. The web app
 then offers "Hide this calendar" instead of a delete action. Manual
 shares do not have it.
 
-Sync-managed instances start transparent, like other shared calendars.
-Mailbox events do not make the user busy. The user can include the
-calendar in their availability; the sync keeps that choice. See
+A sync-managed instance of a team mailbox starts transparent, like
+other shared calendars: its events do not make the user busy. An
+instance of a person's mailbox starts opaque. Messages tells which
+mailboxes are not a person (`is_identity` is false). The own mailbox of
+a user, at the email of the user, always starts opaque. The user can
+change the setting; the sync keeps that choice. See
 [freebusy.md](freebusy.md#calendar-level-transparency-rfc-6638).
 
 A mailbox admin can delete a mailbox calendar for every user with
