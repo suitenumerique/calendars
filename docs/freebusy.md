@@ -244,8 +244,9 @@ availability.
 
 Calendars you own start opaque. Calendars shared with you start
 transparent, so they do not make you busy. Mailbox calendars that the
-Messages sync shares with you start transparent for a team mailbox,
-and opaque for a person's mailbox (see [mailboxes.md](mailboxes.md)).
+Messages sync shares with you start transparent when you are a delegate
+of another person's mailbox, and opaque in the other cases (see
+[mailboxes.md](mailboxes.md)).
 You can change the setting, and the sync keeps your choice. The
 mailbox's own instance stays opaque, so the mailbox's availability
 does not change.
