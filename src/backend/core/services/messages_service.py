@@ -147,11 +147,9 @@ class MessagesService:
         Each mailbox includes the user's ``role`` and a ``users`` array.
         Cached separately from get_mailbox_by_email (different response shape).
 
-        Only the user sync can use the cache. The user sync locks the user,
-        so the syncs of a user write the cache in order. Another caller must
-        use ``use_cache=False``. Its answer can be older than the answer of
-        a sync that ends first. In the cache, this old answer can restore a
-        revoked share at the next sync.
+        Only the user sync uses the cache. Another caller must use
+        ``use_cache=False``, so that its answer does not reach the next
+        sync.
 
         Raises MessagesServiceError when the lookup fails. Callers must not
         read a failed lookup as "no mailboxes": the ACL sync then removes

@@ -14,7 +14,6 @@ from enum import StrEnum
 from urllib.parse import quote
 
 from django.conf import settings
-from django.db import transaction
 
 from core.models import Organization, User
 from core.services.caldav_service import CalDAVHTTPClient
@@ -322,6 +321,9 @@ class SetupService:
             available_mailboxes: list of mailboxes the user has access to
             active_mailbox_calendars: list of mailbox calendar paths shared
 
+        Two syncs of a user can overlap. Then an older Messages answer can
+        reach CalDAV last. The next successful sync corrects the shares.
+
         Raises MessagesServiceError when the Messages lookup fails, and
         MailboxSyncError when CalDAV does not confirm the sync.
         """
@@ -329,14 +331,6 @@ class SetupService:
         if not settings.FEATURE_MESSAGES_INTEGRATION or not user.email:
             return {"available_mailboxes": [], "active_mailbox_calendars": []}
 
-        # The lock on the user row makes the syncs of a user run one at a
-        # time. Otherwise an older Messages answer can reach CalDAV after
-        # a newer one, and restore a share that the newer one removed.
-        with transaction.atomic():
-            User.objects.select_for_update().only("pk").get(pk=user.pk)
-            return self._sync_user_mailboxes(user)
-
-    def _sync_user_mailboxes(self, user):
         mailboxes = self.messages.get_user_mailboxes(user.email)
         if not mailboxes:
             # No mailboxes — clean up any stale sync-managed shares
@@ -391,9 +385,9 @@ class SetupService:
         """Sync the shares of each Calendars user of a mailbox.
 
         The users of the mailbox come from Messages. This list only selects
-        the users to sync. Each user sync
-        locks the user and gets the mailboxes of the user again. Thus an
-        old list cannot restore a share that a newer user sync removed.
+        the users to sync. Each user sync gets the mailboxes of the user
+        again. Thus an old list cannot restore a share that a newer user
+        sync removed.
         A Messages or CalDAV error on a user sync is logged and does not
         stop the other user syncs.
 

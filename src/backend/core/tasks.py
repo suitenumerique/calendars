@@ -136,8 +136,7 @@ def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments
 # interval on purpose. A run that stops early does not sync all the users.
 # With a short limit, this can occur at each run, and the same users can
 # stay out of sync.
-# Two runs can overlap. SetupService.sync_user_mailboxes locks the user,
-# so two syncs of one user do not interleave.
+# Two runs can overlap. The next successful sync corrects the shares.
 @register_task(
     queue="sync",
     time_limit=60 * 60 * 1000,
