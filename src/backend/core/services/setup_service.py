@@ -55,7 +55,11 @@ class SetupServiceError(Exception):
 
 
 class MailboxSyncError(SetupServiceError):
-    """Raised when CalDAV does not apply a mailbox ACL sync."""
+    """Raised when CalDAV does not confirm a mailbox ACL sync.
+
+    CalDAV can apply the sync and then fail to answer, for example after a
+    timeout. Thus this error does not tell that CalDAV applied nothing.
+    """
 
     code = "mailbox_sync_failed"
 
@@ -313,12 +317,13 @@ class SetupService:
     def sync_user_mailboxes(self, user):
         """Sync Messages mailbox ACLs for this user.
 
-        One Messages API call, one internal API call. Returns dict with:
+        At most one Messages request: a cache hit sends no request. Then one
+        CalDAV request when the lookup succeeds. Returns dict with:
             available_mailboxes: list of mailboxes the user has access to
             active_mailbox_calendars: list of mailbox calendar paths shared
 
         Raises MessagesServiceError when the Messages lookup fails, and
-        MailboxSyncError when CalDAV does not apply the sync.
+        MailboxSyncError when CalDAV does not confirm the sync.
         """
         # A user without an email cannot have mailbox access or shares.
         if not settings.FEATURE_MESSAGES_INTEGRATION or not user.email:
@@ -393,7 +398,8 @@ class SetupService:
         The list of users only selects the users to sync. Each user sync
         locks the user and gets the mailboxes of the user again. Thus an
         old list cannot restore a share that a newer user sync removed.
-        A failed user sync is logged and does not stop the others.
+        A Messages or CalDAV error on a user sync is logged and does not
+        stop the other user syncs.
 
         Returns:
             Number of users synced.
@@ -509,7 +515,7 @@ class SetupService:
         (user, mailbox, calendar) with the actual ``calendar_uri`` filled
         in by the fan-out.
 
-        Raises MailboxSyncError when CalDAV does not apply the sync.
+        Raises MailboxSyncError when CalDAV does not confirm the sync.
         """
         try:
             resp = self._http.internal_request(

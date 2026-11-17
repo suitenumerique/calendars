@@ -132,9 +132,10 @@ def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments
 # The cron runs this task every 15 minutes, and the next run does the
 # same work. Thus a failed run is not retried, and a message older than
 # 15 minutes is dropped.
-# The time limit only stops a stuck run. It does not follow the cron
-# interval: the task syncs users in a fixed order, so a limit shorter
-# than a run would never sync the last users.
+# The time limit stops a run after one hour. It is longer than the cron
+# interval on purpose. A run that stops early does not sync all the users.
+# With a short limit, this can occur at each run, and the same users can
+# stay out of sync.
 # Two runs can overlap. SetupService.sync_user_mailboxes locks the user,
 # so two syncs of one user do not interleave.
 @register_task(

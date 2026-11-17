@@ -125,16 +125,19 @@ is the sum of:
 - the age of the cached Messages answer (up to 5 minutes).
 
 With a healthy worker and a short run, the delay is about 20 minutes.
-A run stops after one hour. If a run takes longer, the users at the end
-of the list are not synced. Opening the app also syncs the user.
+A run stops after one hour. If a run takes longer, the users that it did
+not reach are not synced. Opening the app also syncs the user.
 
 The syncs of one user run one at a time: each sync locks the user row
 during the Messages lookup and the CalDAV update. Thus two syncs of a
 user apply their Messages answers in the order of the lookups. Only the
 user sync writes the cached Messages answer of a user: the access checks
-of the setup and of the delete ask Messages and keep the cache. Only the
-user sync writes shares: a mailbox sync (`--mailbox`, or the creation of
-a mailbox calendar) runs the user sync of each mailbox user.
+of the setup and of the delete ask Messages and keep the cache.
+
+The membership sync writes shares only through the user sync: a mailbox
+sync (`--mailbox`, or the sync after the creation of a mailbox calendar)
+runs the user sync of each mailbox user. The creation of a mailbox
+calendar also creates the share of the caller directly.
 
 **Sync commands**:
 
@@ -254,13 +257,15 @@ Shares are synced in two directions:
   `sync_mailbox_task`. The worker runs `SetupService.sync_mailbox()`, which
   syncs each mailbox user who has a Calendars account. The user list comes
   from the `users` field of the Messages mailbox response. Each user sync
-  gets the mailboxes of the user again, so this costs one Messages call and
-  one CalDAV call per user. The worker runs it, because these calls can
+  gets the mailboxes of the user again. Thus each user costs at most one
+  Messages request (a cache hit sends none), then one CalDAV request when
+  the lookup succeeds. The worker runs it, because these calls can
   take longer than the request timeout. A mailbox user without a
   Calendars account gets the shares on their first app open.
 - **On each user's app open**: `GET /setup/mailboxes/` syncs that user's
   shares (picks up new mailbox calendars, updates changed roles, removes
-  stale shares). Again, one Messages API call returns everything.
+  stale shares). At most one Messages request returns all the mailboxes
+  of the user.
 
 All sync-managed shares are tagged with `is_sync_managed = TRUE`
 in `calendarinstances`. This distinguishes them from manual shares and

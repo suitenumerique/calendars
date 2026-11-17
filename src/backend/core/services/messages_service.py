@@ -115,9 +115,7 @@ class MessagesService:
         """Fetch from provisioning/mailboxes/ with caching.
 
         With ``use_cache=False``, the result comes from Messages, and the
-        cache stays unchanged. A caller outside the ACL sync must not write
-        the cache: its answer can be older than the answer of a sync that
-        ends first, and the next sync then restores a revoked share.
+        cache stays unchanged.
 
         Cache keys MUST be distinct per query shape — the response includes
         user-specific fields (role) when queried by user_email, but not
@@ -148,6 +146,12 @@ class MessagesService:
 
         Each mailbox includes the user's ``role`` and a ``users`` array.
         Cached separately from get_mailbox_by_email (different response shape).
+
+        Only the user sync can use the cache. The user sync locks the user,
+        so the syncs of a user write the cache in order. Another caller must
+        use ``use_cache=False``. Its answer can be older than the answer of
+        a sync that ends first. In the cache, this old answer can restore a
+        revoked share at the next sync.
 
         Raises MessagesServiceError when the lookup fails. Callers must not
         read a failed lookup as "no mailboxes": the ACL sync then removes
