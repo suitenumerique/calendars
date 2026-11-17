@@ -148,7 +148,7 @@ def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments
 def sync_all_mailbox_acls():
     """Sync Messages mailbox ACLs for all users.
 
-    Scheduled externally (cron). Iterates all users with an org and
+    Scheduled externally (cron). Iterates all users with an email and
     syncs their mailbox shares via the Messages API.
     """
     if not settings.FEATURE_MESSAGES_INTEGRATION:
@@ -179,11 +179,7 @@ def sync_all_mailbox_acls():
     total = 0
     errors = 0
     # A user without an email cannot have mailbox access.
-    users = (
-        User.objects.filter(organization__isnull=False)
-        .exclude(email__isnull=True)
-        .exclude(email="")
-    )
+    users = User.objects.exclude(email__isnull=True).exclude(email="")
     for user in users.iterator():
         try:
             service.sync_user_mailboxes(user)

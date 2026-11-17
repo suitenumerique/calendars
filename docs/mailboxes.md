@@ -109,7 +109,7 @@ share: it sets the access and the `is_sync_managed` flag.
 
 **Recurring background sync**: schedule `sync_all_mailbox_acls` via cron
 (or call the management command periodically). It iterates users with
-organizations and resyncs their mailbox shares. On Scalingo, `cron.json`
+an email and resyncs their mailbox shares. On Scalingo, `cron.json`
 runs `sync_mailbox_acls --enqueue` every 15 minutes. The command sends
 the task to the worker and exits. The worker runs the sync, because it
 has the internal CalDAV server.

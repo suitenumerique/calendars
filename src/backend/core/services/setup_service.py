@@ -340,7 +340,7 @@ class SetupService:
         mailboxes = self.messages.get_user_mailboxes(user.email)
         if not mailboxes:
             # No mailboxes — clean up any stale sync-managed shares
-            self._sync_acls(user, [], full_sync_users=[user.email])
+            self._sync_acls(user, [])
             return {"available_mailboxes": [], "active_mailbox_calendars": []}
 
         role_by_email = {}
@@ -362,7 +362,7 @@ class SetupService:
                 }
             )
 
-        synced = self._sync_acls(user, shares, full_sync_users=[user.email])
+        synced = self._sync_acls(user, shares)
 
         # ``synced`` has one entry per (user, mailbox, calendar) — the
         # PHP fan-out resolves the actual URIs, so we use those here
@@ -387,15 +387,11 @@ class SetupService:
     # Sync from mailbox side: for all users of a given mailbox
     # ------------------------------------------------------------------
 
-    def sync_mailbox(self, mailbox_email, users=None):
+    def sync_mailbox(self, mailbox_email):
         """Sync the shares of each Calendars user of a mailbox.
 
-        Args:
-            mailbox_email: The mailbox email to sync.
-            users: Optional list of {"email", "role"} dicts. If not provided,
-                   fetched from Messages via get_mailbox_by_email().
-
-        The list of users only selects the users to sync. Each user sync
+        The users of the mailbox come from Messages. This list only selects
+        the users to sync. Each user sync
         locks the user and gets the mailboxes of the user again. Thus an
         old list cannot restore a share that a newer user sync removed.
         A Messages or CalDAV error on a user sync is logged and does not
@@ -406,13 +402,11 @@ class SetupService:
 
         Raises MessagesServiceError when the Messages lookup fails.
         """
-        if users is None:
-            mailbox = self.messages.get_mailbox_by_email(mailbox_email)
-            users = mailbox.get("users", []) if mailbox else []
-
+        mailbox = self.messages.get_mailbox_by_email(mailbox_email)
+        users = mailbox.get("users", []) if mailbox else []
         emails = [mb_user["email"] for mb_user in users if mb_user.get("email")]
         synced = 0
-        for user in User.objects.filter(email__in=emails, organization__isnull=False):
+        for user in User.objects.filter(email__in=emails):
             try:
                 self.sync_user_mailboxes(user)
             except (MessagesServiceError, MailboxSyncError):
@@ -500,16 +494,19 @@ class SetupService:
         except Exception as exc:
             raise SetupServiceError(f"Failed to create calendar: {exc}") from exc
 
-    def _sync_acls(self, caller, shares, full_sync_users=None):
-        """Batch sync mailbox shares via the internal API. One call.
+    def _sync_acls(self, user, shares):
+        """Sync all the mailbox shares of a user via the internal API.
+
+        CalDAV removes the sync-managed shares of the user that are not in
+        ``shares``.
 
         Args:
-            caller: User object for authenticating the internal API call.
+            user: The user to sync. The internal API call also uses it for
+                authentication.
             shares: Flat list of {user_email, mailbox_email, privilege}.
                 Each entry grants access at the mailbox level — the
                 CalDAV side fans it out to every owner calendar under
                 the mailbox principal.
-            full_sync_users: List of user emails whose stale shares should be removed.
 
         Returns the ``active`` list from the response: one entry per
         (user, mailbox, calendar) with the actual ``calendar_uri`` filled
@@ -520,12 +517,9 @@ class SetupService:
         try:
             resp = self._http.internal_request(
                 "POST",
-                caller,
+                user,
                 "internal-api/sync-mailbox-acls/",
-                json={
-                    "shares": shares,
-                    "full_sync_users": full_sync_users or [],
-                },
+                json={"shares": shares, "full_sync_users": [user.email]},
             )
         except Exception as exc:  # pylint: disable=broad-exception-caught
             raise MailboxSyncError(f"Failed to sync mailbox ACLs: {exc}") from exc
