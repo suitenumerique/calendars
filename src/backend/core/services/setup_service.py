@@ -216,7 +216,10 @@ class SetupService:
         }
 
     def _setup_mailbox(self, user, name, mailbox_email, color=None):
-        """Create a MAILBOX principal + calendar, shared with all mailbox users.
+        """Create a MAILBOX principal + calendar, shared with the caller.
+
+        The sync of the mailbox shares the calendar with the other
+        mailbox users.
 
         Each call creates a NEW calendar under the mailbox principal so
         a single mailbox can back several calendars (e.g. ``Personal``,
@@ -252,14 +255,6 @@ class SetupService:
         # response below uses the caller-side URI because the frontend
         # path it builds is read by the caller.
         caller_calendar_uri = result.get("caller_calendar_uri", "default")
-
-        # Fan out to the rest of the mailbox users. The caller's sharee
-        # row already exists (with their picked color) thanks to
-        # caller_email above; the sync will leave it alone because
-        # ON CONFLICT only refreshes ``access``, not ``calendarcolor``.
-        # The calendar exists at this point, so a failed fan-out does not
-        # fail the setup. The next sync shares it with the other users.
-        self.sync_mailbox(mailbox_email, users=user_mailbox.get("users", []))
 
         return {
             "calendar_path": (f"calendars/users/{user.email}/{caller_calendar_uri}"),

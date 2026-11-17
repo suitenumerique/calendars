@@ -197,3 +197,13 @@ def sync_all_mailbox_acls():
         total,
         errors,
     )
+
+
+# A failed sync is not retried. The next scheduled sync of all users
+# does the same work.
+@register_task(queue="sync", max_retries=0, store_results=False)
+def sync_mailbox_task(mailbox_email):
+    """Sync the shares of each Calendars user of a mailbox."""
+    from core.services.setup_service import SetupService  # noqa: PLC0415
+
+    SetupService().sync_mailbox(mailbox_email)

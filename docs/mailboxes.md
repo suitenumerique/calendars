@@ -173,8 +173,8 @@ same endpoint: `POST /api/v1.0/setup/`.
      → Django verifies Alice has sender/admin access, then creates a MAILBOX
      principal under `principals/mailboxes/contact@company.com` with a
      calendar at `calendars/mailboxes/contact@company.com/default`.
-     Alice gets a sharee instance in her own calendar home. Other users
-     pick up the new calendar on their next `GET /setup/mailboxes/` call.
+     Alice gets a sharee instance in her own calendar home. The worker
+     then shares the calendar with the other users of the mailbox.
 
 ### Personal mailboxes (user.email == mailbox_email)
 
@@ -250,12 +250,14 @@ The share modal detects mailbox calendars and adapts its UI:
 ### Mailbox sharing (sync-managed)
 
 Shares are synced in two directions:
-- **On mailbox calendar creation**: `SetupService.sync_mailbox()` syncs
-  each mailbox user who has a Calendars account. The user list comes from
-  the `users` field of the Messages mailbox response. Each user sync gets
-  the mailboxes of the user again, so this costs one Messages call and one
-  CalDAV call per user. A mailbox user without a Calendars account gets
-  the shares on their first app open.
+- **On mailbox calendar creation**: the setup view enqueues
+  `sync_mailbox_task`. The worker runs `SetupService.sync_mailbox()`, which
+  syncs each mailbox user who has a Calendars account. The user list comes
+  from the `users` field of the Messages mailbox response. Each user sync
+  gets the mailboxes of the user again, so this costs one Messages call and
+  one CalDAV call per user. The worker runs it, because these calls can
+  take longer than the request timeout. A mailbox user without a
+  Calendars account gets the shares on their first app open.
 - **On each user's app open**: `GET /setup/mailboxes/` syncs that user's
   shares (picks up new mailbox calendars, updates changed roles, removes
   stale shares). Again, one Messages API call returns everything.

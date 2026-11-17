@@ -58,33 +58,6 @@ def test_sync_user_mailboxes_without_mailbox_raises():
 
 
 @override_settings(FEATURE_MESSAGES_INTEGRATION=True)
-def test_setup_mailbox_ignores_a_failed_fan_out():
-    """The setup returns the new calendar when the share fan-out fails."""
-    internal_request = mock.Mock(side_effect=requests.ConnectionError("refused"))
-    service = _service(internal_request)
-    user = factories.UserFactory()
-    other = factories.UserFactory()
-    mailbox = {**MAILBOX, "users": [{"email": user.email}, {"email": other.email}]}
-
-    with (
-        mock.patch.object(service, "_get_user_mailbox", return_value=mailbox),
-        mock.patch(
-            "core.services.setup_service._resolve_mailbox_org_id",
-            return_value="org-id",
-        ),
-        mock.patch.object(
-            service,
-            "_create_calendar",
-            return_value={"caller_calendar_uri": "cal-uri"},
-        ),
-    ):
-        result = service.setup(user, "Team", mailbox_email=MAILBOX["email"])
-
-    assert result["calendar_path"] == f"calendars/users/{user.email}/cal-uri"
-    assert internal_request.call_count == 2
-
-
-@override_settings(FEATURE_MESSAGES_INTEGRATION=True)
 def test_sync_all_mailbox_acls_counts_caldav_errors(core_caplog):
     """The sync task counts a CalDAV error and logs a warning."""
     factories.UserFactory(organization=factories.OrganizationFactory())
