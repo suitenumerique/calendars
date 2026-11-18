@@ -1156,12 +1156,15 @@ export class CalDavService {
   /**
    * Relocate an event resource to a different calendar via WebDAV MOVE.
    *
-   * SabreDAV's Schedule\Plugin skips iTIP dispatch on MOVE (CalDAV/Schedule/
-   * Plugin.php#beforeUnbind), which is the desired behavior when an organizer
-   * moves an event between their own calendars: attendees should not receive
-   * spurious REQUEST/CANCEL emails. Content edits (which may warrant iTIP)
-   * should be applied via a follow-up updateEvent at the returned URL — the
-   * `significantChange` filter then decides whether to notify attendees.
+   * A move to a calendar with another identity transfers a meeting that
+   * the user organizes, and the server sends the update to the guests.
+   * The server refuses this move for a guest copy. A move to a calendar
+   * with the same identity keeps the organizer and sends nothing. An event
+   * without guests only moves.
+   *
+   * The MOVE can change the organizer, the attendees and the SEQUENCE of
+   * all the occurrences. Read the moved event before a follow-up
+   * updateEvent at the returned URL.
    *
    * Returns the new resource URL and ETag. Source ETag, if provided, is sent
    * as If-Match for an optimistic-concurrency precondition.
