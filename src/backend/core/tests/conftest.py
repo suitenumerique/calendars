@@ -1,6 +1,7 @@
 """Fixtures for tests in the calendars core application"""
 
 import base64
+import logging
 import os
 
 from django.conf import settings
@@ -107,6 +108,18 @@ def clear_cache():
     yield
     cache.clear()
     # Clear functools.cache for functions decorated with @functools.cache
+
+
+@pytest.fixture(name="core_caplog")
+def fixture_core_caplog(caplog, monkeypatch):
+    """Return caplog with the records of the "core" loggers.
+
+    The "core" logger does not propagate its records, so caplog does not
+    see them by default.
+    """
+    monkeypatch.setattr(logging.getLogger("core"), "propagate", True)
+    caplog.set_level(logging.INFO, logger="core")
+    return caplog
 
 
 def resource_server_backend_setup(settings):  # pylint: disable=redefined-outer-name

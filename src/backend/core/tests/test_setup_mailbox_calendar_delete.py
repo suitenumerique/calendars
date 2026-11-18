@@ -111,7 +111,10 @@ def test_delete_mailbox_calendar_requires_admin_role(client, role):
 
 
 def test_delete_mailbox_calendar_ignores_a_cached_admin_role():
-    """A demoted admin cannot delete while the cache still says admin."""
+    """A demoted admin cannot delete while the cache still says admin.
+
+    The lookup does not write the cache: only the ACL sync writes it.
+    """
     org = factories.OrganizationFactory(external_id="test-org")
     user = factories.UserFactory(organization=org)
     client = APIClient()
@@ -138,6 +141,7 @@ def test_delete_mailbox_calendar_ignores_a_cached_admin_role():
 
     assert response.status_code == HTTP_403_FORBIDDEN
     assert response.json()["code"] == "mailbox_admin_required"
+    assert cache.get(f"messages:by_user:{user.email}")[0]["role"] == "admin"
     mock_caldav.assert_not_called()
 
 

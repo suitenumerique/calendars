@@ -124,12 +124,9 @@ def fixture_messages_settings(settings):
     settings.MESSAGES_CHANNEL_ID = "channel"
 
 
-def _send_via_messages(lookup):
+def _send_via_messages(target, **lookup):
     with (
-        patch(
-            "core.services.messages_service.MessagesService.get_mailbox_by_email",
-            **lookup,
-        ),
+        patch(f"core.services.messages_service.MessagesService.{target}", **lookup),
         patch(
             "core.services.messages_service.MessagesService.submit_raw_message"
         ) as mock_submit,
@@ -160,10 +157,10 @@ def _http_error(status):
 )
 def test_send_can_be_retried_when_the_mailbox_lookup_fails(error):
     with pytest.raises(InvitationNotSentError):
-        _send_via_messages({"side_effect": error})
+        _send_via_messages("_request", side_effect=error)
 
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures("messages_settings")
 def test_send_fails_for_good_when_the_mailbox_is_not_found():
-    assert _send_via_messages({"return_value": None}) is False
+    assert _send_via_messages("get_mailbox_by_email", return_value=None) is False

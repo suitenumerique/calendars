@@ -15,9 +15,9 @@ from urllib.parse import quote
 
 from django.conf import settings
 
-from core.models import Organization
+from core.models import Organization, User
 from core.services.caldav_service import CalDAVHTTPClient
-from core.services.messages_service import MessagesService
+from core.services.messages_service import MessagesService, MessagesServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,16 @@ class SetupServiceError(Exception):
     """
 
     code = "calendar_creation_failed"
+
+
+class MailboxSyncError(SetupServiceError):
+    """Raised when CalDAV does not confirm a mailbox ACL sync.
+
+    CalDAV can apply the sync and then fail to answer, for example after a
+    timeout. Thus this error does not tell that CalDAV applied nothing.
+    """
+
+    code = "mailbox_sync_failed"
 
 
 class MessagesDisabledError(SetupServiceError):
@@ -209,7 +219,10 @@ class SetupService:
         }
 
     def _setup_mailbox(self, user, name, mailbox_email, color=None):
-        """Create a MAILBOX principal + calendar, shared with all mailbox users.
+        """Create a MAILBOX principal + calendar, shared with the caller.
+
+        The sync of the mailbox shares the calendar with the other
+        mailbox users.
 
         Each call creates a NEW calendar under the mailbox principal so
         a single mailbox can back several calendars (e.g. ``Personal``,
@@ -246,12 +259,6 @@ class SetupService:
         # path it builds is read by the caller.
         caller_calendar_uri = result.get("caller_calendar_uri", "default")
 
-        # Fan out to the rest of the mailbox users. The caller's sharee
-        # row already exists (with their picked color) thanks to
-        # caller_email above; sync_mailbox will leave it alone because
-        # ON CONFLICT only refreshes ``access``, not ``calendarcolor``.
-        self.sync_mailbox(user, mailbox_email, users=user_mailbox.get("users", []))
-
         return {
             "calendar_path": (f"calendars/users/{user.email}/{caller_calendar_uri}"),
             "mailbox_email": mailbox_email,
@@ -268,9 +275,7 @@ class SetupService:
         ``calendar_uri`` is the URI of the user's own instance, under
         ``calendars/users/{user.email}/``.
         """
-        # The delete is destructive, so the role comes from Messages and not
-        # from the cache. A demoted admin cannot delete.
-        user_mailbox = self._get_user_mailbox(user, mailbox_email, use_cache=False)
+        user_mailbox = self._get_user_mailbox(user, mailbox_email)
         user_role = user_mailbox.get("role", MailboxRole.VIEWER)
         if user_role != MailboxRole.ADMIN:
             raise MailboxAdminRequiredError(
@@ -311,25 +316,25 @@ class SetupService:
     def sync_user_mailboxes(self, user):
         """Sync Messages mailbox ACLs for this user.
 
-        One Messages API call, one internal API call. Returns dict with:
+        At most one Messages request: a cache hit sends no request. Then one
+        CalDAV request when the lookup succeeds. Returns dict with:
             available_mailboxes: list of mailboxes the user has access to
             active_mailbox_calendars: list of mailbox calendar paths shared
+
+        Two syncs of a user can overlap. Then an older Messages answer can
+        reach CalDAV last. The next successful sync corrects the shares.
+
+        Raises MessagesServiceError when the Messages lookup fails, and
+        MailboxSyncError when CalDAV does not confirm the sync.
         """
-        if not settings.FEATURE_MESSAGES_INTEGRATION:
+        # A user without an email cannot have mailbox access or shares.
+        if not settings.FEATURE_MESSAGES_INTEGRATION or not user.email:
             return {"available_mailboxes": [], "active_mailbox_calendars": []}
 
         mailboxes = self.messages.get_user_mailboxes(user.email)
         if not mailboxes:
             # No mailboxes — clean up any stale sync-managed shares
-            try:
-                self._http.internal_request(
-                    "POST",
-                    user,
-                    "internal-api/sync-mailbox-acls/",
-                    json={"shares": [], "full_sync_users": [user.email]},
-                )
-            except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-                logger.warning("Failed to clean stale shares for user %s", user.pk)
+            self._sync_acls(user, [])
             return {"available_mailboxes": [], "active_mailbox_calendars": []}
 
         role_by_email = {}
@@ -351,7 +356,7 @@ class SetupService:
                 }
             )
 
-        synced = self._sync_acls(user, shares, full_sync_users=[user.email])
+        synced = self._sync_acls(user, shares)
 
         # ``synced`` has one entry per (user, mailbox, calendar) — the
         # PHP fan-out resolves the actual URIs, so we use those here
@@ -376,47 +381,47 @@ class SetupService:
     # Sync from mailbox side: for all users of a given mailbox
     # ------------------------------------------------------------------
 
-    def sync_mailbox(self, caller, mailbox_email, users=None):
-        """Sync shares for all users of a mailbox. One internal API call.
+    def sync_mailbox(self, mailbox_email):
+        """Sync the shares of each Calendars user of a mailbox.
 
-        Args:
-            caller: A user object for authenticating internal API calls.
-            mailbox_email: The mailbox email to sync.
-            users: Optional list of {"email", "role"} dicts. If not provided,
-                   fetched from Messages via get_mailbox_by_email().
+        The users of the mailbox come from Messages. This list only selects
+        the users to sync. Each user sync gets the mailboxes of the user
+        again. Thus an old list cannot restore a share that a newer user
+        sync removed.
+        A Messages or CalDAV error on a user sync is logged and does not
+        stop the other user syncs.
 
         Returns:
-            Number of shares synced.
+            Number of users synced.
+
+        Raises MessagesServiceError when the Messages lookup fails.
         """
-        if users is None:
-            mailbox = self.messages.get_mailbox_by_email(mailbox_email)
-            users = mailbox.get("users", []) if mailbox else []
-
-        shares = []
-        for mb_user in users:
-            mb_user_email = mb_user.get("email", "")
-            mb_user_role = mb_user.get("role", MailboxRole.VIEWER)
-            if not mb_user_email:
+        mailbox = self.messages.get_mailbox_by_email(mailbox_email)
+        users = mailbox.get("users", []) if mailbox else []
+        emails = [mb_user["email"] for mb_user in users if mb_user.get("email")]
+        synced = 0
+        members = User.objects.filter(email__in=emails).select_related("organization")
+        for user in members:
+            try:
+                self.sync_user_mailboxes(user)
+            except (MessagesServiceError, MailboxSyncError):
+                logger.exception(
+                    "Failed to sync user %s of mailbox %s", user.pk, mailbox_email
+                )
                 continue
-            # One share entry per user: the CalDAV side fans it out to
-            # every calendar under the mailbox principal.
-            shares.append(
-                {
-                    "user_email": mb_user_email,
-                    "mailbox_email": mailbox_email,
-                    "privilege": ROLE_TO_PRIVILEGE.get(mb_user_role, "read"),
-                }
-            )
-
-        synced = self._sync_acls(caller, shares)
-        return len(synced)
+            synced += 1
+        return synced
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_user_mailbox(self, user, mailbox_email, *, use_cache=True):
+    def _get_user_mailbox(self, user, mailbox_email):
         """Return the Messages data of a mailbox that the user can access.
+
+        The data comes from Messages and not from the cache, so a demoted
+        user loses the role at once. The cache stays unchanged, because
+        only the ACL sync writes it.
 
         Raises an error when the Messages integration is disabled or the
         user has no role on the mailbox.
@@ -424,7 +429,13 @@ class SetupService:
         if not settings.FEATURE_MESSAGES_INTEGRATION:
             raise MessagesDisabledError("Messages integration is not enabled")
 
-        mailboxes = self.messages.get_user_mailboxes(user.email, use_cache=use_cache)
+        try:
+            mailboxes = self.messages.get_user_mailboxes(user.email, use_cache=False)
+        except MessagesServiceError as exc:
+            # Access cannot be checked, so deny it.
+            raise MailboxAccessDeniedError(
+                f"Messages lookup failed for {user.email}: {exc}"
+            ) from exc
         user_mailbox = next(
             (mb for mb in mailboxes if mb.get("email") == mailbox_email),
             None,
@@ -478,33 +489,38 @@ class SetupService:
         except Exception as exc:
             raise SetupServiceError(f"Failed to create calendar: {exc}") from exc
 
-    def _sync_acls(self, caller, shares, full_sync_users=None):
-        """Batch sync mailbox shares via the internal API. One call.
+    def _sync_acls(self, user, shares):
+        """Sync all the mailbox shares of a user via the internal API.
+
+        CalDAV removes the sync-managed shares of the user that are not in
+        ``shares``.
 
         Args:
-            caller: User object for authenticating the internal API call.
+            user: The user to sync. The internal API call also uses it for
+                authentication.
             shares: Flat list of {user_email, mailbox_email, privilege}.
                 Each entry grants access at the mailbox level — the
                 CalDAV side fans it out to every owner calendar under
                 the mailbox principal.
-            full_sync_users: List of user emails whose stale shares should be removed.
 
         Returns the ``active`` list from the response: one entry per
         (user, mailbox, calendar) with the actual ``calendar_uri`` filled
         in by the fan-out.
+
+        Raises MailboxSyncError when CalDAV does not confirm the sync.
         """
         try:
             resp = self._http.internal_request(
                 "POST",
-                caller,
+                user,
                 "internal-api/sync-mailbox-acls/",
-                json={
-                    "shares": shares,
-                    "full_sync_users": full_sync_users or [],
-                },
+                json={"shares": shares, "full_sync_users": [user.email]},
             )
-            if resp.status_code == 200:
-                return resp.json().get("active", [])
-        except Exception:  # pylint: disable=broad-exception-caught
-            logger.exception("Failed to sync mailbox ACLs")
-        return []
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            raise MailboxSyncError(f"Failed to sync mailbox ACLs: {exc}") from exc
+        if resp.status_code != 200:
+            raise MailboxSyncError(f"Failed to sync mailbox ACLs: {resp.status_code}")
+        try:
+            return resp.json().get("active", [])
+        except ValueError as exc:
+            raise MailboxSyncError(f"Invalid mailbox ACL sync response: {exc}") from exc
