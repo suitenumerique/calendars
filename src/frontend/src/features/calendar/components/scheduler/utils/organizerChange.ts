@@ -89,3 +89,15 @@ export const changeOrganizer = (
     attendees: changeAttendees(event.attendees ?? [], organizer, previous),
   };
 };
+
+/**
+ * Make the address the organizer of a new series that a split makes from
+ * the event. The new organizer is no longer an attendee. The previous
+ * organizer makes the new series, so it does not become an attendee and
+ * it gets no invitation.
+ */
+export const organizeNewSeries = (event: IcsEvent, organizer: IcsOrganizer): IcsEvent => ({
+  ...event,
+  organizer,
+  attendees: event.attendees?.filter((a) => !same(a.email, organizer.email)),
+});

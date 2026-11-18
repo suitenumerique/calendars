@@ -43,6 +43,7 @@ import {
   changeOrganizer,
   isOrganizerCopy,
   mergeAttendeeEdits,
+  organizeNewSeries,
   userAddresses,
 } from "./utils/organizerChange";
 
@@ -231,14 +232,20 @@ export const EventModal = ({
     return form.endDateTime < form.startDateTime;
   }, [form.startDateTime, form.endDateTime]);
 
+  const toSavedEvent = (option?: RecurringEditOption): IcsEvent => {
+    const formEvent = form.toIcsEvent();
+    if (!organizer) return formEvent;
+    // A "future" edit does not move the meeting. It makes a new series in
+    // the selected calendar.
+    if (option === "future" && changesOrganizer) return organizeNewSeries(formEvent, organizer);
+    const previous = event?.attendees?.length ? event.organizer : undefined;
+    return changeOrganizer(formEvent, organizer, previous);
+  };
+
   const doSave = async (option?: RecurringEditOption) => {
     setIsLoading(true);
     try {
-      const formEvent = form.toIcsEvent();
-      const previous = event?.attendees?.length ? event.organizer : undefined;
-      const icsEvent = organizer ? changeOrganizer(formEvent, organizer, previous) : formEvent;
-
-      await onSave(icsEvent, form.selectedCalendarUrl, option);
+      await onSave(toSavedEvent(option), form.selectedCalendarUrl, option);
       onClose();
     } catch (error) {
       console.error("Failed to save event:", error);
