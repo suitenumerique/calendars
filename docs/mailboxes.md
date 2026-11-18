@@ -305,6 +305,10 @@ across all principals matching the organizer email (both
 `principals/users/` and `principals/mailboxes/`) and updates the
 attendee's PARTSTAT atomically — no namespace selection or retry needed.
 
+The internal API only takes an event that this email organizes. After a
+move of the meeting to another organizer, a link from an earlier email
+shows that the event no longer exists.
+
 ## Internal API Endpoints (CalDAV side)
 
 All in `InternalApiPlugin.php`. Authenticated via `X-LS-Internal-Api-Key`.
