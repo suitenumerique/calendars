@@ -102,6 +102,8 @@ class SetupView(APIView):
         if mailbox_email:
             try:
                 sync_mailbox_task.delay(mailbox_email)
-            except Exception:  # pylint: disable=broad-exception-caught
-                logger.exception("Failed to enqueue the sync of %s", mailbox_email)
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.exception(
+                    "Failed to enqueue the sync of %s", mailbox_email, exc_info=exc
+                )
         return Response(result, status=status.HTTP_201_CREATED)
