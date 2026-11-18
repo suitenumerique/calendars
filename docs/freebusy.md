@@ -242,10 +242,13 @@ Hiding a calendar (`LS:calendar-hidden`, see
 whether it contributes to free/busy. Only this property controls
 availability.
 
+Calendars you own start opaque. Calendars shared with you start
+transparent. For mailbox calendars, see [mailboxes.md](mailboxes.md).
+
 ### UI
 
 The "Include in availability" checkbox in the calendar edit modal
-toggles this property via PROPPATCH. Default is checked (opaque).
+toggles this property via PROPPATCH.
 
 Apple Calendar exposes this as "Show in availability" in calendar
 settings. Thunderbird and DAVx5 also support it natively.

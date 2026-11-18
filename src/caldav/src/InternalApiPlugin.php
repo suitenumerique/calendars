@@ -650,12 +650,15 @@ class InternalApiPlugin extends ServerPlugin
      *   "org_id": "...",                       (required)
      *   "name": "Contact Team",               (optional, defaults to email)
      *   "color": "#dc3545",                   (optional, defaults to #3788d8)
-     *   "caller_email": "alice@co",           (optional) When set and
-     *       different from ``email``, an additional sharee instance for
-     *       the caller is inserted with read-write access and the
-     *       chosen ``color``. Used by the mailbox setup flow so the
-     *       caller sees the new calendar with their picked color
-     *       immediately, without waiting for sync-mailbox-acls.
+     *   "caller_email": "alice@co",           (optional) For a MAILBOX
+     *       calendar, a read-write sharee instance is created for this
+     *       user with the chosen ``color``, also when the user email is
+     *       the mailbox email. The user sees the calendar immediately,
+     *       without a sync. An INDIVIDUAL calendar ignores this field.
+     *   "caller_transparent": true,           (optional, defaults to false)
+     *       Must be a boolean; null is invalid. When true, the sharee
+     *       instance of ``caller_email`` starts transparent. It has no
+     *       effect on an INDIVIDUAL calendar.
      * }
      */
     private function handleCreateCalendar($request, $response)
@@ -692,6 +695,17 @@ class InternalApiPlugin extends ServerPlugin
         $callerEmail = $body['caller_email'] ?? null;
         if ($callerEmail === '') {
             $callerEmail = null;
+        }
+        $callerTransparent = array_key_exists('caller_transparent', $body)
+            ? $body['caller_transparent']
+            : false;
+        if (!is_bool($callerTransparent)) {
+            $response->setStatus(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode([
+                'error' => 'Invalid field: caller_transparent (must be boolean)',
+            ]));
+            return false;
         }
         $isMailbox = ($calendarUserType === PrincipalBackend::TYPE_MAILBOX);
         $principalUri = ($isMailbox ? 'principals/mailboxes/' : 'principals/users/') . $email;
@@ -768,7 +782,7 @@ class InternalApiPlugin extends ServerPlugin
                     . ' (calendarid, principaluri, access, uri, displayname,'
                     . '  calendarcolor, share_href, share_displayname,'
                     . '  share_invitestatus, transparent, is_sync_managed)'
-                    . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 0, TRUE)'
+                    . ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, ?, TRUE)'
                 );
                 $sharee->execute([
                     $calendarId,
@@ -779,6 +793,7 @@ class InternalApiPlugin extends ServerPlugin
                     $color,
                     'mailto:' . $callerEmail,
                     $callerEmail,
+                    $callerTransparent ? 1 : 0,
                 ]);
             }
 
@@ -932,7 +947,7 @@ class InternalApiPlugin extends ServerPlugin
      *     {"user_email": "alice@co", "mailbox_email": "contact@co",
      *      "privilege": "read-write"},
      *     {"user_email": "bob@co", "mailbox_email": "contact@co",
-     *      "privilege": "read"}
+     *      "privilege": "read", "transparent": true}
      *   ],
      *   "full_sync_users": ["alice@co"]
      * }
@@ -943,6 +958,10 @@ class InternalApiPlugin extends ServerPlugin
      * calendars (the second create allocates a UUID URI), and Messages
      * tracks access per mailbox — not per calendar — so the share
      * naturally applies to all of them.
+     *
+     * "transparent" is optional and defaults to false. It must be a
+     * boolean; null is invalid. It applies only when the sync creates
+     * the instance.
      *
      * "shares" is a flat list of all desired sync-managed shares.
      * "full_sync_users" lists users whose stale shares should be removed
@@ -1001,6 +1020,15 @@ class InternalApiPlugin extends ServerPlugin
                     ]));
                     return false;
                 }
+            }
+            if (array_key_exists('transparent', $share)
+                && !is_bool($share['transparent'])) {
+                $response->setStatus(400);
+                $response->setHeader('Content-Type', 'application/json');
+                $response->setBody(json_encode([
+                    'error' => "shares[$i] invalid transparent: must be boolean",
+                ]));
+                return false;
             }
             if (!in_array($share['privilege'], ['read', 'read-write'], true)) {
                 $response->setStatus(400);
@@ -1118,6 +1146,7 @@ class InternalApiPlugin extends ServerPlugin
                         'share_href' => 'mailto:' . $userEmail,
                         'share_displayname' => $userEmail,
                         'color' => '#3788d8',
+                        'transparent' => ($share['transparent'] ?? false) ? 1 : 0,
                     ];
                     $active[] = [
                         'user_email' => $userEmail,
@@ -1128,12 +1157,14 @@ class InternalApiPlugin extends ServerPlugin
                 }
             }
 
-            // 5. Prepare upsert statement (reused across all users)
+            // 5. Prepare upsert statement (reused across all users).
+            // The update does not touch the color and ``transparent``,
+            // so the choices of the user stay.
             $upsertStmt = $this->pdo->prepare(
                 'INSERT INTO calendarinstances '
                 . '(calendarid, principaluri, access, uri, displayname, calendarcolor, '
                 . 'share_href, share_displayname, share_invitestatus, transparent, is_sync_managed) '
-                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, 0, TRUE) '
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, 2, ?, TRUE) '
                 . 'ON CONFLICT (principaluri, calendarid) '
                 . 'DO UPDATE SET access = EXCLUDED.access, share_href = EXCLUDED.share_href, '
                 . 'is_sync_managed = TRUE'
@@ -1159,6 +1190,7 @@ class InternalApiPlugin extends ServerPlugin
                         $calendarId, $principal, $d['access'], UUIDUtil::getUUID(),
                         $d['displayname'], $d['color'],
                         $d['share_href'], $d['share_displayname'],
+                        $d['transparent'],
                     ]);
                 }
 
