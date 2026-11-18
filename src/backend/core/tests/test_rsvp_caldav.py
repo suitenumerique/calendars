@@ -92,25 +92,25 @@ class TestRSVPDoesNotRestoreEvents:
         self.path = f"{caldav_path}{self.uid}.ics"
         self.start = (timezone.now() + timedelta(days=7)).replace(microsecond=0)
 
-    def _vevent(self, start, *extra, attendee=True):
+    def _vevent(self, start, *extra, attendee=True, organizer=None):
         lines = [
             f"UID:{self.uid}",
             f"DTSTART:{_fmt(start)}",
             f"DTEND:{_fmt(start + timedelta(hours=1))}",
             "SUMMARY:RSVP guard",
-            f"ORGANIZER:mailto:{self.organizer.email}",
+            f"ORGANIZER:mailto:{organizer or self.organizer.email}",
             *extra,
         ]
         if attendee:
             lines.append(f"ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{ATTENDEE}")
         return lines
 
-    def _caldav(self, method, ics=None):
+    def _caldav(self, method, ics=None, path=None):
         """Send a raw request, so SabreDAV keeps the VEVENT order as written."""
         return CalDAVHTTPClient().request(
             method,
             self.organizer,
-            self.path,
+            path or self.path,
             data=ics.encode() if ics else None,
             content_type="text/calendar" if ics else None,
         )
@@ -157,6 +157,34 @@ class TestRSVPDoesNotRestoreEvents:
         assert response.status_code == 400
         assert "not listed as an attendee" in response.content.decode()
         assert _state(self._caldav("GET").text) == ("", None)
+
+    def test_event_of_another_organizer_is_not_updated(self):
+        """The user of the link can own a guest copy of the meeting, for
+        example after a move to a calendar with another identity."""
+        copy = self._vevent(self.start, organizer="other-organizer@example.com")
+        assert self._caldav("PUT", _ics(copy)).status_code == 201
+
+        response = self._rsvp()
+
+        assert response.status_code == 400
+        assert "no longer exists" in response.content.decode()
+        assert _state(self._caldav("GET").text) == ("", "NEEDS-ACTION")
+
+    def test_reply_goes_to_the_event_that_the_user_organizes(self):
+        """The user of the link owns a guest copy and the meeting itself,
+        with the same UID."""
+        copy = self._vevent(self.start, organizer="other-organizer@example.com")
+        assert self._caldav("PUT", _ics(copy)).status_code == 201
+        other = CalendarService().create_calendar(self.organizer, name="Other")
+        path = f"{other}{self.uid}.ics"
+        meeting = _ics(self._vevent(self.start))
+        assert self._caldav("PUT", meeting, path).status_code == 201
+
+        response = self._rsvp()
+
+        assert response.status_code == 200
+        assert _state(self._caldav("GET", path=path).text) == ("", "ACCEPTED")
+        assert _state(self._caldav("GET").text) == ("", "NEEDS-ACTION")
 
     def test_cancelled_occurrence_stays_cancelled(self):
         cancelled = self.start + timedelta(days=1)
