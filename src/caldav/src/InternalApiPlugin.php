@@ -658,15 +658,15 @@ class InternalApiPlugin extends ServerPlugin
      *   "org_id": "...",                       (required)
      *   "name": "Contact Team",               (optional, defaults to email)
      *   "color": "#dc3545",                   (optional, defaults to #3788d8)
-     *   "caller_email": "alice@co",           (optional) When set and
-     *       different from ``email``, an additional sharee instance for
-     *       the caller is inserted with read-write access and the
-     *       chosen ``color``. Used by the mailbox setup flow so the
-     *       caller sees the new calendar with their picked color
-     *       immediately, without waiting for sync-mailbox-acls.
+     *   "caller_email": "alice@co",           (optional) For a MAILBOX
+     *       calendar, a read-write sharee instance is created for this
+     *       user with the chosen ``color``, also when the user email is
+     *       the mailbox email. The user sees the calendar immediately,
+     *       without a sync. An INDIVIDUAL calendar ignores this field.
      *   "caller_transparent": true,           (optional, defaults to false)
-     *       When true, the caller instance starts transparent: its
-     *       events do not make the caller busy.
+     *       Must be a boolean; null is invalid. When true, the sharee
+     *       instance of ``caller_email`` starts transparent. It has no
+     *       effect on an INDIVIDUAL calendar.
      * }
      */
     private function handleCreateCalendar($request, $response)
@@ -967,10 +967,9 @@ class InternalApiPlugin extends ServerPlugin
      * tracks access per mailbox — not per calendar — so the share
      * naturally applies to all of them.
      *
-     * "transparent" is optional and defaults to false. When true, a new
-     * instance starts transparent: its events do not make the user busy.
-     * The sync never changes the transparency of an existing instance,
-     * so the choice of the user stays.
+     * "transparent" is optional and defaults to false. It must be a
+     * boolean; null is invalid. It applies only when the sync creates
+     * the instance.
      *
      * "shares" is a flat list of all desired sync-managed shares.
      * "full_sync_users" lists users whose stale shares should be removed
@@ -1167,8 +1166,8 @@ class InternalApiPlugin extends ServerPlugin
             }
 
             // 5. Prepare upsert statement (reused across all users).
-            // The update does not touch ``transparent``, so the choice
-            // of the user stays.
+            // The update does not touch the color and ``transparent``,
+            // so the choices of the user stay.
             $upsertStmt = $this->pdo->prepare(
                 'INSERT INTO calendarinstances '
                 . '(calendarid, principaluri, access, uri, displayname, calendarcolor, '

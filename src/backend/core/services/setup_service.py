@@ -106,19 +106,17 @@ class MailboxOrgUnresolvedError(SetupServiceError):
 
 
 def _starts_transparent(user_email, mailbox):
-    """Return True when the mailbox calendar of a user starts transparent.
+    """Return True when a new mailbox instance of a user starts transparent.
 
-    A transparent calendar does not make the user busy. The events of a
-    person's mailbox make its owner busy, but not its delegates.
-
-    In Messages, the owner of a person's mailbox (``is_identity`` is True)
-    is the user with the email of the mailbox. A mailbox that is not a
-    person can be a team mailbox or an alias of a person. Messages does
-    not tell which, so this mailbox starts opaque.
+    Only a delegate of a person's mailbox starts transparent. The user can
+    change the value later. The owner is the user with the mailbox email.
+    Other mailboxes start opaque, because Messages does not tell a team
+    mailbox from an alias of a person.
     """
-    if user_email.lower() == mailbox.get("email", "").lower():
-        return False
-    return mailbox.get("is_identity") is True
+    return (
+        user_email.lower() != mailbox.get("email", "").lower()
+        and mailbox.get("is_identity") is True
+    )
 
 
 def _resolve_mailbox_org_id(mailbox_data):
