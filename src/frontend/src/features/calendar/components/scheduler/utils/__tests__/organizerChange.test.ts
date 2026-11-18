@@ -6,6 +6,7 @@ import {
   changeOrganizer,
   isOrganizerCopy,
   mergeAttendeeEdits,
+  organizeNewSeries,
   userAddresses,
 } from "../organizerChange";
 
@@ -73,6 +74,15 @@ describe("changeOrganizer", () => {
     expect(changed.attendees).toEqual([
       { email: "team@x.fr", name: undefined, partstat: "ACCEPTED" },
     ]);
+  });
+});
+
+describe("organizeNewSeries", () => {
+  it("does not make the previous organizer an attendee", () => {
+    const event = meeting("me@x.fr", "ext@y.fr", "TEAM@x.fr");
+    const series = organizeNewSeries(event, { email: "team@x.fr" });
+    expect(series.organizer).toEqual({ email: "team@x.fr" });
+    expect(series.attendees).toEqual([{ email: "ext@y.fr", partstat: "NEEDS-ACTION" }]);
   });
 });
 
