@@ -11,6 +11,7 @@ import {
 } from "@gouvfr-lasuite/ui-components";
 import { CalendarSelect } from "./CalendarSelect";
 import { useAuth } from "@/features/auth/Auth";
+import { useCalendarContext } from "@/features/calendar/contexts";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
 import { DeleteEventModal } from "./DeleteEventModal";
 import { RecurringEditModal } from "./RecurringEditModal";
@@ -33,10 +34,17 @@ import { FeatureFlag, useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { SectionRow } from "./event-modal-sections/SectionRow";
 import { Meet, Pin, Calendar, Edit, Lock } from "@gouvfr-lasuite/ui-components/icons";
 
-import type { IcsEvent, IcsOrganizer } from "ts-ics";
+import type { IcsAttendee, IcsEvent, IcsOrganizer } from "ts-ics";
 
 import type { EventModalProps, RecurringDeleteOption, RecurringEditOption } from "./types";
 import { getDefaultCalendar } from "@/features/calendar/utils/calendar-order";
+import {
+  changeAttendees,
+  changeOrganizer,
+  isOrganizerCopy,
+  mergeAttendeeEdits,
+  userAddresses,
+} from "./utils/organizerChange";
 
 export const EventModal = ({
   isOpen,
@@ -52,6 +60,7 @@ export const EventModal = ({
 }: EventModalProps) => {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { hiddenCalendars } = useCalendarContext();
   const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -92,18 +101,42 @@ export const EventModal = ({
     availableResources,
   });
 
-  // Organizer that tracks the *currently selected* calendar in the
-  // dropdown — this is what gets written into the ICS on save and
-  // shown in the attendees section.  When the user switches from a
-  // personal calendar to a mailbox calendar the ORGANIZER must
-  // become the mailbox email so SabreDAV sets X-LS-Is-Mailbox and
-  // Django routes the invitation through the Messages API.
+  const mailboxOf = (url: string | undefined): string | undefined =>
+    url ? calendars.find((c) => c.url === url)?.mailboxEmail : undefined;
+  const identityOf = (url: string | undefined): string | undefined => mailboxOf(url) ?? user?.email;
+  const selectedMailbox = mailboxOf(form.selectedCalendarUrl);
+  const sourceIdentity = identityOf(calendarUrl);
+  const selectedIdentity = selectedMailbox ?? user?.email;
+
+  // A guest copy can only move to a calendar with the same identity. An
+  // event without attendees is not a guest copy.
+  const isOrganizer =
+    mode !== "edit" ||
+    !event?.attendees?.length ||
+    isOrganizerCopy(
+      event,
+      sourceIdentity,
+      userAddresses(user?.email, [...calendars, ...hiddenCalendars]),
+    );
+  const selectableCalendars = isOrganizer
+    ? calendars
+    : calendars.filter((c) => identityOf(c.url)?.toLowerCase() === sourceIdentity?.toLowerCase());
+
+  // An event can be in a calendar with another identity than its
+  // organizer. A move to the calendar of this organizer changes nothing.
+  const changesOrganizer =
+    mode === "edit" &&
+    isOrganizer &&
+    selectedIdentity?.toLowerCase() !== sourceIdentity?.toLowerCase() &&
+    selectedIdentity?.toLowerCase() !== event?.organizer?.email?.toLowerCase();
+
+  // Organizer of the identity of the selected calendar. For a new event,
+  // a mailbox calendar makes the mailbox the organizer, so that Django
+  // sends the invitation through Messages. A move of a meeting to a
+  // calendar with another identity changes the organizer.
   const organizer: IcsOrganizer | undefined = useMemo(() => {
-    if (event?.organizer) return event.organizer;
-    const mbxEmail = form.selectedCalendarUrl
-      ? calendars.find((c) => c.url === form.selectedCalendarUrl)?.mailboxEmail
-      : undefined;
-    if (mbxEmail) return { email: mbxEmail, name: mbxEmail.split("@")[0] };
+    if (event?.organizer && !changesOrganizer) return event.organizer;
+    if (selectedMailbox) return { email: selectedMailbox, name: selectedMailbox.split("@")[0] };
     if (user?.email) {
       return {
         email: user.email,
@@ -111,7 +144,24 @@ export const EventModal = ({
       };
     }
     return undefined;
-  }, [event?.organizer, form.selectedCalendarUrl, calendars, user]);
+  }, [event?.organizer, changesOrganizer, selectedMailbox, user]);
+
+  // A meeting keeps its previous organizer as a guest, as the server
+  // does. This depends on the stored meeting, not on the guests left in
+  // the form. The guest list shows the attendees as the save writes them,
+  // and the user cannot remove the previous organizer.
+  const previousOrganizer =
+    changesOrganizer && event?.attendees?.length ? event.organizer : undefined;
+  const shownAttendees =
+    previousOrganizer && organizer
+      ? changeAttendees(form.attendees, organizer, previousOrganizer)
+      : form.attendees;
+  const setShownAttendees = (attendees: IcsAttendee[]) =>
+    form.setAttendees(
+      previousOrganizer && organizer
+        ? mergeAttendeeEdits(attendees, form.attendees, organizer, previousOrganizer)
+        : attendees,
+    );
 
   // Defensive fallback to keep a valid selection when the caller did
   // not pass one (e.g. "new event" from a context with no default
@@ -184,16 +234,9 @@ export const EventModal = ({
   const doSave = async (option?: RecurringEditOption) => {
     setIsLoading(true);
     try {
-      const icsEvent = form.toIcsEvent();
-
-      // Override organizer with the one matching the currently
-      // selected calendar (may differ from the initial prop).
-      if (organizer) {
-        icsEvent.organizer = {
-          email: organizer.email,
-          name: organizer.name,
-        };
-      }
+      const formEvent = form.toIcsEvent();
+      const previous = event?.attendees?.length ? event.organizer : undefined;
+      const icsEvent = organizer ? changeOrganizer(formEvent, organizer, previous) : formEvent;
 
       await onSave(icsEvent, form.selectedCalendarUrl, option);
       onClose();
@@ -413,11 +456,19 @@ export const EventModal = ({
           </SectionRow>
           <SectionRow icon={<Calendar />} label={t("calendar.event.calendar")} alwaysOpen={true}>
             <CalendarSelect
-              calendars={calendars}
+              calendars={selectableCalendars}
               value={form.selectedCalendarUrl}
               onChange={form.setSelectedCalendarUrl}
             />
           </SectionRow>
+          {previousOrganizer && organizer && (
+            <p className="event-modal__note">
+              {t("calendar.event.organizerChange", {
+                organizer: organizer.email,
+                previous: previousOrganizer.email,
+              })}
+            </p>
+          )}
           <DateTimeSection
             startDateTime={form.startDateTime}
             endDateTime={form.endDateTime}
@@ -462,10 +513,11 @@ export const EventModal = ({
           {form.isSectionExpanded("attendees") && (
             <>
               <AttendeesSection
-                attendees={form.attendees}
-                onChange={form.setAttendees}
+                attendees={shownAttendees}
+                onChange={setShownAttendees}
                 organizerEmail={organizer?.email ?? user?.email}
                 organizer={organizer}
+                lockedEmail={previousOrganizer?.email}
                 onPendingInvalidChange={setAttendeesPendingInvalid}
                 alwaysOpen
               />
