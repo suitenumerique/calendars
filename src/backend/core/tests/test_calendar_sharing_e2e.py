@@ -21,6 +21,7 @@ from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.models import Organization
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
+from core.services.setup_service import SetupService
 
 pytestmark = [
     pytest.mark.django_db,
@@ -4380,6 +4381,48 @@ class TestMailboxCalendarTransparency:
         assert _is_busy(_freebusy_of(q_client, querier.email, creator.email)) is (
             not transparent
         )
+
+    def test_delegate_is_free_and_owner_is_busy(self, settings):
+        """Bob owns his mailbox, and Alice is his delegate.
+
+        The setup and the syncs use the Messages data. The events of the
+        mailbox make Bob busy, but not Alice.
+        """
+        settings.FEATURE_MESSAGES_INTEGRATION = True
+        domain = "transp-person.com"
+        org = factories.OrganizationFactory(external_id=domain)
+        users = []
+        for name in ("bob", "alice", "querier"):
+            user = factories.UserFactory(email=f"{name}@{domain}", organization=org)
+            CalendarService().create_calendar(user, name=name)
+            client = APIClient()
+            client.force_login(user)
+            users.append((user, client))
+        (bob, bob_client), (alice, _), (querier, q_client) = users
+
+        mailbox = {
+            "email": bob.email,
+            "is_identity": True,
+            "users": [
+                {"email": bob.email, "role": "admin"},
+                {"email": alice.email, "role": "sender"},
+            ],
+        }
+        roles = {bob.email: "admin", alice.email: "sender"}
+        service = SetupService()
+        service._messages = mock.MagicMock()  # pylint: disable=protected-access
+        service.messages.get_user_mailboxes.side_effect = lambda email, **kwargs: [
+            {**mailbox, "role": roles[email]}
+        ]
+
+        result = service.setup(bob, "Bob", mailbox_email=bob.email)
+        for user in (bob, alice):
+            service.sync_user_mailboxes(user)
+
+        uri = result["calendar_path"].rsplit("/", maxsplit=1)[-1]
+        _put_event(bob_client, bob.email, uri, "person-ev")
+        assert _is_busy(_freebusy_of(q_client, querier.email, bob.email))
+        assert not _is_busy(_freebusy_of(q_client, querier.email, alice.email))
 
     @pytest.mark.parametrize("value", ["yes", None])
     def test_invalid_sync_flag_is_refused(self, value):
