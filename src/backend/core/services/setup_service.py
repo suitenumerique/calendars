@@ -96,19 +96,17 @@ class MailboxOrgUnresolvedError(SetupServiceError):
 
 
 def _starts_transparent(user_email, mailbox):
-    """Return True when the mailbox calendar of a user starts transparent.
+    """Return True when a new mailbox instance of a user starts transparent.
 
-    A transparent calendar does not make the user busy. The events of a
-    person's mailbox make its owner busy, but not its delegates.
-
-    In Messages, the owner of a person's mailbox (``is_identity`` is True)
-    is the user with the email of the mailbox. A mailbox that is not a
-    person can be a team mailbox or an alias of a person. Messages does
-    not tell which, so this mailbox starts opaque.
+    Only a delegate of a person's mailbox starts transparent. The user can
+    change the value later. The owner is the user with the mailbox email.
+    Other mailboxes start opaque, because Messages does not tell a team
+    mailbox from an alias of a person.
     """
-    if user_email.lower() == mailbox.get("email", "").lower():
-        return False
-    return mailbox.get("is_identity") is True
+    return (
+        user_email.lower() != mailbox.get("email", "").lower()
+        and mailbox.get("is_identity") is True
+    )
 
 
 def _resolve_mailbox_org_id(mailbox_data):
@@ -263,10 +261,8 @@ class SetupService:
         # path it builds is read by the caller.
         caller_calendar_uri = result.get("caller_calendar_uri", "default")
 
-        # Fan out to the rest of the mailbox users. The caller's sharee
-        # row already exists (with their picked color) thanks to
-        # caller_email above; sync_mailbox will leave it alone because
-        # ON CONFLICT only refreshes ``access``, not ``calendarcolor``.
+        # Share with the other mailbox users. The caller instance exists
+        # already. The sync keeps its color and transparency.
         self.sync_mailbox(user, mailbox_email, mailbox=user_mailbox)
 
         return {
@@ -401,8 +397,9 @@ class SetupService:
             caller: A user object for authenticating internal API calls.
             mailbox_email: The mailbox email to sync.
             mailbox: Optional Messages data of the mailbox, with its
-                     ``users`` list. If not provided, fetched from Messages
-                     via get_mailbox_by_email().
+                     ``email``, ``is_identity`` and ``users``. If not
+                     provided, fetched from Messages via
+                     get_mailbox_by_email().
 
         Returns:
             Number of shares synced.
