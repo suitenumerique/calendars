@@ -25,6 +25,8 @@ interface AttendeesInputProps {
   onChange: (attendees: IcsAttendee[]) => void;
   organizerEmail?: string;
   organizer?: IcsOrganizer;
+  /** Address of an attendee that the user cannot remove. */
+  lockedEmail?: string;
   /** Reports whether the input holds non-empty text that isn't a valid email. */
   onPendingInvalidChange?: (invalid: boolean) => void;
 }
@@ -34,6 +36,7 @@ export function AttendeesInput({
   onChange,
   organizerEmail,
   organizer,
+  lockedEmail,
   onPendingInvalidChange,
 }: AttendeesInputProps) {
   const { t } = useTranslation();
@@ -254,14 +257,16 @@ export function AttendeesInput({
           >
             {getPartstatIcon(attendee.partstat)}
             {attendee.email}
-            <button
-              type="button"
-              className="attendees-input__pill-remove"
-              onClick={() => removeAttendee(attendee.email)}
-              aria-label={t("calendar.attendees.remove")}
-            >
-              <XMark />
-            </button>
+            {attendee.email.toLowerCase() !== lockedEmail?.toLowerCase() && (
+              <button
+                type="button"
+                className="attendees-input__pill-remove"
+                onClick={() => removeAttendee(attendee.email)}
+                aria-label={t("calendar.attendees.remove")}
+              >
+                <XMark />
+              </button>
+            )}
           </Badge>
         ))}
       </div>
