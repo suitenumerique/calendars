@@ -4381,8 +4381,9 @@ class TestMailboxCalendarTransparency:
             not transparent
         )
 
-    def test_invalid_flag_is_refused(self):
-        """The flag must be a boolean."""
+    @pytest.mark.parametrize("value", ["yes", None])
+    def test_invalid_sync_flag_is_refused(self, value):
+        """The sync flag must be a boolean when it is present."""
         org = factories.OrganizationFactory(external_id="transp-invalid")
         user, _, _ = _create_user_with_calendar(org, "transp-invalid")
 
@@ -4396,9 +4397,33 @@ class TestMailboxCalendarTransparency:
                         "user_email": user.email,
                         "mailbox_email": "team@transp-invalid.com",
                         "privilege": "read",
-                        "transparent": "yes",
+                        "transparent": value,
                     }
                 ]
+            },
+        )
+
+        assert resp.status_code == 400
+
+    @pytest.mark.parametrize("value", ["yes", None])
+    def test_invalid_create_flag_is_refused(self, value):
+        """The creation flag must be a boolean when it is present."""
+        org = factories.OrganizationFactory(external_id="transp-invalid-create")
+        mailbox_org = factories.OrganizationFactory(
+            external_id="transp-invalid-create.com"
+        )
+        user, _, _ = _create_user_with_calendar(org, "transp-invalid-create")
+
+        resp = http.internal_request(
+            "POST",
+            user,
+            "internal-api/calendars/",
+            json={
+                "email": "team@transp-invalid-create.com",
+                "calendar_user_type": "MAILBOX",
+                "org_id": str(mailbox_org.id),
+                "caller_email": user.email,
+                "caller_transparent": value,
             },
         )
 

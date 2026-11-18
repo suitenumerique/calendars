@@ -696,7 +696,9 @@ class InternalApiPlugin extends ServerPlugin
         if ($callerEmail === '') {
             $callerEmail = null;
         }
-        $callerTransparent = $body['caller_transparent'] ?? false;
+        $callerTransparent = array_key_exists('caller_transparent', $body)
+            ? $body['caller_transparent']
+            : false;
         if (!is_bool($callerTransparent)) {
             $response->setStatus(400);
             $response->setHeader('Content-Type', 'application/json');
@@ -1020,7 +1022,8 @@ class InternalApiPlugin extends ServerPlugin
                     return false;
                 }
             }
-            if (!is_bool($share['transparent'] ?? false)) {
+            if (array_key_exists('transparent', $share)
+                && !is_bool($share['transparent'])) {
                 $response->setStatus(400);
                 $response->setHeader('Content-Type', 'application/json');
                 $response->setBody(json_encode([
