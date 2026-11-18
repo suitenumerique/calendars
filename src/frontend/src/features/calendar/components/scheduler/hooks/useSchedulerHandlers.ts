@@ -479,11 +479,11 @@ export const useSchedulerHandlers = ({
 
         const sourceCalendarUrl = getCalendarUrlFromEventUrl(modalState.eventUrl);
 
-        // Calendar change: WebDAV MOVE relocates the resource without firing
-        // iTIP (Sabre's Schedule plugin skips it on MOVE), so attendees don't
-        // get spurious REQUEST/CANCEL emails. Then a normal PUT at the new
-        // URL applies any content edits — iTIP dispatches only on a
-        // significant change, as it would for any in-place edit.
+        // Calendar change: WebDAV MOVE relocates the resource. A move to a
+        // calendar with another identity transfers the meeting, and the
+        // server sends the update to the guests. A move with the same
+        // identity sends nothing. Then a PUT at the new URL applies the
+        // content edits.
         let updateUrl = modalState.eventUrl;
         let updateEtag = etag;
         if (sourceCalendarUrl !== targetCalendarUrl) {
@@ -497,8 +497,30 @@ export const useSchedulerHandlers = ({
             throw new Error(moveResult.error || "Failed to move event");
           }
 
+          // The server can change the organizer of all the occurrences.
+          // Read the moved event so the PUT keeps these changes.
           updateUrl = moveResult.data.url;
-          updateEtag = moveResult.data.etag;
+          const moved = await caldavService.fetchEvent(updateUrl);
+          if (!moved.success || !moved.data) {
+            calendarRef.current?.refetchEvents();
+            throw new Error(moved.error || "Failed to read the moved event");
+          }
+          // Another edit between the MOVE and the GET changes the ETag.
+          // Then stop, so that the PUT does not overwrite it.
+          if (moveResult.data.etag && moved.data.etag !== moveResult.data.etag) {
+            calendarRef.current?.refetchEvents();
+            throw new Error("The moved event changed during the save");
+          }
+          updateEtag = moved.data.etag;
+
+          // The move can raise the SEQUENCE. The PUT must send a higher one.
+          const movedMaster = moved.data.data.events?.find(
+            (e) => e.uid === event.uid && !e.recurrenceId,
+          );
+          eventToUpdate = {
+            ...eventToUpdate,
+            sequence: movedMaster?.sequence ?? eventToUpdate.sequence,
+          };
         }
 
         const result = await caldavService.updateEvent({
