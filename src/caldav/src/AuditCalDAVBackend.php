@@ -3,8 +3,8 @@
  * AuditCalDAVBackend - Extends SabreDAV's PDO backend with audit columns.
  *
  * Tracks channel_id, created_by, modified_by, created_at, and modified_by_at
- * on calendarobjects. Context is injected by AuditContextPlugin before each
- * write via setCurrentPrincipal() and setCurrentChannelId().
+ * on calendarobjects. AuditContextPlugin sets the context once for each
+ * request with setCurrentPrincipal() and setCurrentChannelId().
  *
  * Overrides createCalendarObject/updateCalendarObject to include audit
  * columns directly in the INSERT/UPDATE statement (single query).

@@ -598,6 +598,11 @@ class InternalApiPlugin extends ServerPlugin
             $updated = $vcalendar->serialize();
             $summary = isset($vevent->SUMMARY) ? (string) $vevent->SUMMARY : '';
 
+            // The request authenticates as the organizer, but the attendee
+            // makes this change.
+            if ($this->caldavBackend instanceof AuditCalDAVBackend) {
+                $this->caldavBackend->setCurrentPrincipal($attendeeEmail);
+            }
             $this->caldavBackend->updateCalendarObject(
                 [(int) $row['calendarid'], (int) $row['instanceid']],
                 $row['event_uri'],
@@ -1274,19 +1279,6 @@ class InternalApiPlugin extends ServerPlugin
         // at 100 so a hostile import can't blow up the response.
         $filteredTitles = [];
         $errors = [];
-
-        // Set audit context once before the import loop. Reuses the
-        // X-LS-User auth header so the audit principal can never drift
-        // from the authenticated principal (same contract as
-        // AuditContextPlugin for the regular write path).
-        if ($this->caldavBackend instanceof AuditCalDAVBackend) {
-            $user = $request->getHeader('X-LS-User');
-            if ($user) {
-                $this->caldavBackend->setCurrentPrincipal($user);
-            }
-            $channelId = $request->getHeader('X-LS-Channel-Id');
-            $this->caldavBackend->setCurrentChannelId($channelId ?: null);
-        }
 
         try {
             while ($splitVcal = $splitter->getNext()) {

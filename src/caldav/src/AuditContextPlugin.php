@@ -2,9 +2,11 @@
 /**
  * AuditContextPlugin - Injects principal and channel context into the backend.
  *
- * Hooks beforeCreateFile and beforeWriteContent at priority 70 (before
- * CalendarSanitizerPlugin at 85 and AttendeeNormalizerPlugin at 90) so
- * that the audit context is available when the backend write happens.
+ * The context belongs to the request, not to one write. The plugin sets
+ * it once, on beforeMethod:* at priority 15, after the authentication
+ * (10). Thus each backend write of the request has the context. This
+ * includes the writes that emit no beforeCreateFile or beforeWriteContent:
+ * a MOVE, a write by another plugin, a write by the internal API.
  *
  * Reads:
  *   X-LS-User header → setCurrentPrincipal()
@@ -44,16 +46,12 @@ class AuditContextPlugin extends ServerPlugin
     {
         $this->server = $server;
 
-        // Priority 70: before sanitizer (85), normalizer (90), and CalDAV (100+)
-        $server->on('beforeCreateFile', [$this, 'injectContext'], 70);
-        $server->on('beforeWriteContent', [$this, 'injectContext'], 70);
+        // Priority 15: after the authentication (10), before all the writes.
+        $server->on('beforeMethod:*', [$this, 'injectContext'], 15);
     }
 
     /**
      * Inject audit context from HTTP headers into the backend.
-     *
-     * Accepts variable arguments because beforeCreateFile and
-     * beforeWriteContent have different signatures.
      */
     public function injectContext(): void
     {

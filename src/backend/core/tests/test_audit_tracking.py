@@ -389,6 +389,16 @@ def _get_cal_id(caldav_path):
     return parts[-1] if len(parts) >= 4 else "default"
 
 
+def _audit_columns(caldav_db, uid):
+    """Return created_by and modified_by of the stored events with the UID."""
+    with caldav_db.cursor() as cur:
+        cur.execute(
+            "SELECT created_by, modified_by FROM calendarobjects WHERE uid = %s",
+            [uid],
+        )
+        return cur.fetchall()
+
+
 @pytest.mark.xdist_group("caldav")
 class TestAuditTrackingE2E:
     """E2E: verify audit columns are set by SabreDAV and queryable."""
@@ -695,6 +705,81 @@ class TestAuditTrackingE2E:
         events = chan_service.list_events(user, str(channel.pk))
         uids = [e["uid"] for e in events]
         assert import_uid in uids
+        assert [e["created_by"] for e in events] == [user.email]
+
+    def test_move_sets_the_user_on_the_moved_event(self, caldav_db):
+        """A MOVE makes a new row in the destination calendar, and emits no
+        write event. The new row has the user that moves the event."""
+        user = factories.UserFactory(
+            email=f"audit-move-{uuid.uuid4().hex[:8]}@test.com"
+        )
+        client = APIClient()
+        client.force_login(user)
+        service = CalendarService()
+        source = service.create_calendar(user, name="Source")
+        destination = service.create_calendar(user, name="Destination")
+        uid = f"audit-move-{uuid.uuid4()}"
+        resp = _put_event(client, user.email, _get_cal_id(source), uid)
+        assert resp.status_code == 201, resp.content
+
+        http = CalDAVHTTPClient()
+        resp = http.request(
+            "MOVE",
+            user,
+            f"{source}{uid}.ics",
+            extra_headers={"Destination": http.build_url(f"{destination}{uid}.ics")},
+        )
+        assert resp.status_code == 201, resp.text
+
+        assert _audit_columns(caldav_db, uid) == [(user.email, user.email)]
+
+    def test_rsvp_sets_the_attendee_as_modifier(self, caldav_db):
+        """The RSVP request authenticates as the organizer, but the attendee
+        makes the change."""
+        organizer = factories.UserFactory(
+            email=f"audit-rsvp-{uuid.uuid4().hex[:8]}@test.com"
+        )
+        attendee = "guest@external.test"
+        caldav_path = CalendarService().create_calendar(organizer, name="RSVP")
+        uid = f"audit-rsvp-{uuid.uuid4()}"
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Audit//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            "DTSTART:20990601T100000Z\r\n"
+            "DTEND:20990601T110000Z\r\n"
+            "SUMMARY:audit RSVP test\r\n"
+            f"ORGANIZER:mailto:{organizer.email}\r\n"
+            f"ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{attendee}\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        http = CalDAVHTTPClient()
+        resp = http.request(
+            "PUT",
+            organizer,
+            f"{caldav_path}{uid}.ics",
+            data=ical.encode(),
+            content_type="text/calendar",
+        )
+        assert resp.status_code == 201, resp.text
+
+        resp = http.internal_request(
+            "POST",
+            organizer,
+            "internal-api/rsvp/",
+            json={
+                "organizer_email": organizer.email,
+                "uid": uid,
+                "attendee_email": attendee,
+                "partstat": "ACCEPTED",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+
+        assert _audit_columns(caldav_db, uid) == [(organizer.email, attendee)]
 
     def test_channel_events_delete_only_removes_own_events(self):
         """DELETE removes one channel's events without touching another's."""
