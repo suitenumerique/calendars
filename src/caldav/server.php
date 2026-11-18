@@ -20,6 +20,7 @@ use Calendars\SabreDav\ResourceAutoSchedulePlugin;
 use Calendars\SabreDav\FreeBusyOrgScopePlugin;
 use Calendars\SabreDav\SharedCalendarPrivacyPlugin;
 use Calendars\SabreDav\MailboxPlugin;
+use Calendars\SabreDav\MailboxSchedulePlugin;
 use Calendars\SabreDav\ShareAccessPlugin;
 use Calendars\SabreDav\HiddenCalendarPlugin;
 use Calendars\SabreDav\AvailabilityPlugin;
@@ -365,9 +366,7 @@ $server->addPlugin(new FreeBusyOrgScopePlugin($pdo));
 
 // Add CalDAV scheduling support
 // See https://sabre.io/dav/scheduling/
-// NOTE: MailboxPlugin (registered above) runs propFind at priority 80 to inject
-// mailbox emails into calendar-user-address-set before Schedule\Plugin (100).
-$schedulePlugin = new CalDAV\Schedule\Plugin();
+$schedulePlugin = new MailboxSchedulePlugin();
 $server->addPlugin($schedulePlugin);
 
 // Resource principal management: auto-scheduling + MKCALENDAR blocking

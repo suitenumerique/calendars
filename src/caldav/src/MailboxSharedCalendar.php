@@ -50,4 +50,19 @@ class MailboxSharedCalendar extends SharedCalendar
 
         return $acl;
     }
+
+    /**
+     * Returns the email of the mailbox that owns the calendar.
+     */
+    public function getMailboxEmail(): ?string
+    {
+        $prefix = 'principals/mailboxes/';
+        foreach ($this->getInvites() as $sharee) {
+            if ($sharee->access === SPlugin::ACCESS_SHAREDOWNER
+                && str_starts_with($sharee->principal, $prefix)) {
+                return substr($sharee->principal, strlen($prefix));
+            }
+        }
+        return null;
+    }
 }

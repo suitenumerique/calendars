@@ -7,8 +7,10 @@
  *
  * 1. **Address injection**: Users with read-write access to a MAILBOX
  *    calendar get the mailbox email in their calendar-user-address-set.
- *    This allows SabreDAV's Schedule\Plugin to accept that email as a
- *    valid ORGANIZER when creating events on behalf of the mailbox.
+ *    Clients thus know that the user can act for the mailbox. The
+ *    scheduling of event changes uses the identity of the calendar
+ *    first. When the event does not contain this identity, it uses
+ *    this set (see MailboxSchedulePlugin).
  *
  * 2. **Share restriction**: Direct CalDAV shares on MAILBOX calendars
  *    are capped to read-only. Write access must come via the internal
