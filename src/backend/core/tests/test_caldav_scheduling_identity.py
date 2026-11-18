@@ -270,11 +270,20 @@ class TestCalendarSchedulingIdentity:
         ]
 
 
-def _move(client, event, calendar_url):
+def _move(client, event, calendar_url, overwrite=True):
     """Move the event to the calendar and return the new URL and response."""
     target = f"{calendar_url.rstrip('/')}/{str(event.url).rsplit('/', 1)[-1]}"
-    resp = client.request(str(event.url), "MOVE", "", {"Destination": target})
+    headers = {"Destination": target}
+    if not overwrite:
+        headers["Overwrite"] = "F"
+    resp = client.request(str(event.url), "MOVE", "", headers)
     return target, resp
+
+
+def _events(client, calendar_url, uid):
+    """Return the data of the events of the calendar that have the UID."""
+    events = client.calendar(url=calendar_url).events()
+    return [event.data for event in events if f"UID:{uid}" in event.data]
 
 
 def _series(uid, organizer, attendees, sequences=(0, 0)):
@@ -413,6 +422,111 @@ class TestMoveChangesOrganizer:
             _move(client, copy, personal_url)
         time.sleep(1)
         assert not callbacks["requests"]
+
+    @pytest.mark.usefixtures("callbacks")
+    def test_move_replaces_attendee_copy_of_new_organizer(self):
+        """The user is an attendee of a mailbox meeting, and SabreDAV put a
+        copy in the personal calendar. The meeting moves to this calendar and
+        replaces the copy."""
+        user = factories.UserFactory(email=f"user-{secrets.token_hex(4)}@{DOMAIN}")
+        organizer = f"organizer-{secrets.token_hex(4)}@{DOMAIN}"
+        organizer_url = _add_mailbox_calendar(user, organizer)
+        service = CalendarService()
+        personal_url = service._calendar_url(
+            service.create_calendar(user, name="Personal")
+        )
+        client = service._get_client(user)
+        external = f"external-{secrets.token_hex(4)}@external-{DOMAIN}"
+        uid = f"identity-{secrets.token_hex(6)}"
+        data = _event(uid, organizer, external).replace(
+            "END:VEVENT",
+            f"ATTENDEE;PARTSTAT=ACCEPTED:mailto:{user.email}\r\nEND:VEVENT",
+        )
+
+        event = client.calendar(url=organizer_url).save_event(data)
+        assert len(_events(client, personal_url, uid)) == 1
+
+        _, resp = _move(client, event, personal_url)
+        assert resp.status == 201
+
+        events = _events(client, personal_url, uid)
+        assert len(events) == 1
+        assert f"ORGANIZER:mailto:{user.email}" in events[0]
+
+    @pytest.mark.parametrize("same_name", [True, False])
+    def test_move_replaces_attendee_copy_in_mailbox(self, callbacks, same_name):
+        """The mailbox is an attendee of a meeting of the user, and its
+        calendar has an accepted copy. Messages gives the copy the name of the
+        meeting, and the event form sends "Overwrite: F". The copy can also
+        have another name. The meeting replaces the copy in the two cases, and
+        the mailbox sends no reply."""
+        user = factories.UserFactory(email=f"user-{secrets.token_hex(4)}@{DOMAIN}")
+        mailbox = f"attendee-{secrets.token_hex(4)}@{DOMAIN}"
+        mailbox_url = _add_mailbox_calendar(user, mailbox)
+        service = CalendarService()
+        personal_url = service._calendar_url(
+            service.create_calendar(user, name="Personal")
+        )
+        client = service._get_client(user)
+        uid = f"identity-{secrets.token_hex(6)}"
+
+        name = uid if same_name else secrets.token_hex(6)
+        url = f"{personal_url.rstrip('/')}/{name}.ics"
+        client.request(
+            url,
+            "PUT",
+            _event(uid, user.email, mailbox),
+            {"Content-Type": "text/calendar; charset=utf-8"},
+        )
+        event = client.calendar(url=personal_url).event_by_url(url)
+        client.calendar(url=mailbox_url).save_event(
+            _event(uid, user.email, mailbox, partstat="ACCEPTED")
+        )
+        _wait_for_callbacks(callbacks, expected_count=2)
+        callbacks["requests"].clear()
+
+        _, resp = _move(client, event, mailbox_url, overwrite=False)
+        assert resp.status == (204 if same_name else 201)
+        time.sleep(1)
+        assert not callbacks["requests"]
+
+        assert not _events(client, personal_url, uid)
+        events = _events(client, mailbox_url, uid)
+        assert len(events) == 1
+        assert f"ORGANIZER:mailto:{mailbox}" in events[0]
+        assert f"ATTENDEE;PARTSTAT=ACCEPTED:mailto:{user.email}" in events[0]
+
+    @pytest.mark.usefixtures("callbacks")
+    def test_move_keeps_other_event_with_same_name(self):
+        """A MOVE with "Overwrite: F" does not replace an event that is not a
+        copy of the meeting."""
+        user = factories.UserFactory(email=f"user-{secrets.token_hex(4)}@{DOMAIN}")
+        mailbox = f"attendee-{secrets.token_hex(4)}@{DOMAIN}"
+        mailbox_url = _add_mailbox_calendar(user, mailbox)
+        service = CalendarService()
+        personal_url = service._calendar_url(
+            service.create_calendar(user, name="Personal")
+        )
+        client = service._get_client(user)
+        external = f"external-{secrets.token_hex(4)}@external-{DOMAIN}"
+        uid = f"identity-{secrets.token_hex(6)}"
+
+        event = client.calendar(url=personal_url).save_event(
+            _event(uid, user.email, external)
+        )
+        other_uid = f"identity-{secrets.token_hex(6)}"
+        resp = client.request(
+            f"{mailbox_url.rstrip('/')}/{uid}.ics",
+            "PUT",
+            _event(other_uid, mailbox, external),
+            {"Content-Type": "text/calendar; charset=utf-8"},
+        )
+        assert resp.status == 201
+
+        _, resp = _move(client, event, mailbox_url, overwrite=False)
+        assert resp.status == 412
+        assert len(_events(client, personal_url, uid)) == 1
+        assert len(_events(client, mailbox_url, other_uid)) == 1
 
     def test_move_with_same_identity_sends_nothing(self, callbacks):
         """A mailbox meeting in a personal calendar moves to another personal
