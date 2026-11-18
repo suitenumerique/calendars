@@ -103,6 +103,19 @@ class MailboxSchedulePlugin extends Plugin
         $event->destroy();
     }
 
+    /**
+     * Prepares the organizer change of a MOVE.
+     *
+     * A meeting that moves to a calendar with another identity gets this
+     * identity as organizer. This hook only records the change, and
+     * afterMove applies it when the event is in its new calendar.
+     *
+     * A move between calendars with the same identity changes nothing. So
+     * does the move of an event without attendees.
+     *
+     * @throws Forbidden when an attendee copy moves to a calendar with
+     *                   another identity
+     */
     public function beforeMove(string $source, string $destination): void
     {
         $node = $this->server->tree->getNodeForPath($source);
@@ -142,6 +155,13 @@ class MailboxSchedulePlugin extends Plugin
         $this->transfer = ['destination' => $destination, 'previous' => $organizer, 'organizer' => $identity];
     }
 
+    /**
+     * Applies the organizer change that beforeMove recorded.
+     *
+     * This hook writes the new organizer in the moved event. Then it sends
+     * the update to the attendees, but not to the previous organizer. A
+     * request with "Schedule-Reply: F" sends no message.
+     */
     public function afterMove(string $source, string $destination): void
     {
         $transfer = $this->transfer;
