@@ -70,6 +70,8 @@ export interface RecurringEditModalProps {
   prompt?: string;
   confirmLabel?: string;
   disableFuture?: boolean;
+  /** Hides "this occurrence". An override stays in the source calendar. */
+  disableThis?: boolean;
 }
 
 /**

@@ -592,6 +592,7 @@ export const EventModal = ({
         isOpen={showEditRecurringModal}
         onConfirm={handleEditRecurringConfirm}
         onCancel={() => setShowEditRecurringModal(false)}
+        disableThis={form.selectedCalendarUrl !== calendarUrl}
       />
 
       <RecurringEditModal

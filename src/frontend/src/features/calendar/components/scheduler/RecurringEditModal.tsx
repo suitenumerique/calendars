@@ -18,15 +18,17 @@ export const RecurringEditModal = ({
   prompt,
   confirmLabel,
   disableFuture = false,
+  disableThis = false,
 }: RecurringEditModalProps) => {
   const { t } = useTranslation();
-  const [selectedOption, setSelectedOption] = useState<RecurringEditOption>("this");
+  const initialOption: RecurringEditOption = disableThis ? "all" : "this";
+  const [selectedOption, setSelectedOption] = useState<RecurringEditOption>(initialOption);
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedOption("this");
+      setSelectedOption(initialOption);
     }
-  }, [isOpen]);
+  }, [isOpen, initialOption]);
 
   return (
     <Modal
@@ -48,16 +50,18 @@ export const RecurringEditModal = ({
       <div className="delete-modal__content">
         <p className="delete-modal__message">{prompt ?? t("calendar.event.editRecurringPrompt")}</p>
         <div className="delete-modal__options">
-          <label className="delete-modal__option">
-            <input
-              type="radio"
-              name="edit-option"
-              value="this"
-              checked={selectedOption === "this"}
-              onChange={(e) => setSelectedOption(e.target.value as RecurringEditOption)}
-            />
-            <span>{t("calendar.event.editThisOccurrence")}</span>
-          </label>
+          {!disableThis && (
+            <label className="delete-modal__option">
+              <input
+                type="radio"
+                name="edit-option"
+                value="this"
+                checked={selectedOption === "this"}
+                onChange={(e) => setSelectedOption(e.target.value as RecurringEditOption)}
+              />
+              <span>{t("calendar.event.editThisOccurrence")}</span>
+            </label>
+          )}
           {!disableFuture && (
             <label className="delete-modal__option">
               <input
