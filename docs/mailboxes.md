@@ -293,6 +293,10 @@ principal. When the event contains this address, scheduling uses only
 this address. Otherwise, it uses the `calendar-user-address-set` of the
 user.
 
+A move of a meeting to a calendar with another address makes this
+address the organizer. The previous organizer stays as an attendee. An
+attendee copy cannot move to a calendar with another address.
+
 ### RSVP
 
 When an attendee clicks the RSVP link, the backend always delegates to
