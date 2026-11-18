@@ -294,7 +294,8 @@ this address. Otherwise, it uses the `calendar-user-address-set` of the
 user.
 
 A move of a meeting to a calendar with another address makes this
-address the organizer. The previous organizer stays as an attendee. An
+address the organizer. The previous organizer stays as an attendee. The
+meeting replaces the attendee copy that the new organizer had. An
 attendee copy cannot move to a calendar with another address.
 
 ### RSVP

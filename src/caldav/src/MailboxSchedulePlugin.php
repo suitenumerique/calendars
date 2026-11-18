@@ -13,8 +13,9 @@
  *
  * A move of a meeting to a calendar with another identity changes the
  * organizer to this identity. The previous organizer becomes an attendee
- * that accepts. The attendees receive the update. An attendee copy cannot
- * move to a calendar with another identity.
+ * that accepts. The attendees receive the update. The meeting replaces the
+ * attendee copy that the new organizer had. An attendee copy cannot move to a
+ * calendar with another identity.
  *
  * An event can be in a calendar that is not its identity, for example after
  * a move by an older version or by another client. Then the plugin uses all
@@ -40,13 +41,17 @@ class MailboxSchedulePlugin extends Plugin
     /**
      * Organizer change of the current MOVE.
      *
-     * @var array{destination: string, previous: string, organizer: string}|null
+     * `copy` is the path of the event with the same UID that the new
+     * organizer owns before the move, if any.
+     *
+     * @var array{destination: string, previous: string, organizer: string, copy: ?string}|null
      */
     private ?array $transfer = null;
 
     public function initialize(Server $server)
     {
         parent::initialize($server);
+        $server->on('beforeMethod:MOVE', [$this, 'beforeMoveMethod']);
         $server->on('beforeMove', [$this, 'beforeMove']);
         $server->on('afterMove', [$this, 'afterMove']);
     }
@@ -104,6 +109,50 @@ class MailboxSchedulePlugin extends Plugin
     }
 
     /**
+     * Lets a MOVE replace the attendee copy of the meeting at its destination.
+     *
+     * The new organizer can be an attendee of the meeting, with a copy at
+     * the destination path. A client sends "Overwrite: F" to keep another
+     * event that has this path. The copy is the same meeting, so the
+     * request continues as a MOVE that overwrites.
+     */
+    public function beforeMoveMethod(RequestInterface $request): void
+    {
+        $header = $request->getHeader('Destination');
+        if (!$header || 'F' !== strtoupper((string) $request->getHeader('Overwrite'))) {
+            return;
+        }
+
+        $tree = $this->server->tree;
+        $source = $request->getPath();
+        $destination = $this->server->calculateUri($header);
+        if (!$tree->nodeExists($source) || !$tree->nodeExists($destination)) {
+            return;
+        }
+        $existing = $tree->getNodeForPath($destination);
+        if (!$existing instanceof ICalendarObject) {
+            return;
+        }
+
+        try {
+            $change = $this->getOrganizerChange($source, $destination);
+        } catch (Forbidden) {
+            return;
+        }
+        if ($change === null) {
+            return;
+        }
+
+        $copy = Reader::read($existing->get());
+        $isAttendeeCopy = (string) $copy->VEVENT?->UID === $change['uid']
+            && $this->getOrganizer($copy) !== $change['organizer'];
+        $copy->destroy();
+        if ($isAttendeeCopy) {
+            $request->setHeader('Overwrite', 'T');
+        }
+    }
+
+    /**
      * Prepares the organizer change of a MOVE.
      *
      * A meeting that moves to a calendar with another identity gets this
@@ -118,22 +167,46 @@ class MailboxSchedulePlugin extends Plugin
      */
     public function beforeMove(string $source, string $destination): void
     {
+        $change = $this->getOrganizerChange($source, $destination);
+        if ($change === null) {
+            return;
+        }
+
+        [$calendarPath] = Uri\split($destination);
+        $this->transfer = [
+            'destination' => $destination,
+            'previous' => $change['previous'],
+            'organizer' => $change['organizer'],
+            'copy' => $this->findOwnedEvent($this->server->tree->getNodeForPath($calendarPath), $change['uid']),
+        ];
+    }
+
+    /**
+     * Returns the organizer change that a MOVE makes, or null.
+     *
+     * @return array{previous: string, organizer: string, uid: string}|null
+     * @throws Forbidden when an attendee copy moves to a calendar with
+     *                   another identity
+     */
+    private function getOrganizerChange(string $source, string $destination): ?array
+    {
         $node = $this->server->tree->getNodeForPath($source);
         if (!$node instanceof ICalendarObject) {
-            return;
+            return null;
         }
 
         $event = Reader::read($node->get());
         $organizer = $this->getOrganizer($event);
         if (!$organizer || !$this->hasAttendees($event)) {
             $event->destroy();
-            return;
+            return null;
         }
 
         [$sourcePath] = Uri\split($source);
         [$destinationPath] = Uri\split($destination);
         $sourceCalendar = $this->server->tree->getNodeForPath($sourcePath);
         $addresses = array_map('strtolower', $this->getAddresses($sourceCalendar, [$event]));
+        $uid = (string) $event->VEVENT->UID;
         $event->destroy();
         $identity = $this->getCalendarIdentity($this->server->tree->getNodeForPath($destinationPath));
         $identity = $identity ? strtolower($identity) : null;
@@ -141,7 +214,7 @@ class MailboxSchedulePlugin extends Plugin
         $sourceIdentity = $sourceIdentity ? strtolower($sourceIdentity) : null;
 
         if ($identity === $sourceIdentity) {
-            return;
+            return null;
         }
 
         if (!in_array($organizer, $addresses, true)) {
@@ -149,18 +222,19 @@ class MailboxSchedulePlugin extends Plugin
         }
 
         if (!$identity || $identity === $organizer) {
-            return;
+            return null;
         }
 
-        $this->transfer = ['destination' => $destination, 'previous' => $organizer, 'organizer' => $identity];
+        return ['previous' => $organizer, 'organizer' => $identity, 'uid' => $uid];
     }
 
     /**
      * Applies the organizer change that beforeMove recorded.
      *
-     * This hook writes the new organizer in the moved event. Then it sends
-     * the update to the attendees, but not to the previous organizer. A
-     * request with "Schedule-Reply: F" sends no message.
+     * This hook writes the new organizer in the moved event, and removes
+     * the attendee copy that the new organizer had. Then it sends the update
+     * to the attendees, but not to the previous organizer. A request with
+     * "Schedule-Reply: F" sends no message.
      */
     public function afterMove(string $source, string $destination): void
     {
@@ -178,6 +252,7 @@ class MailboxSchedulePlugin extends Plugin
         if ($etag) {
             $this->server->httpResponse->setHeader('ETag', $etag);
         }
+        $this->removeAttendeeCopy($transfer['copy'], $organizer);
 
         if (!$this->scheduleReply($this->server->httpRequest)) {
             $event->destroy();
@@ -192,6 +267,40 @@ class MailboxSchedulePlugin extends Plugin
             }
         }
         $event->destroy();
+    }
+
+    /**
+     * Returns the path of the event with this UID in the calendars that
+     * the identity of the calendar owns, or null.
+     */
+    private function findOwnedEvent(INode $calendar, string $uid): ?string
+    {
+        $principal = $calendar instanceof MailboxSharedCalendar
+            ? 'principals/mailboxes/' . $calendar->getMailboxEmail()
+            : $calendar->getOwner();
+        $homePath = 'calendars/' . substr($principal, strlen('principals/'));
+        $path = $this->server->tree->getNodeForPath($homePath)->getCalendarObjectByUID($uid);
+        return $path ? $homePath . '/' . $path : null;
+    }
+
+    /**
+     * Removes the attendee copy of the meeting that the new organizer had.
+     *
+     * A MOVE that overwrites puts the meeting at the path of the copy.
+     * Thus the organizer of the event at this path tells if it is a copy.
+     */
+    private function removeAttendeeCopy(?string $path, string $organizer): void
+    {
+        if ($path === null || !$this->server->tree->nodeExists($path)) {
+            return;
+        }
+
+        $copy = Reader::read($this->server->tree->getNodeForPath($path)->get());
+        $isAttendeeCopy = $this->getOrganizer($copy) !== $organizer;
+        $copy->destroy();
+        if ($isAttendeeCopy) {
+            $this->server->tree->delete($path);
+        }
     }
 
     /**
