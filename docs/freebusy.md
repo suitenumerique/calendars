@@ -243,19 +243,12 @@ whether it contributes to free/busy. Only this property controls
 availability.
 
 Calendars you own start opaque. Calendars shared with you start
-transparent, so they do not make you busy. Mailbox calendars that the
-Messages sync shares with you start transparent when you are a delegate
-of another person's mailbox, and opaque in the other cases (see
-[mailboxes.md](mailboxes.md)).
-You can change the setting, and the sync keeps your choice. The
-mailbox's own instance stays opaque, so the mailbox's availability
-does not change.
+transparent. For mailbox calendars, see [mailboxes.md](mailboxes.md).
 
 ### UI
 
 The "Include in availability" checkbox in the calendar edit modal
-toggles this property via PROPPATCH. It shows the current value of the
-instance. A new instance gets the default value above.
+toggles this property via PROPPATCH.
 
 Apple Calendar exposes this as "Show in availability" in calendar
 settings. Thunderbird and DAVx5 also support it natively.
