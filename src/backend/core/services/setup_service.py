@@ -105,7 +105,7 @@ class MailboxOrgUnresolvedError(SetupServiceError):
     code = "mailbox_org_unresolved"
 
 
-def _starts_transparent(user_email, mailbox):
+def _starts_transparent(user_email, mailbox_email, is_identity):
     """Return True when a new mailbox instance of a user starts transparent.
 
     Only a delegate of a person's mailbox starts transparent. The user can
@@ -113,10 +113,7 @@ def _starts_transparent(user_email, mailbox):
     Other mailboxes start opaque, because Messages does not tell a team
     mailbox from an alias of a person.
     """
-    return (
-        user_email.lower() != mailbox.get("email", "").lower()
-        and mailbox.get("is_identity") is True
-    )
+    return is_identity is True and user_email.lower() != mailbox_email.lower()
 
 
 def _resolve_mailbox_org_id(mailbox_data):
@@ -266,7 +263,9 @@ class SetupService:
             org_id=org_id,
             color=color,
             caller_email=user.email,
-            caller_transparent=_starts_transparent(user.email, user_mailbox),
+            caller_transparent=_starts_transparent(
+                user.email, mailbox_email, user_mailbox.get("is_identity")
+            ),
         )
         # ``calendar_uri`` is the owner-side URI (under the mailbox
         # principal); ``caller_calendar_uri`` is the URI the caller can
@@ -369,7 +368,9 @@ class SetupService:
                     "user_email": user.email,
                     "mailbox_email": mb_email,
                     "privilege": ROLE_TO_PRIVILEGE.get(mb_role, "read"),
-                    "transparent": _starts_transparent(user.email, mailbox),
+                    "transparent": _starts_transparent(
+                        user.email, mb_email, mailbox.get("is_identity")
+                    ),
                 }
             )
 

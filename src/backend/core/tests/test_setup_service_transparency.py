@@ -15,31 +15,23 @@ PERSON = {"email": "bob@example.com", "is_identity": True}
 
 
 @pytest.mark.parametrize(
-    ("user_email", "mailbox", "transparent"),
+    ("user_email", "mailbox_email", "is_identity", "transparent"),
     [
-        ("alice@example.com", PERSON, True),
-        ("Bob@Example.com", PERSON, False),
-        (
-            "alice@example.com",
-            {"email": "team@example.com", "is_identity": False},
-            False,
-        ),
-        (
-            "alice@example.com",
-            {"email": "a.smith@example.com", "is_identity": False},
-            False,
-        ),
-        ("alice@example.com", {"email": "team@example.com"}, False),
+        ("alice@example.com", "bob@example.com", True, True),
+        ("Bob@Example.com", "bob@example.com", True, False),
+        ("alice@example.com", "team@example.com", False, False),
+        ("alice@example.com", "a.smith@example.com", False, False),
+        ("alice@example.com", "team@example.com", None, False),
     ],
     ids=["delegate", "owner", "team", "alias", "missing-field"],
 )
-def test_starts_transparent(user_email, mailbox, transparent):
+def test_starts_transparent(user_email, mailbox_email, is_identity, transparent):
     """Only a delegate of a person's mailbox starts transparent.
 
     A team mailbox and an alias of a person both have ``is_identity``
     False. Calendars cannot tell them apart, so both start opaque.
     """
-    assert _starts_transparent(user_email, mailbox) is transparent
+    assert _starts_transparent(user_email, mailbox_email, is_identity) is transparent
 
 
 def _service():
