@@ -80,8 +80,14 @@ describe("changeOrganizer", () => {
 describe("organizeNewSeries", () => {
   it("does not make the previous organizer an attendee", () => {
     const event = meeting("me@x.fr", "ext@y.fr", "TEAM@x.fr");
-    const series = organizeNewSeries(event, { email: "team@x.fr" });
+    const series = organizeNewSeries(event, { email: "team@x.fr" }, event.organizer);
     expect(series.organizer).toEqual({ email: "team@x.fr" });
+    expect(series.attendees).toEqual([{ email: "ext@y.fr", partstat: "NEEDS-ACTION" }]);
+  });
+
+  it("removes the previous organizer from the attendees", () => {
+    const event = meeting("me@x.fr", "ME@x.fr", "ext@y.fr");
+    const series = organizeNewSeries(event, { email: "team@x.fr" }, event.organizer);
     expect(series.attendees).toEqual([{ email: "ext@y.fr", partstat: "NEEDS-ACTION" }]);
   });
 });
