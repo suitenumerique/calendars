@@ -73,6 +73,19 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
     in the User and Identity models, and handles signed and/or encrypted UserInfo response.
     """
 
+    def verify_claims(self, claims):
+        """Require the configured org claim before the user is created or updated.
+
+        Without the claim, the user keeps the previous organization.
+        """
+        if not super().verify_claims(claims):
+            return False
+        org_claim = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
+        if org_claim and not claims.get(org_claim):
+            logger.error("Missing organization claim: %s", org_claim)
+            return False
+        return True
+
     def get_extra_claims(self, user_info):
         """Return extra claims from user_info.
 
