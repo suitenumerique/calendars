@@ -308,7 +308,8 @@ attendee's PARTSTAT atomically — no namespace selection or retry needed.
 
 The internal API only takes an event that this email organizes. After a
 move of the meeting to another organizer, a link from an earlier email
-shows that the event no longer exists.
+shows that the event no longer exists. The link in the update from the
+new organizer works.
 
 ## Internal API Endpoints (CalDAV side)
 
