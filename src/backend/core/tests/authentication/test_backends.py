@@ -605,3 +605,29 @@ def test_authentication_new_user_org_claim_also_in_store_claims(monkeypatch):
     assert user.organization is not None
     assert user.organization.external_id == "13002526500013"
     assert user.claims == {"siret": "13002526500013"}
+
+
+@override_settings(OIDC_USERINFO_ORGANIZATION_CLAIM="siret")
+def test_authentication_new_user_forwards_org_claim_to_entitlements(monkeypatch):
+    """The first login of a user forwards the org claim to the entitlements."""
+    klass = OIDCAuthenticationBackend()
+
+    def get_userinfo_mocked(*args):
+        return {
+            "sub": "789",
+            "email": "bob@ministry.gouv.fr",
+            "siret": "13002526500013",
+        }
+
+    monkeypatch.setattr(OIDCAuthenticationBackend, "get_userinfo", get_userinfo_mocked)
+
+    with mock.patch(
+        "core.authentication.backends.get_user_entitlements",
+        return_value={"can_access": True},
+    ) as mock_ent:
+        user = klass.get_or_create_user(
+            access_token="test-token", id_token=None, payload=None
+        )
+
+    assert user.organization.external_id == "13002526500013"
+    assert mock_ent.call_args.kwargs["user_info"]["siret"] == "13002526500013"

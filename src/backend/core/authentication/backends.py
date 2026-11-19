@@ -104,9 +104,11 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
 
         Organization is NOT NULL, so we must resolve it before the initial save.
         The org claim is surfaced at the top level of ``claims`` by
-        ``get_extra_claims`` so we can read it here. It must be popped before
+        ``get_extra_claims`` so we can read it here. It must be removed before
         delegating to ``super().create_user``, which forwards unknown top-level
-        keys as ``User(**claims)`` kwargs and would otherwise error.
+        keys as ``User(**claims)`` kwargs and would otherwise error. The
+        claim is removed from a copy. The entitlement lookup after the login
+        needs the original dict.
         """
         external_id = _resolve_org_external_id(claims)
         if not external_id:
@@ -115,9 +117,8 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
                 "(no org claim and no email domain)"
             )
 
-        org_claim = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
-        if org_claim:
-            claims.pop(org_claim, None)
+        claims = claims.copy()
+        claims.pop(settings.OIDC_USERINFO_ORGANIZATION_CLAIM, None)
 
         org, _ = Organization.objects.get_or_create(
             external_id=external_id,
