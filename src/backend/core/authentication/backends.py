@@ -73,6 +73,19 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
     in the User and Identity models, and handles signed and/or encrypted UserInfo response.
     """
 
+    def verify_claims(self, claims):
+        """Require the configured org claim before the user is created or updated.
+
+        Without the claim, the user keeps the previous organization.
+        """
+        if not super().verify_claims(claims):
+            return False
+        org_claim = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
+        if org_claim and not claims.get(org_claim):
+            logger.error("Missing organization claim: %s", org_claim)
+            return False
+        return True
+
     def get_extra_claims(self, user_info):
         """Return extra claims from user_info.
 
@@ -104,9 +117,11 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
 
         Organization is NOT NULL, so we must resolve it before the initial save.
         The org claim is surfaced at the top level of ``claims`` by
-        ``get_extra_claims`` so we can read it here. It must be popped before
+        ``get_extra_claims`` so we can read it here. It must be removed before
         delegating to ``super().create_user``, which forwards unknown top-level
-        keys as ``User(**claims)`` kwargs and would otherwise error.
+        keys as ``User(**claims)`` kwargs and would otherwise error. The
+        claim is removed from a copy. The entitlement lookup after the login
+        needs the original dict.
         """
         external_id = _resolve_org_external_id(claims)
         if not external_id:
@@ -115,9 +130,8 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
                 "(no org claim and no email domain)"
             )
 
-        org_claim = settings.OIDC_USERINFO_ORGANIZATION_CLAIM
-        if org_claim:
-            claims.pop(org_claim, None)
+        claims = claims.copy()
+        claims.pop(settings.OIDC_USERINFO_ORGANIZATION_CLAIM, None)
 
         org, _ = Organization.objects.get_or_create(
             external_id=external_id,
@@ -131,10 +145,7 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
         entitlements = {}
         try:
             entitlements = get_user_entitlements(
-                user_sub=user.sub,
-                user_email=user.email,
-                user_info=claims,
-                force_refresh=True,
+                user, user_info=claims, force_refresh=True
             )
         except EntitlementsUnavailableError:
             logger.warning(

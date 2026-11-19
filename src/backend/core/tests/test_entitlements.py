@@ -3,6 +3,7 @@
 from unittest import mock
 
 from django.conf import settings
+from django.core.cache import cache
 from django.test import override_settings
 
 import pytest
@@ -83,7 +84,7 @@ def test_factory_singleton():
 def test_get_user_entitlements_with_local_backend():
     """The public API should delegate to the configured backend."""
     get_entitlements_backend.cache_clear()
-    result = get_user_entitlements("sub-123", "user@example.com")
+    result = get_user_entitlements(factories.UserFactory())
     assert result["can_access"] is True
     get_entitlements_backend.cache_clear()
 
@@ -99,7 +100,10 @@ def test_deploycenter_backend_grants_access():
     responses.add(
         responses.GET,
         DC_URL,
-        json={"entitlements": {"can_access": True, "can_admin": True}},
+        json={
+            "organization": {"name": "Ministere X"},
+            "entitlements": {"can_access": True, "is_admin": True},
+        },
         status=200,
     )
 
@@ -109,7 +113,11 @@ def test_deploycenter_backend_grants_access():
         api_key="test-key",
     )
     result = backend.get_user_entitlements("sub-123", "user@example.com")
-    assert result == {"can_access": True, "can_admin": True}
+    assert result == {
+        "can_access": True,
+        "can_admin": True,
+        "organization_name": "Ministere X",
+    }
 
     # Verify request was made with correct params and header
     assert len(responses.calls) == 1
@@ -280,6 +288,152 @@ def test_deploycenter_backend_sends_oidc_claims():
     assert "other" not in request.url
 
 
+@responses.activate
+@override_settings(ENTITLEMENTS_CACHE_TIMEOUT=300)
+def test_deploycenter_backend_cache_is_per_claims():
+    """An answer for one organization is not served for another one."""
+    responses.add(
+        responses.GET,
+        DC_URL,
+        json={"entitlements": {"can_access": True}},
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        DC_URL,
+        json={"entitlements": {"can_access": False}},
+        status=200,
+    )
+
+    backend = DeployCenterEntitlementsBackend(
+        base_url=DC_URL,
+        service_id="calendar",
+        api_key="test-key",
+        oidc_claims=["siret"],
+    )
+
+    first = backend.get_user_entitlements(
+        "sub-123", "user@example.com", user_info={"siret": "111"}
+    )
+    second = backend.get_user_entitlements(
+        "sub-123", "user@example.com", user_info={"siret": "222"}
+    )
+
+    assert first["can_access"] is True
+    assert second["can_access"] is False
+    assert len(responses.calls) == 2
+
+
+@responses.activate
+@override_settings(ENTITLEMENTS_CACHE_TIMEOUT=300)
+def test_deploycenter_backend_does_not_cache_user_without_sub():
+    """Users without a sub do not share a cache entry."""
+    responses.add(
+        responses.GET,
+        DC_URL,
+        json={"entitlements": {"can_access": True}},
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        DC_URL,
+        json={"entitlements": {"can_access": False}},
+        status=200,
+    )
+
+    backend = DeployCenterEntitlementsBackend(
+        base_url=DC_URL,
+        service_id="calendar",
+        api_key="test-key",
+    )
+
+    first = backend.get_user_entitlements(None, "alice@example.com")
+    second = backend.get_user_entitlements(None, "bob@example.com")
+
+    assert first["can_access"] is True
+    assert second["can_access"] is False
+    assert len(responses.calls) == 2
+
+
+@pytest.fixture
+def deploycenter_backend():
+    """Select the DeployCenter backend, with siret as the organization claim."""
+    with override_settings(
+        ENTITLEMENTS_BACKEND=(
+            "core.entitlements.backends.deploycenter.DeployCenterEntitlementsBackend"
+        ),
+        ENTITLEMENTS_BACKEND_PARAMETERS={
+            "base_url": DC_URL,
+            "service_id": "calendar",
+            "api_key": "test-key",
+            "oidc_claims": ["siret"],
+        },
+        ENTITLEMENTS_CACHE_TIMEOUT=300,
+        OIDC_USERINFO_ORGANIZATION_CLAIM="siret",
+    ):
+        get_entitlements_backend.cache_clear()
+        yield
+    get_entitlements_backend.cache_clear()
+
+
+@responses.activate
+@pytest.mark.usefixtures("deploycenter_backend")
+def test_get_user_entitlements_sends_organization_claim_of_stored_user():
+    """Without user_info, the siret of the stored organization is sent.
+
+    The login fills the cache with the claims of the identity provider.
+    The later calls send the same claims, so they read the same entry.
+    """
+    responses.add(
+        responses.GET,
+        DC_URL,
+        json={"entitlements": {"can_access": True, "is_admin": True}},
+        status=200,
+    )
+    org = factories.OrganizationFactory(external_id="13002526500013")
+    user = factories.UserFactory(organization=org)
+
+    login = get_user_entitlements(
+        user, user_info={"siret": "13002526500013"}, force_refresh=True
+    )
+    later = get_user_entitlements(user)
+
+    assert login == later == {"can_access": True, "can_admin": True}
+    assert len(responses.calls) == 1
+    assert "siret=13002526500013" in responses.calls[0].request.url
+
+
+@responses.activate
+@pytest.mark.usefixtures("deploycenter_backend")
+def test_get_user_entitlements_after_cache_expiry():
+    """When the login answer expires, a later call sends the siret again."""
+    responses.add(
+        responses.GET,
+        DC_URL,
+        json={"entitlements": {"can_access": True}},
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        DC_URL,
+        json={"entitlements": {"can_access": True, "is_admin": True}},
+        status=200,
+    )
+    org = factories.OrganizationFactory(external_id="13002526500013")
+    user = factories.UserFactory(organization=org)
+
+    get_user_entitlements(
+        user, user_info={"siret": "13002526500013"}, force_refresh=True
+    )
+    # Simulate cache expiry.
+    cache.clear()
+    result = get_user_entitlements(user)
+
+    assert result == {"can_access": True, "can_admin": True}
+    assert len(responses.calls) == 2
+    assert "siret=13002526500013" in responses.calls[1].request.url
+
+
 # -- Auth backend integration --
 
 
@@ -297,10 +451,7 @@ def test_auth_backend_warms_cache_on_login():
     ) as mock_ent:
         backend.post_get_or_create_user(user, {"sub": "x"}, is_new_user=False)
         mock_ent.assert_called_once_with(
-            user_sub=user.sub,
-            user_email=user.email,
-            user_info={"sub": "x"},
-            force_refresh=True,
+            user, user_info={"sub": "x"}, force_refresh=True
         )
 
 
