@@ -324,6 +324,37 @@ def test_deploycenter_backend_cache_is_per_claims():
     assert len(responses.calls) == 2
 
 
+@responses.activate
+@override_settings(ENTITLEMENTS_CACHE_TIMEOUT=300)
+def test_deploycenter_backend_does_not_cache_user_without_sub():
+    """Users without a sub do not share a cache entry."""
+    responses.add(
+        responses.GET,
+        DC_URL,
+        json={"entitlements": {"can_access": True}},
+        status=200,
+    )
+    responses.add(
+        responses.GET,
+        DC_URL,
+        json={"entitlements": {"can_access": False}},
+        status=200,
+    )
+
+    backend = DeployCenterEntitlementsBackend(
+        base_url=DC_URL,
+        service_id="calendar",
+        api_key="test-key",
+    )
+
+    first = backend.get_user_entitlements(None, "alice@example.com")
+    second = backend.get_user_entitlements(None, "bob@example.com")
+
+    assert first["can_access"] is True
+    assert second["can_access"] is False
+    assert len(responses.calls) == 2
+
+
 @pytest.fixture
 def deploycenter_backend():
     """Select the DeployCenter backend, with siret as the organization claim."""
