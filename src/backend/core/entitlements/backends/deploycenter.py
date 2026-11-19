@@ -101,11 +101,15 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
 
         A cache entry is for one user and one set of forwarded claims. An
         answer for one organization is thus never served for another one.
+
+        A user without a ``sub`` is never cached. Otherwise, users without a
+        ``sub`` and with the same claims share one entry.
         """
         claims = self._claims(user_info)
+        cacheable = bool(user_sub)
         cache_key = self._cache_key(user_sub, claims)
 
-        if not force_refresh:
+        if cacheable and not force_refresh:
             cached = cache.get(cache_key)
             if cached is not None:
                 return cached
@@ -113,8 +117,8 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         data = self._make_request(user_email, claims)
 
         if data is None:
-            # API failed — try stale cache as fallback
-            cached = cache.get(cache_key)
+            # The request failed. Use the cache entry if it has not expired.
+            cached = cache.get(cache_key) if cacheable else None
             if cached is not None:
                 return cached
             raise EntitlementsUnavailableError(
@@ -134,5 +138,6 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         if org_name:
             result["organization_name"] = org_name
 
-        cache.set(cache_key, result, settings.ENTITLEMENTS_CACHE_TIMEOUT)
+        if cacheable:
+            cache.set(cache_key, result, settings.ENTITLEMENTS_CACHE_TIMEOUT)
         return result
