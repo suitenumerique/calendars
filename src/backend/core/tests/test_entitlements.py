@@ -99,7 +99,10 @@ def test_deploycenter_backend_grants_access():
     responses.add(
         responses.GET,
         DC_URL,
-        json={"entitlements": {"can_access": True, "can_admin": True}},
+        json={
+            "organization": {"name": "Ministere X"},
+            "entitlements": {"can_access": True, "is_admin": True},
+        },
         status=200,
     )
 
@@ -109,7 +112,11 @@ def test_deploycenter_backend_grants_access():
         api_key="test-key",
     )
     result = backend.get_user_entitlements("sub-123", "user@example.com")
-    assert result == {"can_access": True, "can_admin": True}
+    assert result == {
+        "can_access": True,
+        "can_admin": True,
+        "organization_name": "Ministere X",
+    }
 
     # Verify request was made with correct params and header
     assert len(responses.calls) == 1

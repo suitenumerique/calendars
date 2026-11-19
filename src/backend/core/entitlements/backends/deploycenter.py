@@ -114,7 +114,8 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         entitlements = data.get("entitlements", {})
         result = {
             "can_access": entitlements.get("can_access", False),
-            "can_admin": entitlements.get("can_admin", False),
+            # DeployCenter names the administrator entitlement "is_admin".
+            "can_admin": entitlements.get("is_admin", False),
         }
 
         # Organization name from DeployCenter response (if present)
