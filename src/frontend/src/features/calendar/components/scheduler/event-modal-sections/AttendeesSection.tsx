@@ -10,6 +10,7 @@ interface AttendeesSectionProps {
   onChange: (attendees: IcsAttendee[]) => void;
   organizerEmail?: string;
   organizer?: IcsOrganizer;
+  lockedEmail?: string;
   alwaysOpen?: boolean;
   isExpanded?: boolean;
   onToggle?: () => void;
@@ -21,6 +22,7 @@ export const AttendeesSection = ({
   onChange,
   organizerEmail,
   organizer,
+  lockedEmail,
   alwaysOpen,
   isExpanded,
   onToggle,
@@ -43,6 +45,7 @@ export const AttendeesSection = ({
         onChange={onChange}
         organizerEmail={organizerEmail}
         organizer={organizer}
+        lockedEmail={lockedEmail}
         onPendingInvalidChange={onPendingInvalidChange}
       />
     </SectionRow>

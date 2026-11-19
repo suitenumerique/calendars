@@ -293,6 +293,11 @@ principal. When the event contains this address, scheduling uses only
 this address. Otherwise, it uses the `calendar-user-address-set` of the
 user.
 
+A move of a meeting to a calendar with another address makes this
+address the organizer. The previous organizer stays as an attendee. The
+meeting replaces the attendee copy that the new organizer had. An
+attendee copy cannot move to a calendar with another address.
+
 ### RSVP
 
 When an attendee clicks the RSVP link, the backend always delegates to
@@ -300,6 +305,11 @@ When an attendee clicks the RSVP link, the backend always delegates to
 across all principals matching the organizer email (both
 `principals/users/` and `principals/mailboxes/`) and updates the
 attendee's PARTSTAT atomically — no namespace selection or retry needed.
+
+The internal API only takes an event that this email organizes. After a
+move of the meeting to another organizer, a link from an earlier email
+shows that the event no longer exists. The link in the update from the
+new organizer works.
 
 ## Internal API Endpoints (CalDAV side)
 
