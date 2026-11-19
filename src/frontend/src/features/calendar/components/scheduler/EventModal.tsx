@@ -237,7 +237,9 @@ export const EventModal = ({
     if (!organizer) return formEvent;
     // A "future" edit does not move the meeting. It makes a new series in
     // the selected calendar.
-    if (option === "future" && changesOrganizer) return organizeNewSeries(formEvent, organizer);
+    if (option === "future" && changesOrganizer) {
+      return organizeNewSeries(formEvent, organizer, event?.organizer);
+    }
     const previous = event?.attendees?.length ? event.organizer : undefined;
     return changeOrganizer(formEvent, organizer, previous);
   };
