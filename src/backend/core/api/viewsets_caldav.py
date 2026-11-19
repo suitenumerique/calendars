@@ -213,7 +213,7 @@ class CalDAVProxyView(View):
         Fail-closed: denies if the entitlements service is unavailable.
         """
         try:
-            entitlements = get_user_entitlements(user.sub, user.email)
+            entitlements = get_user_entitlements(user)
             if not entitlements.get("can_access", False):
                 return HttpResponse(
                     status=403,

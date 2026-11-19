@@ -1,6 +1,7 @@
 """DeployCenter (Espace Operateur) entitlements backend."""
 
 import logging
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core.cache import cache
@@ -23,7 +24,8 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         api_key: API key for X-Service-Auth header.
         timeout: HTTP request timeout in seconds.
         oidc_claims: List of OIDC claim names to extract from user_info
-            and forward as query params (e.g. ["siret"]).
+            and forward as query params (e.g. ["siret"]). DeployCenter
+            refuses a request without "siret".
     """
 
     def __init__(  # pylint: disable=too-many-arguments
@@ -41,10 +43,19 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
         self.timeout = timeout
         self.oidc_claims = oidc_claims or []
 
-    def _cache_key(self, user_sub):
-        return f"entitlements:user:{user_sub}"
+    def _claims(self, user_info):
+        """Return the configured claims that have a truthy value in *user_info*."""
+        user_info = user_info or {}
+        return {
+            claim: user_info[claim]
+            for claim in self.oidc_claims
+            if user_info.get(claim)
+        }
 
-    def _make_request(self, user_email, user_info=None):
+    def _cache_key(self, user_sub, claims):
+        return f"entitlements:user:{user_sub}:{urlencode(claims)}"
+
+    def _make_request(self, user_email, claims):
         """Make a request to the DeployCenter entitlements API.
 
         Returns:
@@ -54,13 +65,8 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
             "service_id": self.service_id,
             "account_type": "user",
             "account_email": user_email,
+            **claims,
         }
-
-        # Forward configured OIDC claims as query params
-        if user_info:
-            for claim in self.oidc_claims:
-                if claim in user_info:
-                    params[claim] = user_info[claim]
 
         headers = {
             "X-Service-Auth": f"Bearer {self.api_key}",
@@ -89,18 +95,22 @@ class DeployCenterEntitlementsBackend(EntitlementsBackend):
     ):
         """Fetch user entitlements from DeployCenter with caching.
 
-        On cache miss or force_refresh: fetches from the API.
-        On API failure: falls back to stale cache if available,
-        otherwise raises EntitlementsUnavailableError.
+        On a cache miss or with force_refresh, call the API. When the call
+        fails, return the cache entry if it has not expired. Otherwise raise
+        EntitlementsUnavailableError. A returned entry keeps its expiry time.
+
+        A cache entry is for one user and one set of forwarded claims. An
+        answer for one organization is thus never served for another one.
         """
-        cache_key = self._cache_key(user_sub)
+        claims = self._claims(user_info)
+        cache_key = self._cache_key(user_sub, claims)
 
         if not force_refresh:
             cached = cache.get(cache_key)
             if cached is not None:
                 return cached
 
-        data = self._make_request(user_email, user_info=user_info)
+        data = self._make_request(user_email, claims)
 
         if data is None:
             # API failed — try stale cache as fallback

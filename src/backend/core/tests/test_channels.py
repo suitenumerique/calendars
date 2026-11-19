@@ -993,7 +993,7 @@ class TestCalDAVProxyChannelAuth:  # pylint: disable=too-many-public-methods
             HTTP_AUTHORIZATION=_basic_auth(user.email, channel.pk, token),
         )
         assert response.status_code == 403
-        mock_entitlements.assert_called_once_with(user.sub, user.email)
+        mock_entitlements.assert_called_once_with(user)
 
     @patch("core.api.viewsets_caldav.CalDAVHTTPClient")
     def test_global_channel_acting_user_comes_from_basic_auth(self, mock_http_cls):

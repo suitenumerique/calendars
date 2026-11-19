@@ -92,9 +92,7 @@ class UserMeSerializer(UserSerializer):
         """
         if user.sub not in self._entitlements_cache:
             try:
-                self._entitlements_cache[user.sub] = get_user_entitlements(
-                    user.sub, user.email
-                )
+                self._entitlements_cache[user.sub] = get_user_entitlements(user)
             except EntitlementsUnavailableError:
                 self._entitlements_cache[user.sub] = None
         return self._entitlements_cache[user.sub]

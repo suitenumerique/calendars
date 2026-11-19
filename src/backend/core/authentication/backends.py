@@ -131,10 +131,7 @@ class OIDCAuthenticationBackend(LaSuiteOIDCAuthenticationBackend):
         entitlements = {}
         try:
             entitlements = get_user_entitlements(
-                user_sub=user.sub,
-                user_email=user.email,
-                user_info=claims,
-                force_refresh=True,
+                user, user_info=claims, force_refresh=True
             )
         except EntitlementsUnavailableError:
             logger.warning(
