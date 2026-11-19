@@ -160,8 +160,8 @@ class TestCalendarSchedulingIdentity:
         )
         _wait_for_callbacks(callbacks, expected_count=1)
 
-        assert [(m, r) for m, _s, r in _methods(callbacks)] == [
-            ("REPLY", f"mailto:{organizer}")
+        assert _methods(callbacks) == [
+            ("REPLY", f"mailto:{attendee.lower()}", f"mailto:{organizer}")
         ]
 
     def test_accept_in_personal_calendar_replies_to_mailbox(self, callbacks):
