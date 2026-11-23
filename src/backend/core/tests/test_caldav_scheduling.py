@@ -535,6 +535,98 @@ END:VCALENDAR"""
             server.shutdown()
             server.server_close()
 
+    @pytest.mark.parametrize(
+        "change", ["answer", "move", "location", "role", "series location"]
+    )
+    def test_scheduling_callback_skips_answer_for_one_date(  # pylint: disable=too-many-locals
+        self, change
+    ):
+        """A new entry for a regular date that only records an answer
+        sends no message. When the write also moves the date, changes a
+        location or changes a role, all the attendees get an update."""
+        organizer = factories.UserFactory(email="organizer-one-date@example.com")
+        service = CalendarService()
+        caldav_path = service.create_calendar(
+            organizer, name="One Date Calendar", color="#0000aa"
+        )
+
+        server, _port, callback_data = create_test_server()
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        time.sleep(0.5)
+
+        try:
+            client = service._get_client(organizer)  # pylint: disable=protected-access
+            calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
+
+            try:
+                caldav_calendar = client.calendar(url=calendar_url)
+
+                dtstart = (datetime.now() + timedelta(days=3)).replace(microsecond=0)
+                second = dtstart + timedelta(days=7)
+                start = second + timedelta(hours=1) if change == "move" else second
+                series_location = (
+                    "LOCATION:Room C\n" if change == "series location" else ""
+                )
+                location = (
+                    "LOCATION:Room B\n" if change == "location" else series_location
+                )
+                role = ";ROLE=OPT-PARTICIPANT" if change == "role" else ""
+                declining = "declining@external-a.test"
+                other = "other@external-b.test"
+                event_uid = f"one-date-{datetime.now().timestamp()}"
+                fmt = "%Y%m%dT%H%M%SZ"
+
+                def master(extra=""):
+                    return f"""BEGIN:VEVENT
+UID:{event_uid}
+DTSTART:{dtstart.strftime(fmt)}
+DTEND:{(dtstart + timedelta(hours=1)).strftime(fmt)}
+RRULE:FREQ=WEEKLY;COUNT=3
+SUMMARY:Weekly event
+{extra}ORGANIZER;CN=Organizer:mailto:{organizer.email}
+ATTENDEE;RSVP=TRUE:mailto:{declining}
+ATTENDEE;RSVP=TRUE:mailto:{other}
+END:VEVENT"""
+
+                event = caldav_calendar.save_event(
+                    f"BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Test//EN\n"
+                    f"{master()}\nEND:VCALENDAR"
+                )
+                _wait_for_callbacks(callback_data, expected_count=2)
+                callback_data["requests"] = []
+
+                event.data = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//EN
+{master(series_location)}
+BEGIN:VEVENT
+UID:{event_uid}
+RECURRENCE-ID:{second.strftime(fmt)}
+DTSTART:{start.strftime(fmt)}
+DTEND:{(start + timedelta(hours=1)).strftime(fmt)}
+SUMMARY:Weekly event
+{location}ORGANIZER;CN=Organizer:mailto:{organizer.email}
+ATTENDEE;PARTSTAT=DECLINED:mailto:{declining}
+ATTENDEE;RSVP=TRUE{role}:mailto:{other}
+END:VEVENT
+END:VCALENDAR"""
+                event.save()
+                _wait_for_callbacks(callback_data, expected_count=2, timeout=1.0)
+
+                recipients = {
+                    re.sub(r"(?i)^mailto:", "", r["headers"].get("X-LS-Recipient", ""))
+                    for r in callback_data["requests"]
+                }
+                expected = set() if change == "answer" else {declining, other}
+                assert recipients == expected
+
+            except NotFoundError:
+                pytest.skip("Calendar not found - CalDAV server may not be running")
+        finally:
+            server.shutdown()
+            server.server_close()
+
     def test_scheduling_callback_fires_cancel_when_deleting_event_with_attendee(  # pylint: disable=too-many-locals,too-many-statements
         self,
     ):

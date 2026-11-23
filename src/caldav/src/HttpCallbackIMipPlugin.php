@@ -15,11 +15,19 @@ use Sabre\DAV\Server;
 use Sabre\HTTP\RequestInterface;
 use Sabre\HTTP\ResponseInterface;
 use Sabre\VObject\Component\VCalendar;
+use Sabre\VObject\Component\VEvent;
 use Sabre\VObject\ITip\Message;
 use Sabre\VObject\Reader;
+use Sabre\VObject\Recur\EventIterator;
 
 class HttpCallbackIMipPlugin extends IMipPlugin
 {
+    private const WRITE_PROPERTIES = ['CREATED', 'DTSTAMP', 'LAST-MODIFIED', 'SEQUENCE'];
+
+    private const TIME_PROPERTIES = ['DTEND', 'DTSTART', 'DURATION', 'RECURRENCE-ID'];
+
+    private const ANSWER_PARAMETERS = ['PARTSTAT', 'RSVP', 'SCHEDULE-STATUS'];
+
     /**
      * API key for authenticating with the callback endpoint
      * @var string
@@ -51,6 +59,14 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     private $previousAttendees = [];
 
     /**
+     * UIDs of the events that this request changes only by new entries
+     * for regular dates. Each new entry is a copy of its date, with other
+     * answers of the attendees.
+     * @var array<string, true>
+     */
+    private $answerOnlyUids = [];
+
+    /**
      * Constructor
      *
      * @param string $apiKey The API key for authenticating with the callback endpoint
@@ -78,17 +94,18 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         parent::initialize($server);
         $this->server = $server;
         // Priority 90 runs before the scheduling plugin (priority 100).
-        $server->on('calendarObjectChange', [$this, 'rememberPreviousAttendees'], 90);
+        $server->on('calendarObjectChange', [$this, 'inspectStoredEvent'], 90);
     }
 
     /**
-     * Keep the attendees of the stored event before it is overwritten.
+     * Compare the stored event with the new one before the overwrite.
      *
-     * A new event has no previous attendees.
+     * Keep the attendees of the stored event. A new event has no previous
+     * attendees.
      *
      * @return void
      */
-    public function rememberPreviousAttendees(
+    public function inspectStoredEvent(
         RequestInterface $request,
         ResponseInterface $response,
         VCalendar $vCal,
@@ -118,7 +135,131 @@ class HttpCallbackIMipPlugin extends IMipPlugin
                 $this->previousAttendees[$uid][$this->normalizeEmail($attendee->getValue())] = true;
             }
         }
+
+        try {
+            if ($this->onlyAddsRegularDates($vCal, $stored)) {
+                $this->answerOnlyUids[(string) $vCal->VEVENT->UID] = true;
+            }
+        } catch (\Exception $e) {
+            error_log("[HttpCallbackIMipPlugin] Failed to compare the stored event: " . $e->getMessage());
+        }
         $stored->destroy();
+    }
+
+    /**
+     * Tell if the new event only adds entries for regular dates.
+     *
+     * SabreDAV marks each new entry as a significant change for all the
+     * attendees. A copy of a regular date with other answers changes
+     * nothing for them.
+     */
+    private function onlyAddsRegularDates(VCalendar $vCal, VCalendar $stored): bool
+    {
+        if (!isset($stored->VEVENT->ORGANIZER)) {
+            return false;
+        }
+
+        $storedEntries = [];
+        foreach ($stored->VEVENT as $vevent) {
+            $storedEntries[$this->recurrenceId($vevent)] = $vevent;
+        }
+
+        $kept = 0;
+        $added = false;
+        foreach ($vCal->VEVENT as $vevent) {
+            $storedEntry = $storedEntries[$this->recurrenceId($vevent)] ?? null;
+            if ($storedEntry) {
+                $kept++;
+                if ($this->answerless($vevent, self::WRITE_PROPERTIES)
+                    !== $this->answerless($storedEntry, self::WRITE_PROPERTIES)) {
+                    return false;
+                }
+            } elseif ($this->matchesRegularDate($vevent, $stored)) {
+                $added = true;
+            } else {
+                return false;
+            }
+        }
+        return $added && $kept === count($storedEntries);
+    }
+
+    private function recurrenceId(VEvent $vevent): string
+    {
+        return isset($vevent->{'RECURRENCE-ID'}) ? $vevent->{'RECURRENCE-ID'}->getValue() : 'master';
+    }
+
+    /**
+     * Tell if a new entry is a copy of its regular date in the stored
+     * event. Only the answers of the attendees can differ.
+     */
+    private function matchesRegularDate(VEvent $vevent, VCalendar $stored): bool
+    {
+        if (!isset($vevent->{'RECURRENCE-ID'})) {
+            return false;
+        }
+        foreach ($vevent->ATTENDEE ?? [] as $attendee) {
+            if (isset($attendee['SCHEDULE-FORCE-SEND'])) {
+                return false;
+            }
+        }
+
+        $date = $vevent->{'RECURRENCE-ID'}->getDateTime();
+        $occurrences = new EventIterator($stored, (string) $vevent->UID);
+        $occurrences->fastForward($date);
+        while ($occurrences->valid() && $occurrences->getDtStart() < $date) {
+            $occurrences->next();
+        }
+        if (!$occurrences->valid() || $occurrences->getDtStart() != $date) {
+            return false;
+        }
+
+        $regular = $occurrences->getEventObject();
+        $skipped = array_merge(self::WRITE_PROPERTIES, self::TIME_PROPERTIES);
+        return $vevent->DTSTART->getDateTime() == $occurrences->getDtStart()
+            && $vevent->DTSTART->hasTime() === $regular->DTSTART->hasTime()
+            && $this->endOf($vevent) == $occurrences->getDtEnd()
+            && $this->answerless($vevent, $skipped) === $this->answerless($regular, $skipped);
+    }
+
+    private function endOf(VEvent $vevent): \DateTimeImmutable
+    {
+        $start = $vevent->DTSTART->getDateTime();
+        if (isset($vevent->DTEND)) {
+            return $vevent->DTEND->getDateTime();
+        }
+        if (isset($vevent->DURATION)) {
+            return $start->add($vevent->DURATION->getDateInterval());
+        }
+        return $vevent->DTSTART->hasTime() ? $start : $start->modify('+1 day');
+    }
+
+    /**
+     * @param string[] $skipped Names of the properties to leave out
+     * @return string[] Sorted serialized children, without the answers of
+     *                  the attendees
+     */
+    private function answerless(VEvent $vevent, array $skipped): array
+    {
+        $children = [];
+        foreach ($vevent->children() as $child) {
+            if (in_array($child->name, $skipped, true)) {
+                continue;
+            }
+            if ('ATTENDEE' !== $child->name) {
+                $children[] = $child->serialize();
+                continue;
+            }
+            $parameters = [];
+            foreach ($child->parameters() as $parameter) {
+                if (!in_array($parameter->name, self::ANSWER_PARAMETERS, true)) {
+                    $parameters[] = $parameter->serialize();
+                }
+            }
+            sort($parameters);
+            $children[] = 'ATTENDEE:' . $this->normalizeEmail($child->getValue()) . ';' . implode(';', $parameters);
+        }
+        sort($children);
+        return $children;
     }
 
     /**
@@ -156,6 +297,11 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             if (!$iTipMessage->scheduleStatus) {
                 $iTipMessage->scheduleStatus = '1.0;We got the message, but it\'s not significant enough to warrant delivery';
             }
+            return;
+        }
+
+        if ('REQUEST' === $iTipMessage->method && isset($this->answerOnlyUids[$iTipMessage->uid])) {
+            $iTipMessage->scheduleStatus = '1.0;The change only records an answer for one date';
             return;
         }
 
