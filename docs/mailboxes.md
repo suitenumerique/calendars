@@ -272,12 +272,10 @@ Standard flow. SabreDAV's Schedule plugin fires the iMIP callback.
 ### Mailbox calendar (MAILBOX principal)
 
 1. User creates an event in a mailbox calendar.
-2. Frontend sets `ORGANIZER = mailto:{mailbox_email}`. This works because
-   the mailbox email is in the user's `calendar-user-address-set`
-   (derived by `PrincipalBackend` from the read-write share).
+2. Frontend sets `ORGANIZER = mailto:{mailbox_email}`.
 3. CalDAV PUT goes through the proxy with `X-LS-User: {oidc_email}`.
-4. SabreDAV's Schedule plugin validates ORGANIZER is in the user's
-   address set → OK.
+4. SabreDAV's Schedule plugin finds that the ORGANIZER is the address of
+   the calendar → the user is the organizer.
 5. `HttpCallbackIMipPlugin` checks the sender's principal type in the DB
    and sends the `X-LS-Is-Mailbox: true` header along with the
    callback to Django.
@@ -286,6 +284,14 @@ Standard flow. SabreDAV's Schedule plugin fires the iMIP callback.
    Messages via `POST /api/v1.0/submit/` (raw RFC 5322, DKIM-signed by
    Messages). No SMTP fallback — mailbox invitations must come from the
    mailbox identity or not at all.
+
+### Scheduling identity of a calendar
+
+A calendar speaks for one address (`MailboxSchedulePlugin`): a mailbox
+calendar for its mailbox, any other calendar for the email of its
+principal. When the event contains this address, scheduling uses only
+this address. Otherwise, it uses the `calendar-user-address-set` of the
+user.
 
 ### RSVP
 
