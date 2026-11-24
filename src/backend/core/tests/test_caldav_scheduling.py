@@ -536,14 +536,25 @@ END:VCALENDAR"""
             server.server_close()
 
     @pytest.mark.parametrize(
-        "change", ["answer", "move", "location", "role", "series location"]
+        "change, sends",
+        [
+            ("answer", False),
+            ("reordered parameters", False),
+            ("no end", False),
+            ("move", True),
+            ("location", True),
+            ("series location", True),
+            ("role", True),
+        ],
     )
     def test_scheduling_callback_skips_answer_for_one_date(  # pylint: disable=too-many-locals
-        self, change
+        self, change, sends
     ):
         """A new entry for a regular date that only records an answer
-        sends no message. When the write also moves the date, changes a
-        location or changes a role, all the attendees get an update."""
+        sends no message, also when the client writes the parameters in
+        another order or the event has no end. When the write also moves
+        the date, changes a location or changes a role, all the attendees
+        get an update."""
         organizer = factories.UserFactory(email="organizer-one-date@example.com")
         service = CalendarService()
         caldav_path = service.create_calendar(
@@ -564,62 +575,76 @@ END:VCALENDAR"""
 
                 dtstart = (datetime.now() + timedelta(days=3)).replace(microsecond=0)
                 second = dtstart + timedelta(days=7)
-                start = second + timedelta(hours=1) if change == "move" else second
-                series_location = (
-                    "LOCATION:Room C\n" if change == "series location" else ""
-                )
-                location = (
-                    "LOCATION:Room B\n" if change == "location" else series_location
-                )
-                role = ";ROLE=OPT-PARTICIPANT" if change == "role" else ""
                 declining = "declining@external-a.test"
                 other = "other@external-b.test"
                 event_uid = f"one-date-{datetime.now().timestamp()}"
                 fmt = "%Y%m%dT%H%M%SZ"
 
-                def master(extra=""):
+                def entry(start, header, organizer_params, extra="", other_params=""):
+                    end = (
+                        ""
+                        if change == "no end"
+                        else f"DTEND:{(start + timedelta(hours=1)).strftime(fmt)}\n"
+                    )
                     return f"""BEGIN:VEVENT
 UID:{event_uid}
-DTSTART:{dtstart.strftime(fmt)}
-DTEND:{(dtstart + timedelta(hours=1)).strftime(fmt)}
-RRULE:FREQ=WEEKLY;COUNT=3
-SUMMARY:Weekly event
-{extra}ORGANIZER;CN=Organizer:mailto:{organizer.email}
+{header}DTSTART:{start.strftime(fmt)}
+{end}SUMMARY:Weekly event
+{extra}ORGANIZER;{organizer_params}:mailto:{organizer.email}
 ATTENDEE;RSVP=TRUE:mailto:{declining}
-ATTENDEE;RSVP=TRUE:mailto:{other}
+ATTENDEE;RSVP=TRUE{other_params}:mailto:{other}
 END:VEVENT"""
 
-                event = caldav_calendar.save_event(
-                    f"BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Test//EN\n"
-                    f"{master()}\nEND:VCALENDAR"
-                )
+                def calendar(*entries):
+                    body = "\n".join(entries)
+                    return (
+                        "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Test//EN\n"
+                        f"{body}\nEND:VCALENDAR"
+                    )
+
+                # A raw PUT keeps the order of the parameters.
+                event_url = f"{str(caldav_calendar.url).rstrip('/')}/{event_uid}.ics"
+
+                def put(body):
+                    response = client.put(
+                        event_url, body, {"Content-Type": "text/calendar"}
+                    )
+                    assert response.status < 300
+
+                organizer_params = "CN=Organizer;LANGUAGE=fr"
+                series = "RRULE:FREQ=WEEKLY;COUNT=3\n"
+                put(calendar(entry(dtstart, series, organizer_params)))
                 _wait_for_callbacks(callback_data, expected_count=2)
                 callback_data["requests"] = []
 
-                event.data = f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Test//EN
-{master(series_location)}
-BEGIN:VEVENT
-UID:{event_uid}
-RECURRENCE-ID:{second.strftime(fmt)}
-DTSTART:{start.strftime(fmt)}
-DTEND:{(start + timedelta(hours=1)).strftime(fmt)}
-SUMMARY:Weekly event
-{location}ORGANIZER;CN=Organizer:mailto:{organizer.email}
-ATTENDEE;PARTSTAT=DECLINED:mailto:{declining}
-ATTENDEE;RSVP=TRUE{role}:mailto:{other}
-END:VEVENT
-END:VCALENDAR"""
-                event.save()
+                if change == "reordered parameters":
+                    organizer_params = "LANGUAGE=fr;CN=Organizer"
+                series_location = (
+                    "LOCATION:Room C\n" if change == "series location" else ""
+                )
+                answer = entry(
+                    second + timedelta(hours=1) if change == "move" else second,
+                    f"RECURRENCE-ID:{second.strftime(fmt)}\n",
+                    organizer_params,
+                    "LOCATION:Room B\n" if change == "location" else series_location,
+                    ";ROLE=OPT-PARTICIPANT" if change == "role" else "",
+                ).replace(
+                    f"ATTENDEE;RSVP=TRUE:mailto:{declining}",
+                    f"ATTENDEE;PARTSTAT=DECLINED:mailto:{declining}",
+                )
+                put(
+                    calendar(
+                        entry(dtstart, series, organizer_params, series_location),
+                        answer,
+                    )
+                )
                 _wait_for_callbacks(callback_data, expected_count=2, timeout=1.0)
 
                 recipients = {
                     re.sub(r"(?i)^mailto:", "", r["headers"].get("X-LS-Recipient", ""))
                     for r in callback_data["requests"]
                 }
-                expected = set() if change == "answer" else {declining, other}
-                assert recipients == expected
+                assert recipients == ({declining, other} if sends else set())
 
             except NotFoundError:
                 pytest.skip("Calendar not found - CalDAV server may not be running")

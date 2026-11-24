@@ -17,6 +17,7 @@ use Sabre\HTTP\ResponseInterface;
 use Sabre\VObject\Component\VCalendar;
 use Sabre\VObject\Component\VEvent;
 use Sabre\VObject\ITip\Message;
+use Sabre\VObject\Property;
 use Sabre\VObject\Reader;
 use Sabre\VObject\Recur\EventIterator;
 
@@ -205,7 +206,6 @@ class HttpCallbackIMipPlugin extends IMipPlugin
 
         $date = $vevent->{'RECURRENCE-ID'}->getDateTime();
         $occurrences = new EventIterator($stored, (string) $vevent->UID);
-        $occurrences->fastForward($date);
         while ($occurrences->valid() && $occurrences->getDtStart() < $date) {
             $occurrences->next();
         }
@@ -235,8 +235,8 @@ class HttpCallbackIMipPlugin extends IMipPlugin
 
     /**
      * @param string[] $skipped Names of the properties to leave out
-     * @return string[] Sorted serialized children, without the answers of
-     *                  the attendees
+     * @return string[] Sorted serialized children, with sorted parameters
+     *                  and without the answers of the attendees
      */
     private function answerless(VEvent $vevent, array $skipped): array
     {
@@ -245,18 +245,20 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             if (in_array($child->name, $skipped, true)) {
                 continue;
             }
-            if ('ATTENDEE' !== $child->name) {
+            if (!$child instanceof Property) {
                 $children[] = $child->serialize();
                 continue;
             }
+            $isAttendee = 'ATTENDEE' === $child->name;
             $parameters = [];
             foreach ($child->parameters() as $parameter) {
-                if (!in_array($parameter->name, self::ANSWER_PARAMETERS, true)) {
+                if (!$isAttendee || !in_array($parameter->name, self::ANSWER_PARAMETERS, true)) {
                     $parameters[] = $parameter->serialize();
                 }
             }
             sort($parameters);
-            $children[] = 'ATTENDEE:' . $this->normalizeEmail($child->getValue()) . ';' . implode(';', $parameters);
+            $value = $isAttendee ? $this->normalizeEmail($child->getValue()) : $child->getRawMimeDirValue();
+            $children[] = $child->name . ';' . implode(';', $parameters) . ':' . $value;
         }
         sort($children);
         return $children;
