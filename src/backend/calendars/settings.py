@@ -962,6 +962,26 @@ class Base(Configuration):
                 "OIDC_ALLOW_DUPLICATE_EMAILS cannot be set to True simultaneously. "
             )
 
+        # DeployCenter refuses a request that has no siret. After login, the
+        # backend sends the external_id of the organization as the organization
+        # claim. Thus both settings must use siret.
+        deploycenter = (
+            "core.entitlements.backends.deploycenter.DeployCenterEntitlementsBackend"
+        )
+        if cls.ENTITLEMENTS_BACKEND == deploycenter:
+            # pylint: disable-next=no-member
+            claims = cls.ENTITLEMENTS_BACKEND_PARAMETERS.get("oidc_claims") or []
+            if "siret" not in claims:
+                raise ValueError(
+                    "ENTITLEMENTS_BACKEND_PARAMETERS must have siret in oidc_claims "
+                    "for the DeployCenter backend."
+                )
+            if cls.OIDC_USERINFO_ORGANIZATION_CLAIM != "siret":
+                raise ValueError(
+                    "OIDC_USERINFO_ORGANIZATION_CLAIM must be siret for the "
+                    "DeployCenter backend."
+                )
+
         if cls.FRONTEND_SILENT_LOGIN_ENABLED:
             missing = [
                 name

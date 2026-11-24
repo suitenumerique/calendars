@@ -62,9 +62,9 @@ Calendars checks two entitlements:
 
 1. **OIDC login** (`core/authentication/backends.py`):
    `post_get_or_create_user()` calls `get_user_entitlements()` with
-   `force_refresh=True` to warm the cache. Login always succeeds
-   regardless of `can_access` value — access is gated at API level
-   and in the frontend.
+   `force_refresh=True` to warm the cache. A denial or an unavailable
+   entitlements service does not refuse a valid login. The API and the
+   frontend gate the access.
 2. **User API** (`core/api/serializers.py`): `UserMeSerializer`
    exposes `can_access` as a field on `GET /users/me/`. Fail-closed:
    returns `False` when entitlements are unavailable.
@@ -143,7 +143,7 @@ provide these in `ENTITLEMENTS_BACKEND_PARAMETERS`:
 | `service_id` | Yes | Service identifier in DeployCenter |
 | `api_key` | Yes | API key for `X-Service-Auth: Bearer` header |
 | `timeout` | No | HTTP timeout in seconds (default: 10) |
-| `oidc_claims` | No | OIDC claim names to forward as query params |
+| `oidc_claims` | Yes | OIDC claim names to forward as query params. Must contain `siret` |
 
 ### Example production configuration
 
@@ -151,6 +151,7 @@ provide these in `ENTITLEMENTS_BACKEND_PARAMETERS`:
 ENTITLEMENTS_BACKEND=core.entitlements.backends.deploycenter.DeployCenterEntitlementsBackend
 ENTITLEMENTS_BACKEND_PARAMETERS='{"base_url":"https://deploycenter.example.com/api/v1.0/entitlements/","service_id":"calendar","api_key":"secret","timeout":10,"oidc_claims":["siret"]}'
 ENTITLEMENTS_CACHE_TIMEOUT=300
+OIDC_USERINFO_ORGANIZATION_CLAIM=siret
 ```
 
 ## Backend interface
@@ -181,11 +182,17 @@ GET {base_url}?service_id=X&account_type=user&account_email=X
 
 Headers: `X-Service-Auth: Bearer {api_key}`
 
-Query parameters include any configured `oidc_claims` extracted from
-the OIDC user_info response (e.g. `siret`).
+Query parameters include the configured `oidc_claims` (e.g. `siret`).
+DeployCenter requires `siret` on each request. Set `oidc_claims` to
+`["siret"]` and `OIDC_USERINFO_ORGANIZATION_CLAIM` to `siret`: after
+login, the backend sends the `external_id` of the user's organization.
 
 Expected response:
-`{"entitlements": {"can_access": true, "can_admin": false}}`
+`{"entitlements": {"can_access": true, "is_admin": false}}`
+
+DeployCenter gives `is_admin` only when the organization has a
+Calendars subscription. Access can come from the Messages subscription
+alone.
 
 ## Access control flow
 
@@ -194,7 +201,8 @@ exposes entitlements data, and the frontend gates access.
 
 ### On login
 
-1. User authenticates via OIDC — login always succeeds
+1. User authenticates via OIDC. A denial or an unavailable
+   entitlements service does not refuse a valid login.
 2. `post_get_or_create_user` calls `get_user_entitlements()` with
    `force_refresh=True` to warm the cache
 3. If entitlements are unavailable, a warning is logged but login
@@ -216,7 +224,7 @@ the main application.
 ### Caching behavior
 
 - The DeployCenter backend caches results in Django's cache framework
-  (key: `entitlements:user:{user_sub}`, TTL:
+  (key: `entitlements:user:{user_sub}:{claims}`, TTL:
   `ENTITLEMENTS_CACHE_TIMEOUT`).
 - On login, `force_refresh=True` bypasses the cache for fresh data.
 - If the API fails during a forced refresh, stale cached data is

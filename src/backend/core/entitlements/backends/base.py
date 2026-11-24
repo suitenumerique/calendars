@@ -15,9 +15,11 @@ class EntitlementsBackend(ABC):
         Args:
             user_sub: The user's OIDC subject identifier.
             user_email: The user's email address.
-            user_info: The full OIDC user_info dict (backends may
-                extract claims from it).
-            force_refresh: If True, bypass any cache and fetch fresh data.
+            user_info: The claims for the lookup. It can contain only the
+                organization claim.
+            force_refresh: If True, request fresh entitlements, also when
+                the cache has an entry. When the request fails, the backend
+                can return the cache entry.
 
         Returns:
             dict: {

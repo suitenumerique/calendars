@@ -71,3 +71,52 @@ def test_silent_login_no_warning(caplog, silent_login_enabled, logout_endpoint):
     TestSettings().post_setup()
 
     assert "FRONTEND_SILENT_LOGIN_ENABLED" not in caplog.text
+
+
+DEPLOYCENTER = "core.entitlements.backends.deploycenter.DeployCenterEntitlementsBackend"
+
+
+@pytest.mark.parametrize(
+    "oidc_claims, org_claim, message",
+    [
+        (
+            [],
+            "siret",
+            "ENTITLEMENTS_BACKEND_PARAMETERS must have siret in oidc_claims "
+            "for the DeployCenter backend.",
+        ),
+        (
+            ["siret"],
+            "organization",
+            "OIDC_USERINFO_ORGANIZATION_CLAIM must be siret for the "
+            "DeployCenter backend.",
+        ),
+    ],
+)
+def test_deploycenter_requires_siret(oidc_claims, org_claim, message):
+    """The DeployCenter backend needs siret in both claim settings."""
+
+    class TestSettings(Base):
+        """Fake test settings."""
+
+        ENTITLEMENTS_BACKEND = DEPLOYCENTER
+        ENTITLEMENTS_BACKEND_PARAMETERS = {"oidc_claims": oidc_claims}
+        OIDC_USERINFO_ORGANIZATION_CLAIM = org_claim
+
+    with pytest.raises(ValueError) as excinfo:
+        TestSettings().post_setup()
+
+    assert str(excinfo.value) == message
+
+
+def test_deploycenter_with_siret_is_valid():
+    """The DeployCenter backend starts when both claim settings use siret."""
+
+    class TestSettings(Base):
+        """Fake test settings."""
+
+        ENTITLEMENTS_BACKEND = DEPLOYCENTER
+        ENTITLEMENTS_BACKEND_PARAMETERS = {"oidc_claims": ["siret"]}
+        OIDC_USERINFO_ORGANIZATION_CLAIM = "siret"
+
+    TestSettings().post_setup()

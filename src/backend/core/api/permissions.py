@@ -41,7 +41,7 @@ class IsEntitledToAccess(IsAuthenticated):
         if not super().has_permission(request, view):
             return False
         try:
-            entitlements = get_user_entitlements(request.user.sub, request.user.email)
+            entitlements = get_user_entitlements(request.user)
             return entitlements.get("can_access", False)
         except EntitlementsUnavailableError:
             logger.warning(
@@ -62,7 +62,7 @@ class IsOrgAdmin(IsAuthenticated):
         if not super().has_permission(request, view):
             return False
         try:
-            entitlements = get_user_entitlements(request.user.sub, request.user.email)
+            entitlements = get_user_entitlements(request.user)
             return entitlements.get("can_admin", False)
         except EntitlementsUnavailableError:
             logger.warning(
