@@ -487,7 +487,7 @@ class InternalApiPlugin extends ServerPlugin
      * POST /internal-api/rsvp/
      * Find an event by UID across all calendars owned by a given email
      * (both principals/users/ and principals/mailboxes/) and update an
-     * attendee's PARTSTAT.
+     * attendee's PARTSTAT. The given email must organize the event.
      *
      * Body: {
      *   "organizer_email": "contact@company.com",
@@ -540,31 +540,34 @@ class InternalApiPlugin extends ServerPlugin
                 . ' JOIN principals p ON p.uri = ci.principaluri'
                 . ' WHERE co.uid = ? AND lower(p.email) = ?'
                 . ' FOR UPDATE'
-                . ' LIMIT 1'
             );
             $stmt->execute([$uid, $email]);
-            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            // The principal can also own an attendee copy of the meeting, for
+            // example after a move to a calendar with another identity. Only
+            // the event that the principal organizes takes the reply.
+            $row = null;
+            $vcalendar = null;
+            $vevent = null;
+            foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $candidate) {
+                $ical = $candidate['calendardata'];
+                if (is_resource($ical)) {
+                    $ical = stream_get_contents($ical);
+                }
+                $calendar = \Sabre\VObject\Reader::read($ical);
+                $event = $calendar->getBaseComponent('VEVENT') ?? $calendar->VEVENT;
+                $organizer = strtolower(preg_replace('/^mailto:/i', '', trim((string) $event?->ORGANIZER)));
+                if ($organizer === $email) {
+                    [$row, $vcalendar, $vevent] = [$candidate, $calendar, $event];
+                    break;
+                }
+            }
 
             if (!$row) {
                 $this->pdo->rollBack();
                 $response->setStatus(404);
                 $response->setHeader('Content-Type', 'application/json');
                 $response->setBody(json_encode(['error' => 'Event not found']));
-                return false;
-            }
-
-            $ical = $row['calendardata'];
-            if (is_resource($ical)) {
-                $ical = stream_get_contents($ical);
-            }
-
-            $vcalendar = \Sabre\VObject\Reader::read($ical);
-            $vevent = $vcalendar->getBaseComponent('VEVENT') ?? $vcalendar->VEVENT;
-            if (!$vevent) {
-                $this->pdo->rollBack();
-                $response->setStatus(404);
-                $response->setHeader('Content-Type', 'application/json');
-                $response->setBody(json_encode(['error' => 'No VEVENT in calendar data']));
                 return false;
             }
 
