@@ -62,21 +62,14 @@ def test_user_sync_sends_the_transparency():
 
 @override_settings(FEATURE_MESSAGES_INTEGRATION=True)
 def test_mailbox_setup_sends_the_transparency():
-    """The creator instance and the fan-out use the mailbox data.
+    """The creator instance uses the mailbox data.
 
     Alice is a delegate of the mailbox of Bob.
     """
     service, request = _service()
     user = factories.UserFactory(email="alice@example.com")
-    mailbox = {
-        **PERSON,
-        "role": "sender",
-        "users": [{"email": user.email, "role": "sender"}],
-    }
-    request.side_effect = [
-        mock.Mock(status_code=201, json=mock.Mock(return_value={})),
-        mock.Mock(status_code=200, json=mock.Mock(return_value={"active": []})),
-    ]
+    mailbox = {**PERSON, "role": "sender"}
+    request.return_value = mock.Mock(status_code=201, json=mock.Mock(return_value={}))
 
     with (
         mock.patch.object(service, "_get_user_mailbox", return_value=mailbox),
@@ -87,6 +80,5 @@ def test_mailbox_setup_sends_the_transparency():
     ):
         service.setup(user, "Bob", mailbox_email=PERSON["email"])
 
-    create, sync = request.call_args_list
-    assert create.kwargs["json"]["caller_transparent"] is True
-    assert sync.kwargs["json"]["shares"][0]["transparent"] is True
+    request.assert_called_once()
+    assert request.call_args.kwargs["json"]["caller_transparent"] is True

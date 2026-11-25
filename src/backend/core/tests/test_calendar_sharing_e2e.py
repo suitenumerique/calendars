@@ -4391,14 +4391,16 @@ class TestMailboxCalendarTransparency:
         settings.FEATURE_MESSAGES_INTEGRATION = True
         domain = "transp-person.com"
         org = factories.OrganizationFactory(external_id=domain)
-        users = []
-        for name in ("bob", "alice", "querier"):
-            user = factories.UserFactory(email=f"{name}@{domain}", organization=org)
-            CalendarService().create_calendar(user, name=name)
-            client = APIClient()
-            client.force_login(user)
-            users.append((user, client))
-        (bob, bob_client), (alice, _), (querier, q_client) = users
+        bob, alice, querier = (
+            factories.UserFactory(email=f"{name}@{domain}", organization=org)
+            for name in ("bob", "alice", "querier")
+        )
+        for user in (bob, alice, querier):
+            CalendarService().create_calendar(user, name=user.email)
+        bob_client = APIClient()
+        bob_client.force_login(bob)
+        q_client = APIClient()
+        q_client.force_login(querier)
 
         mailbox = {
             "email": bob.email,
