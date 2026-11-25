@@ -1072,6 +1072,20 @@ export class CalDavService {
         icsCalendar.events = [...icsCalendar.events];
         icsCalendar.events[existingIndex] = updatedEvent;
 
+        // SabreDAV refuses a series whose components have different
+        // organizers. The overrides take the organizer of the series.
+        const organizer = updatedEvent.organizer;
+        if (organizer && !updatedEvent.recurrenceId) {
+          icsCalendar.events = icsCalendar.events.map((e) =>
+            e.uid === updatedEvent.uid &&
+            e.recurrenceId &&
+            e.organizer &&
+            e.organizer.email.toLowerCase() !== organizer.email.toLowerCase()
+              ? { ...e, organizer }
+              : e,
+          );
+        }
+
         // When updating the source of a recurring series with a time change,
         // shift EXDATE entries and override RECURRENCE-IDs to match the new occurrence times.
         if (updatedEvent.recurrenceRule && !updatedEvent.recurrenceId) {

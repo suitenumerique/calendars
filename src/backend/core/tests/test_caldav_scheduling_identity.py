@@ -554,6 +554,36 @@ class TestMoveChangesOrganizer:
         data = client.calendar(url=second_url).event_by_url(target).data
         assert f"ORGANIZER:mailto:{organizer}" in data
 
+    def test_series_without_attendees_takes_new_organizer_after_move(self, callbacks):
+        """A series without attendees only moves. An update can then give the
+        new organizer to all its components, and nothing is sent."""
+        user = factories.UserFactory(email=f"user-{secrets.token_hex(4)}@{DOMAIN}")
+        organizer = f"organizer-{secrets.token_hex(4)}@{DOMAIN}"
+        organizer_url = _add_mailbox_calendar(user, organizer)
+        service = CalendarService()
+        personal_url = service._calendar_url(
+            service.create_calendar(user, name="Personal")
+        )
+        client = service._get_client(user)
+        uid = f"identity-{secrets.token_hex(6)}"
+        headers = {"Content-Type": "text/calendar; charset=utf-8"}
+
+        url = f"{organizer_url.rstrip('/')}/{uid}.ics"
+        resp = client.request(url, "PUT", _series(uid, organizer, []), headers)
+        assert resp.status == 201
+
+        event = client.calendar(url=organizer_url).event_by_url(url)
+        target, resp = _move(client, event, personal_url)
+        assert resp.status == 201
+        data = client.calendar(url=personal_url).event_by_url(target).data
+        assert data.count(f"ORGANIZER:mailto:{organizer}") == 2
+
+        data = data.replace(f"mailto:{organizer}", f"mailto:{user.email}")
+        resp = client.request(target, "PUT", data, headers)
+        assert resp.status == 204
+        time.sleep(1)
+        assert not callbacks["requests"]
+
     @pytest.mark.parametrize("override_first", [False, True])
     def test_move_series_with_guests_on_override_changes_organizer(
         self, callbacks, override_first
