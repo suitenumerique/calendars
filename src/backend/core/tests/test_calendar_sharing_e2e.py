@@ -19,7 +19,9 @@ from rest_framework.test import APIClient
 
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
+from core.models import Organization
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
+from core.services.setup_service import SetupService
 
 pytestmark = [
     pytest.mark.django_db,
@@ -3969,13 +3971,14 @@ class TestSyncManagedCalendarDeletion:
         assert _list_calendar_urls(sharee) == before_sharee
 
 
-def _setup_mailbox_members(prefix, *members):
+def _setup_mailbox_members(prefix, *members, transparent=None):
     """Create a mailbox calendar synced to every member.
 
     Returns (users, mailbox_email, {member email: instance URI}). Each
     user is a (user, client, calendar path) tuple. The members are in a
     different organization from the mailbox. The mailbox organization
     comes from the mailbox domain, as in ``_resolve_mailbox_org_id``.
+    ``transparent`` is the optional flag of each synced share.
     """
     org = factories.OrganizationFactory(external_id=prefix)
     mailbox_email = f"team@{prefix}.com"
@@ -3991,6 +3994,7 @@ def _setup_mailbox_members(prefix, *members):
                 "mailbox_email": mailbox_email,
                 "privilege": "read-write",
             }
+            | ({} if transparent is None else {"transparent": transparent})
             for user, _, _ in users
         ],
     )
@@ -4261,3 +4265,211 @@ class TestHiddenCalendar:
 
         assert resp.status_code == 403
         assert cal_uri in _home_listing(member_client, member.email)
+
+
+def _is_busy(freebusy_response):
+    """Return True when a free/busy response has a busy period."""
+    return re.search(r"^FREEBUSY", freebusy_response, re.MULTILINE) is not None
+
+
+def _set_schedule_transp(client, user_email, cal_uri, value):
+    """Set schedule-calendar-transp ("opaque" or "transparent")."""
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<D:propertyupdate xmlns:D="DAV:" '
+        'xmlns:C="urn:ietf:params:xml:ns:caldav">'
+        "<D:set><D:prop>"
+        f"<C:schedule-calendar-transp><C:{value}/></C:schedule-calendar-transp>"
+        "</D:prop></D:set>"
+        "</D:propertyupdate>"
+    )
+    resp = client.generic(
+        "PROPPATCH",
+        f"/caldav/calendars/users/{user_email}/{cal_uri}/",
+        data=body,
+        content_type="application/xml",
+    )
+    assert resp.status_code == 207, resp.content.decode()[:500]
+    assert "200 OK" in resp.content.decode()
+
+
+class TestMailboxCalendarTransparency:
+    """The sync tells if a new mailbox instance starts transparent.
+
+    A transparent instance does not make its user busy. Without the flag,
+    the instance starts opaque. The user can change it, and the sync keeps
+    the choice.
+    """
+
+    def test_instances_start_opaque_without_the_flag(self):
+        """An older caller that does not send the flag keeps the old default."""
+        users, _, uris = _setup_mailbox_members(
+            "transp-none", "creator", "member", "querier"
+        )
+        (creator, creator_client, _), (member, _, _), (querier, q_client, _) = users
+        _put_event(creator_client, creator.email, uris[creator.email], "none-ev")
+
+        assert _is_busy(_freebusy_of(q_client, querier.email, creator.email))
+        assert _is_busy(_freebusy_of(q_client, querier.email, member.email))
+
+    def test_transparent_instances_do_not_make_members_busy(self):
+        """The mailbox events make the mailbox busy, but not its members."""
+        users, mailbox_email, uris = _setup_mailbox_members(
+            "transp-true", "creator", "member", "querier", transparent=True
+        )
+        (creator, creator_client, _), (member, _, _), (querier, q_client, _) = users
+        _put_event(creator_client, creator.email, uris[creator.email], "true-ev")
+
+        mailbox_org = Organization.objects.get(external_id="transp-true.com")
+        colleague, c_client, _ = _create_user_with_calendar(mailbox_org, "colleague")
+        assert _is_busy(_freebusy_of(c_client, colleague.email, mailbox_email))
+        assert not _is_busy(_freebusy_of(q_client, querier.email, creator.email))
+        assert not _is_busy(_freebusy_of(q_client, querier.email, member.email))
+
+    def test_sync_keeps_the_choice_of_the_user(self):
+        """A later sync does not change the transparency of an instance."""
+        users, mailbox_email, uris = _setup_mailbox_members(
+            "transp-keep", "creator", "member", "querier", transparent=True
+        )
+        (creator, creator_client, _), (member, member_client, _) = users[:2]
+        querier, q_client, _ = users[2]
+        _put_event(creator_client, creator.email, uris[creator.email], "keep-ev")
+
+        _set_schedule_transp(member_client, member.email, uris[member.email], "opaque")
+        for privilege, transparent in (("read", True), ("read-write", False)):
+            _sync_mailbox_acls(
+                creator,
+                [
+                    {
+                        "user_email": user.email,
+                        "mailbox_email": mailbox_email,
+                        "privilege": privilege,
+                        "transparent": transparent,
+                    }
+                    for user in (creator, member)
+                ],
+            )
+
+        assert _is_busy(_freebusy_of(q_client, querier.email, member.email))
+        assert not _is_busy(_freebusy_of(q_client, querier.email, creator.email))
+
+    @pytest.mark.parametrize("transparent", [True, False])
+    def test_creator_instance_follows_the_flag(self, transparent):
+        """The calendar creation applies the flag to the creator instance."""
+        prefix = f"transp-create-{str(transparent).lower()}"
+        org = factories.OrganizationFactory(external_id=prefix)
+        mailbox_org = factories.OrganizationFactory(external_id=f"{prefix}.com")
+        creator, creator_client, _ = _create_user_with_calendar(org, f"c-{prefix}")
+        querier, q_client, _ = _create_user_with_calendar(org, f"q-{prefix}")
+
+        resp = http.internal_request(
+            "POST",
+            creator,
+            "internal-api/calendars/",
+            json={
+                "email": f"team@{prefix}.com",
+                "calendar_user_type": "MAILBOX",
+                "org_id": str(mailbox_org.id),
+                "caller_email": creator.email,
+                "caller_transparent": transparent,
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        uri = resp.json()["caller_calendar_uri"]
+        _put_event(creator_client, creator.email, uri, f"{prefix}-ev")
+
+        assert _is_busy(_freebusy_of(q_client, querier.email, creator.email)) is (
+            not transparent
+        )
+
+    def test_delegate_is_free_and_owner_is_busy(self, settings):
+        """Bob owns his mailbox, and Alice is his delegate.
+
+        The setup and the syncs use the Messages data. The events of the
+        mailbox make Bob busy, but not Alice.
+        """
+        settings.FEATURE_MESSAGES_INTEGRATION = True
+        domain = "transp-person.com"
+        org = factories.OrganizationFactory(external_id=domain)
+        bob, alice, querier = (
+            factories.UserFactory(email=f"{name}@{domain}", organization=org)
+            for name in ("bob", "alice", "querier")
+        )
+        for user in (bob, alice, querier):
+            CalendarService().create_calendar(user, name=user.email)
+        bob_client = APIClient()
+        bob_client.force_login(bob)
+        q_client = APIClient()
+        q_client.force_login(querier)
+
+        mailbox = {
+            "email": bob.email,
+            "is_identity": True,
+            "users": [
+                {"email": bob.email, "role": "admin"},
+                {"email": alice.email, "role": "sender"},
+            ],
+        }
+        roles = {bob.email: "admin", alice.email: "sender"}
+        service = SetupService()
+        service._messages = mock.MagicMock()  # pylint: disable=protected-access
+        service.messages.get_user_mailboxes.side_effect = lambda email, **kwargs: [
+            {**mailbox, "role": roles[email]}
+        ]
+
+        result = service.setup(bob, "Bob", mailbox_email=bob.email)
+        for user in (bob, alice):
+            service.sync_user_mailboxes(user)
+
+        uri = result["calendar_path"].rsplit("/", maxsplit=1)[-1]
+        _put_event(bob_client, bob.email, uri, "person-ev")
+        assert _is_busy(_freebusy_of(q_client, querier.email, bob.email))
+        assert not _is_busy(_freebusy_of(q_client, querier.email, alice.email))
+
+    @pytest.mark.parametrize("value", ["yes", None])
+    def test_invalid_sync_flag_is_refused(self, value):
+        """The sync flag must be a boolean when it is present."""
+        org = factories.OrganizationFactory(external_id="transp-invalid")
+        user, _, _ = _create_user_with_calendar(org, "transp-invalid")
+
+        resp = http.internal_request(
+            "POST",
+            user,
+            "internal-api/sync-mailbox-acls/",
+            json={
+                "shares": [
+                    {
+                        "user_email": user.email,
+                        "mailbox_email": "team@transp-invalid.com",
+                        "privilege": "read",
+                        "transparent": value,
+                    }
+                ]
+            },
+        )
+
+        assert resp.status_code == 400
+
+    @pytest.mark.parametrize("value", ["yes", None])
+    def test_invalid_create_flag_is_refused(self, value):
+        """The creation flag must be a boolean when it is present."""
+        org = factories.OrganizationFactory(external_id="transp-invalid-create")
+        mailbox_org = factories.OrganizationFactory(
+            external_id="transp-invalid-create.com"
+        )
+        user, _, _ = _create_user_with_calendar(org, "transp-invalid-create")
+
+        resp = http.internal_request(
+            "POST",
+            user,
+            "internal-api/calendars/",
+            json={
+                "email": "team@transp-invalid-create.com",
+                "calendar_user_type": "MAILBOX",
+                "org_id": str(mailbox_org.id),
+                "caller_email": user.email,
+                "caller_transparent": value,
+            },
+        )
+
+        assert resp.status_code == 400

@@ -249,6 +249,12 @@ Messages. These instances expose `LS:calendar-sync-managed`. The web app
 then offers "Hide this calendar" instead of a delete action. Manual
 shares do not have it.
 
+A sync-managed instance starts transparent only for a delegate of a
+person's mailbox (`is_identity` is true, and the mailbox email is not
+the user's email). The other instances start opaque, because Messages
+does not tell a team mailbox from an alias. The sync keeps the choice of
+the user.
+
 A mailbox admin can delete a mailbox calendar for every user with
 `DELETE /api/v1.0/calendars/mailboxes/{mailbox_email}/{calendar_uri}/`.
 `calendar_uri` is the URI of the admin's own instance. The calendar,
