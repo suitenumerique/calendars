@@ -14,6 +14,7 @@ use Sabre\CalDAV\Schedule\IMipPlugin;
 use Sabre\DAV\Server;
 use Sabre\HTTP\RequestInterface;
 use Sabre\HTTP\ResponseInterface;
+use Sabre\VObject\Component;
 use Sabre\VObject\Component\VCalendar;
 use Sabre\VObject\Component\VEvent;
 use Sabre\VObject\ITip\Message;
@@ -255,17 +256,18 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     /**
      * @param string[] $skipped Names of the properties to leave out
      * @return string[] Sorted serialized children, with sorted parameters
-     *                  and without the answers of the attendees
+     *                  and without the answers of the attendees. Nested
+     *                  components get the same treatment.
      */
-    private function answerless(VEvent $vevent, array $skipped): array
+    private function answerless(Component $component, array $skipped): array
     {
         $children = [];
-        foreach ($vevent->children() as $child) {
+        foreach ($component->children() as $child) {
             if (in_array($child->name, $skipped, true)) {
                 continue;
             }
             if (!$child instanceof Property) {
-                $children[] = $child->serialize();
+                $children[] = $child->name . '{' . implode("\n", $this->answerless($child, [])) . '}';
                 continue;
             }
             $isAttendee = 'ATTENDEE' === $child->name;

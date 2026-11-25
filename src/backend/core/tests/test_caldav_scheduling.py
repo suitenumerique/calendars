@@ -542,6 +542,7 @@ END:VCALENDAR"""
             ("reordered parameters", False),
             ("no end", False),
             ("same timezone", False),
+            ("reordered alarm", False),
             ("move", True),
             ("moved date", True),
             ("location", True),
@@ -549,18 +550,19 @@ END:VCALENDAR"""
             ("role", True),
             ("timezone", True),
             ("floating", True),
+            ("alarm", True),
         ],
     )
     def test_scheduling_callback_skips_answer_for_one_date(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
         self, change, sends
     ):
         """A new entry for a regular date that only records an answer
-        sends no message, also when the client writes the parameters in
-        another order, the event has no end or uses a custom timezone.
-        When the write also moves the date, adds a date where a moved date
-        starts, changes a location, changes a role, changes the timezone
-        or gives a timezone to a floating time, all the attendees get an
-        update."""
+        sends no message, also when the client writes the parameters or
+        the alarm in another order, the event has no end or uses a custom
+        timezone. When the write also moves the date, adds a date where a
+        moved date starts, changes a location, changes a role, changes the
+        timezone, gives a timezone to a floating time or changes an alarm,
+        all the attendees get an update."""
         organizer = factories.UserFactory(email="organizer-one-date@example.com")
         service = CalendarService()
         caldav_path = service.create_calendar(
@@ -642,6 +644,12 @@ END:VTIMEZONE
 
                 organizer_params = "CN=Organizer;LANGUAGE=fr"
                 series = "RRULE:FREQ=WEEKLY;COUNT=3\n"
+                alarm = ""
+                if change in ("reordered alarm", "alarm"):
+                    alarm = (
+                        "BEGIN:VALARM\nTRIGGER:-PT15M\nACTION:DISPLAY\n"
+                        'DESCRIPTION;LANGUAGE=fr;ALTREP="cid:a":Rappel\nEND:VALARM\n'
+                    )
                 # The first date moves to the start of the second date,
                 # which the series excludes.
                 moved = []
@@ -654,7 +662,7 @@ END:VTIMEZONE
                             organizer_params,
                         )
                     ]
-                put(calendar(entry(dtstart, series, organizer_params), *moved))
+                put(calendar(entry(dtstart, series, organizer_params, alarm), *moved))
                 _wait_for_callbacks(callback_data, expected_count=2)
                 callback_data["requests"] = []
 
@@ -663,11 +671,20 @@ END:VTIMEZONE
                 series_location = (
                     "LOCATION:Room C\n" if change == "series location" else ""
                 )
+                answer_alarm = {
+                    "reordered alarm": (
+                        "BEGIN:VALARM\nACTION:DISPLAY\n"
+                        'DESCRIPTION;ALTREP="cid:a";LANGUAGE=fr:Rappel\n'
+                        "TRIGGER:-PT15M\nEND:VALARM\n"
+                    ),
+                    "alarm": alarm.replace("-PT15M", "-PT30M"),
+                }.get(change, "")
                 answer = entry(
                     second + timedelta(hours=1) if change == "move" else second,
                     f"RECURRENCE-ID:{second.strftime(fmt)}\n",
                     organizer_params,
-                    "LOCATION:Room B\n" if change == "location" else series_location,
+                    ("LOCATION:Room B\n" if change == "location" else series_location)
+                    + answer_alarm,
                     ";ROLE=OPT-PARTICIPANT" if change == "role" else "",
                 ).replace(
                     f"ATTENDEE;RSVP=TRUE:mailto:{declining}",
@@ -675,7 +692,9 @@ END:VTIMEZONE
                 )
                 put(
                     calendar(
-                        entry(dtstart, series, organizer_params, series_location),
+                        entry(
+                            dtstart, series, organizer_params, series_location + alarm
+                        ),
                         *moved,
                         answer,
                         offset="+0200" if change == "timezone" else "+0100",
