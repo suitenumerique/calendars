@@ -18,6 +18,7 @@ from rest_framework.test import APIClient
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.models import Organization
+from core.services.messages_service import MessagesServiceError
 
 pytestmark = pytest.mark.django_db
 
@@ -238,6 +239,24 @@ def test_delete_mailbox_calendar_caldav_failure(client):
         "code": "calendar_deletion_failed",
         "detail": "Calendar deletion failed.",
     }
+
+
+def test_delete_mailbox_calendar_messages_failure(client):
+    """A failed Messages lookup gives a 500, and not a denied access."""
+    with (
+        mock.patch("core.services.setup_service.MessagesService") as mock_messages_cls,
+        mock.patch(
+            "core.services.caldav_service.requests.Session.request"
+        ) as mock_request,
+    ):
+        mock_messages_cls.return_value.get_user_mailboxes.side_effect = (
+            MessagesServiceError("down")
+        )
+        response = client.delete(URL)
+
+    assert response.status_code == HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json() == {"detail": "Calendar deletion failed."}
+    mock_request.assert_not_called()
 
 
 def test_delete_mailbox_calendar_messages_disabled(client):

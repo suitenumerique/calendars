@@ -197,6 +197,7 @@ class SetupService:
 
         Raises:
             SetupServiceError on failure.
+            MessagesServiceError when the Messages lookup fails.
         """
         if mailbox_email:
             return self._setup_mailbox(user, name, mailbox_email, color=color)
@@ -428,17 +429,13 @@ class SetupService:
 
         Raises an error when the Messages integration is disabled or the
         user has no role on the mailbox.
+        Raises MessagesServiceError when the Messages lookup fails. Then
+        the access is not known. This is not a denied access.
         """
         if not settings.FEATURE_MESSAGES_INTEGRATION:
             raise MessagesDisabledError("Messages integration is not enabled")
 
-        try:
-            mailboxes = self.messages.get_user_mailboxes(user.email, use_cache=False)
-        except MessagesServiceError as exc:
-            # Access cannot be checked, so deny it.
-            raise MailboxAccessDeniedError(
-                f"Messages lookup failed for {user.email}: {exc}"
-            ) from exc
+        mailboxes = self.messages.get_user_mailboxes(user.email, use_cache=False)
         user_mailbox = next(
             (mb for mb in mailboxes if mb.get("email") == mailbox_email),
             None,
