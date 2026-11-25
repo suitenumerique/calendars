@@ -21,6 +21,7 @@ from core.services.caldav_service import (
     verify_caldav_access,
 )
 from core.services.import_service import MAX_FILE_SIZE
+from core.services.messages_service import MessagesServiceError
 from core.services.resource_service import ResourceProvisioningError, ResourceService
 from core.services.setup_service import (
     MailboxAccessDeniedError,
@@ -392,6 +393,15 @@ class CalendarViewSet(viewsets.GenericViewSet):
         try:
             SetupService().delete_mailbox_calendar(
                 request.user, mailbox_email, calendar_uri
+            )
+        except MessagesServiceError:
+            logger.exception(
+                "Messages lookup failed for the mailbox calendar delete of user %s",
+                request.user.pk,
+            )
+            return response.Response(
+                {"detail": "Calendar deletion failed."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         except SetupServiceError as exc:
             logger.warning(

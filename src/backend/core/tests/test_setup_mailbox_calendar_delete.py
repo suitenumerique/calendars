@@ -18,6 +18,7 @@ from rest_framework.test import APIClient
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.models import Organization
+from core.services.messages_service import MessagesServiceError
 
 pytestmark = pytest.mark.django_db
 
@@ -111,7 +112,10 @@ def test_delete_mailbox_calendar_requires_admin_role(client, role):
 
 
 def test_delete_mailbox_calendar_ignores_a_cached_admin_role():
-    """A demoted admin cannot delete while the cache still says admin."""
+    """A demoted admin cannot delete while the cache still says admin.
+
+    The lookup does not write the cache: only the ACL sync writes it.
+    """
     org = factories.OrganizationFactory(external_id="test-org")
     user = factories.UserFactory(organization=org)
     client = APIClient()
@@ -138,6 +142,7 @@ def test_delete_mailbox_calendar_ignores_a_cached_admin_role():
 
     assert response.status_code == HTTP_403_FORBIDDEN
     assert response.json()["code"] == "mailbox_admin_required"
+    assert cache.get(f"messages:by_user:{user.email}")[0]["role"] == "admin"
     mock_caldav.assert_not_called()
 
 
@@ -234,6 +239,24 @@ def test_delete_mailbox_calendar_caldav_failure(client):
         "code": "calendar_deletion_failed",
         "detail": "Calendar deletion failed.",
     }
+
+
+def test_delete_mailbox_calendar_messages_failure(client):
+    """A failed Messages lookup gives a 500, and not a denied access."""
+    with (
+        mock.patch("core.services.setup_service.MessagesService") as mock_messages_cls,
+        mock.patch(
+            "core.services.caldav_service.requests.Session.request"
+        ) as mock_request,
+    ):
+        mock_messages_cls.return_value.get_user_mailboxes.side_effect = (
+            MessagesServiceError("down")
+        )
+        response = client.delete(URL)
+
+    assert response.status_code == HTTP_500_INTERNAL_SERVER_ERROR
+    assert response.json() == {"detail": "Calendar deletion failed."}
+    mock_request.assert_not_called()
 
 
 def test_delete_mailbox_calendar_messages_disabled(client):

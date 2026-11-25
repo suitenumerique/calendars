@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.services.setup_service import SetupService, SetupServiceError
+from core.tasks import sync_mailbox_task
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,6 @@ class SetupView(APIView):
             result = SetupService().setup(
                 request.user, name, mailbox_email=mailbox_email, color=color
             )
-            return Response(result, status=status.HTTP_201_CREATED)
         except SetupServiceError as exc:
             logger.warning(
                 "Setup rejected for user %s (mailbox=%s, code=%s): %s",
@@ -93,3 +93,17 @@ class SetupView(APIView):
                 {"error": "Failed to create calendar"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+        # The other mailbox users get the calendar from the worker, because
+        # one sync per user can take longer than the request timeout. The
+        # sync keeps the color of the caller: it only updates the access.
+        # The calendar exists, so a failed enqueue does not fail the setup.
+        # The scheduled sync shares the calendar later.
+        if mailbox_email:
+            try:
+                sync_mailbox_task.delay(mailbox_email)
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.exception(
+                    "Failed to enqueue the sync of %s", mailbox_email, exc_info=exc
+                )
+        return Response(result, status=status.HTTP_201_CREATED)

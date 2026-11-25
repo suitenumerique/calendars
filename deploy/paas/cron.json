@@ -1,0 +1,7 @@
+{
+  "jobs": [
+    {
+      "command": "*/15 * * * * python manage.py sync_mailbox_acls --enqueue"
+    }
+  ]
+}

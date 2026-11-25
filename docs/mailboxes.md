@@ -109,7 +109,8 @@ share: it sets the access and the `is_sync_managed` flag.
 
 **Recurring background sync**: schedule `sync_all_mailbox_acls` via cron
 (or call the management command periodically). It iterates users with
-organizations and resyncs their mailbox shares.
+an email and resyncs their mailbox shares. With `--enqueue`, the
+management command sends this task to the worker and exits.
 
 **Sync commands**:
 
@@ -117,6 +118,7 @@ organizations and resyncs their mailbox shares.
 python manage.py sync_mailbox_acls                          # all users
 python manage.py sync_mailbox_acls --email alice@company.com   # one user
 python manage.py sync_mailbox_acls --mailbox contact@company.com  # one mailbox
+python manage.py sync_mailbox_acls --enqueue                # all users, in the worker
 ```
 
 ## Calendar Creation
@@ -147,8 +149,8 @@ same endpoint: `POST /api/v1.0/setup/`.
      → Django verifies Alice has sender/admin access, then creates a MAILBOX
      principal under `principals/mailboxes/contact@company.com` with a
      calendar at `calendars/mailboxes/contact@company.com/default`.
-     Alice gets a sharee instance in her own calendar home. Other users
-     pick up the new calendar on their next `GET /setup/mailboxes/` call.
+     Alice gets a sharee instance in her own calendar home. The worker
+     then shares the calendar with the other users of the mailbox.
 
 ### Personal mailboxes (user.email == mailbox_email)
 
@@ -224,12 +226,12 @@ The share modal detects mailbox calendars and adapts its UI:
 ### Mailbox sharing (sync-managed)
 
 Shares are synced in two directions:
-- **On mailbox calendar creation**: `SetupService.sync_mailbox()` creates
-  shares for all users immediately. The user list comes from the `users`
-  field already included in the Messages mailbox response (no extra call).
+- **On mailbox calendar creation**: the worker runs
+  `SetupService.sync_mailbox()`, which syncs each mailbox user who has a
+  Calendars account.
 - **On each user's app open**: `GET /setup/mailboxes/` syncs that user's
   shares (picks up new mailbox calendars, updates changed roles, removes
-  stale shares). Again, one Messages API call returns everything.
+  stale shares). One Messages API call returns everything.
 
 All sync-managed shares are tagged with `is_sync_managed = TRUE`
 in `calendarinstances`. This distinguishes them from manual shares and

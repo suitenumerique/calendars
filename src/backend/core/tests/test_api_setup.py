@@ -9,6 +9,7 @@ import requests
 from rest_framework.test import APIClient
 
 from core import factories
+from core.services.messages_service import MessagesServiceError
 
 pytestmark = pytest.mark.django_db
 
@@ -115,6 +116,25 @@ def test_api_setup_unknown_mailbox_does_not_echo_details(mock_messages):
     }
 
 
+@override_settings(FEATURE_MESSAGES_INTEGRATION=True)
+@mock.patch("core.services.setup_service.MessagesService")
+def test_api_setup_messages_failure_is_not_a_denied_access(mock_messages):
+    """A failed Messages lookup gets a 500, and not the access denied code."""
+    user = factories.UserFactory()
+    mock_messages.return_value.get_user_mailboxes.side_effect = MessagesServiceError(
+        "down"
+    )
+
+    response = _client_for(user).post(
+        SETUP_URL,
+        {"name": "Team", "mailbox_email": "team@example.com"},
+        format="json",
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"error": "Failed to create calendar"}
+
+
 @mock.patch("core.services.setup_service.CalDAVHTTPClient")
 def test_api_setup_caldav_failure_hides_internal_details(mock_http):
     """A CalDAV failure does not show the internal host to the client."""
@@ -131,3 +151,53 @@ def test_api_setup_caldav_failure_hides_internal_details(mock_http):
         "code": "calendar_creation_failed",
         "error": "Calendar setup failed.",
     }
+
+
+@override_settings(FEATURE_MESSAGES_INTEGRATION=True)
+@mock.patch("core.api.viewsets_setup.sync_mailbox_task")
+@mock.patch("core.api.viewsets_setup.SetupService")
+def test_api_setup_mailbox_enqueues_the_fan_out(mock_service, mock_task):
+    """The worker shares a new mailbox calendar with the other users."""
+    user = factories.UserFactory()
+    mock_service.return_value.setup.return_value = {"calendar_path": "path"}
+
+    response = _client_for(user).post(
+        SETUP_URL,
+        {"name": "Team", "mailbox_email": "team@example.com"},
+        format="json",
+    )
+
+    assert response.status_code == 201
+    mock_task.delay.assert_called_once_with("team@example.com")
+
+
+@mock.patch("core.api.viewsets_setup.sync_mailbox_task")
+@mock.patch("core.api.viewsets_setup.SetupService")
+def test_api_setup_standalone_enqueues_no_fan_out(mock_service, mock_task):
+    """A standalone calendar has no mailbox users to sync."""
+    user = factories.UserFactory()
+    mock_service.return_value.setup.return_value = {"calendar_path": "path"}
+
+    response = _client_for(user).post(SETUP_URL, {"name": "Mine"}, format="json")
+
+    assert response.status_code == 201
+    mock_task.delay.assert_not_called()
+
+
+@override_settings(FEATURE_MESSAGES_INTEGRATION=True)
+@mock.patch("core.api.viewsets_setup.sync_mailbox_task")
+@mock.patch("core.api.viewsets_setup.SetupService")
+def test_api_setup_mailbox_ignores_a_failed_enqueue(mock_service, mock_task):
+    """The setup succeeds when the fan-out cannot be enqueued."""
+    user = factories.UserFactory()
+    mock_service.return_value.setup.return_value = {"calendar_path": "path"}
+    mock_task.delay.side_effect = ConnectionError("redis down")
+
+    response = _client_for(user).post(
+        SETUP_URL,
+        {"name": "Team", "mailbox_email": "team@example.com"},
+        format="json",
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {"calendar_path": "path"}
