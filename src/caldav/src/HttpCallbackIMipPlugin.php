@@ -168,6 +168,11 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         foreach ($stored->VEVENT as $vevent) {
             $storedEntries[$this->recurrenceId($vevent)] = $vevent;
         }
+        // Without a master, EventIterator takes the first entry as the
+        // master, so the regular dates are not known.
+        if (!isset($storedEntries['master'])) {
+            return false;
+        }
 
         $kept = 0;
         $added = false;

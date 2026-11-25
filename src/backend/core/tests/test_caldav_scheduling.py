@@ -560,6 +560,7 @@ END:VCALENDAR"""
             ("timezone", True),
             ("floating", True),
             ("floating end", True),
+            ("no master", True),
             ("alarm", True),
             ("forced", True),
             ("dropped date", True),
@@ -689,9 +690,10 @@ END:VEVENT"""
                         'DESCRIPTION;LANGUAGE=fr;ALTREP="cid:a":Rappel\nEND:VALARM\n'
                     )
                 # The first date moves to the start of the second date,
-                # which the series excludes.
+                # which the series excludes. Without a master, the event
+                # only has the moved date.
                 moved = []
-                if change == "moved date":
+                if change in ("moved date", "no master"):
                     series += f"EXDATE:{second.strftime(fmt)}\n"
                     moved = [
                         entry(
@@ -722,13 +724,13 @@ END:VEVENT"""
                             "LOCATION:Room D\n",
                         )
                     ]
-                put(
-                    calendar(
-                        entry(dtstart, series, organizer_params, alarm),
-                        *moved,
-                        *dropped,
-                    )
-                )
+
+                def master(extra):
+                    if change == "no master":
+                        return []
+                    return [entry(dtstart, series, organizer_params, extra)]
+
+                put(calendar(*master(alarm), *moved, *dropped))
                 _wait_for_callbacks(callback_data, expected_count=2)
                 callback_data["requests"] = []
 
@@ -783,9 +785,7 @@ END:VEVENT"""
                     )
                 put(
                     calendar(
-                        entry(
-                            dtstart, series, organizer_params, series_location + alarm
-                        ),
+                        *master(series_location + alarm),
                         *moved,
                         answer,
                         offset="+0200" if change == "timezone" else "+0100",
