@@ -158,6 +158,8 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     private function onlyAddsRegularDates(VCalendar $vCal, VCalendar $stored): bool
     {
         if (!isset($stored->VEVENT->ORGANIZER)
+            || $this->hasRange($vCal)
+            || $this->hasRange($stored)
             || $this->timezones($vCal) !== $this->timezones($stored)) {
             return false;
         }
@@ -187,6 +189,22 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     }
 
     /**
+     * Tell if an entry has a RANGE, such as RANGE=THISANDFUTURE.
+     *
+     * Such an entry also changes the later dates. EventIterator does not
+     * support it, so the regular dates are not known.
+     */
+    private function hasRange(VCalendar $vCal): bool
+    {
+        foreach ($vCal->VEVENT as $vevent) {
+            if (isset($vevent->{'RECURRENCE-ID'}['RANGE'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * @return string[] Sorted VTIMEZONE components, with sorted properties
      */
     private function timezones(VCalendar $vCal): array
@@ -210,8 +228,7 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      */
     private function matchesRegularDate(VEvent $vevent, VCalendar $stored): bool
     {
-        // RANGE=THISANDFUTURE also changes the later dates.
-        if (!isset($vevent->{'RECURRENCE-ID'}) || isset($vevent->{'RECURRENCE-ID'}['RANGE'])) {
+        if (!isset($vevent->{'RECURRENCE-ID'})) {
             return false;
         }
 

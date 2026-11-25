@@ -553,6 +553,7 @@ END:VCALENDAR"""
             ("all day", True),
             ("moved date", True),
             ("this and future", True),
+            ("stored this and future", True),
             ("location", True),
             ("series location", True),
             ("role", True),
@@ -693,6 +694,16 @@ END:VEVENT"""
                         entry(
                             second,
                             f"RECURRENCE-ID:{dtstart.strftime(fmt)}\n",
+                            organizer_params,
+                        )
+                    ]
+                # The first date and the later dates move one hour later.
+                if change == "stored this and future":
+                    moved = [
+                        entry(
+                            dtstart + timedelta(hours=1),
+                            "RECURRENCE-ID;RANGE=THISANDFUTURE:"
+                            f"{dtstart.strftime(fmt)}\n",
                             organizer_params,
                         )
                     ]
