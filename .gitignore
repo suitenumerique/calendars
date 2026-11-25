@@ -60,6 +60,7 @@ src/frontend/src/routes.gen.ts
 
 # Composer (PHP)
 src/caldav/vendor/
+src/caldav/.phpunit.cache/
 
 # Mails
 src/backend/core/templates/mail/

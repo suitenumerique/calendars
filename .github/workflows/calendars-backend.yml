@@ -140,3 +140,12 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -n 2
+
+  test-caldav:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Run the CalDAV unit tests
+        run: make test-caldav

@@ -9,9 +9,17 @@
         "ext-pdo_pgsql": "*",
         "ext-mbstring": "*"
     },
+    "require-dev": {
+        "phpunit/phpunit": "^13.4"
+    },
     "autoload": {
         "psr-4": {
             "Calendars\\SabreDav\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Calendars\\SabreDav\\Tests\\": "tests/"
         }
     },
     "scripts": {

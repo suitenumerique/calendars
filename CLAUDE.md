@@ -29,6 +29,7 @@ make update             # Update project after pulling changes
 ```bash
 make test-back -- path/to/test.py::TestClass::test_method  # Run specific test
 make test-back-parallel                                     # Run all tests in parallel
+make test-caldav                                            # Run the CalDAV server unit tests (PHPUnit)
 make lint                                                   # Run all linters (back + front)
 make lint-back                                              # Run back-end linters only
 make migrate                                                # Run Django migrations
