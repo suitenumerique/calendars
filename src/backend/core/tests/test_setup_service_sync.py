@@ -88,14 +88,30 @@ def test_sync_mailbox_does_not_restore_a_revoked_share():
     service = _service(mock.Mock(side_effect=internal_request))
     service.messages.get_user_mailboxes.return_value = []
 
-    def get_mailbox_by_email(mailbox_email):
+    def get_mailbox_by_email(mailbox_email, **_kwargs):
         snapshot = {"email": mailbox_email, "users": [{"email": alice.email}]}
         service.sync_user_mailboxes(alice)
         return snapshot
 
     service.messages.get_mailbox_by_email.side_effect = get_mailbox_by_email
 
-    synced = service.sync_mailbox(MAILBOX["email"])
+    result = service.sync_mailbox(MAILBOX["email"])
 
     assert applied[-1] == {"shares": [], "full_sync_users": [alice.email]}
-    assert synced == 1
+    assert result == (1, 0)
+
+
+@override_settings(FEATURE_MESSAGES_INTEGRATION=True)
+def test_sync_mailbox_counts_the_failed_users():
+    """A failed user sync does not stop the next one, and the result counts it."""
+    users = factories.UserFactory.create_batch(2)
+    confirmed = mock.Mock(status_code=200, json=mock.Mock(return_value={"active": []}))
+    service = _service(
+        mock.Mock(side_effect=[requests.ConnectionError("refused"), confirmed])
+    )
+    service.messages.get_mailbox_by_email.return_value = {
+        "email": MAILBOX["email"],
+        "users": [{"email": user.email} for user in users],
+    }
+
+    assert service.sync_mailbox(MAILBOX["email"]) == (1, 1)

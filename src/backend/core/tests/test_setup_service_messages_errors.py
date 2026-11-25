@@ -122,6 +122,27 @@ def test_sync_mailbox_lookup_failure_sends_no_sync():
     internal_request.assert_not_called()
 
 
+def test_sync_mailbox_reads_the_users_from_messages():
+    """A cached answer does not hide a user that Messages added after it."""
+    service, internal_request = _service()
+    bob = factories.UserFactory()
+    cached = [{"email": "team@example.com", "users": []}]
+    cache.set("messages:by_email:team@example.com", cached)
+
+    def request(_method, _path, *, params, **_kwargs):
+        if "email" in params:
+            users = [{"email": bob.email}]
+            return _messages_answer([{"email": "team@example.com", "users": users}])
+        return _messages_answer([{"email": "team@example.com", "role": "sender"}])
+
+    with mock.patch.object(MessagesService, "_request", side_effect=request):
+        result = service.sync_mailbox("team@example.com")
+
+    assert result == (1, 0)
+    internal_request.assert_called_once()
+    assert cache.get("messages:by_email:team@example.com") == cached
+
+
 def test_sync_task_skips_users_without_email(core_caplog):
     """The sync task does not count a user without an email."""
     org = factories.OrganizationFactory()

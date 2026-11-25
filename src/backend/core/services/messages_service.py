@@ -161,16 +161,21 @@ class MessagesService:
             user_email=user_email,
         )
 
-    def get_mailbox_by_email(self, mailbox_email):
+    def get_mailbox_by_email(self, mailbox_email, *, use_cache=True):
         """Look up a mailbox by its email address.
 
         Returns dict with mailbox info or None. No ``role`` field in response.
         Cached separately from get_user_mailboxes (different response shape).
 
+        With ``use_cache=False``, the answer comes from Messages, and the
+        cache stays unchanged.
+
         Raises MessagesServiceError when the lookup fails.
         """
         results = self._fetch_mailboxes(
-            f"messages:by_email:{mailbox_email}", email=mailbox_email
+            f"messages:by_email:{mailbox_email}",
+            use_cache=use_cache,
+            email=mailbox_email,
         )
         return results[0] if results else None
 

@@ -384,22 +384,24 @@ class SetupService:
     def sync_mailbox(self, mailbox_email):
         """Sync the shares of each Calendars user of a mailbox.
 
-        The users of the mailbox come from Messages. This list only selects
-        the users to sync. Each user sync gets the mailboxes of the user
-        again. Thus an old list cannot restore a share that a newer user
-        sync removed.
+        The users of the mailbox come from Messages and not from the cache.
+        Thus the list has a user that Messages added a moment ago. This list
+        only selects the users to sync. Each user sync gets the mailboxes of
+        the user again. Thus an old list cannot restore a share that a newer
+        user sync removed.
         A Messages or CalDAV error on a user sync is logged and does not
         stop the other user syncs.
 
         Returns:
-            Number of users synced.
+            The number of users synced and the number of users that failed.
 
         Raises MessagesServiceError when the Messages lookup fails.
         """
-        mailbox = self.messages.get_mailbox_by_email(mailbox_email)
+        mailbox = self.messages.get_mailbox_by_email(mailbox_email, use_cache=False)
         users = mailbox.get("users", []) if mailbox else []
         emails = [mb_user["email"] for mb_user in users if mb_user.get("email")]
         synced = 0
+        failed = 0
         members = User.objects.filter(email__in=emails).select_related("organization")
         for user in members:
             try:
@@ -408,9 +410,10 @@ class SetupService:
                 logger.exception(
                     "Failed to sync user %s of mailbox %s", user.pk, mailbox_email
                 )
+                failed += 1
                 continue
             synced += 1
-        return synced
+        return synced, failed
 
     # ------------------------------------------------------------------
     # Internal helpers

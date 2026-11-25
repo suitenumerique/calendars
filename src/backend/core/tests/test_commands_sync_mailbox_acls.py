@@ -1,5 +1,6 @@
 """Tests for the sync_mailbox_acls management command."""
 
+from io import StringIO
 from unittest import mock
 
 from django.core.management import call_command
@@ -51,3 +52,16 @@ def test_enqueue_with_feature_disabled(settings):
         call_command("sync_mailbox_acls", "--enqueue")
 
     mock_task.send.assert_not_called()
+
+
+def test_mailbox_prints_the_failed_users():
+    """--mailbox prints the count of users that failed."""
+    out = StringIO()
+
+    with mock.patch(f"{COMMAND_MODULE}.SetupService") as mock_service:
+        mock_service.return_value.sync_mailbox.return_value = (1, 2)
+        call_command("sync_mailbox_acls", "--mailbox", "team@example.com", stdout=out)
+
+    assert "Synced 1 user(s) for mailbox team@example.com, 2 error(s)." in (
+        out.getvalue()
+    )

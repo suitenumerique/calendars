@@ -78,12 +78,14 @@ class Command(BaseCommand):
     def _sync_mailbox(self, service, mailbox_email):
         """Sync shares for all users of a specific mailbox."""
         try:
-            count = service.sync_mailbox(mailbox_email)
+            synced, failed = service.sync_mailbox(mailbox_email)
         except MessagesServiceError:
             logger.exception("Failed to sync mailbox %s", mailbox_email)
             self.stderr.write(f"Failed to sync mailbox {mailbox_email}.")
             return
-        self.stdout.write(f"Synced {count} user(s) for mailbox {mailbox_email}.")
+        self.stdout.write(
+            f"Synced {synced} user(s) for mailbox {mailbox_email}, {failed} error(s)."
+        )
 
     def _sync_users(self, service, email=None):
         """Sync all mailbox shares for users."""
