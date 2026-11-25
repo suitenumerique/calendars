@@ -173,6 +173,12 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         if (!isset($storedEntries['master'])) {
             return false;
         }
+        // EventIterator ignores EXRULE, and reads RDATE in the timezone of
+        // DTSTART. With either, the regular dates are not known.
+        $master = $storedEntries['master'];
+        if (isset($master->RDATE) || isset($master->EXRULE)) {
+            return false;
+        }
 
         $kept = 0;
         $added = false;

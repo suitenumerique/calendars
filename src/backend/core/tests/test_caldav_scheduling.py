@@ -561,12 +561,14 @@ END:VCALENDAR"""
             ("floating", True),
             ("floating end", True),
             ("no master", True),
+            ("rdate", True),
+            ("exrule", True),
             ("alarm", True),
             ("forced", True),
             ("dropped date", True),
         ],
     )
-    def test_scheduling_callback_skips_answer_for_one_date(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
+    def test_scheduling_callback_skips_answer_for_one_date(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-branches,too-many-locals,too-many-statements
         self, change, sends
     ):
         """A new entry for a regular date that only records an answer
@@ -712,6 +714,17 @@ END:VEVENT"""
                             organizer_params,
                         )
                     ]
+                # The extra date is in Paris time. With the bug, EventIterator
+                # reads it in UTC, at the time of the new entry.
+                extra_date = dtstart + timedelta(days=3)
+                if change == "rdate":
+                    series += (
+                        "RDATE;TZID=Europe/Paris:"
+                        f"{extra_date.strftime('%Y%m%dT%H%M%S')}\n"
+                    )
+                # The rule excludes the first and the second dates.
+                if change == "exrule":
+                    series += "EXRULE:FREQ=DAILY;COUNT=9\n"
                 # A third date has its own location, and the write drops it.
                 dropped = []
                 if change == "dropped date":
@@ -750,9 +763,12 @@ END:VEVENT"""
                 answer_start = {
                     "move": second + timedelta(hours=1),
                     "earlier start": second - timedelta(minutes=30),
+                    "rdate": extra_date,
                 }.get(change, second)
                 recurrence_id = f"RECURRENCE-ID:{second.strftime(fmt)}\n"
-                if change == "this and future":
+                if change == "rdate":
+                    recurrence_id = f"RECURRENCE-ID:{extra_date.strftime(fmt)}\n"
+                elif change == "this and future":
                     recurrence_id = (
                         f"RECURRENCE-ID;RANGE=THISANDFUTURE:{second.strftime(fmt)}\n"
                     )
