@@ -210,7 +210,8 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      */
     private function matchesRegularDate(VEvent $vevent, VCalendar $stored): bool
     {
-        if (!isset($vevent->{'RECURRENCE-ID'})) {
+        // RANGE=THISANDFUTURE also changes the later dates.
+        if (!isset($vevent->{'RECURRENCE-ID'}) || isset($vevent->{'RECURRENCE-ID'}['RANGE'])) {
             return false;
         }
 

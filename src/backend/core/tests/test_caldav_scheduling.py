@@ -552,6 +552,7 @@ END:VCALENDAR"""
             ("longer", True),
             ("all day", True),
             ("moved date", True),
+            ("this and future", True),
             ("location", True),
             ("series location", True),
             ("role", True),
@@ -735,7 +736,11 @@ END:VEVENT"""
                     "earlier start": second - timedelta(minutes=30),
                 }.get(change, second)
                 recurrence_id = f"RECURRENCE-ID:{second.strftime(fmt)}\n"
-                if change == "all day":
+                if change == "this and future":
+                    recurrence_id = (
+                        f"RECURRENCE-ID;RANGE=THISANDFUTURE:{second.strftime(fmt)}\n"
+                    )
+                elif change == "all day":
                     recurrence_id = (
                         f"RECURRENCE-ID;VALUE=DATE:{second.strftime('%Y%m%d')}\n"
                     )
