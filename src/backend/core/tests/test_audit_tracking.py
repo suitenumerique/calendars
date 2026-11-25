@@ -19,6 +19,12 @@ from core.models import uuid_to_urlsafe
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
 from core.services.channel_event_service import ChannelEventService
 from core.services.import_service import ICSImportService
+from core.tests.test_caldav_scheduling_identity import (
+    DOMAIN,
+    _add_mailbox_calendar,
+    _event,
+    _move,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -731,6 +737,32 @@ class TestAuditTrackingE2E:
         )
         assert resp.status_code == 201, resp.text
 
+        assert _audit_columns(caldav_db, uid) == [(user.email, user.email)]
+
+    def test_move_to_other_identity_sets_the_user_on_the_new_organizer(self, caldav_db):
+        """A MOVE to a calendar with another identity writes the new
+        organizer in the moved event, after the move. This write has the
+        user that moves the event."""
+        user = factories.UserFactory(
+            email=f"audit-move-org-{uuid.uuid4().hex[:8]}@{DOMAIN}"
+        )
+        mailbox = f"audit-mailbox-{uuid.uuid4().hex[:8]}@{DOMAIN}"
+        mailbox_url = _add_mailbox_calendar(user, mailbox)
+        service = CalendarService()
+        personal_url = service._calendar_url(  # pylint: disable=protected-access
+            service.create_calendar(user, name="Personal")
+        )
+        client = service._get_client(user)  # pylint: disable=protected-access
+        uid = f"audit-move-org-{uuid.uuid4()}"
+        event = client.calendar(url=mailbox_url).save_event(
+            _event(uid, mailbox, "guest@external.test")
+        )
+
+        target, resp = _move(client, event, personal_url)
+        assert resp.status == 201
+
+        data = client.calendar(url=personal_url).event_by_url(target).data
+        assert f"ORGANIZER:mailto:{user.email}" in data
         assert _audit_columns(caldav_db, uid) == [(user.email, user.email)]
 
     def test_rsvp_sets_the_attendee_as_modifier(self, caldav_db):
