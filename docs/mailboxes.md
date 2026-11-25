@@ -116,7 +116,7 @@ reads it. The command sends
 the task to the worker and exits. The worker runs the sync, because it
 has the internal CalDAV server. A sync can use a Messages answer that
 is up to 5 minutes old. Thus a user removed from a mailbox can keep
-access until a sync reads a new answer. Opening the app also syncs the
+access until a sync applies a new answer. Opening the app also syncs the
 user.
 
 **Sync commands**:
