@@ -542,6 +542,7 @@ END:VCALENDAR"""
             ("reordered parameters", False),
             ("no end", False),
             ("same timezone", False),
+            ("reordered timezone", False),
             ("reordered alarm", False),
             ("duration", False),
             ("email case", False),
@@ -591,7 +592,11 @@ END:VCALENDAR"""
                 other = "other@external-b.test"
                 event_uid = f"one-date-{datetime.now().timestamp()}"
                 fmt = "%Y%m%dT%H%M%SZ"
-                custom_timezone = change in ("same timezone", "timezone")
+                custom_timezone = change in (
+                    "same timezone",
+                    "reordered timezone",
+                    "timezone",
+                )
 
                 def when(name, moment, local):
                     if not local:
@@ -633,18 +638,21 @@ ATTENDEE;RSVP=TRUE:mailto:{declining}
 ATTENDEE;RSVP=TRUE{other_params}:mailto:{other}
 END:VEVENT"""
 
-                def calendar(*entries, offset="+0100"):
+                def calendar(*entries, offset="+0100", reordered=False):
                     body = "\n".join(entries)
                     if custom_timezone:
-                        body = f"""BEGIN:VTIMEZONE
-TZID:Etc/GMT-1
-BEGIN:STANDARD
-DTSTART:19700101T000000
-TZOFFSETFROM:{offset}
-TZOFFSETTO:{offset}
-END:STANDARD
-END:VTIMEZONE
-{body}"""
+                        rule = [
+                            "DTSTART:19700101T000000",
+                            f"TZOFFSETFROM:{offset}",
+                            f"TZOFFSETTO:{offset}",
+                        ]
+                        if reordered:
+                            rule.reverse()
+                        body = (
+                            "BEGIN:VTIMEZONE\nTZID:Etc/GMT-1\nBEGIN:STANDARD\n"
+                            + "\n".join(rule)
+                            + f"\nEND:STANDARD\nEND:VTIMEZONE\n{body}"
+                        )
                     return (
                         "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Test//EN\n"
                         f"{body}\nEND:VCALENDAR"
@@ -749,6 +757,7 @@ END:VTIMEZONE
                         *moved,
                         answer,
                         offset="+0200" if change == "timezone" else "+0100",
+                        reordered=change == "reordered timezone",
                     )
                 )
                 # Wait for one more callback than expected, to catch duplicates.

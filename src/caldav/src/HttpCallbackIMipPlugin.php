@@ -187,13 +187,13 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     }
 
     /**
-     * @return string[] Sorted serialized VTIMEZONE components
+     * @return string[] Sorted VTIMEZONE components, with sorted properties
      */
     private function timezones(VCalendar $vCal): array
     {
         $timezones = [];
         foreach ($vCal->select('VTIMEZONE') as $timezone) {
-            $timezones[] = $timezone->serialize();
+            $timezones[] = implode("\n", $this->answerless($timezone, []));
         }
         sort($timezones);
         return $timezones;
