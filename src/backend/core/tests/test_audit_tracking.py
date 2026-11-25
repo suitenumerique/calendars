@@ -781,6 +781,83 @@ class TestAuditTrackingE2E:
 
         assert _audit_columns(caldav_db, uid) == [(organizer.email, attendee)]
 
+    def test_scheduling_write_keeps_the_channel_of_the_event(  # pylint: disable=too-many-locals
+        self, caldav_db
+    ):
+        """A local attendee deletes the invitation through a channel. The
+        server writes the decline in the organizer's copy. This copy keeps
+        its channel, and has the attendee as modifier."""
+        organizer = factories.UserFactory(
+            email=f"audit-org-{uuid.uuid4().hex[:8]}@test.com"
+        )
+        attendee = factories.UserFactory(
+            email=f"audit-guest-{uuid.uuid4().hex[:8]}@test.com"
+        )
+        service = CalendarService()
+        organizer_path = service.create_calendar(organizer, name="Organizer")
+        service.create_calendar(attendee, name="Guest")
+        organizer_channel = str(uuid.uuid4())
+        attendee_channel = str(uuid.uuid4())
+        uid = f"audit-channel-{uuid.uuid4()}"
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Audit//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            "DTSTART:20990601T100000Z\r\n"
+            "DTEND:20990601T110000Z\r\n"
+            "SUMMARY:audit channel test\r\n"
+            f"ORGANIZER:mailto:{organizer.email}\r\n"
+            f"ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{attendee.email}\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        http = CalDAVHTTPClient()
+        resp = http.request(
+            "PUT",
+            organizer,
+            f"{organizer_path}{uid}.ics",
+            data=ical.encode(),
+            content_type="text/calendar",
+            extra_headers={"X-LS-Channel-Id": organizer_channel},
+        )
+        assert resp.status_code == 201, resp.text
+
+        with caldav_db.cursor() as cur:
+            cur.execute(
+                "SELECT ci.principaluri, ci.uri, co.uri FROM calendarobjects co"
+                " JOIN calendarinstances ci ON ci.calendarid = co.calendarid"
+                " WHERE co.uid = %s AND ci.principaluri = %s",
+                [uid, f"principals/users/{attendee.email}"],
+            )
+            principal_uri, calendar_uri, object_uri = cur.fetchone()
+        attendee_copy = (
+            f"calendars/users/{principal_uri.rsplit('/', 1)[-1]}"
+            f"/{calendar_uri}/{object_uri}"
+        )
+
+        resp = http.request(
+            "DELETE",
+            attendee,
+            attendee_copy,
+            extra_headers={"X-LS-Channel-Id": attendee_channel},
+        )
+        assert resp.status_code == 204, resp.text
+
+        with caldav_db.cursor() as cur:
+            cur.execute(
+                "SELECT channel_id::text, modified_by, calendardata"
+                " FROM calendarobjects WHERE uid = %s",
+                [uid],
+            )
+            rows = cur.fetchall()
+        assert len(rows) == 1
+        channel_id, modified_by, calendardata = rows[0]
+        assert channel_id == organizer_channel
+        assert modified_by == attendee.email
+        assert "PARTSTAT=DECLINED" in bytes(calendardata).decode()
+
     def test_channel_events_delete_only_removes_own_events(self):
         """DELETE removes one channel's events without touching another's."""
         org = factories.OrganizationFactory()

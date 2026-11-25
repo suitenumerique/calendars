@@ -1283,6 +1283,11 @@ class InternalApiPlugin extends ServerPlugin
         $filteredTitles = [];
         $errors = [];
 
+        $auditContext = $this->server->getPlugin('audit-context');
+        if ($auditContext instanceof AuditContextPlugin) {
+            $auditContext->applyChannel();
+        }
+
         try {
             while ($splitVcal = $splitter->getNext()) {
                 $totalEvents++;
@@ -1377,6 +1382,9 @@ class InternalApiPlugin extends ServerPlugin
             }
         } finally {
             fclose($stream);
+            if ($auditContext instanceof AuditContextPlugin) {
+                $auditContext->clearChannel();
+            }
         }
 
         error_log(
