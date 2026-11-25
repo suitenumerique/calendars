@@ -547,6 +547,7 @@ END:VCALENDAR"""
             ("series location", True),
             ("role", True),
             ("timezone", True),
+            ("floating", True),
         ],
     )
     def test_scheduling_callback_skips_answer_for_one_date(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
@@ -556,7 +557,8 @@ END:VCALENDAR"""
         sends no message, also when the client writes the parameters in
         another order, the event has no end or uses a custom timezone.
         When the write also moves the date, changes a location, changes a
-        role or changes the timezone, all the attendees get an update."""
+        role, changes the timezone or gives a timezone to a floating time,
+        all the attendees get an update."""
         organizer = factories.UserFactory(email="organizer-one-date@example.com")
         service = CalendarService()
         caldav_path = service.create_calendar(
@@ -586,13 +588,17 @@ END:VCALENDAR"""
                 def when(name, moment, local):
                     if not local:
                         return f"{name}:{moment.strftime(fmt)}\n"
+                    if change == "floating":
+                        return f"{name}:{moment.strftime(fmt[:-1])}\n"
                     # Etc/GMT-1 is one hour ahead of UTC.
                     local_time = (moment + timedelta(hours=1)).strftime(fmt[:-1])
                     return f"{name};TZID=Etc/GMT-1:{local_time}\n"
 
                 def entry(start, header, organizer_params, extra="", other_params=""):
-                    # The series uses the custom timezone, the answer uses UTC.
-                    local = custom_timezone and header == series
+                    # The series uses a local time, the answer uses UTC.
+                    local = (
+                        custom_timezone or change == "floating"
+                    ) and header == series
                     end = (
                         ""
                         if change == "no end"

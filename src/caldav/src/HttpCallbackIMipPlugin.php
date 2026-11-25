@@ -231,6 +231,7 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         $skipped = array_merge(self::WRITE_PROPERTIES, self::TIME_PROPERTIES);
         return $vevent->DTSTART->getDateTime() == $occurrences->getDtStart()
             && $vevent->DTSTART->hasTime() === $regular->DTSTART->hasTime()
+            && $vevent->DTSTART->isFloating() === $regular->DTSTART->isFloating()
             && $this->endOf($vevent) == $occurrences->getDtEnd()
             && $this->answerless($vevent, $skipped) === $this->answerless($regular, $skipped);
     }
