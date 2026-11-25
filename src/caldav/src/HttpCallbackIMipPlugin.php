@@ -228,6 +228,10 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         }
 
         $regular = $occurrences->getEventObject();
+        // A moved date can start at the time of the new entry.
+        if ($regular->{'RECURRENCE-ID'}->getDateTime() != $date) {
+            return false;
+        }
         $skipped = array_merge(self::WRITE_PROPERTIES, self::TIME_PROPERTIES);
         return $vevent->DTSTART->getDateTime() == $occurrences->getDtStart()
             && $vevent->DTSTART->hasTime() === $regular->DTSTART->hasTime()

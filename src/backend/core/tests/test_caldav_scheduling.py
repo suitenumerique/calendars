@@ -543,6 +543,7 @@ END:VCALENDAR"""
             ("no end", False),
             ("same timezone", False),
             ("move", True),
+            ("moved date", True),
             ("location", True),
             ("series location", True),
             ("role", True),
@@ -556,9 +557,10 @@ END:VCALENDAR"""
         """A new entry for a regular date that only records an answer
         sends no message, also when the client writes the parameters in
         another order, the event has no end or uses a custom timezone.
-        When the write also moves the date, changes a location, changes a
-        role, changes the timezone or gives a timezone to a floating time,
-        all the attendees get an update."""
+        When the write also moves the date, adds a date where a moved date
+        starts, changes a location, changes a role, changes the timezone
+        or gives a timezone to a floating time, all the attendees get an
+        update."""
         organizer = factories.UserFactory(email="organizer-one-date@example.com")
         service = CalendarService()
         caldav_path = service.create_calendar(
@@ -640,7 +642,19 @@ END:VTIMEZONE
 
                 organizer_params = "CN=Organizer;LANGUAGE=fr"
                 series = "RRULE:FREQ=WEEKLY;COUNT=3\n"
-                put(calendar(entry(dtstart, series, organizer_params)))
+                # The first date moves to the start of the second date,
+                # which the series excludes.
+                moved = []
+                if change == "moved date":
+                    series += f"EXDATE:{second.strftime(fmt)}\n"
+                    moved = [
+                        entry(
+                            second,
+                            f"RECURRENCE-ID:{dtstart.strftime(fmt)}\n",
+                            organizer_params,
+                        )
+                    ]
+                put(calendar(entry(dtstart, series, organizer_params), *moved))
                 _wait_for_callbacks(callback_data, expected_count=2)
                 callback_data["requests"] = []
 
@@ -662,6 +676,7 @@ END:VTIMEZONE
                 put(
                     calendar(
                         entry(dtstart, series, organizer_params, series_location),
+                        *moved,
                         answer,
                         offset="+0200" if change == "timezone" else "+0100",
                     )
