@@ -788,6 +788,13 @@ END:VEVENT"""
                 expected = [(declining, "REQUEST"), (other, "REQUEST")] if sends else []
                 assert callbacks == expected
 
+                # The organizer keeps the answer.
+                stored = client.request(event_url).raw
+                lines = re.sub(r"\r?\n[ \t]", "", stored).splitlines()
+                assert any(
+                    "PARTSTAT=DECLINED" in line and declining in line for line in lines
+                )
+
             except NotFoundError:
                 pytest.skip("Calendar not found - CalDAV server may not be running")
         finally:
