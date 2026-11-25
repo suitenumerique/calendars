@@ -543,7 +543,12 @@ END:VCALENDAR"""
             ("no end", False),
             ("same timezone", False),
             ("reordered alarm", False),
+            ("duration", False),
+            ("email case", False),
             ("move", True),
+            ("earlier start", True),
+            ("longer", True),
+            ("all day", True),
             ("moved date", True),
             ("location", True),
             ("series location", True),
@@ -551,18 +556,17 @@ END:VCALENDAR"""
             ("timezone", True),
             ("floating", True),
             ("alarm", True),
+            ("forced", True),
+            ("dropped date", True),
         ],
     )
     def test_scheduling_callback_skips_answer_for_one_date(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
         self, change, sends
     ):
         """A new entry for a regular date that only records an answer
-        sends no message, also when the client writes the parameters or
-        the alarm in another order, the event has no end or uses a custom
-        timezone. When the write also moves the date, adds a date where a
-        moved date starts, changes a location, changes a role, changes the
-        timezone, gives a timezone to a floating time or changes an alarm,
-        all the attendees get an update."""
+        sends no message, also when the client writes the same event in
+        another way. When the write also makes a real change, each
+        attendee gets one update."""
         organizer = factories.UserFactory(email="organizer-one-date@example.com")
         service = CalendarService()
         caldav_path = service.create_calendar(
@@ -598,19 +602,32 @@ END:VCALENDAR"""
                     local_time = (moment + timedelta(hours=1)).strftime(fmt[:-1])
                     return f"{name};TZID=Etc/GMT-1:{local_time}\n"
 
-                def entry(start, header, organizer_params, extra="", other_params=""):
+                def times(start, header):
+                    is_series = header == series
+                    if change == "all day":
+                        # The series is all-day, the answer is a full floating day.
+                        day = start.strftime("%Y%m%d")
+                        next_day = (start + timedelta(days=1)).strftime("%Y%m%d")
+                        if is_series:
+                            return f"DTSTART;VALUE=DATE:{day}\nDTEND;VALUE=DATE:{next_day}\n"
+                        return f"DTSTART:{day}T000000\nDTEND:{next_day}T000000\n"
                     # The series uses a local time, the answer uses UTC.
-                    local = (
-                        custom_timezone or change == "floating"
-                    ) and header == series
-                    end = (
-                        ""
-                        if change == "no end"
-                        else when("DTEND", start + timedelta(hours=1), local)
-                    )
+                    local = (custom_timezone or change == "floating") and is_series
+                    length = timedelta(hours=1)
+                    if change in ("longer", "earlier start") and not is_series:
+                        length = timedelta(minutes=90)
+                    if change == "no end":
+                        end = ""
+                    elif change == "duration":
+                        end = "DURATION:PT1H\n"
+                    else:
+                        end = when("DTEND", start + length, local)
+                    return when("DTSTART", start, local) + end
+
+                def entry(start, header, organizer_params, extra="", other_params=""):
                     return f"""BEGIN:VEVENT
 UID:{event_uid}
-{header}{when("DTSTART", start, local)}{end}SUMMARY:Weekly event
+{header}{times(start, header)}SUMMARY:Weekly event
 {extra}ORGANIZER;{organizer_params}:mailto:{organizer.email}
 ATTENDEE;RSVP=TRUE:mailto:{declining}
 ATTENDEE;RSVP=TRUE{other_params}:mailto:{other}
@@ -662,7 +679,25 @@ END:VTIMEZONE
                             organizer_params,
                         )
                     ]
-                put(calendar(entry(dtstart, series, organizer_params, alarm), *moved))
+                # A third date has its own location, and the write drops it.
+                dropped = []
+                if change == "dropped date":
+                    third = dtstart + timedelta(days=14)
+                    dropped = [
+                        entry(
+                            third,
+                            f"RECURRENCE-ID:{third.strftime(fmt)}\n",
+                            organizer_params,
+                            "LOCATION:Room D\n",
+                        )
+                    ]
+                put(
+                    calendar(
+                        entry(dtstart, series, organizer_params, alarm),
+                        *moved,
+                        *dropped,
+                    )
+                )
                 _wait_for_callbacks(callback_data, expected_count=2)
                 callback_data["requests"] = []
 
@@ -679,17 +714,33 @@ END:VTIMEZONE
                     ),
                     "alarm": alarm.replace("-PT15M", "-PT30M"),
                 }.get(change, "")
+                answer_start = {
+                    "move": second + timedelta(hours=1),
+                    "earlier start": second - timedelta(minutes=30),
+                }.get(change, second)
+                recurrence_id = (
+                    f"RECURRENCE-ID;VALUE=DATE:{second.strftime('%Y%m%d')}\n"
+                    if change == "all day"
+                    else f"RECURRENCE-ID:{second.strftime(fmt)}\n"
+                )
                 answer = entry(
-                    second + timedelta(hours=1) if change == "move" else second,
-                    f"RECURRENCE-ID:{second.strftime(fmt)}\n",
+                    answer_start,
+                    recurrence_id,
                     organizer_params,
                     ("LOCATION:Room B\n" if change == "location" else series_location)
                     + answer_alarm,
-                    ";ROLE=OPT-PARTICIPANT" if change == "role" else "",
+                    {
+                        "role": ";ROLE=OPT-PARTICIPANT",
+                        "forced": ";SCHEDULE-FORCE-SEND=REQUEST",
+                    }.get(change, ""),
                 ).replace(
                     f"ATTENDEE;RSVP=TRUE:mailto:{declining}",
                     f"ATTENDEE;PARTSTAT=DECLINED:mailto:{declining}",
                 )
+                if change == "email case":
+                    answer = answer.replace(
+                        f"mailto:{other}", f"MAILTO:{other.capitalize()}"
+                    )
                 put(
                     calendar(
                         entry(
