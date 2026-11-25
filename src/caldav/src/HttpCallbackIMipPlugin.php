@@ -213,11 +213,6 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         if (!isset($vevent->{'RECURRENCE-ID'})) {
             return false;
         }
-        foreach ($vevent->ATTENDEE ?? [] as $attendee) {
-            if (isset($attendee['SCHEDULE-FORCE-SEND'])) {
-                return false;
-            }
-        }
 
         $date = $vevent->{'RECURRENCE-ID'}->getDateTime();
         $occurrences = new EventIterator($stored, (string) $vevent->UID);
