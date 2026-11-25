@@ -103,7 +103,7 @@ export const EventModal = ({
   });
 
   const mailboxOf = (url: string | undefined): string | undefined =>
-    url ? calendars.find((c) => c.url === url)?.mailboxEmail : undefined;
+    calendars.find((c) => c.url === url)?.mailboxEmail;
   const identityOf = (url: string | undefined): string | undefined => mailboxOf(url) ?? user?.email;
   const selectedMailbox = mailboxOf(form.selectedCalendarUrl);
   const sourceIdentity = identityOf(calendarUrl);
@@ -131,10 +131,10 @@ export const EventModal = ({
     selectedIdentity?.toLowerCase() !== sourceIdentity?.toLowerCase() &&
     selectedIdentity?.toLowerCase() !== event?.organizer?.email?.toLowerCase();
 
-  // Organizer of the identity of the selected calendar. For a new event,
-  // a mailbox calendar makes the mailbox the organizer, so that Django
-  // sends the invitation through Messages. A move of a meeting to a
-  // calendar with another identity changes the organizer.
+  // Organizer that the save writes. An event keeps its organizer, unless
+  // a move to a calendar with another identity changes it. For a new
+  // event, a mailbox calendar makes the mailbox the organizer, so that
+  // Django sends the invitation through Messages.
   const organizer: IcsOrganizer | undefined = useMemo(() => {
     if (event?.organizer && !changesOrganizer) return event.organizer;
     if (selectedMailbox) return { email: selectedMailbox, name: selectedMailbox.split("@")[0] };

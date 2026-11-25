@@ -7,7 +7,7 @@ const same = (a?: string, b?: string): boolean => !!a && !!b && a.toLowerCase() 
 /**
  * Give the addresses that the user can schedule with: the email of the
  * user and the mailboxes of the given calendars that the user can write
- * to. Give the hidden calendars too, as the server counts them.
+ * to. Pass the hidden calendars too, because the server counts them.
  */
 export const userAddresses = (
   email: string | undefined,
