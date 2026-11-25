@@ -781,12 +781,15 @@ class TestAuditTrackingE2E:
 
         assert _audit_columns(caldav_db, uid) == [(organizer.email, attendee)]
 
+    @pytest.mark.parametrize("answer", ["delete", "accept"])
     def test_scheduling_write_keeps_the_channel_of_the_event(  # pylint: disable=too-many-locals
-        self, caldav_db
+        self, caldav_db, answer
     ):
-        """A local attendee deletes the invitation through a channel. The
-        server writes the decline in the organizer's copy. This copy keeps
-        its channel, and has the attendee as modifier."""
+        """A local attendee answers through a channel: a DELETE declines,
+        a PUT accepts. The server writes the answer in the organizer's
+        copy before the write of the request. This copy keeps its
+        channel, and has the attendee as modifier. Only the attendee's
+        own copy gets the channel of the attendee."""
         organizer = factories.UserFactory(
             email=f"audit-org-{uuid.uuid4().hex[:8]}@test.com"
         )
@@ -824,39 +827,55 @@ class TestAuditTrackingE2E:
         )
         assert resp.status_code == 201, resp.text
 
-        with caldav_db.cursor() as cur:
-            cur.execute(
-                "SELECT ci.principaluri, ci.uri, co.uri FROM calendarobjects co"
-                " JOIN calendarinstances ci ON ci.calendarid = co.calendarid"
-                " WHERE co.uid = %s AND ci.principaluri = %s",
-                [uid, f"principals/users/{attendee.email}"],
-            )
-            principal_uri, calendar_uri, object_uri = cur.fetchone()
-        attendee_copy = (
-            f"calendars/users/{principal_uri.rsplit('/', 1)[-1]}"
-            f"/{calendar_uri}/{object_uri}"
-        )
+        def copies():
+            with caldav_db.cursor() as cur:
+                cur.execute(
+                    "SELECT ci.principaluri, ci.uri, co.uri, co.channel_id::text,"
+                    " co.modified_by, co.calendardata FROM calendarobjects co"
+                    " JOIN calendarinstances ci ON ci.calendarid = co.calendarid"
+                    " WHERE co.uid = %s",
+                    [uid],
+                )
+                return {row[0].rsplit("/", 1)[-1]: row[1:] for row in cur.fetchall()}
 
-        resp = http.request(
-            "DELETE",
-            attendee,
-            attendee_copy,
-            extra_headers={"X-LS-Channel-Id": attendee_channel},
-        )
-        assert resp.status_code == 204, resp.text
+        calendar_uri, object_uri, channel_id, _, data = copies()[attendee.email]
+        assert channel_id is None
+        attendee_copy = f"calendars/users/{attendee.email}/{calendar_uri}/{object_uri}"
 
-        with caldav_db.cursor() as cur:
-            cur.execute(
-                "SELECT channel_id::text, modified_by, calendardata"
-                " FROM calendarobjects WHERE uid = %s",
-                [uid],
+        if answer == "delete":
+            resp = http.request(
+                "DELETE",
+                attendee,
+                attendee_copy,
+                extra_headers={"X-LS-Channel-Id": attendee_channel},
             )
-            rows = cur.fetchall()
-        assert len(rows) == 1
-        channel_id, modified_by, calendardata = rows[0]
+            assert resp.status_code == 204, resp.text
+        else:
+            # The copy of the attendee has one ATTENDEE, the attendee.
+            accepted = (
+                bytes(data)
+                .decode()
+                .replace("PARTSTAT=NEEDS-ACTION", "PARTSTAT=ACCEPTED")
+                .encode()
+            )
+            resp = http.request(
+                "PUT",
+                attendee,
+                attendee_copy,
+                data=accepted,
+                content_type="text/calendar",
+                extra_headers={"X-LS-Channel-Id": attendee_channel},
+            )
+            assert resp.status_code == 204, resp.text
+
+        result = copies()
+        _, _, channel_id, modified_by, data = result[organizer.email]
         assert channel_id == organizer_channel
         assert modified_by == attendee.email
-        assert "PARTSTAT=DECLINED" in bytes(calendardata).decode()
+        partstat = "DECLINED" if answer == "delete" else "ACCEPTED"
+        assert f"PARTSTAT={partstat}" in bytes(data).decode()
+        if answer == "accept":
+            assert result[attendee.email][2] == attendee_channel
 
     def test_channel_events_delete_only_removes_own_events(self):
         """DELETE removes one channel's events without touching another's."""
