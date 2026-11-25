@@ -31,6 +31,11 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     private const ANSWER_PARAMETERS = ['PARTSTAT', 'RSVP', 'SCHEDULE-STATUS'];
 
     /**
+     * Recurrence properties other than RRULE and EXDATE.
+     */
+    private const UNSUPPORTED_RECURRENCE = ['EXRULE', 'RDATE'];
+
+    /**
      * API key for authenticating with the callback endpoint
      * @var string
      */
@@ -173,10 +178,7 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         if (!isset($storedEntries['master'])) {
             return false;
         }
-        // EventIterator ignores EXRULE, and reads RDATE in the timezone of
-        // DTSTART. With either, the regular dates are not known.
-        $master = $storedEntries['master'];
-        if (isset($master->RDATE) || isset($master->EXRULE)) {
+        if (!$this->isPlainSeries($storedEntries['master'])) {
             return false;
         }
 
@@ -197,6 +199,27 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             }
         }
         return $added && $kept === count($storedEntries);
+    }
+
+    /**
+     * Tell if the master only uses the supported recurrence properties:
+     * one RRULE, and EXDATE lines.
+     *
+     * EventIterator does not handle the other combinations well. For
+     * example, it ignores EXRULE and reads RDATE in the timezone of
+     * DTSTART. Other series keep the update emails.
+     */
+    private function isPlainSeries(VEvent $master): bool
+    {
+        $rules = 0;
+        foreach ($master->children() as $child) {
+            if ('RRULE' === $child->name) {
+                $rules++;
+            } elseif (in_array($child->name, self::UNSUPPORTED_RECURRENCE, true)) {
+                return false;
+            }
+        }
+        return 1 === $rules;
     }
 
     /**

@@ -563,6 +563,7 @@ END:VCALENDAR"""
             ("no master", True),
             ("rdate", True),
             ("exrule", True),
+            ("no rrule", True),
             ("alarm", True),
             ("forced", True),
             ("dropped date", True),
@@ -725,6 +726,10 @@ END:VEVENT"""
                 # The rule excludes the first and the second dates.
                 if change == "exrule":
                     series += "EXRULE:FREQ=DAILY;COUNT=9\n"
+                # A single event, and the answer is for its only date.
+                if change == "no rrule":
+                    series = ""
+                    second = dtstart
                 # A third date has its own location, and the write drops it.
                 dropped = []
                 if change == "dropped date":
