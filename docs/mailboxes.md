@@ -109,15 +109,8 @@ share: it sets the access and the `is_sync_managed` flag.
 
 **Recurring background sync**: schedule `sync_all_mailbox_acls` via cron
 (or call the management command periodically). It iterates users with
-an email and resyncs their mailbox shares. On Scalingo,
-`deploy/paas/cron.json` runs `sync_mailbox_acls --enqueue` every 15
-minutes. The post-compile script copies it to the root, where Scalingo
-reads it. The command sends
-the task to the worker and exits. The worker runs the sync, because it
-has the internal CalDAV server. A sync can use a Messages answer that
-is up to 5 minutes old. Thus a user removed from a mailbox can keep
-access until a sync applies a new answer. Opening the app also syncs the
-user.
+an email and resyncs their mailbox shares. With `--enqueue`, the
+management command sends this task to the worker and exits.
 
 **Sync commands**:
 
@@ -235,11 +228,10 @@ The share modal detects mailbox calendars and adapts its UI:
 Shares are synced in two directions:
 - **On mailbox calendar creation**: the worker runs
   `SetupService.sync_mailbox()`, which syncs each mailbox user who has a
-  Calendars account. A mailbox user without a Calendars account gets
-  the shares on their first app open.
+  Calendars account.
 - **On each user's app open**: `GET /setup/mailboxes/` syncs that user's
   shares (picks up new mailbox calendars, updates changed roles, removes
-  stale shares). Again, one Messages API call returns everything.
+  stale shares). One Messages API call returns everything.
 
 All sync-managed shares are tagged with `is_sync_managed = TRUE`
 in `calendarinstances`. This distinguishes them from manual shares and
