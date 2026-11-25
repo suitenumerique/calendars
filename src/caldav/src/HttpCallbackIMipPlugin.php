@@ -31,11 +31,6 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     private const ANSWER_PARAMETERS = ['PARTSTAT', 'RSVP', 'SCHEDULE-STATUS'];
 
     /**
-     * Recurrence properties other than RRULE and EXDATE.
-     */
-    private const UNSUPPORTED_RECURRENCE = ['EXRULE', 'RDATE'];
-
-    /**
      * API key for authenticating with the callback endpoint
      * @var string
      */
@@ -154,7 +149,12 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     }
 
     /**
-     * Tell if the new event only adds entries for regular dates.
+     * Tell if the write only records answers.
+     *
+     * The write adds at least one copy of a regular date, and keeps all
+     * the stored entries. All other changes are in the answers of the
+     * attendees or in the write properties, such as DTSTAMP or SEQUENCE.
+     * The answers do not have to change.
      *
      * SabreDAV marks each new entry as a significant change for all the
      * attendees. A copy of a regular date with other answers changes
@@ -207,19 +207,13 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      *
      * EventIterator does not handle the other combinations well. For
      * example, it ignores EXRULE and reads RDATE in the timezone of
-     * DTSTART. Other series keep the update emails.
+     * DTSTART. Other series use the usual scheduling rules.
      */
     private function isPlainSeries(VEvent $master): bool
     {
-        $rules = 0;
-        foreach ($master->children() as $child) {
-            if ('RRULE' === $child->name) {
-                $rules++;
-            } elseif (in_array($child->name, self::UNSUPPORTED_RECURRENCE, true)) {
-                return false;
-            }
-        }
-        return 1 === $rules;
+        return 1 === count($master->select('RRULE'))
+            && !isset($master->RDATE)
+            && !isset($master->EXRULE);
     }
 
     /**
@@ -257,8 +251,10 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     }
 
     /**
-     * Tell if a new entry is a copy of its regular date in the stored
-     * event. Only the answers of the attendees can differ.
+     * Tell if a new entry is a copy of its date in the stored series.
+     *
+     * The times can have another form with the same value. The answers of
+     * the attendees and the write properties can differ.
      */
     private function matchesRegularDate(VEvent $vevent, VCalendar $stored): bool
     {
@@ -294,6 +290,12 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         return isset($vevent->DTEND) ? $vevent->DTEND->isFloating() : $vevent->DTSTART->isFloating();
     }
 
+    /**
+     * Give the nominal end of a date.
+     *
+     * The DURATION is added to the start of this date. A day thus stays a
+     * day across a change to summer time.
+     */
     private function endOf(VEvent $vevent): \DateTimeImmutable
     {
         $start = $vevent->DTSTART->getDateTime();
@@ -307,9 +309,11 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     }
 
     /**
-     * @param string[] $skipped Names of the properties to leave out
-     * @return string[] Sorted serialized children, with sorted parameters
-     *                  and without the answers of the attendees. Nested
+     * @param string[] $skipped Names of the direct children to leave out.
+     *                          Nested components keep all their properties.
+     * @return string[] Sorted strings for the comparison. They are not
+     *                  valid iCalendar. The parameters are sorted, and the
+     *                  answers of the attendees are removed. Nested
      *                  components get the same treatment.
      */
     private function answerless(Component $component, array $skipped): array

@@ -813,7 +813,7 @@ END:VEVENT"""
                         reordered=change == "reordered timezone",
                     )
                 )
-                # Wait for one more callback than expected, to catch duplicates.
+                # Wait for callbacks that are not expected, also duplicates.
                 _wait_for_callbacks(callback_data, expected_count=3, timeout=1.0)
 
                 callbacks = sorted(
