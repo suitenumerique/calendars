@@ -543,6 +543,7 @@ END:VCALENDAR"""
             ("no end", False),
             ("same timezone", False),
             ("reordered timezone", False),
+            ("daylight saving", False),
             ("reordered alarm", False),
             ("duration", False),
             ("email case", False),
@@ -587,6 +588,10 @@ END:VCALENDAR"""
                 caldav_calendar = client.calendar(url=calendar_url)
 
                 dtstart = (datetime.now() + timedelta(days=3)).replace(microsecond=0)
+                if change == "daylight saving":
+                    # The first date lasts 23 hours: New York moves to
+                    # summer time on March 14, 2027.
+                    dtstart = datetime(2027, 3, 13, 12)
                 second = dtstart + timedelta(days=7)
                 declining = "declining@external-a.test"
                 other = "other@external-b.test"
@@ -609,6 +614,9 @@ END:VCALENDAR"""
 
                 def times(start, header):
                     is_series = header == series
+                    if change == "daylight saving":
+                        local_start = start.strftime("%Y%m%dT%H%M%S")
+                        return f"DTSTART;TZID=America/New_York:{local_start}\nDURATION:P1D\n"
                     if change == "all day":
                         # The series is all-day, the answer is a full floating day.
                         day = start.strftime("%Y%m%d")
@@ -726,11 +734,16 @@ END:VEVENT"""
                     "move": second + timedelta(hours=1),
                     "earlier start": second - timedelta(minutes=30),
                 }.get(change, second)
-                recurrence_id = (
-                    f"RECURRENCE-ID;VALUE=DATE:{second.strftime('%Y%m%d')}\n"
-                    if change == "all day"
-                    else f"RECURRENCE-ID:{second.strftime(fmt)}\n"
-                )
+                recurrence_id = f"RECURRENCE-ID:{second.strftime(fmt)}\n"
+                if change == "all day":
+                    recurrence_id = (
+                        f"RECURRENCE-ID;VALUE=DATE:{second.strftime('%Y%m%d')}\n"
+                    )
+                elif change == "daylight saving":
+                    recurrence_id = (
+                        "RECURRENCE-ID;TZID=America/New_York:"
+                        f"{second.strftime('%Y%m%dT%H%M%S')}\n"
+                    )
                 answer = entry(
                     answer_start,
                     recurrence_id,

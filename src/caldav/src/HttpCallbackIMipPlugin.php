@@ -232,7 +232,7 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         return $vevent->DTSTART->getDateTime() == $occurrences->getDtStart()
             && $vevent->DTSTART->hasTime() === $regular->DTSTART->hasTime()
             && $vevent->DTSTART->isFloating() === $regular->DTSTART->isFloating()
-            && $this->endOf($vevent) == $occurrences->getDtEnd()
+            && $this->endOf($vevent) == $this->endOf($regular)
             && $this->answerless($vevent, $skipped) === $this->answerless($regular, $skipped);
     }
 
