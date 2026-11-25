@@ -139,16 +139,8 @@ When an event with attendees is modified:
 3. Attendees receive an update email
    (`calendar_invitation_update.html`)
 
-### An answer for one date
-
-A mail client can record an attendee's answer for one date of a series
-in the organizer's calendar. It adds a copy of that date with the new
-answer. When this is the only change, the CalDAV server sends no update
-email. For other changes, the usual scheduling rules apply.
-
-This only applies to a plain series: one `RRULE`, `EXDATE` lines and
-moved dates. For other series, for example with `RDATE`, `EXRULE` or
-`RANGE=THISANDFUTURE`, the usual scheduling rules apply too.
+A write that only records an attendee's answer for one date of a series
+sends no update email (see `HttpCallbackIMipPlugin`).
 
 ## Cancelling an event
 
