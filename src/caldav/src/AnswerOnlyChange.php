@@ -50,7 +50,6 @@ final class AnswerOnlyChange
     {
         if (!isset($stored->VEVENT->ORGANIZER)
             || $this->hasRange($vCal)
-            || $this->hasRange($stored)
             || $this->timezones($vCal) !== $this->timezones($stored)) {
             return false;
         }
@@ -123,7 +122,9 @@ final class AnswerOnlyChange
      * Tell if an entry has a RANGE, such as RANGE=THISANDFUTURE.
      *
      * Such an entry also changes the later dates. EventIterator does not
-     * support it, so the regular dates are not known.
+     * support it, so the regular dates are not known. A stored entry with
+     * a RANGE is also in the new event, or the comparison fails because
+     * the new event drops it.
      */
     private function hasRange(VCalendar $vCal): bool
     {
