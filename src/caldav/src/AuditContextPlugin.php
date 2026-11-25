@@ -2,9 +2,16 @@
 /**
  * AuditContextPlugin - Injects principal and channel context into the backend.
  *
- * Hooks beforeCreateFile and beforeWriteContent at priority 70 (before
- * CalendarSanitizerPlugin at 85 and AttendeeNormalizerPlugin at 90) so
- * that the audit context is available when the backend write happens.
+ * The principal belongs to the request. The plugin sets it once, on
+ * beforeMethod:* at priority 15, after the authentication (10). Thus each
+ * backend write of the request has an author. This includes the writes
+ * that emit no beforeCreateFile or beforeWriteContent: a MOVE, a write by
+ * another plugin, a write by the internal API.
+ *
+ * The channel belongs to the object that the request writes. The plugin
+ * sets it just before this write and clears it after. A write in another
+ * calendar, for example a scheduling update of the organizer's copy,
+ * keeps the channel of its event.
  *
  * Reads:
  *   X-LS-User header → setCurrentPrincipal()
@@ -44,18 +51,18 @@ class AuditContextPlugin extends ServerPlugin
     {
         $this->server = $server;
 
-        // Priority 70: before sanitizer (85), normalizer (90), and CalDAV (100+)
-        $server->on('beforeCreateFile', [$this, 'injectContext'], 70);
-        $server->on('beforeWriteContent', [$this, 'injectContext'], 70);
+        // Priority 15: after the authentication (10), before all the writes.
+        $server->on('beforeMethod:*', [$this, 'injectPrincipal'], 15);
+
+        // Priority 1000: after the CalDAV plugin (100), which makes the
+        // scheduling writes in other calendars.
+        $server->on('beforeCreateFile', [$this, 'applyChannel'], 1000);
+        $server->on('beforeWriteContent', [$this, 'applyChannel'], 1000);
+        $server->on('afterCreateFile', [$this, 'clearChannel'], 10);
+        $server->on('afterWriteContent', [$this, 'clearChannel'], 10);
     }
 
-    /**
-     * Inject audit context from HTTP headers into the backend.
-     *
-     * Accepts variable arguments because beforeCreateFile and
-     * beforeWriteContent have different signatures.
-     */
-    public function injectContext(): void
+    public function injectPrincipal(): void
     {
         $request = $this->server->httpRequest;
 
@@ -68,14 +75,25 @@ class AuditContextPlugin extends ServerPlugin
         if ($user) {
             $this->caldavBackend->setCurrentPrincipal($user);
         }
+    }
 
-        // Set channel ID from X-LS-Channel-Id header (with UUID validation)
-        $channelId = $request->getHeader('X-LS-Channel-Id');
+    /**
+     * Set the channel ID from the X-LS-Channel-Id header, with UUID
+     * validation, for the next writes.
+     */
+    public function applyChannel(): void
+    {
+        $channelId = $this->server->httpRequest->getHeader('X-LS-Channel-Id');
         if ($channelId && $this->isValidUuid($channelId)) {
             $this->caldavBackend->setCurrentChannelId($channelId);
         } else {
             $this->caldavBackend->setCurrentChannelId(null);
         }
+    }
+
+    public function clearChannel(): void
+    {
+        $this->caldavBackend->setCurrentChannelId(null);
     }
 
     /**

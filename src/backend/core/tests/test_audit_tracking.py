@@ -19,6 +19,12 @@ from core.models import uuid_to_urlsafe
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
 from core.services.channel_event_service import ChannelEventService
 from core.services.import_service import ICSImportService
+from core.tests.test_caldav_scheduling_identity import (
+    DOMAIN,
+    _add_mailbox_calendar,
+    _event,
+    _move,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -389,6 +395,16 @@ def _get_cal_id(caldav_path):
     return parts[-1] if len(parts) >= 4 else "default"
 
 
+def _audit_columns(caldav_db, uid):
+    """Return created_by and modified_by of the stored events with the UID."""
+    with caldav_db.cursor() as cur:
+        cur.execute(
+            "SELECT created_by, modified_by FROM calendarobjects WHERE uid = %s",
+            [uid],
+        )
+        return cur.fetchall()
+
+
 @pytest.mark.xdist_group("caldav")
 class TestAuditTrackingE2E:
     """E2E: verify audit columns are set by SabreDAV and queryable."""
@@ -695,6 +711,203 @@ class TestAuditTrackingE2E:
         events = chan_service.list_events(user, str(channel.pk))
         uids = [e["uid"] for e in events]
         assert import_uid in uids
+        assert [e["created_by"] for e in events] == [user.email]
+
+    def test_move_sets_the_user_on_the_moved_event(self, caldav_db):
+        """A MOVE makes a new row in the destination calendar, and emits no
+        write event. The new row has the user that moves the event."""
+        user = factories.UserFactory(
+            email=f"audit-move-{uuid.uuid4().hex[:8]}@test.com"
+        )
+        client = APIClient()
+        client.force_login(user)
+        service = CalendarService()
+        source = service.create_calendar(user, name="Source")
+        destination = service.create_calendar(user, name="Destination")
+        uid = f"audit-move-{uuid.uuid4()}"
+        resp = _put_event(client, user.email, _get_cal_id(source), uid)
+        assert resp.status_code == 201, resp.content
+
+        http = CalDAVHTTPClient()
+        resp = http.request(
+            "MOVE",
+            user,
+            f"{source}{uid}.ics",
+            extra_headers={"Destination": http.build_url(f"{destination}{uid}.ics")},
+        )
+        assert resp.status_code == 201, resp.text
+
+        assert _audit_columns(caldav_db, uid) == [(user.email, user.email)]
+
+    def test_move_to_other_identity_sets_the_user_on_the_new_organizer(self, caldav_db):
+        """A MOVE to a calendar with another identity writes the new
+        organizer in the moved event, after the move. This write has the
+        user that moves the event."""
+        user = factories.UserFactory(
+            email=f"audit-move-org-{uuid.uuid4().hex[:8]}@{DOMAIN}"
+        )
+        mailbox = f"audit-mailbox-{uuid.uuid4().hex[:8]}@{DOMAIN}"
+        mailbox_url = _add_mailbox_calendar(user, mailbox)
+        service = CalendarService()
+        personal_url = service._calendar_url(  # pylint: disable=protected-access
+            service.create_calendar(user, name="Personal")
+        )
+        client = service._get_client(user)  # pylint: disable=protected-access
+        uid = f"audit-move-org-{uuid.uuid4()}"
+        event = client.calendar(url=mailbox_url).save_event(
+            _event(uid, mailbox, "guest@external.test")
+        )
+
+        target, resp = _move(client, event, personal_url)
+        assert resp.status == 201
+
+        data = client.calendar(url=personal_url).event_by_url(target).data
+        assert f"ORGANIZER:mailto:{user.email}" in data
+        assert _audit_columns(caldav_db, uid) == [(user.email, user.email)]
+
+    def test_rsvp_sets_the_attendee_as_modifier(self, caldav_db):
+        """The RSVP request authenticates as the organizer, but the attendee
+        makes the change."""
+        organizer = factories.UserFactory(
+            email=f"audit-rsvp-{uuid.uuid4().hex[:8]}@test.com"
+        )
+        attendee = "guest@external.test"
+        caldav_path = CalendarService().create_calendar(organizer, name="RSVP")
+        uid = f"audit-rsvp-{uuid.uuid4()}"
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Audit//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            "DTSTART:20990601T100000Z\r\n"
+            "DTEND:20990601T110000Z\r\n"
+            "SUMMARY:audit RSVP test\r\n"
+            f"ORGANIZER:mailto:{organizer.email}\r\n"
+            f"ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{attendee}\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        http = CalDAVHTTPClient()
+        resp = http.request(
+            "PUT",
+            organizer,
+            f"{caldav_path}{uid}.ics",
+            data=ical.encode(),
+            content_type="text/calendar",
+        )
+        assert resp.status_code == 201, resp.text
+
+        resp = http.internal_request(
+            "POST",
+            organizer,
+            "internal-api/rsvp/",
+            json={
+                "organizer_email": organizer.email,
+                "uid": uid,
+                "attendee_email": attendee,
+                "partstat": "ACCEPTED",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+
+        assert _audit_columns(caldav_db, uid) == [(organizer.email, attendee)]
+
+    @pytest.mark.parametrize("answer", ["delete", "accept"])
+    def test_scheduling_write_keeps_the_channel_of_the_event(  # pylint: disable=too-many-locals
+        self, caldav_db, answer
+    ):
+        """A local attendee answers through a channel: a DELETE declines,
+        a PUT accepts. The server writes the answer in the organizer's
+        copy before the write of the request. This copy keeps its
+        channel, and has the attendee as modifier. Only the attendee's
+        own copy gets the channel of the attendee."""
+        organizer = factories.UserFactory(
+            email=f"audit-org-{uuid.uuid4().hex[:8]}@test.com"
+        )
+        attendee = factories.UserFactory(
+            email=f"audit-guest-{uuid.uuid4().hex[:8]}@test.com"
+        )
+        service = CalendarService()
+        organizer_path = service.create_calendar(organizer, name="Organizer")
+        service.create_calendar(attendee, name="Guest")
+        organizer_channel = str(uuid.uuid4())
+        attendee_channel = str(uuid.uuid4())
+        uid = f"audit-channel-{uuid.uuid4()}"
+        ical = (
+            "BEGIN:VCALENDAR\r\n"
+            "VERSION:2.0\r\n"
+            "PRODID:-//Test//Audit//EN\r\n"
+            "BEGIN:VEVENT\r\n"
+            f"UID:{uid}\r\n"
+            "DTSTART:20990601T100000Z\r\n"
+            "DTEND:20990601T110000Z\r\n"
+            "SUMMARY:audit channel test\r\n"
+            f"ORGANIZER:mailto:{organizer.email}\r\n"
+            f"ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{attendee.email}\r\n"
+            "END:VEVENT\r\n"
+            "END:VCALENDAR\r\n"
+        )
+        http = CalDAVHTTPClient()
+        resp = http.request(
+            "PUT",
+            organizer,
+            f"{organizer_path}{uid}.ics",
+            data=ical.encode(),
+            content_type="text/calendar",
+            extra_headers={"X-LS-Channel-Id": organizer_channel},
+        )
+        assert resp.status_code == 201, resp.text
+
+        def copies():
+            with caldav_db.cursor() as cur:
+                cur.execute(
+                    "SELECT ci.principaluri, ci.uri, co.uri, co.channel_id::text,"
+                    " co.modified_by, co.calendardata FROM calendarobjects co"
+                    " JOIN calendarinstances ci ON ci.calendarid = co.calendarid"
+                    " WHERE co.uid = %s",
+                    [uid],
+                )
+                return {row[0].rsplit("/", 1)[-1]: row[1:] for row in cur.fetchall()}
+
+        calendar_uri, object_uri, channel_id, _, data = copies()[attendee.email]
+        assert channel_id is None
+        attendee_copy = f"calendars/users/{attendee.email}/{calendar_uri}/{object_uri}"
+
+        if answer == "delete":
+            resp = http.request(
+                "DELETE",
+                attendee,
+                attendee_copy,
+                extra_headers={"X-LS-Channel-Id": attendee_channel},
+            )
+            assert resp.status_code == 204, resp.text
+        else:
+            # The copy of the attendee has one ATTENDEE, the attendee.
+            accepted = (
+                bytes(data)
+                .decode()
+                .replace("PARTSTAT=NEEDS-ACTION", "PARTSTAT=ACCEPTED")
+                .encode()
+            )
+            resp = http.request(
+                "PUT",
+                attendee,
+                attendee_copy,
+                data=accepted,
+                content_type="text/calendar",
+                extra_headers={"X-LS-Channel-Id": attendee_channel},
+            )
+            assert resp.status_code == 204, resp.text
+
+        result = copies()
+        _, _, channel_id, modified_by, data = result[organizer.email]
+        assert channel_id == organizer_channel
+        assert modified_by == attendee.email
+        partstat = "DECLINED" if answer == "delete" else "ACCEPTED"
+        assert f"PARTSTAT={partstat}" in bytes(data).decode()
+        if answer == "accept":
+            assert result[attendee.email][2] == attendee_channel
 
     def test_channel_events_delete_only_removes_own_events(self):
         """DELETE removes one channel's events without touching another's."""

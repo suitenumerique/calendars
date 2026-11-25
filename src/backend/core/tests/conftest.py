@@ -22,19 +22,8 @@ def _has_caldav_marker(request):
     return marker is not None and marker.args and marker.args[0] == "caldav"
 
 
-@pytest.fixture(autouse=True)
-def truncate_caldav_tables(request, django_db_setup, django_db_blocker):  # pylint: disable=unused-argument
-    """Truncate CalDAV tables before each CalDAV E2E test.
-
-    Only runs for tests marked with @pytest.mark.xdist_group("caldav").
-    Non-CalDAV tests don't touch the SabreDAV database, so truncating
-    from their worker would corrupt state for CalDAV tests running
-    concurrently on another xdist worker.
-    """
-    if not _has_caldav_marker(request):
-        yield
-        return
-
+def _connect_caldav_db():
+    """Connect to the SabreDAV test database."""
     import psycopg  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
 
     db_settings = settings.DATABASES["default"]
@@ -58,6 +47,33 @@ def truncate_caldav_tables(request, django_db_setup, django_db_blocker):  # pyli
         options=f"-c search_path={caldav_test_schema},public",
     )
     conn.autocommit = True
+    return conn
+
+
+@pytest.fixture
+def caldav_db():
+    """Give a connection to the SabreDAV test database."""
+    conn = _connect_caldav_db()
+    try:
+        yield conn
+    finally:
+        conn.close()  # pylint: disable=no-member
+
+
+@pytest.fixture(autouse=True)
+def truncate_caldav_tables(request, django_db_setup, django_db_blocker):  # pylint: disable=unused-argument
+    """Truncate CalDAV tables before each CalDAV E2E test.
+
+    Only runs for tests marked with @pytest.mark.xdist_group("caldav").
+    Non-CalDAV tests don't touch the SabreDAV database, so truncating
+    from their worker would corrupt state for CalDAV tests running
+    concurrently on another xdist worker.
+    """
+    if not _has_caldav_marker(request):
+        yield
+        return
+
+    conn = _connect_caldav_db()
     try:
         with conn.cursor() as cur:  # pylint: disable=no-member
             for table in [

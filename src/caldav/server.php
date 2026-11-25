@@ -309,8 +309,9 @@ $server->on('exception', function ($e) {
     exit;
 }, 50);
 
-// Add audit context plugin (priority 70, runs before sanitizer/normalizer)
-// Sets principal email and channel ID on the backend before each write
+// Add audit context plugin
+// Sets the principal email once for each request, and the channel ID for
+// the write of the request only
 $server->addPlugin(new AuditContextPlugin($caldavBackend));
 
 // Add calendar sanitizer plugin (priority 85, runs before all other calendar plugins)
