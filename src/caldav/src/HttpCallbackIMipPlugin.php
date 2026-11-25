@@ -156,7 +156,8 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      */
     private function onlyAddsRegularDates(VCalendar $vCal, VCalendar $stored): bool
     {
-        if (!isset($stored->VEVENT->ORGANIZER)) {
+        if (!isset($stored->VEVENT->ORGANIZER)
+            || $this->timezones($vCal) !== $this->timezones($stored)) {
             return false;
         }
 
@@ -182,6 +183,19 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             }
         }
         return $added && $kept === count($storedEntries);
+    }
+
+    /**
+     * @return string[] Sorted serialized VTIMEZONE components
+     */
+    private function timezones(VCalendar $vCal): array
+    {
+        $timezones = [];
+        foreach ($vCal->select('VTIMEZONE') as $timezone) {
+            $timezones[] = $timezone->serialize();
+        }
+        sort($timezones);
+        return $timezones;
     }
 
     private function recurrenceId(VEvent $vevent): string

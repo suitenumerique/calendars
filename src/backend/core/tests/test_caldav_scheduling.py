@@ -541,20 +541,22 @@ END:VCALENDAR"""
             ("answer", False),
             ("reordered parameters", False),
             ("no end", False),
+            ("same timezone", False),
             ("move", True),
             ("location", True),
             ("series location", True),
             ("role", True),
+            ("timezone", True),
         ],
     )
-    def test_scheduling_callback_skips_answer_for_one_date(  # pylint: disable=too-many-locals
+    def test_scheduling_callback_skips_answer_for_one_date(  # noqa: PLR0915  # pylint: disable=too-many-locals,too-many-statements
         self, change, sends
     ):
         """A new entry for a regular date that only records an answer
         sends no message, also when the client writes the parameters in
-        another order or the event has no end. When the write also moves
-        the date, changes a location or changes a role, all the attendees
-        get an update."""
+        another order, the event has no end or uses a custom timezone.
+        When the write also moves the date, changes a location, changes a
+        role or changes the timezone, all the attendees get an update."""
         organizer = factories.UserFactory(email="organizer-one-date@example.com")
         service = CalendarService()
         caldav_path = service.create_calendar(
@@ -579,24 +581,43 @@ END:VCALENDAR"""
                 other = "other@external-b.test"
                 event_uid = f"one-date-{datetime.now().timestamp()}"
                 fmt = "%Y%m%dT%H%M%SZ"
+                custom_timezone = change in ("same timezone", "timezone")
+
+                def when(name, moment, local):
+                    if not local:
+                        return f"{name}:{moment.strftime(fmt)}\n"
+                    # Etc/GMT-1 is one hour ahead of UTC.
+                    local_time = (moment + timedelta(hours=1)).strftime(fmt[:-1])
+                    return f"{name};TZID=Etc/GMT-1:{local_time}\n"
 
                 def entry(start, header, organizer_params, extra="", other_params=""):
+                    # The series uses the custom timezone, the answer uses UTC.
+                    local = custom_timezone and header == series
                     end = (
                         ""
                         if change == "no end"
-                        else f"DTEND:{(start + timedelta(hours=1)).strftime(fmt)}\n"
+                        else when("DTEND", start + timedelta(hours=1), local)
                     )
                     return f"""BEGIN:VEVENT
 UID:{event_uid}
-{header}DTSTART:{start.strftime(fmt)}
-{end}SUMMARY:Weekly event
+{header}{when("DTSTART", start, local)}{end}SUMMARY:Weekly event
 {extra}ORGANIZER;{organizer_params}:mailto:{organizer.email}
 ATTENDEE;RSVP=TRUE:mailto:{declining}
 ATTENDEE;RSVP=TRUE{other_params}:mailto:{other}
 END:VEVENT"""
 
-                def calendar(*entries):
+                def calendar(*entries, offset="+0100"):
                     body = "\n".join(entries)
+                    if custom_timezone:
+                        body = f"""BEGIN:VTIMEZONE
+TZID:Etc/GMT-1
+BEGIN:STANDARD
+DTSTART:19700101T000000
+TZOFFSETFROM:{offset}
+TZOFFSETTO:{offset}
+END:STANDARD
+END:VTIMEZONE
+{body}"""
                     return (
                         "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Test//EN\n"
                         f"{body}\nEND:VCALENDAR"
@@ -636,15 +657,23 @@ END:VEVENT"""
                     calendar(
                         entry(dtstart, series, organizer_params, series_location),
                         answer,
+                        offset="+0200" if change == "timezone" else "+0100",
                     )
                 )
-                _wait_for_callbacks(callback_data, expected_count=2, timeout=1.0)
+                # Wait for one more callback than expected, to catch duplicates.
+                _wait_for_callbacks(callback_data, expected_count=3, timeout=1.0)
 
-                recipients = {
-                    re.sub(r"(?i)^mailto:", "", r["headers"].get("X-LS-Recipient", ""))
+                callbacks = sorted(
+                    (
+                        re.sub(
+                            r"(?i)^mailto:", "", r["headers"].get("X-LS-Recipient", "")
+                        ),
+                        r["headers"].get("X-LS-Method"),
+                    )
                     for r in callback_data["requests"]
-                }
-                assert recipients == ({declining, other} if sends else set())
+                )
+                expected = [(declining, "REQUEST"), (other, "REQUEST")] if sends else []
+                assert callbacks == expected
 
             except NotFoundError:
                 pytest.skip("Calendar not found - CalDAV server may not be running")
