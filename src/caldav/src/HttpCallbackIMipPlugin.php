@@ -251,7 +251,13 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             && $vevent->DTSTART->hasTime() === $regular->DTSTART->hasTime()
             && $vevent->DTSTART->isFloating() === $regular->DTSTART->isFloating()
             && $this->endOf($vevent) == $this->endOf($regular)
+            && $this->endIsFloating($vevent) === $this->endIsFloating($regular)
             && $this->answerless($vevent, $skipped) === $this->answerless($regular, $skipped);
+    }
+
+    private function endIsFloating(VEvent $vevent): bool
+    {
+        return isset($vevent->DTEND) ? $vevent->DTEND->isFloating() : $vevent->DTSTART->isFloating();
     }
 
     private function endOf(VEvent $vevent): \DateTimeImmutable

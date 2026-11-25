@@ -559,6 +559,7 @@ END:VCALENDAR"""
             ("role", True),
             ("timezone", True),
             ("floating", True),
+            ("floating end", True),
             ("alarm", True),
             ("forced", True),
             ("dropped date", True),
@@ -635,6 +636,8 @@ END:VCALENDAR"""
                         end = ""
                     elif change == "duration":
                         end = "DURATION:PT1H\n"
+                    elif change == "floating end" and not is_series:
+                        end = f"DTEND:{(start + length).strftime(fmt[:-1])}\n"
                     else:
                         end = when("DTEND", start + length, local)
                     return when("DTSTART", start, local) + end
