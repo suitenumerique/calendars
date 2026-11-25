@@ -8,7 +8,7 @@ import {
   mergeAttendeeEdits,
   organizeNewSeries,
   userAddresses,
-} from "../organizerChange";
+} from "../organizer";
 
 const meeting = (organizer: string, ...attendees: string[]): IcsEvent =>
   ({

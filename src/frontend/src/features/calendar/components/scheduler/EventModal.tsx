@@ -45,7 +45,7 @@ import {
   mergeAttendeeEdits,
   organizeNewSeries,
   userAddresses,
-} from "./utils/organizerChange";
+} from "./utils/organizer";
 
 export const EventModal = ({
   isOpen,
