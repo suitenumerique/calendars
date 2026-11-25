@@ -159,7 +159,7 @@ class TestRSVPDoesNotRestoreEvents:
         assert _state(self._caldav("GET").text) == ("", None)
 
     def test_event_of_another_organizer_is_not_updated(self):
-        """The user of the link can own a guest copy of the meeting, for
+        """The user of the link can own an attendee copy of the meeting, for
         example after a move to a calendar with another identity."""
         copy = self._vevent(self.start, organizer="other-organizer@example.com")
         assert self._caldav("PUT", _ics(copy)).status_code == 201
@@ -171,7 +171,7 @@ class TestRSVPDoesNotRestoreEvents:
         assert _state(self._caldav("GET").text) == ("", "NEEDS-ACTION")
 
     def test_reply_goes_to_the_event_that_the_user_organizes(self):
-        """The user of the link owns a guest copy and the meeting itself,
+        """The user of the link owns an attendee copy and the meeting itself,
         with the same UID."""
         copy = self._vevent(self.start, organizer="other-organizer@example.com")
         assert self._caldav("PUT", _ics(copy)).status_code == 201

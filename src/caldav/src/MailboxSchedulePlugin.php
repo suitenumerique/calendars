@@ -151,8 +151,8 @@ class MailboxSchedulePlugin extends Plugin
      * identity as organizer. This hook only records the change, and
      * afterMove applies it when the event is in its new calendar.
      *
-     * A move between calendars with the same identity changes nothing. So
-     * does the move of an event without attendees.
+     * A move between calendars with the same identity changes nothing. The
+     * move of an event without attendees also changes nothing.
      *
      * @throws Forbidden when an attendee copy moves to a calendar with
      *                   another identity
@@ -202,11 +202,8 @@ class MailboxSchedulePlugin extends Plugin
         $uid = (string) $event->VEVENT->UID;
         $event->destroy();
         $identity = $this->getCalendarIdentity($this->server->tree->getNodeForPath($destinationPath));
-        $identity = $identity ? strtolower($identity) : null;
-        $sourceIdentity = $this->getCalendarIdentity($sourceCalendar);
-        $sourceIdentity = $sourceIdentity ? strtolower($sourceIdentity) : null;
 
-        if ($identity === $sourceIdentity) {
+        if ($identity === $this->getCalendarIdentity($sourceCalendar)) {
             return null;
         }
 
@@ -281,7 +278,7 @@ class MailboxSchedulePlugin extends Plugin
      *
      * A MOVE that overwrites puts the meeting at the path of the copy.
      * Another request can also change the event at this path during the
-     * move. Thus the event at this path is examined again.
+     * move. Thus the method examines the event at this path again.
      */
     private function removeAttendeeCopy(?string $path, string $uid, string $organizer): void
     {

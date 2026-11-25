@@ -543,7 +543,7 @@ class InternalApiPlugin extends ServerPlugin
             );
             $stmt->execute([$uid, $email]);
 
-            // The principal can also own a guest copy of the meeting, for
+            // The principal can also own an attendee copy of the meeting, for
             // example after a move to a calendar with another identity. Only
             // the event that the principal organizes takes the reply.
             $row = null;
