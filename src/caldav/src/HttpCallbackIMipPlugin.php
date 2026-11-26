@@ -224,6 +224,8 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      * example, it ignores EXRULE, reads RDATE in the timezone of DTSTART,
      * and ignores BYMONTH in a daily rule. Other series use the usual
      * scheduling rules.
+     *
+     * @see https://github.com/sabre-io/vobject/issues/819 (RDATE)
      */
     private function isPlainSeries(VEvent $master): bool
     {
@@ -324,6 +326,8 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      * With DTEND, all the dates have the exact length of the master, in
      * seconds. EventIterator adds this length to the clock time, so its
      * DTEND is one hour wrong across a change to or from summer time.
+     *
+     * @see https://github.com/sabre-io/vobject/issues/818
      */
     private function regularEnd(VEvent $regular, VEvent $master): \DateTimeImmutable
     {
