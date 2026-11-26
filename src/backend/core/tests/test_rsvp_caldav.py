@@ -238,7 +238,7 @@ class TestRSVPDoesNotRestoreEvents:
 
         assert not callbacks["requests"]
 
-    def test_cancelled_occurrence_stays_cancelled(self):
+    def test_cancelled_occurrence_stays_cancelled(self, callbacks):
         cancelled = self.start + timedelta(days=1)
         # The override comes first. The RSVP must still target the master.
         override = self._vevent(
@@ -246,13 +246,17 @@ class TestRSVPDoesNotRestoreEvents:
         )
         master = self._vevent(self.start, "RRULE:FREQ=DAILY;COUNT=3")
         assert self._caldav("PUT", _ics(override, master)).status_code == 201
+        callbacks["requests"].clear()
 
         response = self._rsvp()
+        _wait_for_callbacks(callbacks)
 
         assert response.status_code == 200
         stored = self._caldav("GET").text
         assert _state(stored) == ("", "ACCEPTED")
         assert _state(stored, cancelled) == ("CANCELLED", "NEEDS-ACTION")
+        assert len(callbacks["requests"]) == 1
+        assert callbacks["requests"][0]["headers"]["X-LS-Method"] == "REPLY"
 
 
 @pytest.mark.django_db

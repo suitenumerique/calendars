@@ -125,7 +125,8 @@ SabreDAV scheduling does not run for this write. The internal API
 makes the REPLY with the iTIP broker, as scheduling does for a change
 by the attendee. The callback flow and the reply email are the same
 as for an iTIP client response. The same answer twice sends one
-email. A cancelled event gets no change and no REPLY.
+email. The REPLY covers the master only. A cancelled occurrence does
+not stop it. A cancelled event gets no change and no REPLY.
 
 ### iTIP client response
 

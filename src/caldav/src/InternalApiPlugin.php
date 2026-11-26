@@ -651,12 +651,35 @@ class InternalApiPlugin extends ServerPlugin
 
         try {
             $broker = new VObject\ITip\Broker();
-            foreach ($broker->parseEvent($calendar, $attendeeHref, $oldIcal) as $message) {
+            $messages = $broker->parseEvent(
+                $this->withoutOverrides($calendar),
+                $attendeeHref,
+                $this->withoutOverrides(VObject\Reader::read($oldIcal))
+            );
+            foreach ($messages as $message) {
                 $imipPlugin->schedule($message);
             }
         } catch (\Exception $e) {
             error_log('[InternalApiPlugin] RSVP reply failed: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Return a copy of the calendar without the overrides.
+     *
+     * The RSVP changes only the master. The broker takes the STATUS of
+     * any VEVENT for the full event, so a cancelled override stops the
+     * REPLY of the master.
+     */
+    private function withoutOverrides(VObject\Component\VCalendar $calendar): VObject\Component\VCalendar
+    {
+        $copy = clone $calendar;
+        foreach ($copy->select('VEVENT') as $vevent) {
+            if (isset($vevent->{'RECURRENCE-ID'})) {
+                $copy->remove($vevent);
+            }
+        }
+        return $copy;
     }
 
     /**
