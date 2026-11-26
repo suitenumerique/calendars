@@ -9,6 +9,8 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/features/auth/Auth";
 import { addErrorToast, addSuccessToast } from "@/features/ui/components/toaster/Toaster";
 import { getCalendarUrlFromEventUrl } from "../../../services/dav/caldav-helpers";
+import { withPartstatsFrom } from "../../../services/dav/helpers/series-attendees";
+import { splitSeries } from "../../../services/dav/helpers/split-series";
 import { RSVP_BLOCKER_MESSAGE_KEYS, toOccurrenceInstant } from "../utils/rsvp";
 
 import type {
@@ -431,9 +433,11 @@ export const useSchedulerHandlers = ({
           sequence: 0,
         };
 
+        const newSeries = splitSeries(sourceIcsEvents, sourceEvent, newSeriesEvent, occurrenceDate);
         const createResult = await caldavService.createEvent({
           calendarUrl: targetCalendarUrl,
-          event: newSeriesEvent,
+          event: newSeries.master,
+          overrides: newSeries.overrides,
         });
 
         if (!createResult.success) {
@@ -465,6 +469,7 @@ export const useSchedulerHandlers = ({
                 duration: sourceEvent.duration,
                 recurrenceId: undefined,
                 exceptionDates: sourceEvent.exceptionDates,
+                attendees: withPartstatsFrom(event.attendees, sourceEvent),
               } as IcsEvent;
             } else {
               // Non-recurring: use form dates directly (user can change date)
@@ -920,9 +925,16 @@ export const useSchedulerHandlers = ({
           };
 
           const calUrl = extProps.calendarUrl || calendarUrl;
+          const newSeries = splitSeries(
+            sourceIcsEvents,
+            sourceEvent,
+            newSeriesEvent,
+            occurrenceDate,
+          );
           const createResult = await caldavService.createEvent({
             calendarUrl: calUrl,
-            event: newSeriesEvent,
+            event: newSeries.master,
+            overrides: newSeries.overrides,
           });
 
           if (!createResult.success) {
