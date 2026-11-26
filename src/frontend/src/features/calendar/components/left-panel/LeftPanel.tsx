@@ -127,7 +127,7 @@ export const LeftPanel = () => {
   // repeats its links, so that these users can get to the same pages.
   const mobileNavItems = [
     {
-      label: t("settings.calendars.mobileLink"),
+      label: t("settings.calendars.link"),
       icon: <Settings />,
       to: "/settings/calendars" as const,
     },

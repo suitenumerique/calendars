@@ -77,7 +77,7 @@ const ApplicationMenu = () => {
 
   const options = [
     {
-      label: t("settings.calendars.title"),
+      label: t("settings.calendars.link"),
       icon: <Icon name="calendar_month" type={IconType.OUTLINED} />,
       callback: () => void navigate({ to: "/settings/calendars" }),
     },
