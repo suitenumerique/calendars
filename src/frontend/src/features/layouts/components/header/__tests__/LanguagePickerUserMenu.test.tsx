@@ -135,8 +135,8 @@ describe("LanguagePickerUserMenu", () => {
     expect(i18n.changeLanguage).not.toHaveBeenCalled();
   });
 
-  // Two quick selections can get their responses out of order. The last
-  // refresh holds the saved language.
+  // A refresh changes only the checked option. AuthProvider sets the UI
+  // language.
   it("shows the saved language when the user refreshes", async () => {
     const configured = [ENGLISH, FRENCH];
     const i18n = await renderMenu({ configured, uiLanguage: "en", userLanguage: "en-us" });
