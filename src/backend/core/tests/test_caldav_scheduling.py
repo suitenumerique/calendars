@@ -21,6 +21,7 @@ from caldav.lib.error import NotFoundError
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
+from core.tests import one_date_cases
 
 logger = logging.getLogger(__name__)
 
@@ -536,54 +537,16 @@ END:VCALENDAR"""
             server.server_close()
 
     @pytest.mark.parametrize(
-        "change, sends",
-        [
-            ("answer", False),
-            ("reordered parameters", False),
-            ("no end", False),
-            ("same timezone", False),
-            ("reordered timezone", False),
-            ("daylight saving", False),
-            ("daylight saving end", False),
-            ("daylight saving gap", False),
-            ("reordered alarm", False),
-            ("duration", False),
-            ("email case", False),
-            ("move", True),
-            ("earlier start", True),
-            ("longer", True),
-            ("daylight saving shorter", True),
-            ("all day", True),
-            ("moved date", True),
-            ("this and future", True),
-            ("stored this and future", True),
-            ("location", True),
-            ("series location", True),
-            ("role", True),
-            ("timezone", True),
-            ("floating", True),
-            ("floating end", True),
-            ("no master", True),
-            ("rdate", True),
-            ("exrule", True),
-            ("no rrule", True),
-            ("unsupported rule", True),
-            ("unsupported yearly rule", True),
-            ("until date", True),
-            ("set position", True),
-            ("alarm", True),
-            ("forced", True),
-            ("dropped date", True),
-        ],
+        "stored, new, sends",
+        list(one_date_cases.ONE_DATE_CASES.values()),
+        ids=list(one_date_cases.ONE_DATE_CASES),
     )
-    def test_scheduling_callback_skips_answer_for_one_date(  # noqa: PLR0912,PLR0915  # pylint: disable=too-many-branches,too-many-locals,too-many-statements
-        self, change, sends
-    ):
+    def test_scheduling_callback_skips_answer_for_one_date(self, stored, new, sends):
         """A new entry for a regular date that only records an answer
         sends no message, also when the client writes the same event in
         another way. When the write also makes a real change, each
         attendee gets one update."""
-        organizer = factories.UserFactory(email="organizer-one-date@example.com")
+        organizer = factories.UserFactory(email=one_date_cases.ORGANIZER)
         service = CalendarService()
         caldav_path = service.create_calendar(
             organizer, name="One Date Calendar", color="#0000aa"
@@ -600,291 +563,24 @@ END:VCALENDAR"""
 
             try:
                 caldav_calendar = client.calendar(url=calendar_url)
+                uid = f"one-date-{datetime.now().timestamp()}"
+                event_url = f"{str(caldav_calendar.url).rstrip('/')}/{uid}.ics"
 
-                dtstart = (datetime.now() + timedelta(days=3)).replace(microsecond=0)
-                if change == "daylight saving":
-                    # The first date lasts 23 hours: New York moves to
-                    # summer time on March 14, 2027.
-                    dtstart = datetime(2027, 3, 13, 12)
-                # The second date lasts 24 hours and New York moves to
-                # summer time on March 14, 2027. The date ends at 13:00 in
-                # New York, which is 17:00 UTC.
-                dst_end = change in (
-                    "daylight saving end",
-                    "daylight saving shorter",
-                    "daylight saving gap",
-                )
-                if dst_end:
-                    dtstart = datetime(2027, 3, 6, 12)
-                second = dtstart + timedelta(days=7)
-                # EventIterator ignores BYMONTH in a daily rule, so it adds
-                # February 1. In a yearly rule with only BYMONTH, it adds
-                # March 1, 2029. In a monthly rule with BYMONTHDAY or
-                # BYSETPOS, it adds the UNTIL date.
-                # 02:30 does not exist in New York on March 14, 2027. RFC 5545
-                # uses the offset before the change, so the date starts at
-                # 03:30 in summer time.
-                custom_rule = {
-                    "unsupported rule": (
-                        "FREQ=DAILY;BYMONTH=1;COUNT=3",
-                        datetime(2027, 1, 31, 9),
-                        datetime(2027, 2, 1, 9),
-                    ),
-                    "unsupported yearly rule": (
-                        "FREQ=YEARLY;BYMONTH=2;COUNT=3",
-                        datetime(2028, 2, 29, 9),
-                        datetime(2029, 3, 1, 9),
-                    ),
-                    "until date": (
-                        "FREQ=MONTHLY;BYMONTHDAY=15;UNTIL=20270201T090000Z",
-                        datetime(2027, 1, 15, 9),
-                        datetime(2027, 2, 1, 9),
-                    ),
-                    "set position": (
-                        "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;"
-                        "UNTIL=20270201T090000Z",
-                        datetime(2027, 1, 29, 9),
-                        datetime(2027, 2, 1, 9),
-                    ),
-                    "daylight saving gap": (
-                        "FREQ=WEEKLY;COUNT=3",
-                        datetime(2027, 3, 7, 2, 30),
-                        datetime(2027, 3, 14, 3, 30),
-                    ),
-                }.get(change)
-                if custom_rule:
-                    dtstart, second = custom_rule[1:]
-                declining = "declining@external-a.test"
-                other = "other@external-b.test"
-                event_uid = f"one-date-{datetime.now().timestamp()}"
-                fmt = "%Y%m%dT%H%M%SZ"
-                custom_timezone = change in (
-                    "same timezone",
-                    "reordered timezone",
-                    "timezone",
-                )
-
-                def when(name, moment, local):
-                    if not local:
-                        return f"{name}:{moment.strftime(fmt)}\n"
-                    if change == "floating":
-                        return f"{name}:{moment.strftime(fmt[:-1])}\n"
-                    # Etc/GMT-1 is one hour ahead of UTC.
-                    local_time = (moment + timedelta(hours=1)).strftime(fmt[:-1])
-                    return f"{name};TZID=Etc/GMT-1:{local_time}\n"
-
-                def times(start, header):
-                    is_series = header == series
-                    if change == "daylight saving":
-                        local_start = start.strftime("%Y%m%dT%H%M%S")
-                        return f"DTSTART;TZID=America/New_York:{local_start}\nDURATION:P1D\n"
-                    if dst_end:
-                        local = "%Y%m%dT%H%M%S"
-                        begin = (
-                            f"DTSTART;TZID=America/New_York:{start.strftime(local)}\n"
-                        )
-                        length = timedelta(days=1)
-                        if change == "daylight saving gap":
-                            length = timedelta(hours=1)
-                        if is_series or change == "daylight saving gap":
-                            local_end = (start + length).strftime(local)
-                            end = f"DTEND;TZID=America/New_York:{local_end}\n"
-                        else:
-                            # The shorter copy ends one hour earlier.
-                            hour = 17 if change == "daylight saving end" else 16
-                            end = f"DTEND:{datetime(2027, 3, 14, hour).strftime(fmt)}\n"
-                        return begin + end
-                    if change == "all day":
-                        # The series is all-day, the answer is a full floating day.
-                        day = start.strftime("%Y%m%d")
-                        next_day = (start + timedelta(days=1)).strftime("%Y%m%d")
-                        if is_series:
-                            return f"DTSTART;VALUE=DATE:{day}\nDTEND;VALUE=DATE:{next_day}\n"
-                        return f"DTSTART:{day}T000000\nDTEND:{next_day}T000000\n"
-                    # The series uses a local time, the answer uses UTC.
-                    local = (custom_timezone or change == "floating") and is_series
-                    length = timedelta(hours=1)
-                    if change in ("longer", "earlier start") and not is_series:
-                        length = timedelta(minutes=90)
-                    if change == "no end":
-                        end = ""
-                    elif change == "duration":
-                        end = "DURATION:PT1H\n"
-                    elif change == "floating end" and not is_series:
-                        end = f"DTEND:{(start + length).strftime(fmt[:-1])}\n"
-                    else:
-                        end = when("DTEND", start + length, local)
-                    return when("DTSTART", start, local) + end
-
-                def entry(start, header, organizer_params, extra="", other_params=""):
-                    return f"""BEGIN:VEVENT
-UID:{event_uid}
-{header}{times(start, header)}SUMMARY:Weekly event
-{extra}ORGANIZER;{organizer_params}:mailto:{organizer.email}
-ATTENDEE;RSVP=TRUE:mailto:{declining}
-ATTENDEE;RSVP=TRUE{other_params}:mailto:{other}
-END:VEVENT"""
-
-                def calendar(*entries, offset="+0100", reordered=False):
-                    body = "\n".join(entries)
-                    if custom_timezone:
-                        rule = [
-                            "DTSTART:19700101T000000",
-                            f"TZOFFSETFROM:{offset}",
-                            f"TZOFFSETTO:{offset}",
-                        ]
-                        if reordered:
-                            rule.reverse()
-                        body = (
-                            "BEGIN:VTIMEZONE\nTZID:Etc/GMT-1\nBEGIN:STANDARD\n"
-                            + "\n".join(rule)
-                            + f"\nEND:STANDARD\nEND:VTIMEZONE\n{body}"
-                        )
-                    return (
-                        "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Test//EN\n"
-                        f"{body}\nEND:VCALENDAR"
+                def put(components):
+                    body = one_date_cases.calendar(components).replace(
+                        f"UID:{one_date_cases.UID}\n", f"UID:{uid}\n"
                     )
-
-                # A raw PUT keeps the order of the parameters.
-                event_url = f"{str(caldav_calendar.url).rstrip('/')}/{event_uid}.ics"
-
-                def put(body):
+                    # A raw PUT keeps the order of the parameters.
                     response = client.put(
                         event_url, body, {"Content-Type": "text/calendar"}
                     )
                     assert response.status < 300
 
-                organizer_params = "CN=Organizer;LANGUAGE=fr"
-                series = "RRULE:FREQ=WEEKLY;COUNT=3\n"
-                if custom_rule:
-                    series = f"RRULE:{custom_rule[0]}\n"
-                alarm = ""
-                if change in ("reordered alarm", "alarm"):
-                    alarm = (
-                        "BEGIN:VALARM\nTRIGGER:-PT15M\nACTION:DISPLAY\n"
-                        'DESCRIPTION;LANGUAGE=fr;ALTREP="cid:a":Rappel\nEND:VALARM\n'
-                    )
-                # The first date moves to the start of the second date,
-                # which the series excludes. Without a master, the event
-                # only has the moved date.
-                moved = []
-                if change in ("moved date", "no master"):
-                    series += f"EXDATE:{second.strftime(fmt)}\n"
-                    moved = [
-                        entry(
-                            second,
-                            f"RECURRENCE-ID:{dtstart.strftime(fmt)}\n",
-                            organizer_params,
-                        )
-                    ]
-                # The first date and the later dates move one hour later.
-                if change == "stored this and future":
-                    moved = [
-                        entry(
-                            dtstart + timedelta(hours=1),
-                            "RECURRENCE-ID;RANGE=THISANDFUTURE:"
-                            f"{dtstart.strftime(fmt)}\n",
-                            organizer_params,
-                        )
-                    ]
-                # The extra date is in Paris time. With the bug, EventIterator
-                # reads it in UTC, at the time of the new entry.
-                extra_date = dtstart + timedelta(days=3)
-                if change == "rdate":
-                    series += (
-                        "RDATE;TZID=Europe/Paris:"
-                        f"{extra_date.strftime('%Y%m%dT%H%M%S')}\n"
-                    )
-                # The rule excludes the first and the second dates.
-                if change == "exrule":
-                    series += "EXRULE:FREQ=DAILY;COUNT=9\n"
-                # A single event, and the answer is for its only date.
-                if change == "no rrule":
-                    series = ""
-                    second = dtstart
-                # A third date has its own location, and the write drops it.
-                dropped = []
-                if change == "dropped date":
-                    third = dtstart + timedelta(days=14)
-                    dropped = [
-                        entry(
-                            third,
-                            f"RECURRENCE-ID:{third.strftime(fmt)}\n",
-                            organizer_params,
-                            "LOCATION:Room D\n",
-                        )
-                    ]
-
-                def master(extra):
-                    if change == "no master":
-                        return []
-                    return [entry(dtstart, series, organizer_params, extra)]
-
-                put(calendar(*master(alarm), *moved, *dropped))
+                put(stored)
                 _wait_for_callbacks(callback_data, expected_count=2)
                 callback_data["requests"] = []
 
-                if change == "reordered parameters":
-                    organizer_params = "LANGUAGE=fr;CN=Organizer"
-                series_location = (
-                    "LOCATION:Room C\n" if change == "series location" else ""
-                )
-                answer_alarm = {
-                    "reordered alarm": (
-                        "BEGIN:VALARM\nACTION:DISPLAY\n"
-                        'DESCRIPTION;ALTREP="cid:a";LANGUAGE=fr:Rappel\n'
-                        "TRIGGER:-PT15M\nEND:VALARM\n"
-                    ),
-                    "alarm": alarm.replace("-PT15M", "-PT30M"),
-                }.get(change, "")
-                answer_start = {
-                    "move": second + timedelta(hours=1),
-                    "earlier start": second - timedelta(minutes=30),
-                    "rdate": extra_date,
-                }.get(change, second)
-                recurrence_id = f"RECURRENCE-ID:{second.strftime(fmt)}\n"
-                if change == "rdate":
-                    recurrence_id = f"RECURRENCE-ID:{extra_date.strftime(fmt)}\n"
-                elif change == "this and future":
-                    recurrence_id = (
-                        f"RECURRENCE-ID;RANGE=THISANDFUTURE:{second.strftime(fmt)}\n"
-                    )
-                elif change == "all day":
-                    recurrence_id = (
-                        f"RECURRENCE-ID;VALUE=DATE:{second.strftime('%Y%m%d')}\n"
-                    )
-                elif change == "daylight saving" or dst_end:
-                    recurrence_id = (
-                        "RECURRENCE-ID;TZID=America/New_York:"
-                        f"{second.strftime('%Y%m%dT%H%M%S')}\n"
-                    )
-                answer = entry(
-                    answer_start,
-                    recurrence_id,
-                    organizer_params,
-                    ("LOCATION:Room B\n" if change == "location" else series_location)
-                    + answer_alarm,
-                    {
-                        "role": ";ROLE=OPT-PARTICIPANT",
-                        "forced": ";SCHEDULE-FORCE-SEND=REQUEST",
-                    }.get(change, ""),
-                ).replace(
-                    f"ATTENDEE;RSVP=TRUE:mailto:{declining}",
-                    f"ATTENDEE;PARTSTAT=DECLINED:mailto:{declining}",
-                )
-                if change == "email case":
-                    answer = answer.replace(
-                        f"mailto:{other}", f"MAILTO:{other.capitalize()}"
-                    )
-                put(
-                    calendar(
-                        *master(series_location + alarm),
-                        *moved,
-                        answer,
-                        offset="+0200" if change == "timezone" else "+0100",
-                        reordered=change == "reordered timezone",
-                    )
-                )
+                put(new)
                 # Wait for callbacks that are not expected, also duplicates.
                 _wait_for_callbacks(callback_data, expected_count=3, timeout=1.0)
 
@@ -897,12 +593,17 @@ END:VEVENT"""
                     )
                     for r in callback_data["requests"]
                 )
-                expected = [(declining, "REQUEST"), (other, "REQUEST")] if sends else []
+                declining = one_date_cases.DECLINING
+                expected = (
+                    [(declining, "REQUEST"), (one_date_cases.OTHER, "REQUEST")]
+                    if sends
+                    else []
+                )
                 assert callbacks == expected
 
                 # The organizer keeps the answer.
-                stored = client.request(event_url).raw
-                lines = re.sub(r"\r?\n[ \t]", "", stored).splitlines()
+                stored_event = client.request(event_url).raw
+                lines = re.sub(r"\r?\n[ \t]", "", stored_event).splitlines()
                 assert any(
                     "PARTSTAT=DECLINED" in line and declining in line for line in lines
                 )
