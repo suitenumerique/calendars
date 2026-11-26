@@ -116,6 +116,71 @@ class TestParseChangedDate:
         assert event.dtstart == datetime(2027, 1, 12, 14, tzinfo=UTC)
         assert event.original_start == datetime(2027, 1, 11, 9, tzinfo=UTC)
 
+    def test_matches_a_utc_time_zone(self):
+        ics = ICS_SERIES.replace(
+            "RECURRENCE-ID:20270111T090000Z",
+            "RECURRENCE-ID;TZID=UTC:20270111T090000",
+        )
+
+        event = ICalendarParser.parse(
+            ics, "bob@example.com", recurrence_id="20270111T090000"
+        )
+
+        assert event.dtstart == datetime(2027, 1, 12, 14, tzinfo=UTC)
+
+    def test_keeps_a_date_and_a_time_apart(self):
+        event = ICalendarParser.parse(
+            ICS_SERIES, "bob@example.com", recurrence_id="20270111"
+        )
+
+        assert event.original_start is None
+
+    def test_takes_the_series_after_a_date(self):
+        series_end = ICS_SERIES.index(
+            "BEGIN:VEVENT", 1 + ICS_SERIES.index("BEGIN:VEVENT")
+        )
+        start = ICS_SERIES.index("BEGIN:VEVENT")
+        ics = (
+            ICS_SERIES[:start]
+            + ICS_SERIES[series_end:].removesuffix("END:VCALENDAR")
+            + ICS_SERIES[start:series_end]
+            + "END:VCALENDAR"
+        )
+
+        event = ICalendarParser.parse(ics, "bob@example.com")
+
+        assert event.dtstart == datetime(2027, 1, 4, 9, tzinfo=UTC)
+
+    def test_takes_the_end_from_the_duration(self):
+        ics = ICS_SERIES.replace("DTEND:20270112T150000Z", "DURATION:PT2H")
+
+        event = ICalendarParser.parse(
+            ics, "bob@example.com", recurrence_id="20270111T090000Z"
+        )
+
+        assert event.dtend == datetime(2027, 1, 12, 16, tzinfo=UTC)
+
+    @pytest.mark.parametrize(
+        "start, duration, end",
+        [
+            ("20270328T013000", "PT2H", datetime(2027, 3, 28, 4, 30)),
+            ("20270327T120000", "P1D", datetime(2027, 3, 28, 12)),
+        ],
+    )
+    def test_takes_the_duration_across_a_time_change(self, start, duration, end):
+        # On March 28, 2027, Paris skips from 02:00 to 03:00. Hours are
+        # elapsed time, days keep the local time.
+        ics = ICS_SERIES.replace(
+            "DTSTART:20270112T140000Z\nDTEND:20270112T150000Z",
+            f"DTSTART;TZID=Europe/Paris:{start}\nDURATION:{duration}",
+        )
+
+        event = ICalendarParser.parse(
+            ics, "bob@example.com", recurrence_id="20270111T090000Z"
+        )
+
+        assert event.dtend == end.replace(tzinfo=ZoneInfo("Europe/Paris"))
+
     def test_takes_the_previous_start(self):
         event = ICalendarParser.parse(
             ICS_SERIES,
@@ -185,6 +250,21 @@ class TestChangedDateEmail:
         assert "lundi 11 janvier 2027 09:00 - 10:00" in kwargs["text_body"]
         for body in (kwargs["text_body"], kwargs["html_body"]):
             assert "Était prévu le" not in body
+
+    def test_shows_a_move_in_the_repeated_hour(self):
+        # On October 31, 2027, 02:30 in Paris happens twice. The date
+        # moves from the second 02:30 (01:30 UTC) to the first one.
+        ics = ICS_SERIES.replace(
+            "DTSTART:20270118T100000Z\nDTEND:20270118T110000Z",
+            "DTSTART;TZID=Europe/Paris:20271031T023000\n"
+            "DTEND;TZID=Europe/Paris:20271031T033000",
+        )
+
+        kwargs = _send_request(
+            ics, recurrence_id="20270118T090000Z", previous_start="20271031T013000Z"
+        )
+
+        assert "Était prévu le" in kwargs["text_body"]
 
     def test_shows_the_previous_start_of_a_moved_date(self):
         kwargs = _send_request(

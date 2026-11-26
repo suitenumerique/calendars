@@ -372,7 +372,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             if event.is_all_day and original == event.dtstart.date():
                 return ""
             return TranslationService.format_date(original, lang)
-        if original == event.dtstart:
+        if original.timestamp() == event.dtstart.timestamp():
             return ""
         date_str = TranslationService.format_date(original, lang)
         return f"{date_str} · {original.strftime('%H:%M')}"

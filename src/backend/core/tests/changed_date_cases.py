@@ -1,8 +1,9 @@
 """Cases for the test of a change to one date of a series.
 
 Each case gives the components of the stored event, the components of
-the new event, and the RECURRENCE-ID and previous start that the
-updates carry. None means that the updates carry neither. The base
+the new event, and the change. The change is the RECURRENCE-ID and the
+previous start that the updates carry, and the new start of the date.
+None means that the updates carry neither header. The base
 series is the series of the cases for one date.
 """
 
@@ -31,8 +32,8 @@ ANSWERED_JAN_18 = moved(
     ":20270118T090000Z", ":20270118T140000Z", ":20270118T150000Z", answered=True
 )
 LONGER_JAN_18 = moved(":20270118T090000Z", ":20270118T140000Z", ":20270118T160000Z")
-JAN_11_CHANGE = ("20270111T090000Z", "20270111T090000Z")
-JAN_18_CHANGE = ("20270118T090000Z", "20270118T140000Z")
+JAN_11_CHANGE = ("20270111T090000Z", "20270111T090000Z", "20270112T100000Z")
+JAN_18_CHANGE = ("20270118T090000Z", "20270118T140000Z", "20270119T100000Z")
 
 CHANGED_DATE_CASES = {
     "new date": ([SERIES], [SERIES, JAN_11], JAN_11_CHANGE),
@@ -45,7 +46,7 @@ CHANGED_DATE_CASES = {
     "longer moved date": (
         [SERIES, STORED_JAN_18],
         [SERIES, LONGER_JAN_18],
-        JAN_18_CHANGE,
+        ("20270118T090000Z", "20270118T140000Z", "20270118T140000Z"),
     ),
     "answer on another date": (
         [SERIES, STORED_JAN_18],
@@ -63,7 +64,7 @@ CHANGED_DATE_CASES = {
                 ";TZID=Etc/GMT-1:20270112T110000",
             ),
         ],
-        ("20270111T100000", "20270111T090000Z"),
+        ("20270111T100000", "20270111T090000Z", "20270112T090000Z"),
     ),
     "all day": (
         [ALL_DAY_SERIES],
@@ -73,7 +74,20 @@ CHANGED_DATE_CASES = {
                 ";VALUE=DATE:20270111", ";VALUE=DATE:20270112", ";VALUE=DATE:20270113"
             ),
         ],
-        ("20270111", "20270111"),
+        ("20270111", "20270111", "20270112"),
+    ),
+    "time zone change": (
+        [gmt1(), LOCAL_SERIES],
+        [
+            gmt1("+0200"),
+            LOCAL_SERIES,
+            moved(
+                ";TZID=Etc/GMT-1:20270111T100000",
+                ";TZID=Etc/GMT-1:20270112T100000",
+                ";TZID=Etc/GMT-1:20270112T110000",
+            ),
+        ],
+        None,
     ),
     "series change": ([SERIES], [series("LOCATION:Room 2"), JAN_11], None),
     "two dates": ([SERIES], [SERIES, JAN_11, JAN_18], None),

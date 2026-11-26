@@ -3,7 +3,7 @@
 import logging
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Optional
 from urllib.parse import urlparse
@@ -105,6 +105,14 @@ class ICalendarParser:
         return None
 
     @staticmethod
+    def _series_vevent(cal: icalendar.Calendar):
+        """Return the VEVENT without RECURRENCE-ID, or else the first VEVENT."""
+        for component in cal.walk("VEVENT"):
+            if "RECURRENCE-ID" not in component:
+                return component
+        return ICalendarParser._first_vevent(cal)
+
+    @staticmethod
     def _coerce_aware(value) -> Optional[datetime]:
         """Coerce a date/datetime to a timezone-aware datetime in UTC.
 
@@ -150,16 +158,16 @@ class ICalendarParser:
         ``EventDetails``. ``recurrence_id`` is the RECURRENCE-ID value of
         one date of a series. When the data has an entry for this date,
         the details come from this entry. Otherwise, they come from the
-        first entry, which is usually the series. ``previous_start`` is
-        the start of this date before the change, as a DATE or UTC
-        DATE-TIME value.
+        series, or from the first entry when the data has no series.
+        ``previous_start`` is the start of this date before the change, as
+        a DATE or UTC DATE-TIME value.
         """
         cal = cls._parse_calendar(icalendar_data)
         if cal is None:
             return None
 
         occurrence = cls._occurrence(cal, recurrence_id) if recurrence_id else None
-        vevent = cls._first_vevent(cal) if occurrence is None else occurrence
+        vevent = cls._series_vevent(cal) if occurrence is None else occurrence
         if vevent is None:
             logger.error("No VEVENT component found in iCalendar data")
             return None
@@ -179,7 +187,6 @@ class ICalendarParser:
             logger.error("VEVENT DTSTART could not be coerced to a datetime")
             return None
 
-        dtend_prop = vevent.get("DTEND")
         organizer = vevent.get("ORGANIZER")
         organizer_email, organizer_name = (
             cls._address(organizer) if organizer is not None else ("", None)
@@ -193,7 +200,7 @@ class ICalendarParser:
             location=cls._optional_text(vevent, "LOCATION"),
             url=cls.sanitize_url(cls._optional_text(vevent, "URL")),
             dtstart=dtstart,
-            dtend=cls._coerce_aware(dtend_prop.dt if dtend_prop is not None else None),
+            dtend=cls._coerce_aware(cls._end(vevent, dtstart_prop.dt)),
             organizer_email=organizer_email,
             organizer_name=organizer_name,
             attendee_email=attendee,
@@ -203,6 +210,26 @@ class ICalendarParser:
             raw_icalendar=icalendar_data,
             original_start=cls._original_start(occurrence, previous_start, dtstart),
         )
+
+    @staticmethod
+    def _end(vevent, start):
+        """Return the DTEND value, or the start plus the DURATION, or None.
+
+        The days of the DURATION keep the local time. Its hours, minutes
+        and seconds are elapsed time, also across a change of the UTC
+        offset.
+        """
+        dtend = vevent.get("DTEND")
+        if dtend is not None:
+            return dtend.dt
+        duration = vevent.get("DURATION")
+        if duration is None:
+            return None
+        days = timedelta(days=duration.dt.days)
+        if not isinstance(start, datetime) or start.tzinfo is None:
+            return start + duration.dt
+        end = (start + days).astimezone(dt_timezone.utc) + (duration.dt - days)
+        return end.astimezone(start.tzinfo)
 
     @classmethod
     def _original_start(
@@ -225,18 +252,36 @@ class ICalendarParser:
         start = cls._coerce_aware(value)
         return start.astimezone(dtstart.tzinfo) if start else None
 
-    @staticmethod
-    def _occurrence(cal: icalendar.Calendar, recurrence_id: str):
-        """Return the VEVENT with this RECURRENCE-ID value, or None."""
+    @classmethod
+    def _occurrence(cls, cal: icalendar.Calendar, recurrence_id: str):
+        """Return the VEVENT with this RECURRENCE-ID value, or None.
+
+        ``recurrence_id`` has no TZID. A value without UTC marker matches
+        the same local time in any time zone.
+        """
+        try:
+            wanted = icalendar.vDDDTypes.from_ical(recurrence_id)
+        except ValueError:
+            return None
         for component in cal.walk("VEVENT"):
             prop = component.get("RECURRENCE-ID")
             # A repeated property gives a list, which matches no date.
-            if (
-                isinstance(prop, icalendar.vDDDTypes)
-                and prop.to_ical().decode() == recurrence_id
+            if isinstance(prop, icalendar.vDDDTypes) and cls._same_date(
+                prop.dt, wanted
             ):
                 return component
         return None
+
+    @classmethod
+    def _same_date(cls, value, wanted) -> bool:
+        """Tell if a RECURRENCE-ID value names the wanted date."""
+        if cls._is_all_day(value) or cls._is_all_day(wanted):
+            return (
+                cls._is_all_day(value) and cls._is_all_day(wanted) and value == wanted
+            )
+        if wanted.tzinfo is not None:
+            return value.tzinfo is not None and value == wanted
+        return value.replace(tzinfo=None) == wanted
 
     @staticmethod
     def _optional_text(vevent, name: str) -> Optional[str]:

@@ -14,6 +14,7 @@ from datetime import timezone as dt_tz
 
 from django.conf import settings
 
+import icalendar
 import pytest
 from rest_framework.test import APIClient as DRFClient
 
@@ -80,6 +81,28 @@ def _wait_for_callbacks(callback_data, expected_count=1, timeout=5.0, interval=0
         if len(callback_data.get("requests", [])) >= expected_count:
             return
         time.sleep(interval)
+
+
+def _requests(callback_data):
+    """Return the REQUEST callbacks, sorted by recipient."""
+    requests = [
+        r
+        for r in callback_data["requests"]
+        if r["headers"].get("X-LS-Method") == "REQUEST"
+    ]
+    return sorted(requests, key=lambda r: r["headers"].get("X-LS-Recipient", ""))
+
+
+def _assert_changed_date(requests, recurrence_id, previous_start, start):
+    """Assert that each message gives the entry of the changed date."""
+    previous_start_value = icalendar.vDDDTypes.from_ical(previous_start)
+    start_value = icalendar.vDDDTypes.from_ical(start)
+    for r in requests:
+        event = ICalendarParser.parse(r["body"], "", recurrence_id, previous_start)
+        assert event.original_start == previous_start_value
+        assert (
+            event.dtstart.date() if event.is_all_day else event.dtstart
+        ) == start_value
 
 
 def create_test_server() -> tuple:
@@ -647,35 +670,35 @@ END:VCALENDAR"""
                 )
                 assert response.status < 300
 
+            recipients = [
+                f"mailto:{one_date_cases.DECLINING}",
+                f"mailto:{one_date_cases.OTHER}",
+            ]
+
             put(stored)
             _wait_for_callbacks(callback_data, expected_count=2)
+            requests = _requests(callback_data)
+            assert [r["headers"]["X-LS-Recipient"] for r in requests] == recipients
             assert all(
                 "X-LS-Recurrence-Id" not in r["headers"]
-                for r in callback_data["requests"]
+                and "X-LS-Previous-Start" not in r["headers"]
+                for r in requests
             )
             callback_data["requests"] = []
 
             put(new)
             _wait_for_callbacks(callback_data, expected_count=2)
 
-            requests = [
-                r
-                for r in callback_data["requests"]
-                if r["headers"].get("X-LS-Method") == "REQUEST"
-            ]
-            assert requests
-            recurrence_id, previous_start = change or (None, None)
+            requests = _requests(callback_data)
+            assert [r["headers"]["X-LS-Recipient"] for r in requests] == recipients
+            recurrence_id, previous_start, start = change or (None, None, None)
             assert all(
                 r["headers"].get("X-LS-Recurrence-Id") == recurrence_id
                 and r["headers"].get("X-LS-Previous-Start") == previous_start
                 for r in requests
             )
-            # The message has the entry of this date.
-            assert all(
-                ICalendarParser.parse(r["body"], "", recurrence_id).original_start
-                for r in requests
-                if recurrence_id
-            )
+            if recurrence_id:
+                _assert_changed_date(requests, recurrence_id, previous_start, start)
         finally:
             server.shutdown()
             server.server_close()

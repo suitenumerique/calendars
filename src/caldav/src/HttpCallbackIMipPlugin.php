@@ -232,8 +232,8 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     /**
      * Give the only date that the write changes.
      *
-     * The master stays the same, and exactly one entry for a date is new
-     * or changed. The answers of the attendees and the write properties
+     * The master and the time zones stay the same, and exactly one entry
+     * for a date is new or changed. The answers of the attendees and the write properties
      * are not changes. A removed entry is a change. A stored or new
      * entry with a RANGE also changes the later dates. In all other
      * cases, the result is null.
@@ -246,7 +246,9 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      */
     private function changedDate(VCalendar $vCal, VCalendar $stored): ?array
     {
-        if ($this->hasRange($vCal) || $this->hasRange($stored)) {
+        if ($this->hasRange($vCal)
+            || $this->hasRange($stored)
+            || $this->timezones($vCal) !== $this->timezones($stored)) {
             return null;
         }
         $storedEntries = [];
