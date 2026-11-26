@@ -63,9 +63,13 @@ for entry in "${PHP_DEBS[@]}"; do
   echo "       Downloading ${pkg}"
   # The archive removes a version when a security update replaces it.
   # Launchpad keeps all the versions.
-  curl -fsSL -o "$DEB_DIR/${pkg}.deb" "https://archive.ubuntu.com/ubuntu/${path}" \
-    || curl -fsSL -o "$DEB_DIR/${pkg}.deb" \
+  if ! curl -fsSL -o "$DEB_DIR/${pkg}.deb" "https://archive.ubuntu.com/ubuntu/${path}"; then
+    echo "       WARNING: ${path##*/} is not in the Ubuntu archive."
+    echo "       WARNING: A security update probably replaces it."
+    echo "       WARNING: Update PHP_DEBS in bin/scalingo_postfrontend."
+    curl -fsSL -o "$DEB_DIR/${pkg}.deb" \
       "https://launchpad.net/ubuntu/+archive/primary/+files/${path##*/}"
+  fi
   echo "${sha256}  ${DEB_DIR}/${pkg}.deb" | sha256sum -c -
 done
 
