@@ -239,13 +239,9 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         if ('YEARLY' !== $parts['FREQ']) {
             return true;
         }
-        // In a yearly rule, EventIterator needs BYMONTH for BYDAY and
-        // BYMONTHDAY. Without them, it needs one month at most.
-        $months = (array) ($parts['BYMONTH'] ?? []);
-        if (isset($parts['BYDAY']) || isset($parts['BYMONTHDAY'])) {
-            return [] !== $months;
-        }
-        return count($months) <= 1;
+        // In a yearly rule, EventIterator needs BYMONTH together with
+        // BYDAY or BYMONTHDAY. Each of them alone gives wrong dates.
+        return isset($parts['BYMONTH']) === (isset($parts['BYDAY']) || isset($parts['BYMONTHDAY']));
     }
 
     /**

@@ -567,6 +567,7 @@ END:VCALENDAR"""
             ("exrule", True),
             ("no rrule", True),
             ("unsupported rule", True),
+            ("unsupported yearly rule", True),
             ("alarm", True),
             ("forced", True),
             ("dropped date", True),
@@ -608,12 +609,24 @@ END:VCALENDAR"""
                 dst_end = change in ("daylight saving end", "daylight saving shorter")
                 if dst_end:
                     dtstart = datetime(2027, 3, 6, 12)
-                # EventIterator ignores BYMONTH, so it adds February 1.
-                if change == "unsupported rule":
-                    dtstart = datetime(2027, 1, 31, 9)
-                second = dtstart + timedelta(
-                    days=1 if change == "unsupported rule" else 7
-                )
+                second = dtstart + timedelta(days=7)
+                # EventIterator ignores BYMONTH in a daily rule, so it adds
+                # February 1. In a yearly rule with only BYMONTH, it adds
+                # March 1, 2029.
+                unsupported_rule = {
+                    "unsupported rule": (
+                        "FREQ=DAILY;BYMONTH=1;COUNT=3",
+                        datetime(2027, 1, 31, 9),
+                        datetime(2027, 2, 1, 9),
+                    ),
+                    "unsupported yearly rule": (
+                        "FREQ=YEARLY;BYMONTH=2;COUNT=3",
+                        datetime(2028, 2, 29, 9),
+                        datetime(2029, 3, 1, 9),
+                    ),
+                }.get(change)
+                if unsupported_rule:
+                    dtstart, second = unsupported_rule[1:]
                 declining = "declining@external-a.test"
                 other = "other@external-b.test"
                 event_uid = f"one-date-{datetime.now().timestamp()}"
@@ -714,8 +727,8 @@ END:VEVENT"""
 
                 organizer_params = "CN=Organizer;LANGUAGE=fr"
                 series = "RRULE:FREQ=WEEKLY;COUNT=3\n"
-                if change == "unsupported rule":
-                    series = "RRULE:FREQ=DAILY;BYMONTH=1;COUNT=3\n"
+                if unsupported_rule:
+                    series = f"RRULE:{unsupported_rule[0]}\n"
                 alarm = ""
                 if change in ("reordered alarm", "alarm"):
                     alarm = (
