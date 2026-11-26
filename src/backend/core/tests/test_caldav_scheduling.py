@@ -544,12 +544,14 @@ END:VCALENDAR"""
             ("same timezone", False),
             ("reordered timezone", False),
             ("daylight saving", False),
+            ("daylight saving end", False),
             ("reordered alarm", False),
             ("duration", False),
             ("email case", False),
             ("move", True),
             ("earlier start", True),
             ("longer", True),
+            ("daylight saving shorter", True),
             ("all day", True),
             ("moved date", True),
             ("this and future", True),
@@ -599,6 +601,12 @@ END:VCALENDAR"""
                     # The first date lasts 23 hours: New York moves to
                     # summer time on March 14, 2027.
                     dtstart = datetime(2027, 3, 13, 12)
+                # The second date lasts 24 hours and New York moves to
+                # summer time on March 14, 2027. The date ends at 13:00 in
+                # New York, which is 17:00 UTC.
+                dst_end = change in ("daylight saving end", "daylight saving shorter")
+                if dst_end:
+                    dtstart = datetime(2027, 3, 6, 12)
                 second = dtstart + timedelta(days=7)
                 declining = "declining@external-a.test"
                 other = "other@external-b.test"
@@ -624,6 +632,20 @@ END:VCALENDAR"""
                     if change == "daylight saving":
                         local_start = start.strftime("%Y%m%dT%H%M%S")
                         return f"DTSTART;TZID=America/New_York:{local_start}\nDURATION:P1D\n"
+                    if dst_end:
+                        local = "%Y%m%dT%H%M%S"
+                        begin = (
+                            f"DTSTART;TZID=America/New_York:{start.strftime(local)}\n"
+                        )
+                        if is_series:
+                            end = (start + timedelta(days=1)).strftime(local)
+                            return begin + f"DTEND;TZID=America/New_York:{end}\n"
+                        # The shorter copy ends one hour earlier.
+                        hour = 17 if change == "daylight saving end" else 16
+                        return (
+                            begin
+                            + f"DTEND:{datetime(2027, 3, 14, hour).strftime(fmt)}\n"
+                        )
                     if change == "all day":
                         # The series is all-day, the answer is a full floating day.
                         day = start.strftime("%Y%m%d")
@@ -781,7 +803,7 @@ END:VEVENT"""
                     recurrence_id = (
                         f"RECURRENCE-ID;VALUE=DATE:{second.strftime('%Y%m%d')}\n"
                     )
-                elif change == "daylight saving":
+                elif change == "daylight saving" or dst_end:
                     recurrence_id = (
                         "RECURRENCE-ID;TZID=America/New_York:"
                         f"{second.strftime('%Y%m%dT%H%M%S')}\n"

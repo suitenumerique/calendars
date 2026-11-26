@@ -192,7 +192,7 @@ class HttpCallbackIMipPlugin extends IMipPlugin
                     !== $this->answerless($storedEntry, self::WRITE_PROPERTIES)) {
                     return false;
                 }
-            } elseif ($this->matchesRegularDate($vevent, $stored)) {
+            } elseif ($this->matchesRegularDate($vevent, $stored, $storedEntries['master'])) {
                 $added = true;
             } else {
                 return false;
@@ -256,7 +256,7 @@ class HttpCallbackIMipPlugin extends IMipPlugin
      * The times can have another form with the same value. The answers of
      * the attendees and the write properties can differ.
      */
-    private function matchesRegularDate(VEvent $vevent, VCalendar $stored): bool
+    private function matchesRegularDate(VEvent $vevent, VCalendar $stored, VEvent $master): bool
     {
         if (!isset($vevent->{'RECURRENCE-ID'})) {
             return false;
@@ -280,9 +280,27 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         return $vevent->DTSTART->getDateTime() == $occurrences->getDtStart()
             && $vevent->DTSTART->hasTime() === $regular->DTSTART->hasTime()
             && $vevent->DTSTART->isFloating() === $regular->DTSTART->isFloating()
-            && $this->endOf($vevent) == $this->endOf($regular)
+            && $this->endOf($vevent) == $this->regularEnd($regular, $master)
             && $this->endIsFloating($vevent) === $this->endIsFloating($regular)
             && $this->answerless($vevent, $skipped) === $this->answerless($regular, $skipped);
+    }
+
+    /**
+     * Give the end of a regular date of the series.
+     *
+     * With DTEND, all the dates have the exact length of the master, in
+     * seconds. EventIterator adds this length to the clock time, so its
+     * DTEND is one hour wrong across a change to or from summer time.
+     */
+    private function regularEnd(VEvent $regular, VEvent $master): \DateTimeImmutable
+    {
+        if (!isset($master->DTEND)) {
+            return $this->endOf($regular);
+        }
+        $length = $master->DTEND->getDateTime()->getTimestamp()
+            - $master->DTSTART->getDateTime()->getTimestamp();
+        $start = $regular->DTSTART->getDateTime();
+        return $start->setTimestamp($start->getTimestamp() + $length);
     }
 
     private function endIsFloating(VEvent $vevent): bool
