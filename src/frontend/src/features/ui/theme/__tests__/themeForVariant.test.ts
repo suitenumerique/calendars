@@ -8,6 +8,17 @@ describe("themeForVariant", () => {
     expect(themeForVariant("anct", "light")).toBe("anct");
   });
 
+  it("returns the light counterpart of a dark base theme", () => {
+    expect(themeForVariant("dark", "light")).toBe("default");
+    expect(themeForVariant("anct-dark", "light")).toBe("anct");
+    expect(themeForVariant("dsfr-dark", "light")).toBe("dsfr-light");
+  });
+
+  it("keeps a dark base theme in the dark variant", () => {
+    expect(themeForVariant("dark", "dark")).toBe("dark");
+    expect(themeForVariant("anct-dark", "dark")).toBe("anct-dark");
+  });
+
   it("returns the dark theme for the default theme", () => {
     expect(themeForVariant("default", "dark")).toBe("dark");
   });
