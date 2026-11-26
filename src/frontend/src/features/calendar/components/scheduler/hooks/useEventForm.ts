@@ -3,8 +3,12 @@ import { cleanEventForDisplay } from "../utils/eventDisplayRules";
 import {
   formatDateTimeLocal,
   formatDateLocal,
+  isValidDateInput,
   parseDateTimeLocal,
   parseDateLocal,
+  shiftEnd,
+  toFakeUtc,
+  toFakeUtcDay,
 } from "../utils/dateFormatters";
 
 import type {
@@ -47,6 +51,10 @@ export const useEventForm = ({
   const [endDateTime, setEndDateTime] = useState("");
   // Stash full datetime strings so toggling all-day off restores the original times
   const savedDateTimesRef = useRef({ start: "", end: "" });
+  // The start input can become invalid while the user types.
+  // Keep the last valid start, so the end keeps the event duration
+  // when the user completes the input.
+  const lastValidStartRef = useRef("");
   const [selectedCalendarUrl, setSelectedCalendarUrl] = useState(calendarUrl);
   const [isAllDay, setIsAllDay] = useState(event?.start?.type === "DATE");
   const [attendees, setAttendees] = useState<IcsAttendee[]>([]);
@@ -165,6 +173,12 @@ export const useEventForm = ({
     }
   }, [event, calendarUrl, mode, organizer?.email]);
 
+  useEffect(() => {
+    if (isValidDateInput(startDateTime, isAllDay)) {
+      lastValidStartRef.current = startDateTime;
+    }
+  }, [startDateTime, isAllDay]);
+
   // Separate effect for resource/attendee splitting — only depends on
   // event.attendees and availableResources, avoids resetting the entire
   // form when the resource list loads asynchronously.
@@ -216,27 +230,11 @@ export const useEventForm = ({
 
   const handleStartDateChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newStartValue = e.target.value;
-
-      if (isAllDay) {
-        const oldStart = parseDateLocal(startDateTime);
-        const oldEnd = parseDateLocal(endDateTime);
-        const duration = oldEnd.getTime() - oldStart.getTime();
-        const newStart = parseDateLocal(newStartValue);
-        const newEnd = new Date(newStart.getTime() + duration);
-        setStartDateTime(newStartValue);
-        setEndDateTime(formatDateLocal(newEnd));
-      } else {
-        const oldStart = parseDateTimeLocal(startDateTime);
-        const oldEnd = parseDateTimeLocal(endDateTime);
-        const duration = oldEnd.getTime() - oldStart.getTime();
-        const newStart = parseDateTimeLocal(newStartValue);
-        const newEnd = new Date(newStart.getTime() + duration);
-        setStartDateTime(newStartValue);
-        setEndDateTime(formatDateTimeLocal(newEnd));
-      }
+      const { value } = e.target;
+      setStartDateTime(value);
+      setEndDateTime(shiftEnd(lastValidStartRef.current, endDateTime, value, isAllDay));
     },
-    [isAllDay, startDateTime, endDateTime],
+    [isAllDay, endDateTime],
   );
 
   const handleAllDayChange = useCallback(
@@ -293,12 +291,8 @@ export const useEventForm = ({
     if (isAllDay) {
       const startDate = parseDateLocal(startDateTime);
       const endDate = parseDateLocal(endDateTime);
-      const utcStart = new Date(
-        Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()),
-      );
-      const utcEnd = new Date(
-        Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1),
-      );
+      const utcStart = toFakeUtcDay(startDate);
+      const utcEnd = toFakeUtcDay(endDate, 1);
 
       return {
         ...eventWithoutDuration,
@@ -322,26 +316,8 @@ export const useEventForm = ({
 
     const startDate = parseDateTimeLocal(startDateTime);
     const endDate = parseDateTimeLocal(endDateTime);
-    const fakeUtcStart = new Date(
-      Date.UTC(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate(),
-        startDate.getHours(),
-        startDate.getMinutes(),
-        startDate.getSeconds(),
-      ),
-    );
-    const fakeUtcEnd = new Date(
-      Date.UTC(
-        endDate.getFullYear(),
-        endDate.getMonth(),
-        endDate.getDate(),
-        endDate.getHours(),
-        endDate.getMinutes(),
-        endDate.getSeconds(),
-      ),
-    );
+    const fakeUtcStart = toFakeUtc(startDate);
+    const fakeUtcEnd = toFakeUtc(endDate);
 
     return {
       ...eventWithoutDuration,

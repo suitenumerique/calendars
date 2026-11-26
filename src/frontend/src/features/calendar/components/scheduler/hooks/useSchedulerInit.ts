@@ -17,6 +17,7 @@ import {
 import { addErrorToast } from "@/features/ui/components/toaster/Toaster";
 import { useCalendarLocale } from "../../../hooks/useCalendarLocale";
 import { createEventContent, type EventContentInfo } from "../utils/eventContent";
+import { latestOnly } from "../utils/latestOnly";
 
 import type {
   EventCalendarAdapter,
@@ -215,7 +216,7 @@ export const useSchedulerInit = ({
       // Event sources - fetch only from visible calendars
       eventSources: [
         {
-          events: async (fetchInfo: EventCalendarFetchInfo) => {
+          events: latestOnly(async (fetchInfo: EventCalendarFetchInfo): Promise<ECEvent[]> => {
             const calendars = davCalendarsRef.current;
             if (calendars.length === 0) return [];
 
@@ -313,7 +314,7 @@ export const useSchedulerInit = ({
               notifyFetchEventsError();
               return [];
             }
-          },
+          }),
         },
       ],
 
