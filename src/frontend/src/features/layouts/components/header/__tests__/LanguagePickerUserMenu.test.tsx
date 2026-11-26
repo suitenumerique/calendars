@@ -49,6 +49,7 @@ let container: HTMLElement;
 const renderMenu = async ({ configured, uiLanguage, userLanguage }: Setup) => {
   const i18n = createInstance();
   await i18n.init({ lng: uiLanguage, fallbackLng: "en", resources });
+  vi.spyOn(i18n, "changeLanguage");
   const user = { id: "user-id", language: userLanguage } as User;
   await act(async () =>
     root.render(
@@ -113,10 +114,23 @@ describe("LanguagePickerUserMenu", () => {
     expect(shownLanguage()).toBe("EN");
   });
 
+  // The app sets the UI language to the saved language when the user loads.
   it("shows the saved language when the config does not offer it", async () => {
-    await renderMenu({ configured: [ENGLISH, FRENCH], uiLanguage: "en", userLanguage: "nl-nl" });
+    await renderMenu({ configured: [ENGLISH, FRENCH], uiLanguage: "nl-nl", userLanguage: "nl-nl" });
 
     expect(shownLanguage()).toBe("NL");
+  });
+
+  // The app sets the saved language when the user loads. A language change
+  // makes the calendar reload all its events.
+  it("does not change the language when the menu opens", async () => {
+    const i18n = await renderMenu({
+      configured: [ENGLISH, FRENCH],
+      uiLanguage: "en",
+      userLanguage: "fr-fr",
+    });
+
+    expect(i18n.changeLanguage).not.toHaveBeenCalled();
   });
 
   it("does not save a language that the config does not offer", async () => {
