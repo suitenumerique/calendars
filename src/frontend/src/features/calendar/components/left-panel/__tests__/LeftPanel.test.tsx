@@ -17,6 +17,10 @@ const own = {
   url: "http://localhost/caldav/calendars/users/me/own/",
   displayName: "Own",
 } as CalDavCalendar;
+const contact = {
+  url: "http://localhost/caldav/calendars/users/me/contact/",
+  displayName: "Contact",
+} as CalDavCalendar;
 
 let modalProps: EventModalProps | null = null;
 
@@ -32,7 +36,8 @@ vi.mock("../../../contexts", () => ({
   useCalendarContext: () => ({
     selectedDate: new Date(),
     setSelectedDate: vi.fn(),
-    orderedCalendars: [readOnly, own],
+    orderedCalendars: [readOnly, own, contact],
+    visibleCalendarUrls: new Set([readOnly.url, contact.url]),
     caldavService: {},
     adapter: { getTimezoneOffset: () => 0 },
     calendarRef: { current: null },
@@ -66,7 +71,7 @@ afterEach(() => {
 });
 
 describe("LeftPanel", () => {
-  it("opens a new event in the first calendar that the user can write to", async () => {
+  it("opens a new event in the first visible calendar that the user can write to", async () => {
     const i18n = createInstance();
     await i18n.init({ lng: "en", resources: {} });
     await act(async () =>
@@ -83,6 +88,6 @@ describe("LeftPanel", () => {
     await act(async () => button?.click());
 
     expect(modalProps?.isOpen).toBe(true);
-    expect(modalProps?.calendarUrl).toBe(own.url);
+    expect(modalProps?.calendarUrl).toBe(contact.url);
   });
 });

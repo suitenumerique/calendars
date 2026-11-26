@@ -89,11 +89,16 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
 
   // Initialize calendar URL from context
   useEffect(() => {
-    const defaultCalendar = getDefaultCalendar(orderedCalendars);
+    const defaultCalendar = getDefaultCalendar(orderedCalendars, visibleCalendarUrls);
     if (defaultCalendar && !calendarUrl) {
       setCalendarUrl(defaultCalendarUrl || defaultCalendar.url);
     }
-  }, [orderedCalendars, defaultCalendarUrl, calendarUrl]);
+  }, [orderedCalendars, visibleCalendarUrls, defaultCalendarUrl, calendarUrl]);
+
+  // `calendarUrl` keeps its first value, because a change creates the
+  // calendar again. A new event follows the visible calendars instead.
+  const newEventCalendarUrl =
+    defaultCalendarUrl || getDefaultCalendar(orderedCalendars, visibleCalendarUrls)?.url || "";
 
   // Check scheduling capabilities on mount
   useSchedulingCapabilitiesCheck(isConnected, caldavService);
@@ -116,7 +121,7 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     adapter,
     caldavService,
     calendarRef,
-    calendarUrl,
+    calendarUrl: newEventCalendarUrl,
     modalState,
     setModalState,
   });
@@ -275,8 +280,6 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
     const endDate = new Date(startDate);
     endDate.setHours(startDate.getHours() + 1);
 
-    const defaultUrl = calendarUrl || getDefaultCalendar(orderedCalendars)?.url || "";
-
     setModalState({
       isOpen: true,
       mode: "create",
@@ -286,9 +289,9 @@ export const Scheduler = ({ defaultCalendarUrl }: SchedulerProps) => {
         start: { date: startDate, type: "DATE-TIME" },
         end: { date: endDate, type: "DATE-TIME" },
       },
-      calendarUrl: defaultUrl,
+      calendarUrl: newEventCalendarUrl,
     });
-  }, [currentDate, calendarUrl, orderedCalendars]);
+  }, [currentDate, newEventCalendarUrl]);
 
   // Mobile list view event click
   const handleMobileEventClick = useCallback(

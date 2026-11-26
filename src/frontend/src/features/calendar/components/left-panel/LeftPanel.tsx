@@ -46,10 +46,17 @@ export const LeftPanel = () => {
   const isChannelsEnabled = useFeatureFlag(FeatureFlag.ADMIN_CHANNELS);
   const isAvailabilitiesEnabled = useFeatureFlag(FeatureFlag.ADMIN_AVAILABILITIES);
 
-  const { selectedDate, setSelectedDate, orderedCalendars, caldavService, adapter, calendarRef } =
-    useCalendarContext();
+  const {
+    selectedDate,
+    setSelectedDate,
+    orderedCalendars,
+    visibleCalendarUrls,
+    caldavService,
+    adapter,
+    calendarRef,
+  } = useCalendarContext();
 
-  const defaultCalendarUrl = getDefaultCalendar(orderedCalendars)?.url || "";
+  const defaultCalendarUrl = getDefaultCalendar(orderedCalendars, visibleCalendarUrls)?.url || "";
 
   // Create default event with rounded times
   const defaultEvent = useMemo(() => {
