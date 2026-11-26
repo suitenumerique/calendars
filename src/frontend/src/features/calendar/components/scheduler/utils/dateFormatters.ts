@@ -1,7 +1,9 @@
 /**
- * Date formatting utilities for the Scheduler components.
- * Handles conversion between Date objects and HTML input formats.
+ * Utilities for the values of the date and datetime-local inputs.
+ * They convert between Date objects and input values, and change these values.
  */
+
+import { addDays } from "@/utils/date";
 
 /**
  * Pad a number with leading zeros to `width` digits.
@@ -9,8 +11,8 @@
 const pad = (n: number, width = 2): string => n.toString().padStart(width, "0");
 
 /**
- * Build a local Date. Unlike the Date constructor, it keeps years below 100
- * as they are, so year 2 stays year 2 and does not become 1902.
+ * Build a local Date. The numeric Date constructor changes the years 0 to 99
+ * to 1900 to 1999. This function keeps the year, so year 2 stays year 2.
  */
 const localDate = (
   year: number,
@@ -37,11 +39,10 @@ const localDate = (
  *                    that store local time as UTC values)
  */
 export const formatDateTimeLocal = (date: Date, isFakeUtc = false): string => {
-  if (isFakeUtc) {
-    // For "fake UTC" dates, getUTC* methods return the intended local time
-    return `${pad(date.getUTCFullYear(), 4)}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
-  }
-  return `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  // For "fake UTC" dates, getUTC* methods return the intended local time
+  const hours = isFakeUtc ? date.getUTCHours() : date.getHours();
+  const minutes = isFakeUtc ? date.getUTCMinutes() : date.getMinutes();
+  return `${formatDateLocal(date, isFakeUtc)}T${pad(hours)}:${pad(minutes)}`;
 };
 
 /**
@@ -91,4 +92,47 @@ export const formatDateLocal = (date: Date, isFakeUtc = false): string => {
 export const parseDateLocal = (value: string): Date => {
   const [year, month, day] = value.split("-").map(Number);
   return localDate(year, month - 1, day);
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const isValid = (date: Date): boolean => !Number.isNaN(date.getTime());
+
+/**
+ * Tell if the parse of an input value gives a valid timestamp.
+ * The value can be incomplete. For example, "2026" is valid for a
+ * datetime-local input.
+ */
+export const isValidDateInput = (value: string, isAllDay: boolean): boolean =>
+  isValid(isAllDay ? parseDateLocal(value) : parseDateTimeLocal(value));
+
+/**
+ * Move the end so that the event keeps its duration when the start changes.
+ * An all-day event keeps its number of calendar days, so a DST change does
+ * not add or remove a day.
+ * Return the previous end unchanged if one of the values is not a valid date,
+ * for example a partial value while the user types.
+ */
+export const shiftEnd = (
+  prevStart: string,
+  prevEnd: string,
+  nextStart: string,
+  isAllDay: boolean,
+): string => {
+  const parse = isAllDay ? parseDateLocal : parseDateTimeLocal;
+  const oldStart = parse(prevStart);
+  const oldEnd = parse(prevEnd);
+  const newStart = parse(nextStart);
+  if (!isValid(oldStart) || !isValid(oldEnd) || !isValid(newStart)) {
+    return prevEnd;
+  }
+  if (!isAllDay) {
+    return formatDateTimeLocal(
+      new Date(newStart.getTime() + oldEnd.getTime() - oldStart.getTime()),
+    );
+  }
+  // A DST change alters the time between two local midnights.
+  // Rounding gives the number of calendar days.
+  const days = Math.round((oldEnd.getTime() - oldStart.getTime()) / DAY_MS);
+  return formatDateLocal(addDays(newStart, days));
 };

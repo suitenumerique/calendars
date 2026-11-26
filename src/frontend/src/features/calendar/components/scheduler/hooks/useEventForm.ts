@@ -3,10 +3,11 @@ import { cleanEventForDisplay } from "../utils/eventDisplayRules";
 import {
   formatDateTimeLocal,
   formatDateLocal,
+  isValidDateInput,
   parseDateTimeLocal,
   parseDateLocal,
+  shiftEnd,
 } from "../utils/dateFormatters";
-import { isValidDateInput, shiftEnd } from "../utils/shiftEnd";
 
 import type {
   IcsEvent,
@@ -48,8 +49,9 @@ export const useEventForm = ({
   const [endDateTime, setEndDateTime] = useState("");
   // Stash full datetime strings so toggling all-day off restores the original times
   const savedDateTimesRef = useRef({ start: "", end: "" });
-  // The start input is invalid while the user clears or types a date segment.
-  // The end then moves from the last valid start, so the duration stays.
+  // The start input can become invalid while the user types.
+  // Keep the last valid start, so the end keeps the event duration
+  // when the user completes the input.
   const lastValidStartRef = useRef("");
   const [selectedCalendarUrl, setSelectedCalendarUrl] = useState(calendarUrl);
   const [isAllDay, setIsAllDay] = useState(event?.start?.type === "DATE");
