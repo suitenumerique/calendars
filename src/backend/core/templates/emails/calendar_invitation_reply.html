@@ -1,9 +1,10 @@
 {% extends "emails/_invitation_layout.html" %}
 
-{% block banner_bg %}#e3fdeb{% endblock %}
-{% block banner_border %}#b8e6c5{% endblock %}
-{% block banner_color %}#18753c{% endblock %}
-{% block banner_icon %}icon-check-green{% endblock %}
+{# Green for accepted, red for declined, blue for maybe and other answers. #}
+{% block banner_bg %}{% if reply_answer == "accepted" %}#e3fdeb{% elif reply_answer == "declined" %}#fdeeee{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block banner_border %}{% if reply_answer == "accepted" %}#b8e6c5{% elif reply_answer == "declined" %}#f5c2c6{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block banner_color %}{% if reply_answer == "accepted" %}#18753c{% elif reply_answer == "declined" %}#9b1c25{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block banner_icon %}{% if reply_answer == "accepted" %}icon-check-green{% elif reply_answer == "declined" %}icon-close-red{% elif reply_answer == "tentative" %}icon-question-blue{% else %}{{ block.super }}{% endif %}{% endblock %}
 
 {% block body %}
   <p style="font-family:Arial,Helvetica,sans-serif; font-size:18px; font-weight:700;

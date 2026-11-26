@@ -506,6 +506,68 @@ class TestReplyEmail:
             assert "Bob (bob@example.com)" in body
             assert "Carol" not in body
 
+    def test_parse_takes_the_partstat_of_the_given_attendee(self):
+        event = ICalendarParser.parse(ICS_REPLY, "bob@example.com")
+        assert event.attendee_partstat == "ACCEPTED"
+
+        event = ICalendarParser.parse(ICS_WITHOUT_URL, "bob@example.com")
+        assert event.attendee_partstat == "NEEDS-ACTION"
+
+    @pytest.mark.parametrize(
+        ("partstat", "subject", "heading", "sentence", "color", "icon"),
+        [
+            (
+                "ACCEPTED",
+                "Accepted: Simple meeting",
+                "Invitation accepted",
+                "Bob (bob@example.com) accepted your invitation.",
+                "#18753c",
+                "icon-check-green",
+            ),
+            (
+                "DECLINED",
+                "Declined: Simple meeting",
+                "Invitation declined",
+                "Bob (bob@example.com) declined your invitation. Bob will not attend.",
+                "#9b1c25",
+                "icon-close-red",
+            ),
+            (
+                "TENTATIVE",
+                "Maybe: Simple meeting",
+                "Reply: maybe",
+                "Bob (bob@example.com) may attend. Attendance is not confirmed.",
+                "#435de6",
+                "icon-question-blue",
+            ),
+            (
+                "DELEGATED",
+                "Reply: Simple meeting",
+                "Reply received",
+                "Bob (bob@example.com) has replied to your event",
+                "#435de6",
+                "icon-link-blue",
+            ),
+        ],
+    )
+    def test_reply_email_follows_the_answer(  # noqa: PLR0913  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self, partstat, subject, heading, sentence, color, icon
+    ):
+        ics = ICS_REPLY.replace("PARTSTAT=ACCEPTED", f"PARTSTAT={partstat}")
+        with patch(
+            "core.services.translation_service.TranslationService.resolve_language",
+            return_value="en",
+        ):
+            kwargs = self._send_reply(ics)
+
+        assert kwargs["subject"] == subject
+        assert sentence in kwargs["text_body"]
+        html = kwargs["html_body"]
+        assert heading in html
+        assert sentence in html
+        assert f"color:{color}" in html
+        assert f"images/{icon}.png" in html
+
 
 @pytest.mark.django_db
 class TestNewAttendeeOnUpdatedEvent:

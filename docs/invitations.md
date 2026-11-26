@@ -85,6 +85,11 @@ Steps:
    | REQUEST | >0 | `calendar_invitation_update.html` |
    | CANCEL | any | `calendar_invitation_cancel.html` |
    | REPLY | any | `calendar_invitation_reply.html` |
+
+   The REPLY email follows the PARTSTAT of the attendee. The subject,
+   the banner and the sentence differ for ACCEPTED (green),
+   DECLINED (red) and TENTATIVE (blue). Other answers get a neutral
+   "Reply received" email.
 3. **RSVP tokens** — for REQUEST emails, generates signed URLs:
    ```
    {APP_URL}/rsvp/?t=<signed>
