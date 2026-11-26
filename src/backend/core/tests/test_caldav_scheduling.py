@@ -21,6 +21,7 @@ from caldav.lib.error import NotFoundError
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
+from core.tests import one_date_cases
 
 logger = logging.getLogger(__name__)
 
@@ -528,6 +529,81 @@ END:VCALENDAR"""
                     for r in callback_data["requests"]
                 }
                 assert flags == {occurrence: None}
+
+            except NotFoundError:
+                pytest.skip("Calendar not found - CalDAV server may not be running")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    @pytest.mark.parametrize(
+        "stored, new, sends",
+        list(one_date_cases.ONE_DATE_CASES.values()),
+        ids=list(one_date_cases.ONE_DATE_CASES),
+    )
+    def test_scheduling_callback_skips_answer_for_one_date(self, stored, new, sends):
+        """A new entry for a regular date that only records an answer
+        sends no message, also when the client writes the same event in
+        another way. When the write also makes a real change, each
+        attendee gets one update."""
+        organizer = factories.UserFactory(email=one_date_cases.ORGANIZER)
+        service = CalendarService()
+        caldav_path = service.create_calendar(
+            organizer, name="One Date Calendar", color="#0000aa"
+        )
+
+        server, _port, callback_data = create_test_server()
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        time.sleep(0.5)
+
+        try:
+            client = service._get_client(organizer)  # pylint: disable=protected-access
+            calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
+
+            try:
+                uid = f"one-date-{datetime.now().timestamp()}"
+                event_url = f"{str(client.calendar(url=calendar_url).url).rstrip('/')}/{uid}.ics"
+
+                def put(components):
+                    body = one_date_cases.calendar(components).replace(
+                        f"UID:{one_date_cases.UID}\n", f"UID:{uid}\n"
+                    )
+                    # A raw PUT keeps the order of the parameters.
+                    response = client.put(
+                        event_url, body, {"Content-Type": "text/calendar"}
+                    )
+                    assert response.status < 300
+
+                put(stored)
+                _wait_for_callbacks(callback_data, expected_count=2)
+                callback_data["requests"] = []
+
+                put(new)
+                # Wait for callbacks that are not expected, also duplicates.
+                _wait_for_callbacks(callback_data, expected_count=3, timeout=1.0)
+
+                callbacks = sorted(
+                    (
+                        re.sub(
+                            r"(?i)^mailto:", "", r["headers"].get("X-LS-Recipient", "")
+                        ),
+                        r["headers"].get("X-LS-Method"),
+                    )
+                    for r in callback_data["requests"]
+                )
+                expected = [
+                    (one_date_cases.DECLINING, "REQUEST"),
+                    (one_date_cases.OTHER, "REQUEST"),
+                ]
+                assert callbacks == (expected if sends else [])
+
+                # The organizer keeps the answer.
+                stored_event = client.request(event_url).raw
+                lines = re.sub(r"\r?\n[ \t]", "", stored_event).splitlines()
+                assert any(
+                    "PARTSTAT=DECLINED" in line and one_date_cases.DECLINING in line
+                    for line in lines
+                )
 
             except NotFoundError:
                 pytest.skip("Calendar not found - CalDAV server may not be running")

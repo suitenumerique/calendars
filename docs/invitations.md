@@ -139,6 +139,10 @@ When an event with attendees is modified:
 3. Attendees receive an update email
    (`calendar_invitation_update.html`)
 
+For a plain series, a write that only adds a copy of one date with an
+attendee's answer sends no update email (see `HttpCallbackIMipPlugin`).
+Other writes use the usual scheduling rules.
+
 ## Cancelling an event
 
 When an event with attendees is deleted:
