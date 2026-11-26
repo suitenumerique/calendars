@@ -6,6 +6,7 @@ import {
   parseDateTimeLocal,
   parseDateLocal,
 } from "../utils/dateFormatters";
+import { shiftEnd } from "../utils/shiftEnd";
 
 import type {
   IcsEvent,
@@ -217,24 +218,8 @@ export const useEventForm = ({
   const handleStartDateChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const newStartValue = e.target.value;
-
-      if (isAllDay) {
-        const oldStart = parseDateLocal(startDateTime);
-        const oldEnd = parseDateLocal(endDateTime);
-        const duration = oldEnd.getTime() - oldStart.getTime();
-        const newStart = parseDateLocal(newStartValue);
-        const newEnd = new Date(newStart.getTime() + duration);
-        setStartDateTime(newStartValue);
-        setEndDateTime(formatDateLocal(newEnd));
-      } else {
-        const oldStart = parseDateTimeLocal(startDateTime);
-        const oldEnd = parseDateTimeLocal(endDateTime);
-        const duration = oldEnd.getTime() - oldStart.getTime();
-        const newStart = parseDateTimeLocal(newStartValue);
-        const newEnd = new Date(newStart.getTime() + duration);
-        setStartDateTime(newStartValue);
-        setEndDateTime(formatDateTimeLocal(newEnd));
-      }
+      setStartDateTime(newStartValue);
+      setEndDateTime(shiftEnd(startDateTime, endDateTime, newStartValue, isAllDay));
     },
     [isAllDay, startDateTime, endDateTime],
   );

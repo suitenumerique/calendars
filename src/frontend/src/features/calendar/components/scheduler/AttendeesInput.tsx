@@ -46,6 +46,8 @@ export function AttendeesInput({
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const pillsRef = useRef<HTMLDivElement>(null);
+  const revealPillsRef = useRef(false);
 
   // A list of addresses is not a search query.
   const isList =
@@ -87,6 +89,13 @@ export function AttendeesInput({
     return () => onPendingInvalidChange?.(false);
   }, [trimmedInput, onPendingInvalidChange]);
 
+  // A new row of pills can grow below the visible part of the modal.
+  useEffect(() => {
+    if (!revealPillsRef.current) return;
+    revealPillsRef.current = false;
+    pillsRef.current?.lastElementChild?.scrollIntoView({ block: "nearest" });
+  }, [attendees]);
+
   const addAttendees = useCallback(
     (text: string, fullName?: string) => {
       const parsed = parseAttendeeList(text);
@@ -111,7 +120,10 @@ export function AttendeesInput({
           };
         });
 
-      if (added.length > 0) onChange([...attendees, ...added]);
+      if (added.length > 0) {
+        revealPillsRef.current = true;
+        onChange([...attendees, ...added]);
+      }
 
       const hasInvalid = parsed.invalid.length > 0;
       const onlyOrganizer =
@@ -261,7 +273,7 @@ export function AttendeesInput({
         ) : null}
       </div>
 
-      <div className="attendees-input__pills">
+      <div className="attendees-input__pills" ref={pillsRef}>
         {organizer && attendees.length > 0 && (
           <Badge type={"success"} className="attendees-input__pill">
             <CircleCheck />

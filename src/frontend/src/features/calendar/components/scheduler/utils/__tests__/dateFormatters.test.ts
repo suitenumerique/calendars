@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { formatDateTimeLocal, parseDateTimeLocal } from "../dateFormatters";
+import {
+  formatDateLocal,
+  formatDateTimeLocal,
+  parseDateLocal,
+  parseDateTimeLocal,
+} from "../dateFormatters";
 
 describe("parseDateTimeLocal", () => {
   it("parses the datetime-local shape as local time components", () => {
@@ -31,5 +36,34 @@ describe("parseDateTimeLocal", () => {
   it("falls back to Date parsing for non datetime-local shapes", () => {
     const utc = parseDateTimeLocal("2026-01-29T15:07:00Z");
     expect(utc.getTime()).toBe(Date.UTC(2026, 0, 29, 15, 7, 0));
+  });
+});
+
+describe("years below 1000", () => {
+  it("round-trips a datetime-local value", () => {
+    for (const value of ["0002-11-26T10:00", "0020-11-26T10:00", "0202-11-26T10:00"]) {
+      expect(formatDateTimeLocal(parseDateTimeLocal(value))).toBe(value);
+    }
+  });
+
+  it("round-trips a date value", () => {
+    expect(formatDateLocal(parseDateLocal("0020-11-26"))).toBe("0020-11-26");
+  });
+});
+
+describe("daylight saving time", () => {
+  const initialTz = process.env.TZ;
+
+  beforeEach(() => {
+    // 2000-03-26 has a DST gap at 02:00 in Paris; 2026-03-26 has none.
+    process.env.TZ = "Europe/Paris";
+  });
+
+  afterEach(() => {
+    process.env.TZ = initialTz;
+  });
+
+  it("keeps a time that is valid on the parsed date", () => {
+    expect(formatDateTimeLocal(parseDateTimeLocal("2026-03-26T02:30"))).toBe("2026-03-26T02:30");
   });
 });
