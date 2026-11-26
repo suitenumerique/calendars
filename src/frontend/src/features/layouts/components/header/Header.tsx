@@ -7,7 +7,7 @@ import {
   useResponsive,
 } from "@gouvfr-lasuite/ui-components";
 import { useAuth } from "@/features/auth/Auth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "@tanstack/react-router";
 import { fetchAPI } from "@/features/api/fetchApi";
@@ -130,10 +130,14 @@ export const LanguagePickerUserMenu = () => {
     config.LANGUAGES ?? [],
     Object.keys(i18n.options.resources ?? {}),
   );
-  // The picker mounts when the menu opens. AuthProvider already sets the
-  // saved language when the user loads, so the picker must not set it again:
-  // a language change makes the calendar reload all its events.
   const [selectedLanguage, setSelectedLanguage] = useState(user?.language);
+
+  // Check the saved language when a refresh changes it. Only the checked
+  // option changes here. AuthProvider sets the UI language when the user
+  // loads, and a language change makes the calendar reload all its events.
+  useEffect(() => {
+    if (user?.language) setSelectedLanguage(user.language);
+  }, [user?.language]);
 
   // The UI kit picker reads its first language, so it cannot render without one.
   if (pickerLanguages.length === 0) return null;

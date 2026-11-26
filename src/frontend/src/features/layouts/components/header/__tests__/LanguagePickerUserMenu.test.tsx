@@ -42,6 +42,21 @@ type Setup = {
 let root: Root;
 let container: HTMLElement;
 
+const menu = (
+  i18n: ReturnType<typeof createInstance>,
+  { configured, userLanguage }: Omit<Setup, "uiLanguage">,
+) => (
+  <I18nextProvider i18n={i18n}>
+    <CunninghamProvider>
+      <ConfigContext.Provider value={{ config: { LANGUAGES: configured } as ApiConfig }}>
+        <AuthContext.Provider value={{ user: { id: "user-id", language: userLanguage } as User }}>
+          <LanguagePickerUserMenu />
+        </AuthContext.Provider>
+      </ConfigContext.Provider>
+    </CunninghamProvider>
+  </I18nextProvider>
+);
+
 /**
  * Renders the menu with the picker of the UI kit, not a mock.
  * The UI has translations for English, French and Dutch.
@@ -50,20 +65,7 @@ const renderMenu = async ({ configured, uiLanguage, userLanguage }: Setup) => {
   const i18n = createInstance();
   await i18n.init({ lng: uiLanguage, fallbackLng: "en", resources });
   vi.spyOn(i18n, "changeLanguage");
-  const user = { id: "user-id", language: userLanguage } as User;
-  await act(async () =>
-    root.render(
-      <I18nextProvider i18n={i18n}>
-        <CunninghamProvider>
-          <ConfigContext.Provider value={{ config: { LANGUAGES: configured } as ApiConfig }}>
-            <AuthContext.Provider value={{ user }}>
-              <LanguagePickerUserMenu />
-            </AuthContext.Provider>
-          </ConfigContext.Provider>
-        </CunninghamProvider>
-      </I18nextProvider>,
-    ),
-  );
+  await act(async () => root.render(menu(i18n, { configured, userLanguage })));
   return i18n;
 };
 
@@ -130,6 +132,18 @@ describe("LanguagePickerUserMenu", () => {
       userLanguage: "fr-fr",
     });
 
+    expect(i18n.changeLanguage).not.toHaveBeenCalled();
+  });
+
+  // Two quick selections can get their responses out of order. The last
+  // refresh holds the saved language.
+  it("shows the saved language when the user refreshes", async () => {
+    const configured = [ENGLISH, FRENCH];
+    const i18n = await renderMenu({ configured, uiLanguage: "en", userLanguage: "en-us" });
+
+    await act(async () => root.render(menu(i18n, { configured, userLanguage: "fr-fr" })));
+
+    expect(shownLanguage()).toBe("FR");
     expect(i18n.changeLanguage).not.toHaveBeenCalled();
   });
 
