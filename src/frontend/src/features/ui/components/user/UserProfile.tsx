@@ -2,6 +2,7 @@ import { UserMenu } from "@gouvfr-lasuite/ui-components";
 import { useAuth, logout } from "@/features/auth/Auth";
 import { LanguagePickerUserMenu } from "@/features/layouts/components/header/Header";
 import { LoginButton } from "@/features/auth/components/LoginButton";
+import { ColorSchemePicker } from "@/features/ui/theme/ColorSchemePicker";
 
 export const UserProfile = () => {
   const { user } = useAuth();
@@ -12,7 +13,12 @@ export const UserProfile = () => {
           user={user}
           logout={logout}
           termOfServiceUrl="https://docs.numerique.gouv.fr/docs/8e298e03-c95f-44c7-be4a-ffb618af1854/"
-          actions={<LanguagePickerUserMenu />}
+          actions={
+            <>
+              <LanguagePickerUserMenu />
+              <ColorSchemePicker />
+            </>
+          }
         />
       ) : (
         <LoginButton />

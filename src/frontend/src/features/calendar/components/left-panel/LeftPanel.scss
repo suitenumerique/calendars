@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: var(--c--theme--colors--greyscale-000);
+  background-color: var(--c--contextuals--background--surface--primary);
 
   overflow-y: auto;
 
@@ -24,7 +24,7 @@
 
   &__divider {
     height: 1px;
-    background-color: var(--c--theme--colors--greyscale-200);
+    background-color: var(--c--contextuals--background--semantic--contextual--primary-hover);
     margin: 0.5rem 0.75rem;
     flex-shrink: 0;
   }
@@ -46,18 +46,18 @@
     border-radius: 6px;
     cursor: pointer;
     font-size: 0.9375rem;
-    color: var(--c--theme--colors--greyscale-700);
+    color: var(--c--contextuals--content--semantic--neutral--primary);
     text-align: left;
 
     &:hover {
-      background-color: var(--c--theme--colors--greyscale-100);
+      background-color: var(--c--contextuals--background--semantic--contextual--primary);
     }
 
     // The mobile-nav items render ui-kit SVG icons (<Clock/>, <Building/>,
     // <Puzzle/>), not the material-icons font glyph — target the <svg>.
     svg {
       font-size: 1.25rem;
-      color: var(--c--theme--colors--greyscale-600);
+      color: var(--c--contextuals--content--semantic--neutral--secondary);
     }
   }
 }

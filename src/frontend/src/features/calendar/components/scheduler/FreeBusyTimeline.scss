@@ -18,11 +18,11 @@
     border-radius: 50%;
     background: none;
     cursor: pointer;
-    color: #5f6368;
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
     padding: 0;
 
     &:hover {
-      background-color: #f1f3f4;
+      background-color: var(--c--contextuals--background--semantic--contextual--primary);
     }
 
     svg {
@@ -34,7 +34,7 @@
   &__date {
     font-size: 0.75rem;
     font-weight: 500;
-    color: #202124;
+    color: var(--c--contextuals--content--semantic--neutral--primary);
     min-width: 100px;
     text-align: center;
   }
@@ -47,7 +47,7 @@
 
   &__spinner {
     font-size: 14px;
-    color: #5f6368;
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
     animation: freebusy-spin 1.5s linear infinite;
   }
 
@@ -58,18 +58,18 @@
     border-radius: 8px;
 
     &--ok {
-      color: #137333;
-      background-color: #e6f4ea;
+      color: var(--c--contextuals--content--semantic--success--secondary);
+      background-color: var(--c--contextuals--background--semantic--success--tertiary);
     }
 
     &--conflict {
-      color: #c5221f;
-      background-color: #fce8e6;
+      color: var(--c--contextuals--content--semantic--error--secondary);
+      background-color: var(--c--contextuals--background--semantic--error--tertiary);
     }
   }
 
   &__calendar {
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--c--contextuals--border--surface--primary);
     border-radius: 4px;
     overflow: hidden;
 
@@ -119,8 +119,8 @@
 
     // Single overlay for proposed meeting time across all rows
     .freebusy-proposed-overlay {
-      border-left: 2px solid #137333;
-      border-right: 2px solid #137333;
+      border-left: 2px solid var(--c--contextuals--border--semantic--success--primary);
+      border-right: 2px solid var(--c--contextuals--border--semantic--success--primary);
       background: repeating-linear-gradient(
         -45deg,
         rgba(19, 115, 51, 0.35),
@@ -135,8 +135,8 @@
     padding: 0.75rem;
     text-align: center;
     font-size: 0.75rem;
-    color: #5f6368;
-    border: 1px solid #e0e0e0;
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
+    border: 1px solid var(--c--contextuals--border--surface--primary);
     border-radius: 4px;
   }
 }

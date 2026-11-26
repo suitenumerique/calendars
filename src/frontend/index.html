@@ -6,6 +6,17 @@
     <meta name="theme-color" content="#FFFFFF" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>Calendars</title>
+    <script>
+      try {
+        var scheme = localStorage.getItem("calendars-color-scheme");
+        if (
+          scheme === "dark" ||
+          (scheme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches)
+        ) {
+          document.documentElement.classList.add("cunningham-theme--dark");
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

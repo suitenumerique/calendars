@@ -3,13 +3,13 @@
   flex-direction: column;
   gap: 0.625rem;
   padding: 0.75rem;
-  background: #f8f9fa;
+  background: var(--c--contextuals--background--surface--tertiary);
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--c--contextuals--border--surface--primary);
 
   &__organizer {
     font-size: 0.8125rem;
-    color: #5f6368;
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
   }
 
   &__actions {
@@ -23,7 +23,7 @@
     align-items: center;
     gap: 0.375rem;
     font-size: 0.8125rem;
-    color: #5f6368;
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
 
     svg {
       width: 1rem;
@@ -31,13 +31,13 @@
     }
 
     &--success {
-      color: #137333;
+      color: var(--c--contextuals--content--semantic--success--secondary);
     }
     &--warning {
-      color: #b06000;
+      color: var(--c--contextuals--content--semantic--warning--secondary);
     }
     &--danger {
-      color: #c5221f;
+      color: var(--c--contextuals--content--semantic--error--secondary);
     }
   }
 
@@ -46,7 +46,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.875rem;
-    color: #c5221f;
+    color: var(--c--contextuals--content--semantic--error--secondary);
     font-weight: 500;
 
     svg {

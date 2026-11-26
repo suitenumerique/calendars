@@ -534,7 +534,7 @@ export const EventModal = ({
                 <p
                   style={{
                     fontSize: "0.75rem",
-                    color: "#9ca3af",
+                    color: "var(--c--contextuals--content--semantic--neutral--tertiary)",
                     margin: "-8px 0 8px 36px",
                     padding: 0,
                   }}

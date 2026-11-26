@@ -8,8 +8,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  background-color: var(--c--globals--colors--gray-000);
-  border-bottom: 1px solid var(--c--globals--colors--gray-100);
+  background-color: var(--c--contextuals--background--surface--primary);
+  border-bottom: 1px solid var(--c--contextuals--border--surface--primary);
   margin-bottom: 1rem;
 
   // -------------------------------------------------------------------------
@@ -42,18 +42,18 @@
     background: transparent;
     border-radius: 50%;
     cursor: pointer;
-    color: var(--c--globals--colors--gray-600);
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
     transition:
       background-color 0.15s,
       color 0.15s;
 
     &:hover {
-      background-color: var(--c--globals--colors--gray-100);
-      color: var(--c--globals--colors--gray-800);
+      background-color: var(--c--contextuals--background--semantic--contextual--primary);
+      color: var(--c--contextuals--content--semantic--neutral--primary);
     }
 
     &:active {
-      background-color: var(--c--globals--colors--gray-200);
+      background-color: var(--c--contextuals--background--semantic--contextual--primary-hover);
     }
 
     svg {
@@ -75,7 +75,7 @@
     margin: 0;
     font-size: 1.125rem;
     font-weight: 500;
-    color: var(--c--globals--colors--gray-800);
+    color: var(--c--contextuals--content--semantic--neutral--primary);
   }
 
   // -------------------------------------------------------------------------
@@ -98,18 +98,18 @@
     cursor: pointer;
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--c--globals--colors--gray-700);
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
     transition:
       background-color 0.15s,
       color 0.15s;
 
     &:hover {
-      background-color: var(--c--globals--colors--gray-100);
-      color: var(--c--globals--colors--gray-900);
+      background-color: var(--c--contextuals--background--semantic--contextual--primary);
+      color: var(--c--contextuals--content--semantic--neutral--primary);
     }
 
     &:active {
-      background-color: var(--c--globals--colors--gray-200);
+      background-color: var(--c--contextuals--background--semantic--contextual--primary-hover);
     }
   }
 
