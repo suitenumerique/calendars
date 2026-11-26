@@ -545,6 +545,7 @@ END:VCALENDAR"""
             ("reordered timezone", False),
             ("daylight saving", False),
             ("daylight saving end", False),
+            ("daylight saving gap", False),
             ("reordered alarm", False),
             ("duration", False),
             ("email case", False),
@@ -568,6 +569,7 @@ END:VCALENDAR"""
             ("no rrule", True),
             ("unsupported rule", True),
             ("unsupported yearly rule", True),
+            ("until date", True),
             ("alarm", True),
             ("forced", True),
             ("dropped date", True),
@@ -606,14 +608,22 @@ END:VCALENDAR"""
                 # The second date lasts 24 hours and New York moves to
                 # summer time on March 14, 2027. The date ends at 13:00 in
                 # New York, which is 17:00 UTC.
-                dst_end = change in ("daylight saving end", "daylight saving shorter")
+                dst_end = change in (
+                    "daylight saving end",
+                    "daylight saving shorter",
+                    "daylight saving gap",
+                )
                 if dst_end:
                     dtstart = datetime(2027, 3, 6, 12)
                 second = dtstart + timedelta(days=7)
                 # EventIterator ignores BYMONTH in a daily rule, so it adds
                 # February 1. In a yearly rule with only BYMONTH, it adds
-                # March 1, 2029.
-                unsupported_rule = {
+                # March 1, 2029. In a monthly rule with BYMONTHDAY, it adds
+                # the UNTIL date.
+                # 02:30 does not exist in New York on March 14, 2027. RFC 5545
+                # uses the offset before the change, so the date starts at
+                # 03:30 in summer time.
+                custom_rule = {
                     "unsupported rule": (
                         "FREQ=DAILY;BYMONTH=1;COUNT=3",
                         datetime(2027, 1, 31, 9),
@@ -624,9 +634,19 @@ END:VCALENDAR"""
                         datetime(2028, 2, 29, 9),
                         datetime(2029, 3, 1, 9),
                     ),
+                    "until date": (
+                        "FREQ=MONTHLY;BYMONTHDAY=15;UNTIL=20270201T090000Z",
+                        datetime(2027, 1, 15, 9),
+                        datetime(2027, 2, 1, 9),
+                    ),
+                    "daylight saving gap": (
+                        "FREQ=WEEKLY;COUNT=3",
+                        datetime(2027, 3, 7, 2, 30),
+                        datetime(2027, 3, 14, 3, 30),
+                    ),
                 }.get(change)
-                if unsupported_rule:
-                    dtstart, second = unsupported_rule[1:]
+                if custom_rule:
+                    dtstart, second = custom_rule[1:]
                 declining = "declining@external-a.test"
                 other = "other@external-b.test"
                 event_uid = f"one-date-{datetime.now().timestamp()}"
@@ -656,15 +676,17 @@ END:VCALENDAR"""
                         begin = (
                             f"DTSTART;TZID=America/New_York:{start.strftime(local)}\n"
                         )
-                        if is_series:
-                            end = (start + timedelta(days=1)).strftime(local)
-                            return begin + f"DTEND;TZID=America/New_York:{end}\n"
-                        # The shorter copy ends one hour earlier.
-                        hour = 17 if change == "daylight saving end" else 16
-                        return (
-                            begin
-                            + f"DTEND:{datetime(2027, 3, 14, hour).strftime(fmt)}\n"
-                        )
+                        length = timedelta(days=1)
+                        if change == "daylight saving gap":
+                            length = timedelta(hours=1)
+                        if is_series or change == "daylight saving gap":
+                            local_end = (start + length).strftime(local)
+                            end = f"DTEND;TZID=America/New_York:{local_end}\n"
+                        else:
+                            # The shorter copy ends one hour earlier.
+                            hour = 17 if change == "daylight saving end" else 16
+                            end = f"DTEND:{datetime(2027, 3, 14, hour).strftime(fmt)}\n"
+                        return begin + end
                     if change == "all day":
                         # The series is all-day, the answer is a full floating day.
                         day = start.strftime("%Y%m%d")
@@ -727,8 +749,8 @@ END:VEVENT"""
 
                 organizer_params = "CN=Organizer;LANGUAGE=fr"
                 series = "RRULE:FREQ=WEEKLY;COUNT=3\n"
-                if unsupported_rule:
-                    series = f"RRULE:{unsupported_rule[0]}\n"
+                if custom_rule:
+                    series = f"RRULE:{custom_rule[0]}\n"
                 alarm = ""
                 if change in ("reordered alarm", "alarm"):
                     alarm = (

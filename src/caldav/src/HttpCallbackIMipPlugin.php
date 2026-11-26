@@ -30,6 +30,8 @@ class HttpCallbackIMipPlugin extends IMipPlugin
 
     private const ANSWER_PARAMETERS = ['PARTSTAT', 'RSVP', 'SCHEDULE-STATUS'];
 
+    private const WEEKDAYS = ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'];
+
     private const COMMON_RRULE_PARTS = ['FREQ', 'COUNT', 'INTERVAL', 'UNTIL', 'WKST'];
 
     /**
@@ -298,6 +300,9 @@ class HttpCallbackIMipPlugin extends IMipPlugin
         if (!$occurrences->valid() || $occurrences->getDtStart() != $date) {
             return false;
         }
+        if (!$this->fitsRule($date, $master)) {
+            return false;
+        }
 
         $regular = $occurrences->getEventObject();
         // A moved date can start at the time of the new entry.
@@ -329,6 +334,85 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             - $master->DTSTART->getDateTime()->getTimestamp();
         $start = $regular->DTSTART->getDateTime();
         return $start->setTimestamp($start->getTimestamp() + $length);
+    }
+
+    /**
+     * Tell if the day of a date can be in the RRULE of the master.
+     *
+     * EventIterator can give dates outside the rule. For example, a
+     * monthly rule with BYMONTHDAY can give the UNTIL date. This check
+     * rejects the days that do not fit the BY parts or the INTERVAL.
+     */
+    private function fitsRule(\DateTimeImmutable $date, VEvent $master): bool
+    {
+        $parts = $master->RRULE->getParts();
+        $start = $master->DTSTART->getDateTime();
+        $date = $date->setTimezone($start->getTimezone());
+        $byMonth = array_map('intval', (array) ($parts['BYMONTH'] ?? []));
+        $byMonthDay = array_map('intval', (array) ($parts['BYMONTHDAY'] ?? []));
+        $byDay = (array) ($parts['BYDAY'] ?? []);
+        // Without these parts, the rule repeats the day of DTSTART.
+        if ('WEEKLY' === $parts['FREQ'] && !$byDay) {
+            $byDay = [self::WEEKDAYS[(int) $start->format('N') - 1]];
+        }
+        if ('DAILY' !== $parts['FREQ'] && 'WEEKLY' !== $parts['FREQ'] && !$byDay && !$byMonthDay) {
+            $byMonthDay = [(int) $start->format('j')];
+        }
+        if ('YEARLY' === $parts['FREQ'] && !$byMonth) {
+            $byMonth = [(int) $start->format('n')];
+        }
+
+        $day = (int) $date->format('j');
+        $monthLength = (int) $date->format('t');
+        if ($byMonth && !in_array((int) $date->format('n'), $byMonth, true)) {
+            return false;
+        }
+        if ($byMonthDay && !in_array($day, array_map(
+            fn (int $monthDay): int => $monthDay > 0 ? $monthDay : $monthLength + 1 + $monthDay,
+            $byMonthDay
+        ), true)) {
+            return false;
+        }
+        $inMonth = 'MONTHLY' === $parts['FREQ'] || 'YEARLY' === $parts['FREQ'];
+        if ($byDay && !array_filter($byDay, fn (string $entry): bool => $this->fitsByDay($date, $entry, $inMonth))) {
+            return false;
+        }
+
+        $days = $this->dayNumber($date) - $this->dayNumber($start);
+        $weekStart = array_search($parts['WKST'] ?? 'MO', self::WEEKDAYS, true) + 1;
+        $steps = match ($parts['FREQ']) {
+            'DAILY' => $days,
+            'WEEKLY' => intdiv($days + ((int) $start->format('N') - $weekStart + 7) % 7, 7),
+            'MONTHLY' => 12 * ((int) $date->format('Y') - (int) $start->format('Y'))
+                + (int) $date->format('n') - (int) $start->format('n'),
+            'YEARLY' => (int) $date->format('Y') - (int) $start->format('Y'),
+        };
+        return 0 === $steps % (int) ($parts['INTERVAL'] ?? 1);
+    }
+
+    /**
+     * Tell if a date fits one BYDAY entry, such as "TU", "2TU" or "-1FR".
+     * A number counts the weeks of the month. A weekly rule ignores it.
+     */
+    private function fitsByDay(\DateTimeImmutable $date, string $entry, bool $inMonth): bool
+    {
+        if (!preg_match('/^([+-]?\d*)([A-Z]{2})$/', strtoupper($entry), $match)
+            || self::WEEKDAYS[(int) $date->format('N') - 1] !== $match[2]) {
+            return false;
+        }
+        $week = $inMonth ? (int) $match[1] : 0;
+        $day = (int) $date->format('j');
+        return match (true) {
+            $week > 0 => intdiv($day - 1, 7) + 1 === $week,
+            $week < 0 => intdiv((int) $date->format('t') - $day, 7) + 1 === -$week,
+            default => true,
+        };
+    }
+
+    private function dayNumber(\DateTimeImmutable $date): int
+    {
+        $day = new \DateTimeImmutable($date->format('Y-m-d'), new \DateTimeZone('UTC'));
+        return intdiv($day->getTimestamp(), 86400);
     }
 
     private function endIsFloating(VEvent $vevent): bool
