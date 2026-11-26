@@ -152,7 +152,8 @@ class Base(Configuration):
     CALENDAR_INVITATION_FROM_EMAIL = values.Value(
         None, environ_name="CALENDAR_INVITATION_FROM_EMAIL", environ_prefix=None
     )
-    APP_NAME = values.Value("Calendars", environ_name="APP_NAME", environ_prefix=None)
+    # Product name in the emails. Empty: the name in the language of the email.
+    APP_NAME = values.Value(None, environ_name="APP_NAME", environ_prefix=None)
     APP_URL = values.Value("", environ_name="APP_URL", environ_prefix=None)
     # URL of the logo in the emails. Empty: the Calendriers logo from the static files.
     EMAIL_LOGO_IMG = values.Value(
