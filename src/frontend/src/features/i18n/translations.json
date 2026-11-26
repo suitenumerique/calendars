@@ -46,7 +46,7 @@
           "title": "Calendars",
           "description": "Edit your calendars and choose the ones you see. Hidden calendars do not appear in the calendar view or in your other calendar apps, and send no reminders. You keep your access.",
           "noCalendar": "You have no calendar.",
-          "mobileLink": "Calendar settings",
+          "link": "Calendar settings",
           "hideTooltip": "Hide this calendar here and in your other calendar apps",
           "showTooltip": "Show this calendar again"
         },
@@ -814,7 +814,7 @@
           "title": "Calendriers",
           "description": "Modifiez vos calendriers et choisissez ceux que vous voyez. Les calendriers masqués n'apparaissent ni dans la vue calendrier ni dans vos autres applications d'agenda, et n'envoient pas de rappels. Vous gardez votre accès.",
           "noCalendar": "Vous n'avez aucun calendrier.",
-          "mobileLink": "Paramètres des calendriers",
+          "link": "Paramètres des calendriers",
           "hideTooltip": "Masquer ce calendrier ici et dans vos autres applications d'agenda",
           "showTooltip": "Afficher à nouveau ce calendrier"
         },
@@ -1846,7 +1846,7 @@
           "title": "Kalenders",
           "description": "Bewerk je kalenders en kies welke je ziet. Verborgen kalenders verschijnen niet in de kalenderweergave of in je andere agenda-apps en sturen geen herinneringen. Je behoudt je toegang.",
           "noCalendar": "Je hebt geen kalender.",
-          "mobileLink": "Kalenderinstellingen",
+          "link": "Kalenderinstellingen",
           "hideTooltip": "Deze kalender hier en in je andere agenda-apps verbergen",
           "showTooltip": "Deze kalender weer tonen"
         },
