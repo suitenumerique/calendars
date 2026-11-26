@@ -16,27 +16,27 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
   height: 100%;
 
   // Base colors
-  --ec-bg-color: var(--c--globals--colors--gray-000);
+  --ec-bg-color: var(--c--contextuals--background--surface--primary);
   --ec-day-bg-color: var(--c--contextuals--background--surface--secondary);
-  --ec-text-color: var(--c--globals--colors--gray-800);
-  --ec-border-color: var(--c--globals--colors--gray-100);
+  --ec-text-color: var(--c--contextuals--content--semantic--neutral--primary);
+  --ec-border-color: var(--c--contextuals--border--surface--primary);
 
   // Buttons (if any native buttons remain visible)
-  --ec-button-bg-color: var(--c--globals--colors--gray-000);
-  --ec-button-border-color: var(--c--globals--colors--gray-200);
-  --ec-button-text-color: var(--c--globals--colors--gray-800);
-  --ec-button-active-bg-color: var(--c--globals--colors--gray-100);
-  --ec-button-active-border-color: var(--c--globals--colors--gray-300);
+  --ec-button-bg-color: var(--c--contextuals--background--surface--primary);
+  --ec-button-border-color: var(--c--contextuals--border--semantic--neutral--tertiary);
+  --ec-button-text-color: var(--c--contextuals--content--semantic--neutral--primary);
+  --ec-button-active-bg-color: var(--c--contextuals--background--semantic--contextual--primary);
+  --ec-button-active-border-color: var(--c--contextuals--border--semantic--neutral--secondary);
 
   // Today & highlight
   --ec-today-bg-color: transparent;
-  --ec-highlight-color: var(--c--globals--colors--brand-050);
+  --ec-highlight-color: var(--c--contextuals--background--semantic--brand--tertiary);
 
   // Events
   --ec-event-text-color: #fff;
 
   // Now indicator
-  --ec-now-indicator-color: var(--c--globals--colors--brand-500);
+  --ec-now-indicator-color: var(--c--contextuals--border--semantic--brand--primary);
 
   border: none !important;
 }
@@ -223,7 +223,7 @@ $tablet: map.get($themes, "default", "globals", "breakpoints", "tablet");
 // -----------------------------------------------------------------------------
 .ec-sidebar {
   font-size: 0.75rem;
-  color: var(--c--globals--colors--gray-500);
+  color: var(--c--contextuals--content--semantic--neutral--tertiary);
 }
 
 // -----------------------------------------------------------------------------

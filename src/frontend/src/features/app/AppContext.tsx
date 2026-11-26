@@ -1,8 +1,15 @@
 import { createContext, useContext, useState, type PropsWithChildren } from "react";
+import {
+  loadColorScheme,
+  saveColorScheme,
+  type ColorScheme,
+} from "@/features/ui/theme/colorScheme";
 
 export interface AppContextType {
   theme: string;
   setTheme: (theme: string) => void;
+  colorScheme: ColorScheme;
+  setColorScheme: (colorScheme: ColorScheme) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -17,5 +24,16 @@ export const useAppContext = () => {
 
 export const AppContextProvider = ({ children }: PropsWithChildren) => {
   const [theme, setTheme] = useState<string>("default");
-  return <AppContext.Provider value={{ theme, setTheme }}>{children}</AppContext.Provider>;
+  const [colorScheme, setColorSchemeState] = useState<ColorScheme>(loadColorScheme);
+
+  const setColorScheme = (scheme: ColorScheme) => {
+    saveColorScheme(scheme);
+    setColorSchemeState(scheme);
+  };
+
+  return (
+    <AppContext.Provider value={{ theme, setTheme, colorScheme, setColorScheme }}>
+      {children}
+    </AppContext.Provider>
+  );
 };

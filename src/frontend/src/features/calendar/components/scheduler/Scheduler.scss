@@ -177,7 +177,7 @@
     margin: 0;
     font-size: 1rem;
     line-height: 1.5;
-    color: #495057;
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
   }
 
   &__options {
@@ -197,8 +197,8 @@
     transition: all 0.15s ease-in-out;
 
     &:hover {
-      background-color: #f8f9fa;
-      border-color: #adb5bd;
+      background-color: var(--c--contextuals--background--surface--tertiary);
+      border-color: var(--c--contextuals--border--semantic--neutral--secondary);
     }
 
     input[type="radio"] {
@@ -213,7 +213,7 @@
       flex: 1;
       font-size: 0.9375rem;
       line-height: 1.5;
-      color: #212529;
+      color: var(--c--contextuals--content--semantic--neutral--primary);
     }
 
     input[type="radio"]:checked + span {

@@ -19,18 +19,18 @@
     height: 2.5rem;
     margin-top: 0.25rem;
     padding: 0;
-    border: 1px solid var(--c--theme--colors--greyscale-200);
+    border: 1px solid var(--c--contextuals--border--surface--primary);
     border-radius: 4px;
     background: transparent;
-    color: var(--c--theme--colors--greyscale-600);
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
     cursor: pointer;
     flex-shrink: 0;
     transition: all 0.15s;
 
     &:hover {
-      background-color: var(--c--theme--colors--greyscale-100);
-      color: var(--c--theme--colors--greyscale-900);
-      border-color: var(--c--theme--colors--greyscale-400);
+      background-color: var(--c--contextuals--background--semantic--contextual--primary);
+      color: var(--c--contextuals--content--semantic--neutral--primary);
+      border-color: var(--c--contextuals--border--semantic--neutral--secondary);
     }
 
     svg {
@@ -45,11 +45,11 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--c--theme--colors--greyscale-400);
+    color: var(--c--contextuals--content--semantic--neutral--tertiary);
     cursor: pointer;
 
     &:hover {
-      color: var(--c--theme--colors--greyscale-700);
+      color: var(--c--contextuals--content--semantic--neutral--primary);
     }
 
     svg {
@@ -67,8 +67,8 @@
     margin: 0;
     padding: 0.25rem 0;
     list-style: none;
-    background: var(--c--theme--colors--greyscale-000, #fff);
-    border: 1px solid var(--c--theme--colors--greyscale-200);
+    background: var(--c--contextuals--background--surface--primary);
+    border: 1px solid var(--c--contextuals--border--surface--primary);
     border-radius: 4px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     max-height: 200px;
@@ -85,11 +85,11 @@
 
     &:hover,
     &--highlighted {
-      background-color: var(--c--theme--colors--greyscale-100);
+      background-color: var(--c--contextuals--background--semantic--contextual--primary);
     }
 
     &--empty {
-      color: var(--c--theme--colors--greyscale-500);
+      color: var(--c--contextuals--content--semantic--neutral--tertiary);
       font-style: italic;
       cursor: default;
 
@@ -102,12 +102,12 @@
   &__suggestion-name {
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--c--theme--colors--greyscale-900);
+    color: var(--c--contextuals--content--semantic--neutral--primary);
   }
 
   &__suggestion-email {
     font-size: 0.75rem;
-    color: var(--c--theme--colors--greyscale-500);
+    color: var(--c--contextuals--content--semantic--neutral--tertiary);
   }
 
   &__pills {

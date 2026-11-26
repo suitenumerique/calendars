@@ -50,6 +50,12 @@ body {
   color: var(--c--contextuals--content--semantic--neutral--primary);
 }
 
+.cunningham-theme--dark,
+.cunningham-theme--anct-dark,
+.cunningham-theme--dsfr-dark {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }

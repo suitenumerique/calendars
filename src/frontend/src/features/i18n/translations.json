@@ -41,6 +41,12 @@
       "login": "Login",
       "my_account": "My Account",
       "settings": {
+        "colorScheme": {
+          "label": "Theme",
+          "system": "System",
+          "light": "Light",
+          "dark": "Dark"
+        },
         "label": "Settings",
         "calendars": {
           "title": "Calendars",
@@ -809,6 +815,12 @@
       "login": "Connexion",
       "my_account": "Mon Compte",
       "settings": {
+        "colorScheme": {
+          "label": "Thème",
+          "system": "Système",
+          "light": "Clair",
+          "dark": "Sombre"
+        },
         "label": "Paramètres",
         "calendars": {
           "title": "Calendriers",
@@ -1841,6 +1853,12 @@
       "login": "Inloggen",
       "my_account": "Mijn account",
       "settings": {
+        "colorScheme": {
+          "label": "Thema",
+          "system": "Systeem",
+          "light": "Licht",
+          "dark": "Donker"
+        },
         "label": "Instellingen",
         "calendars": {
           "title": "Kalenders",

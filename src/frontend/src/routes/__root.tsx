@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { CunninghamProvider } from "@gouvfr-lasuite/ui-components";
 import { useTranslation } from "react-i18next";
-import { AppContextProvider, useAppContext } from "@/features/app/AppContext";
+import { AppContextProvider } from "@/features/app/AppContext";
 import { AnalyticsProvider } from "@/features/analytics/AnalyticsProvider";
 import { ConfigProvider } from "@/features/config/ConfigProvider";
 import { LeftPanelProvider } from "@/features/layouts/contexts/LeftPanelContext";
@@ -20,6 +20,7 @@ import { removeQuotes, useCunninghamTheme } from "@/features/ui/cunningham/useCu
 import { FeedbackFooterMobile } from "@/features/feedback/Feedback";
 import { useDynamicFavicon } from "@/features/ui/hooks/useDynamicFavicon";
 import { addToast, ToasterItem } from "@/features/ui/components/toaster/Toaster";
+import { useThemeName } from "@/features/ui/theme/useThemeName";
 
 const onError = (error: Error, query: unknown) => {
   if ((query as Query).meta?.noGlobalError) {
@@ -71,7 +72,7 @@ const setFavicon = (href: string) => {
 
 const RootShell = () => {
   const { t, i18n } = useTranslation();
-  const { theme } = useAppContext();
+  const theme = useThemeName();
   const themeTokens = useCunninghamTheme();
   const dynamicFavicon = useDynamicFavicon();
   const faviconHref = dynamicFavicon || removeQuotes(themeTokens.components.favicon.src);

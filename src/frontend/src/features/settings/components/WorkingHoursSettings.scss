@@ -61,10 +61,10 @@
     // Invalid range (end <= start): flag the row and its time inputs so
     // the disabled Save button is no longer a silent mystery.
     &--invalid {
-      border-color: var(--c--theme--colors--danger-500, #d2212f);
+      border-color: var(--c--contextuals--border--semantic--error--primary);
 
       .working-hours__row-time {
-        border-color: var(--c--theme--colors--danger-500, #d2212f);
+        border-color: var(--c--contextuals--border--semantic--error--primary);
       }
     }
   }
@@ -73,7 +73,7 @@
     margin: 0 0 var(--c--globals--spacings--2xs);
     padding-left: var(--c--globals--spacings--sm);
     font-size: 0.8125rem;
-    color: var(--c--theme--colors--danger-600, #d2212f);
+    color: var(--c--contextuals--content--semantic--error--secondary);
   }
 
   &__row-when {

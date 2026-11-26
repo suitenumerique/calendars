@@ -1,5 +1,5 @@
 .section-row {
-  border-bottom: 1px solid #f1f3f4;
+  border-bottom: 1px solid var(--c--contextuals--border--surface--primary);
 
   &:last-child {
     border-bottom: none;
@@ -43,7 +43,7 @@
       cursor: pointer;
 
       &:hover {
-        background-color: #f8f9fa;
+        background-color: var(--c--contextuals--background--surface--tertiary);
       }
     }
   }
@@ -54,7 +54,7 @@
     justify-content: center;
     width: 36px;
     flex-shrink: 0;
-    color: #5f6368;
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
 
     // Icons here come from ui-kit SVG icons (Edit/Calendar/Clock…) and
     // ui-kit's font-based <Icon> (.material-icons spans). Size both to a
@@ -72,7 +72,7 @@
   &__label {
     flex: 1;
     font-size: 0.875rem;
-    color: #202124;
+    color: var(--c--contextuals--content--semantic--neutral--primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -80,7 +80,7 @@
   }
 
   &--empty &__label {
-    color: #5f6368;
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
   }
 
   &__right-action {
@@ -92,7 +92,7 @@
     display: flex;
     align-items: center;
     flex-shrink: 0;
-    color: #5f6368;
+    color: var(--c--contextuals--content--semantic--neutral--secondary);
 
     svg {
       width: 20px;
