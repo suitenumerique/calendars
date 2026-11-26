@@ -61,7 +61,7 @@ export const EventModal = ({
 }: EventModalProps) => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { hiddenCalendars } = useCalendarContext();
+  const { hiddenCalendars, visibleCalendarUrls } = useCalendarContext();
   const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -174,7 +174,7 @@ export const EventModal = ({
     if (calendarUrl) return;
     const currentIsValid = calendars.some((cal) => cal.url === form.selectedCalendarUrl);
     if (!currentIsValid) {
-      form.setSelectedCalendarUrl(getDefaultCalendar(calendars)!.url);
+      form.setSelectedCalendarUrl(getDefaultCalendar(calendars, visibleCalendarUrls)!.url);
     }
     // Depend on the specific form fields used inside this effect rather
     // than the whole ``form`` object — useEventForm returns a new object

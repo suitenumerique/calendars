@@ -21,9 +21,15 @@ export const sortCalendars = (calendars: CalDavCalendar[]): CalDavCalendar[] =>
   [...calendars].sort(compareCalendars);
 
 /**
- * The calendar of a new event: the first calendar that is not read-only,
- * or the first calendar when all are. Undefined for an empty list. The
- * list must be in display order.
+ * The calendar of a new event: the first visible calendar that is not
+ * read-only. Without one, the first calendar that is not read-only, or
+ * the first calendar when all are. Undefined for an empty list. The list
+ * must be in display order.
  */
-export const getDefaultCalendar = (calendars: CalDavCalendar[]): CalDavCalendar | undefined =>
-  calendars.find((calendar) => !calendar.readOnly) ?? calendars[0];
+export const getDefaultCalendar = (
+  calendars: CalDavCalendar[],
+  visibleCalendarUrls: Set<string>,
+): CalDavCalendar | undefined =>
+  calendars.find((calendar) => !calendar.readOnly && visibleCalendarUrls.has(calendar.url)) ??
+  calendars.find((calendar) => !calendar.readOnly) ??
+  calendars[0];
