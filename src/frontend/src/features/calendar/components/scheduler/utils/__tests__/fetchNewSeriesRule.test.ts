@@ -36,6 +36,17 @@ describe("fetchNewSeriesRule", () => {
     expect(fetchOccurrenceDates).toHaveBeenCalledWith("/e.ics", "uid", expect.anything());
   });
 
+  it("expands a series that starts before 1970", async () => {
+    const { service, fetchOccurrenceDates } = makeService({ success: true, data: [] });
+    const event = {
+      ...makeEvent(100),
+      start: { date: utc("1960-10-01T10:00:00"), type: "DATE-TIME" },
+    };
+    await fetchNewSeriesRule(service, "/e.ics", event as IcsEvent, utc("2026-10-01T10:00:00"));
+    const [, , range] = fetchOccurrenceDates.mock.calls[0];
+    expect(range.start.getTime()).toBeLessThan(utc("1960-10-01T10:00:00").getTime());
+  });
+
   it("does not call the server for a rule without COUNT", async () => {
     const { service, fetchOccurrenceDates } = makeService({ success: true, data: [] });
     const event = makeEvent();

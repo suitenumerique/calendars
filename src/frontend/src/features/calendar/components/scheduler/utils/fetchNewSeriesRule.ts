@@ -3,11 +3,19 @@ import type { IcsEvent, IcsRecurrenceRule } from "ts-ics";
 import type { CalDavService } from "../../../services/dav/CalDavService";
 import { getNewSeriesRule } from "./newSeriesRule";
 
-// The range holds all the occurrences, also the ones that an override moves.
-const ALL_TIME = {
-  start: new Date(Date.UTC(1970, 0, 1)),
-  end: new Date(Date.UTC(2200, 0, 1)),
-};
+const YEAR_MS = 366 * 24 * 60 * 60 * 1000;
+const EPOCH = 0;
+const END_OF_TIME = new Date(Date.UTC(2200, 0, 1));
+
+/**
+ * Give a range that holds all the occurrences of the series, also the ones
+ * that an override moves to an earlier date. It starts in 1970, or one
+ * year before an older series.
+ */
+const rangeOf = (sourceEvent: IcsEvent) => ({
+  start: new Date(Math.min(EPOCH, sourceEvent.start.date.getTime() - YEAR_MS)),
+  end: END_OF_TIME,
+});
 
 /**
  * Get the recurrence rule of the series that starts at `cutoff` when the
@@ -22,7 +30,11 @@ export const fetchNewSeriesRule = async (
 ): Promise<IcsRecurrenceRule | undefined> => {
   if (!sourceEvent.recurrenceRule?.count) return sourceEvent.recurrenceRule;
 
-  const result = await caldavService.fetchOccurrenceDates(eventUrl, sourceEvent.uid, ALL_TIME);
+  const result = await caldavService.fetchOccurrenceDates(
+    eventUrl,
+    sourceEvent.uid,
+    rangeOf(sourceEvent),
+  );
   if (!result.success || !result.data) {
     throw new Error(result.error || "Failed to expand series");
   }
