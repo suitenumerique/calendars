@@ -10,6 +10,7 @@ import { useAuth } from "@/features/auth/Auth";
 import { addErrorToast, addSuccessToast } from "@/features/ui/components/toaster/Toaster";
 import { getCalendarUrlFromEventUrl } from "../../../services/dav/caldav-helpers";
 import { RSVP_BLOCKER_MESSAGE_KEYS, toOccurrenceInstant } from "../utils/rsvp";
+import { fetchNewSeriesRule } from "../utils/fetchNewSeriesRule";
 
 import type {
   EventCalendarEvent,
@@ -408,6 +409,12 @@ export const useSchedulerHandlers = ({
 
         // Use the ORIGINAL occurrence date for the UNTIL boundary
         const occurrenceDate = getOccurrenceDate();
+        const newSeriesRule = await fetchNewSeriesRule(
+          caldavService,
+          modalState.eventUrl,
+          sourceEvent,
+          occurrenceDate,
+        );
 
         // Truncate the original series: sets UNTIL, removes overrides and
         // EXDATEs >= cutoff in one atomic PUT (prevents orphan overrides).
@@ -427,7 +434,7 @@ export const useSchedulerHandlers = ({
           ...event,
           uid: crypto.randomUUID(),
           recurrenceId: undefined,
-          recurrenceRule: sourceEvent.recurrenceRule,
+          recurrenceRule: newSeriesRule,
           sequence: 0,
         };
 
@@ -891,6 +898,13 @@ export const useSchedulerHandlers = ({
             return;
           }
 
+          const newSeriesRule = await fetchNewSeriesRule(
+            caldavService,
+            eventUrl,
+            sourceEvent,
+            occurrenceDate,
+          );
+
           // Truncate the original series: sets UNTIL, removes overrides and
           // EXDATEs >= cutoff in one atomic PUT (prevents orphan overrides).
           const truncateResult = await caldavService.truncateRecurringSeries(
@@ -915,7 +929,7 @@ export const useSchedulerHandlers = ({
             ...newIcsEvent,
             uid: crypto.randomUUID(),
             recurrenceId: undefined,
-            recurrenceRule: sourceEvent.recurrenceRule,
+            recurrenceRule: newSeriesRule,
             sequence: 0,
           };
 
