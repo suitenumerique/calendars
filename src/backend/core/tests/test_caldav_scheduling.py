@@ -566,6 +566,7 @@ END:VCALENDAR"""
             ("rdate", True),
             ("exrule", True),
             ("no rrule", True),
+            ("unsupported rule", True),
             ("alarm", True),
             ("forced", True),
             ("dropped date", True),
@@ -607,7 +608,12 @@ END:VCALENDAR"""
                 dst_end = change in ("daylight saving end", "daylight saving shorter")
                 if dst_end:
                     dtstart = datetime(2027, 3, 6, 12)
-                second = dtstart + timedelta(days=7)
+                # EventIterator ignores BYMONTH, so it adds February 1.
+                if change == "unsupported rule":
+                    dtstart = datetime(2027, 1, 31, 9)
+                second = dtstart + timedelta(
+                    days=1 if change == "unsupported rule" else 7
+                )
                 declining = "declining@external-a.test"
                 other = "other@external-b.test"
                 event_uid = f"one-date-{datetime.now().timestamp()}"
@@ -708,6 +714,8 @@ END:VEVENT"""
 
                 organizer_params = "CN=Organizer;LANGUAGE=fr"
                 series = "RRULE:FREQ=WEEKLY;COUNT=3\n"
+                if change == "unsupported rule":
+                    series = "RRULE:FREQ=DAILY;BYMONTH=1;COUNT=3\n"
                 alarm = ""
                 if change in ("reordered alarm", "alarm"):
                     alarm = (

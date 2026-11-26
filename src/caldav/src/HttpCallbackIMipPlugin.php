@@ -30,6 +30,19 @@ class HttpCallbackIMipPlugin extends IMipPlugin
 
     private const ANSWER_PARAMETERS = ['PARTSTAT', 'RSVP', 'SCHEDULE-STATUS'];
 
+    private const COMMON_RRULE_PARTS = ['FREQ', 'COUNT', 'INTERVAL', 'UNTIL', 'WKST'];
+
+    /**
+     * The other RRULE parts that EventIterator expands correctly, for each
+     * frequency.
+     */
+    private const RRULE_PARTS = [
+        'DAILY' => [],
+        'WEEKLY' => ['BYDAY'],
+        'MONTHLY' => ['BYDAY', 'BYMONTHDAY', 'BYSETPOS'],
+        'YEARLY' => ['BYDAY', 'BYMONTH', 'BYMONTHDAY'],
+    ];
+
     /**
      * API key for authenticating with the callback endpoint
      * @var string
@@ -203,17 +216,36 @@ class HttpCallbackIMipPlugin extends IMipPlugin
 
     /**
      * Tell if the master only uses the supported recurrence properties:
-     * one RRULE, and EXDATE lines.
+     * one RRULE with supported parts, and EXDATE lines.
      *
      * EventIterator does not handle the other combinations well. For
-     * example, it ignores EXRULE and reads RDATE in the timezone of
-     * DTSTART. Other series use the usual scheduling rules.
+     * example, it ignores EXRULE, reads RDATE in the timezone of DTSTART,
+     * and ignores BYMONTH in a daily rule. Other series use the usual
+     * scheduling rules.
      */
     private function isPlainSeries(VEvent $master): bool
     {
-        return 1 === count($master->select('RRULE'))
-            && !isset($master->RDATE)
-            && !isset($master->EXRULE);
+        $rules = $master->select('RRULE');
+        if (1 !== count($rules) || isset($master->RDATE) || isset($master->EXRULE)) {
+            return false;
+        }
+
+        $parts = reset($rules)->getParts();
+        $supported = self::RRULE_PARTS[$parts['FREQ'] ?? ''] ?? null;
+        if (null === $supported
+            || array_diff(array_keys($parts), self::COMMON_RRULE_PARTS, $supported)) {
+            return false;
+        }
+        if ('YEARLY' !== $parts['FREQ']) {
+            return true;
+        }
+        // In a yearly rule, EventIterator needs BYMONTH for BYDAY and
+        // BYMONTHDAY. Without them, it needs one month at most.
+        $months = (array) ($parts['BYMONTH'] ?? []);
+        if (isset($parts['BYDAY']) || isset($parts['BYMONTHDAY'])) {
+            return [] !== $months;
+        }
+        return count($months) <= 1;
     }
 
     /**
