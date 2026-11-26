@@ -553,8 +553,7 @@ END:VCALENDAR"""
         )
 
         server, _port, callback_data = create_test_server()
-        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-        server_thread.start()
+        threading.Thread(target=server.serve_forever, daemon=True).start()
         time.sleep(0.5)
 
         try:
@@ -562,9 +561,8 @@ END:VCALENDAR"""
             calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
 
             try:
-                caldav_calendar = client.calendar(url=calendar_url)
                 uid = f"one-date-{datetime.now().timestamp()}"
-                event_url = f"{str(caldav_calendar.url).rstrip('/')}/{uid}.ics"
+                event_url = f"{str(client.calendar(url=calendar_url).url).rstrip('/')}/{uid}.ics"
 
                 def put(components):
                     body = one_date_cases.calendar(components).replace(
@@ -593,19 +591,18 @@ END:VCALENDAR"""
                     )
                     for r in callback_data["requests"]
                 )
-                declining = one_date_cases.DECLINING
-                expected = (
-                    [(declining, "REQUEST"), (one_date_cases.OTHER, "REQUEST")]
-                    if sends
-                    else []
-                )
-                assert callbacks == expected
+                expected = [
+                    (one_date_cases.DECLINING, "REQUEST"),
+                    (one_date_cases.OTHER, "REQUEST"),
+                ]
+                assert callbacks == (expected if sends else [])
 
                 # The organizer keeps the answer.
                 stored_event = client.request(event_url).raw
                 lines = re.sub(r"\r?\n[ \t]", "", stored_event).splitlines()
                 assert any(
-                    "PARTSTAT=DECLINED" in line and declining in line for line in lines
+                    "PARTSTAT=DECLINED" in line and one_date_cases.DECLINING in line
+                    for line in lines
                 )
 
             except NotFoundError:
