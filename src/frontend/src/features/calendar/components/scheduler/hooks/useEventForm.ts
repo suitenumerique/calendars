@@ -6,7 +6,7 @@ import {
   parseDateTimeLocal,
   parseDateLocal,
 } from "../utils/dateFormatters";
-import { shiftEnd } from "../utils/shiftEnd";
+import { isValidDateInput, shiftEnd } from "../utils/shiftEnd";
 
 import type {
   IcsEvent,
@@ -48,6 +48,9 @@ export const useEventForm = ({
   const [endDateTime, setEndDateTime] = useState("");
   // Stash full datetime strings so toggling all-day off restores the original times
   const savedDateTimesRef = useRef({ start: "", end: "" });
+  // The start input is invalid while the user clears or types a date segment.
+  // The end then moves from the last valid start, so the duration stays.
+  const lastValidStartRef = useRef("");
   const [selectedCalendarUrl, setSelectedCalendarUrl] = useState(calendarUrl);
   const [isAllDay, setIsAllDay] = useState(event?.start?.type === "DATE");
   const [attendees, setAttendees] = useState<IcsAttendee[]>([]);
@@ -166,6 +169,12 @@ export const useEventForm = ({
     }
   }, [event, calendarUrl, mode, organizer?.email]);
 
+  useEffect(() => {
+    if (isValidDateInput(startDateTime, isAllDay)) {
+      lastValidStartRef.current = startDateTime;
+    }
+  }, [startDateTime, isAllDay]);
+
   // Separate effect for resource/attendee splitting — only depends on
   // event.attendees and availableResources, avoids resetting the entire
   // form when the resource list loads asynchronously.
@@ -219,9 +228,9 @@ export const useEventForm = ({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const newStartValue = e.target.value;
       setStartDateTime(newStartValue);
-      setEndDateTime(shiftEnd(startDateTime, endDateTime, newStartValue, isAllDay));
+      setEndDateTime(shiftEnd(lastValidStartRef.current, endDateTime, newStartValue, isAllDay));
     },
-    [isAllDay, startDateTime, endDateTime],
+    [isAllDay, endDateTime],
   );
 
   const handleAllDayChange = useCallback(
