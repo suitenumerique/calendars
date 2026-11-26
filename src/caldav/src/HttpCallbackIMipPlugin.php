@@ -41,7 +41,7 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     private const RRULE_PARTS = [
         'DAILY' => [],
         'WEEKLY' => ['BYDAY'],
-        'MONTHLY' => ['BYDAY', 'BYMONTHDAY', 'BYSETPOS'],
+        'MONTHLY' => ['BYDAY', 'BYMONTHDAY'],
         'YEARLY' => ['BYDAY', 'BYMONTH', 'BYMONTHDAY'],
     ];
 

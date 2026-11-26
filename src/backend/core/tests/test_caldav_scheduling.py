@@ -570,6 +570,7 @@ END:VCALENDAR"""
             ("unsupported rule", True),
             ("unsupported yearly rule", True),
             ("until date", True),
+            ("set position", True),
             ("alarm", True),
             ("forced", True),
             ("dropped date", True),
@@ -618,8 +619,8 @@ END:VCALENDAR"""
                 second = dtstart + timedelta(days=7)
                 # EventIterator ignores BYMONTH in a daily rule, so it adds
                 # February 1. In a yearly rule with only BYMONTH, it adds
-                # March 1, 2029. In a monthly rule with BYMONTHDAY, it adds
-                # the UNTIL date.
+                # March 1, 2029. In a monthly rule with BYMONTHDAY or
+                # BYSETPOS, it adds the UNTIL date.
                 # 02:30 does not exist in New York on March 14, 2027. RFC 5545
                 # uses the offset before the change, so the date starts at
                 # 03:30 in summer time.
@@ -637,6 +638,12 @@ END:VCALENDAR"""
                     "until date": (
                         "FREQ=MONTHLY;BYMONTHDAY=15;UNTIL=20270201T090000Z",
                         datetime(2027, 1, 15, 9),
+                        datetime(2027, 2, 1, 9),
+                    ),
+                    "set position": (
+                        "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;"
+                        "UNTIL=20270201T090000Z",
+                        datetime(2027, 1, 29, 9),
                         datetime(2027, 2, 1, 9),
                     ),
                     "daylight saving gap": (
