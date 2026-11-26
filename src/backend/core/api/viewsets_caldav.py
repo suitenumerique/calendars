@@ -561,6 +561,8 @@ class CalDAVSchedulingCallbackView(View):
         # so the header cannot be spoofed by external callers.
         is_mailbox = request.headers.get("X-LS-Is-Mailbox") == "true"
         is_new_attendee = request.headers.get("X-LS-New-Attendee") == "true"
+        recurrence_id = request.headers.get("X-LS-Recurrence-Id", "")
+        previous_start = request.headers.get("X-LS-Previous-Start", "")
         org_id = request.headers.get("X-LS-Org-Id", "")
         via = "messages" if is_mailbox else "smtp"
 
@@ -582,6 +584,8 @@ class CalDAVSchedulingCallbackView(View):
                 is_mailbox=is_mailbox,
                 org_id=org_id,
                 is_new_attendee=is_new_attendee,
+                recurrence_id=recurrence_id,
+                previous_start=previous_start,
             )
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.exception("Failed to queue the calendar email: %s", e)

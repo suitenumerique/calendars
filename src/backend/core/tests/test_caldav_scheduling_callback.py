@@ -53,6 +53,8 @@ def _post_callback():
         HTTP_X_LS_IS_MAILBOX="true",
         HTTP_X_LS_NEW_ATTENDEE="true",
         HTTP_X_LS_ORG_ID="org-1",
+        HTTP_X_LS_RECURRENCE_ID="20260211T100000Z",
+        HTTP_X_LS_PREVIOUS_START="20260211T120000Z",
     )
 
 
@@ -69,6 +71,8 @@ def test_callback_queues_the_email():
         is_mailbox=True,
         org_id="org-1",
         is_new_attendee=True,
+        recurrence_id="20260211T100000Z",
+        previous_start="20260211T120000Z",
     )
 
 

@@ -93,6 +93,8 @@ def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments
     is_mailbox=False,
     org_id="",
     is_new_attendee=False,
+    recurrence_id="",
+    previous_start="",
 ):
     """Send one calendar email for an iTIP message from the CalDAV server."""
     via = "messages" if is_mailbox else "smtp"
@@ -112,6 +114,8 @@ def send_invitation_task(  # noqa: PLR0913  # pylint: disable=too-many-arguments
         org_id=org_id,
         is_new_attendee=is_new_attendee,
         email_date=email_date,
+        recurrence_id=recurrence_id,
+        previous_start=previous_start,
     )
     if not success:
         # Raise so that the task shows as failed. The worker logs the error.

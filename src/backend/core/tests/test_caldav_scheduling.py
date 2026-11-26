@@ -21,7 +21,8 @@ from caldav.lib.error import NotFoundError
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
-from core.tests import one_date_cases
+from core.services.icalendar_parser import ICalendarParser
+from core.tests import changed_date_cases, one_date_cases
 
 logger = logging.getLogger(__name__)
 
@@ -607,6 +608,74 @@ END:VCALENDAR"""
 
             except NotFoundError:
                 pytest.skip("Calendar not found - CalDAV server may not be running")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    @pytest.mark.parametrize(
+        "stored, new, change",
+        list(changed_date_cases.CHANGED_DATE_CASES.values()),
+        ids=list(changed_date_cases.CHANGED_DATE_CASES),
+    )
+    def test_scheduling_callback_names_the_changed_date(self, stored, new, change):
+        """When a write changes only one date of a series, each update
+        carries the RECURRENCE-ID of this date and its previous start."""
+        organizer = factories.UserFactory(email=one_date_cases.ORGANIZER)
+        service = CalendarService()
+        caldav_path = service.create_calendar(
+            organizer, name="Changed Date Calendar", color="#00aa00"
+        )
+
+        server, _port, callback_data = create_test_server()
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        time.sleep(0.5)
+
+        try:
+            client = service._get_client(organizer)  # pylint: disable=protected-access
+            calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
+            uid = f"changed-date-{datetime.now().timestamp()}"
+            event_url = (
+                f"{str(client.calendar(url=calendar_url).url).rstrip('/')}/{uid}.ics"
+            )
+
+            def put(components):
+                body = one_date_cases.calendar(components).replace(
+                    f"UID:{one_date_cases.UID}\n", f"UID:{uid}\n"
+                )
+                response = client.put(
+                    event_url, body, {"Content-Type": "text/calendar"}
+                )
+                assert response.status < 300
+
+            put(stored)
+            _wait_for_callbacks(callback_data, expected_count=2)
+            assert all(
+                "X-LS-Recurrence-Id" not in r["headers"]
+                for r in callback_data["requests"]
+            )
+            callback_data["requests"] = []
+
+            put(new)
+            _wait_for_callbacks(callback_data, expected_count=2)
+
+            requests = [
+                r
+                for r in callback_data["requests"]
+                if r["headers"].get("X-LS-Method") == "REQUEST"
+            ]
+            assert requests
+            recurrence_id, previous_start = change or (None, None)
+            assert all(
+                r["headers"].get("X-LS-Recurrence-Id") == recurrence_id
+                and r["headers"].get("X-LS-Previous-Start") == previous_start
+                for r in requests
+            )
+            # The message has the entry of this date.
+            assert all(
+                ICalendarParser.parse(r["body"], "", recurrence_id).original_start
+                for r in requests
+                if recurrence_id
+            )
         finally:
             server.shutdown()
             server.server_close()
