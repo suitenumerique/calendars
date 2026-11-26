@@ -7,6 +7,7 @@ import threading
 import time
 from datetime import datetime
 
+import icalendar
 import pytest
 
 from caldav.lib.error import NotFoundError
@@ -139,7 +140,14 @@ class TestCalDAVSeriesEdit:
         method, body = by_recipient[ADDED]
         assert method == "REQUEST"
         assert "EXDATE" not in body
-        assert "RECURRENCE-ID:20270111T090000Z" in body
+        moved = next(
+            vevent
+            for vevent in icalendar.Calendar.from_ical(body).walk("VEVENT")
+            if vevent.get("RECURRENCE-ID")
+        )
+        assert moved["RECURRENCE-ID"].to_ical() == b"20270111T090000Z"
+        assert moved["DTSTART"].to_ical() == b"20270111T140000Z"
+        assert moved["DTEND"].to_ical() == b"20270111T150000Z"
 
     def test_truncated_series_is_an_update(self):
         """A "this and future" edit ends the old series and increments its

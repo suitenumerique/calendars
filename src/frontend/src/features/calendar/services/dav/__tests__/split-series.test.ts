@@ -64,7 +64,7 @@ const wall = (day: number, hours: number): Date => new Date(Date.UTC(2026, 11, d
 const source = (): IcsEvent[] => convertIcsCalendar(undefined, ICS).events!;
 
 /** The edited occurrence of 2026-12-17, moved from 09:00 to 10:00. */
-const edited = (events: IcsEvent[]): IcsEvent => {
+const edited = (events: IcsEvent[], endHour = 11): IcsEvent => {
   const override = events.find((e) => e.recurrenceId?.value.local?.date.getUTCDate() === 17)!;
   const at = (date: Date) => ({
     ...override.start,
@@ -77,7 +77,7 @@ const edited = (events: IcsEvent[]): IcsEvent => {
     recurrenceId: undefined,
     recurrenceRule: { frequency: "WEEKLY" },
     start: at(wall(17, 10)),
-    end: at(wall(17, 11)),
+    end: at(wall(17, endHour)),
   } as IcsEvent;
 };
 
@@ -135,6 +135,96 @@ describe("splitSeries", () => {
     expect(answer.recurrenceId!.value.local?.date).toEqual(jan7);
     expect(answer.start.local?.date).toEqual(jan7);
     expect(partstatOf(answer, "guest@x.test")).toBe("TENTATIVE");
+  });
+
+  it("gives the new duration to an override at its own date", () => {
+    const events = source();
+    const master = events.find((e) => !e.recurrenceId)!;
+    const longer = edited(events, 12);
+
+    const result = splitSeries(events, master, longer, wall(17, 9));
+
+    const answer = result.overrides.find((e) => e.summary === "Weekly (answer)")!;
+    expect(answer.end?.local?.date).toEqual(new Date(Date.UTC(2027, 0, 7, 12)));
+    const moved = result.overrides.find((e) => e.summary === "Weekly (moved)")!;
+    expect(moved.end?.local?.date).toEqual(wall(24, 12));
+  });
+
+  it("keeps DURATION and DTEND apart in a series with DURATION", () => {
+    const withDuration = (event: IcsEvent, hours: number): IcsEvent =>
+      ({ ...event, end: undefined, duration: { hours } }) as IcsEvent;
+    const events = source().map((e) => withDuration(e, 1));
+    const master = events.find((e) => !e.recurrenceId)!;
+    const longer = withDuration(edited(events), 2);
+
+    const result = splitSeries(events, master, longer, wall(17, 9));
+
+    const answer = result.overrides.find((e) => e.summary === "Weekly (answer)")!;
+    expect(answer.end).toBeUndefined();
+    expect(answer.duration).toEqual({ hours: 2 });
+  });
+
+  it("compares durations in wall-clock time over a DST change", () => {
+    const vevent = (...lines: string[]) => [
+      "BEGIN:VEVENT",
+      "UID:dst",
+      "DTSTAMP:20260101T000000Z",
+      "SUMMARY:Night",
+      ...lines,
+      "END:VEVENT",
+    ];
+    const ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//test//EN",
+      ...vevent(
+        "DTSTART;TZID=Europe/Paris:20260322T000000",
+        "DTEND;TZID=Europe/Paris:20260322T040000",
+        "RRULE:FREQ=WEEKLY",
+      ),
+      ...vevent(
+        "RECURRENCE-ID;TZID=Europe/Paris:20260329T000000",
+        "DTSTART;TZID=Europe/Paris:20260329T000000",
+        "DTEND;TZID=Europe/Paris:20260329T050000",
+      ),
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const events = convertIcsCalendar(undefined, ics).events!;
+    const master = events.find((e) => !e.recurrenceId)!;
+    const at = (day: number, hours: number) => {
+      const date = new Date(Date.UTC(2026, 2, day, hours));
+      return { ...master.start, date, local: { ...master.start.local!, date } };
+    };
+    const unchanged = {
+      ...master,
+      uid: "new",
+      start: at(22, 0),
+      end: at(22, 4),
+    } as IcsEvent;
+
+    const { overrides } = splitSeries(
+      events,
+      master,
+      unchanged,
+      new Date(Date.UTC(2026, 2, 22, 0)),
+    );
+
+    expect(overrides[0].end?.local?.date).toEqual(new Date(Date.UTC(2026, 2, 29, 5)));
+  });
+
+  it("moves the dates of a series with no DTEND and no DURATION", () => {
+    // ts-ics types need DTEND or DURATION, but the parser keeps events with neither.
+    const withoutEnd = (event: IcsEvent): IcsEvent =>
+      ({ ...event, end: undefined, duration: undefined }) as unknown as IcsEvent;
+    const events = source().map(withoutEnd);
+    const master = events.find((e) => !e.recurrenceId)!;
+
+    const result = splitSeries(events, master, withoutEnd(edited(events)), wall(17, 9));
+
+    const answer = result.overrides.find((e) => e.summary === "Weekly (answer)")!;
+    expect(answer.start.local?.date).toEqual(new Date(Date.UTC(2027, 0, 7, 10)));
+    expect(answer.end).toBeUndefined();
+    expect(answer.duration).toBeUndefined();
   });
 
   it("applies the attendee change to the moved overrides", () => {

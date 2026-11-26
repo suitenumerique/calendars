@@ -1,4 +1,4 @@
-import type { IcsDateObject, IcsEvent } from "ts-ics";
+import { getEventEnd, type IcsDateObject, type IcsEvent } from "ts-ics";
 
 import { withPartstatsFrom, withSeriesAttendeeChange } from "./series-attendees";
 import { toWallClock } from "./timezone";
@@ -53,6 +53,18 @@ export const splitSeries = (
     wallClock(value, timezone).getTime() - cutoff.getTime();
   const shift = (value: IcsDateObject): IcsDateObject =>
     atWallClock(newMaster, new Date(wallClock(value, timezone).getTime() + offset));
+  /**
+   * Give the duration of an event. A DTEND gives a wall-clock duration, so
+   * a date over a DST change compares well. No DTEND and no DURATION gives
+   * undefined.
+   */
+  const durationOf = (event: IcsEvent, zone = timezone): number | undefined => {
+    if (event.end) {
+      return wallClock(event.end, zone).getTime() - wallClock(event.start, zone).getTime();
+    }
+    if (!event.duration) return undefined;
+    return getEventEnd(event).getTime() - event.start.date.getTime();
+  };
 
   const exceptionDates = oldMaster.exceptionDates?.filter((d) => fromCutoff(d) > 0).map(shift);
   const master: IcsEvent = {
@@ -72,11 +84,18 @@ export const splitSeries = (
     };
     const ownTime = fromCutoff(override.start) !== fromCutoff(recurrenceId.value);
     if (ownTime) return moved;
-    return {
-      ...moved,
-      start: shift(override.start),
-      ...(override.end && { end: shift(override.end) }),
-    } as IcsEvent;
+    const start = shift(override.start);
+    // An override with the duration of the old master takes the new one.
+    if (durationOf(override) !== durationOf(oldMaster)) {
+      return { ...moved, start, ...(override.end && { end: shift(override.end) }) } as IcsEvent;
+    }
+    if (newMaster.duration) {
+      return { ...moved, start, end: undefined, duration: newMaster.duration } as IcsEvent;
+    }
+    const newDuration = durationOf(newMaster, newMaster.start.local?.timezone);
+    if (newDuration === undefined) return { ...moved, start } as IcsEvent;
+    const end = atWallClock(newMaster, new Date(start.date.getTime() + newDuration));
+    return { ...moved, start, end, duration: undefined } as IcsEvent;
   };
   const moved = overrides.filter((e) => fromCutoff(e.recurrenceId!.value) > 0).map(moveOverride);
 
