@@ -45,23 +45,27 @@ mkdir -p "$DEB_DIR" "$PHP_PREFIX"
 # (libxml2.so.16, libpq.so.5, libonig.so.5, libcurl.so.4, libxslt, ...), which
 # are all present at the standard multiarch path. No library bundling needed.
 # Source: https://launchpad.net/ubuntu/resolute/amd64/php8.5-cli
-# Format: "package_name url sha256"
+# Format: "package_name archive_path sha256"
 PHP_DEBS=(
-  "php8.5-cli https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-cli_8.5.4-0ubuntu1.5_amd64.deb a3865b136c6fa6d4f10be482e7131eb25e85976f246a730a0cfddbcb72f9156e"
-  "php8.5-fpm https://archive.ubuntu.com/ubuntu/pool/universe/p/php8.5/php8.5-fpm_8.5.4-0ubuntu1.5_amd64.deb 3a5d154e58c814cfa62600710ea23f4699ad7d3aefbe66a6a5154f0f9690d118"
-  "php8.5-common https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-common_8.5.4-0ubuntu1.5_amd64.deb a4e93169f9351f4db59e7717fc214a33fa7bd4b2f47dee6783c04ebbfad8dd54"
-  "php8.5-readline https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-readline_8.5.4-0ubuntu1.5_amd64.deb ccaceb94156a4dccc87b978d8bc28ed3602429cdad85d526de162594938543c9"
-  "php8.5-pgsql https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-pgsql_8.5.4-0ubuntu1.5_amd64.deb 1ff61f8690d61aadc65d5a4de61927364f601c978725c9575978c2e62209959d"
-  "php8.5-xml https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-xml_8.5.4-0ubuntu1.5_amd64.deb 9f5e15611f0a33b78efd9bac98662d3f33bbf9f7f61a654b6cb35e4ef69ff859"
-  "php8.5-mbstring https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-mbstring_8.5.4-0ubuntu1.5_amd64.deb 783d871f7896176a8819d2ba3c1d34b01f11bd7e0c77e783f004e53808812383"
-  "php8.5-curl https://archive.ubuntu.com/ubuntu/pool/main/p/php8.5/php8.5-curl_8.5.4-0ubuntu1.5_amd64.deb 7ff70240fc54f70576b18f9583517d128e614f4b50b1c9332ee504a15bdd4883"
-  "php-common https://archive.ubuntu.com/ubuntu/pool/main/p/php-defaults/php-common_99ubuntu1_all.deb 2d6417a2f74686b9b23f48126131c6fc1a142d6746e5547d85353d8190aa8f8e"
+  "php8.5-cli pool/main/p/php8.5/php8.5-cli_8.5.4-0ubuntu1.6_amd64.deb 6d6fdafa17fed7f84db3a9d92e85805f5e834a3022b1c7298b59c0769bf7937e"
+  "php8.5-fpm pool/universe/p/php8.5/php8.5-fpm_8.5.4-0ubuntu1.6_amd64.deb c892581b2bd98b1c3097cad69af79e59b7d3891f979ba8c1599bd7b066008d5c"
+  "php8.5-common pool/main/p/php8.5/php8.5-common_8.5.4-0ubuntu1.6_amd64.deb 8423ec2a1b1473ad715c42b80bb71b05b840009d4a82f05b3ec965e031cce81d"
+  "php8.5-readline pool/main/p/php8.5/php8.5-readline_8.5.4-0ubuntu1.6_amd64.deb bbf3bde10c93c4fc1bfea35b369ac956b1c86a4726b7a609343a11a85af58734"
+  "php8.5-pgsql pool/main/p/php8.5/php8.5-pgsql_8.5.4-0ubuntu1.6_amd64.deb ba196f81cf7cc39dbbb3af6bfb1a83c53ba6a19123a1be0e1f3093ae1db4e00c"
+  "php8.5-xml pool/main/p/php8.5/php8.5-xml_8.5.4-0ubuntu1.6_amd64.deb c84bd81b85a1dfa016ac5e59479c3d77ff99fc12851febb4540da4182f9e6fbf"
+  "php8.5-mbstring pool/main/p/php8.5/php8.5-mbstring_8.5.4-0ubuntu1.6_amd64.deb 7c76cc6162bfb7e4e368d94cf4b7c4a128ef8f1b6d67bbc01c3ed79ee335ecab"
+  "php8.5-curl pool/main/p/php8.5/php8.5-curl_8.5.4-0ubuntu1.6_amd64.deb 842dbde19408ad2b554326d37eba1fac29b05ba8c993859c0ec0a1bbef7e8f41"
+  "php-common pool/main/p/php-defaults/php-common_99ubuntu1_all.deb 2d6417a2f74686b9b23f48126131c6fc1a142d6746e5547d85353d8190aa8f8e"
 )
 
 for entry in "${PHP_DEBS[@]}"; do
-  read -r pkg url sha256 <<< "$entry"
+  read -r pkg path sha256 <<< "$entry"
   echo "       Downloading ${pkg}"
-  curl -fsSL -o "$DEB_DIR/${pkg}.deb" "$url"
+  # The archive removes a version when a security update replaces it.
+  # Launchpad keeps all the versions.
+  curl -fsSL -o "$DEB_DIR/${pkg}.deb" "https://archive.ubuntu.com/ubuntu/${path}" \
+    || curl -fsSL -o "$DEB_DIR/${pkg}.deb" \
+      "https://launchpad.net/ubuntu/+archive/primary/+files/${path##*/}"
   echo "${sha256}  ${DEB_DIR}/${pkg}.deb" | sha256sum -c -
 done
 
