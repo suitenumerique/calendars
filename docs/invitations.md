@@ -143,6 +143,13 @@ For a plain series, a write that only adds a copy of one date with an
 attendee's answer sends no update email (see `HttpCallbackIMipPlugin`).
 Other writes use the usual scheduling rules.
 
+When a write keeps the series and changes only one date, the callback
+has an `X-LS-Recurrence-Id` header with the RECURRENCE-ID of this date,
+and an `X-LS-Previous-Start` header with its start before the change.
+The update email then shows this date: the old start, struck through,
+and the new start and end. The email is an update also when the
+SEQUENCE of the series is 0. The answer links stay for the whole event.
+
 ## Cancelling an event
 
 When an event with attendees is deleted:
@@ -176,7 +183,7 @@ When an event with attendees is deleted:
 | Scheduling callback | `src/backend/core/api/viewsets_caldav.py` (`CalDAVSchedulingCallbackView`) |
 | RSVP handler | `src/backend/core/api/viewsets_rsvp.py` |
 | Email service | `src/backend/core/services/calendar_invitation_service.py` |
-| ICS parser | `src/backend/core/services/calendar_invitation_service.py` (`ICalendarParser`) |
+| ICS parser | `src/backend/core/services/icalendar_parser.py` (`ICalendarParser`) |
 | Email templates | `src/backend/core/templates/emails/calendar_invitation*.html` |
 | Email images | `src/backend/core/static/images/` (served from `APP_URL/static/images/`) |
 | SabreDAV sanitizer | `src/caldav/src/CalendarSanitizerPlugin.php` |

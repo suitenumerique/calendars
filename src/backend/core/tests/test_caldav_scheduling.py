@@ -14,6 +14,7 @@ from datetime import timezone as dt_tz
 
 from django.conf import settings
 
+import icalendar
 import pytest
 from rest_framework.test import APIClient as DRFClient
 
@@ -21,7 +22,8 @@ from caldav.lib.error import NotFoundError
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
-from core.tests import one_date_cases
+from core.services.icalendar_parser import ICalendarParser
+from core.tests import changed_date_cases, one_date_cases
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +81,28 @@ def _wait_for_callbacks(callback_data, expected_count=1, timeout=5.0, interval=0
         if len(callback_data.get("requests", [])) >= expected_count:
             return
         time.sleep(interval)
+
+
+def _requests(callback_data):
+    """Return the REQUEST callbacks, sorted by recipient."""
+    requests = [
+        r
+        for r in callback_data["requests"]
+        if r["headers"].get("X-LS-Method") == "REQUEST"
+    ]
+    return sorted(requests, key=lambda r: r["headers"].get("X-LS-Recipient", ""))
+
+
+def _assert_changed_date(requests, recurrence_id, previous_start, start):
+    """Assert that each message gives the entry of the changed date."""
+    previous_start_value = icalendar.vDDDTypes.from_ical(previous_start)
+    start_value = icalendar.vDDDTypes.from_ical(start)
+    for r in requests:
+        event = ICalendarParser.parse(r["body"], "", recurrence_id, previous_start)
+        assert event.original_start == previous_start_value
+        assert (
+            event.dtstart.date() if event.is_all_day else event.dtstart
+        ) == start_value
 
 
 def create_test_server() -> tuple:
@@ -607,6 +631,74 @@ END:VCALENDAR"""
 
             except NotFoundError:
                 pytest.skip("Calendar not found - CalDAV server may not be running")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    @pytest.mark.parametrize(
+        "stored, new, change",
+        list(changed_date_cases.CHANGED_DATE_CASES.values()),
+        ids=list(changed_date_cases.CHANGED_DATE_CASES),
+    )
+    def test_scheduling_callback_names_the_changed_date(self, stored, new, change):
+        """When a write changes only one date of a series, each update
+        carries the RECURRENCE-ID of this date and its previous start."""
+        organizer = factories.UserFactory(email=one_date_cases.ORGANIZER)
+        service = CalendarService()
+        caldav_path = service.create_calendar(
+            organizer, name="Changed Date Calendar", color="#00aa00"
+        )
+
+        server, _port, callback_data = create_test_server()
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        time.sleep(0.5)
+
+        try:
+            client = service._get_client(organizer)  # pylint: disable=protected-access
+            calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
+            uid = f"changed-date-{datetime.now().timestamp()}"
+            event_url = (
+                f"{str(client.calendar(url=calendar_url).url).rstrip('/')}/{uid}.ics"
+            )
+
+            def put(components):
+                body = one_date_cases.calendar(components).replace(
+                    f"UID:{one_date_cases.UID}\n", f"UID:{uid}\n"
+                )
+                response = client.put(
+                    event_url, body, {"Content-Type": "text/calendar"}
+                )
+                assert response.status < 300
+
+            recipients = [
+                f"mailto:{one_date_cases.DECLINING}",
+                f"mailto:{one_date_cases.OTHER}",
+            ]
+
+            put(stored)
+            _wait_for_callbacks(callback_data, expected_count=2)
+            requests = _requests(callback_data)
+            assert [r["headers"]["X-LS-Recipient"] for r in requests] == recipients
+            assert all(
+                "X-LS-Recurrence-Id" not in r["headers"]
+                and "X-LS-Previous-Start" not in r["headers"]
+                for r in requests
+            )
+            callback_data["requests"] = []
+
+            put(new)
+            _wait_for_callbacks(callback_data, expected_count=2)
+
+            requests = _requests(callback_data)
+            assert [r["headers"]["X-LS-Recipient"] for r in requests] == recipients
+            recurrence_id, previous_start, start = change or (None, None, None)
+            assert all(
+                r["headers"].get("X-LS-Recurrence-Id") == recurrence_id
+                and r["headers"].get("X-LS-Previous-Start") == previous_start
+                for r in requests
+            )
+            if recurrence_id:
+                _assert_changed_date(requests, recurrence_id, previous_start, start)
         finally:
             server.shutdown()
             server.server_close()

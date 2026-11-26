@@ -84,6 +84,15 @@ class HttpCallbackIMipPlugin extends IMipPlugin
     private $answerOnlyUids = [];
 
     /**
+     * The single dates that this request changes. Keys are event UIDs.
+     * Each value has the RECURRENCE-ID value of the date and its start
+     * before the change. The request keeps the series and changes only
+     * this date.
+     * @var array<string, array{string, string}>
+     */
+    private $changedDates = [];
+
+    /**
      * Constructor
      *
      * @param string $apiKey The API key for authenticating with the callback endpoint
@@ -157,6 +166,10 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             if ($this->onlyAddsRegularDates($vCal, $stored)) {
                 $this->answerOnlyUids[(string) $vCal->VEVENT->UID] = true;
             }
+            $changedDate = $this->changedDate($vCal, $stored);
+            if (null !== $changedDate) {
+                $this->changedDates[(string) $vCal->VEVENT->UID] = $changedDate;
+            }
         } catch (\Exception $e) {
             error_log("[HttpCallbackIMipPlugin] Failed to compare the stored event: " . $e->getMessage());
         }
@@ -214,6 +227,76 @@ class HttpCallbackIMipPlugin extends IMipPlugin
             }
         }
         return $added && $kept === count($storedEntries);
+    }
+
+    /**
+     * Give the only date that the write changes.
+     *
+     * The master and the time zones stay the same, and exactly one entry
+     * for a date is new or changed. The answers of the attendees and the write properties
+     * are not changes. A removed entry is a change. A stored or new
+     * entry with a RANGE also changes the later dates. In all other
+     * cases, the result is null.
+     *
+     * @return array{string, string}|null The RECURRENCE-ID value of the
+     *         date, and its start before the change. The start of a new
+     *         entry is its RECURRENCE-ID. The start of a changed entry is
+     *         its stored DTSTART, because an earlier change can have
+     *         moved it.
+     */
+    private function changedDate(VCalendar $vCal, VCalendar $stored): ?array
+    {
+        if ($this->hasRange($vCal)
+            || $this->hasRange($stored)
+            || $this->timezones($vCal) !== $this->timezones($stored)) {
+            return null;
+        }
+        $storedEntries = [];
+        foreach ($stored->VEVENT ?? [] as $vevent) {
+            $storedEntries[$this->recurrenceId($vevent)] = $vevent;
+        }
+        $entries = [];
+        foreach ($vCal->VEVENT ?? [] as $vevent) {
+            $entries[$this->recurrenceId($vevent)] = $vevent;
+        }
+        if (!isset($storedEntries['master'], $entries['master'])
+            || !$this->sameEntry($storedEntries['master'], $entries['master'])
+            || array_diff_key($storedEntries, $entries)) {
+            return null;
+        }
+
+        $changed = array_filter(
+            $entries,
+            fn (VEvent $entry, string $id): bool => !isset($storedEntries[$id])
+                || !$this->sameEntry($storedEntries[$id], $entry),
+            ARRAY_FILTER_USE_BOTH
+        );
+        if (1 !== count($changed)) {
+            return null;
+        }
+        $id = (string) array_key_first($changed);
+        $previousStart = isset($storedEntries[$id])
+            ? $storedEntries[$id]->DTSTART
+            : $changed[$id]->{'RECURRENCE-ID'};
+        return [$id, $this->utcValue($previousStart)];
+    }
+
+    private function sameEntry(VEvent $stored, VEvent $vevent): bool
+    {
+        return $this->answerless($stored, self::WRITE_PROPERTIES)
+            === $this->answerless($vevent, self::WRITE_PROPERTIES);
+    }
+
+    /**
+     * Give a date as YYYYMMDD, or a date and time in UTC as
+     * YYYYMMDDTHHMMSSZ.
+     */
+    private function utcValue(Property\ICalendar\DateTime $date): string
+    {
+        if (!$date->hasTime()) {
+            return $date->getDateTime()->format('Ymd');
+        }
+        return $date->getDateTime()->setTimezone(new \DateTimeZone('UTC'))->format('Ymd\THis\Z');
     }
 
     /**
@@ -562,6 +645,12 @@ class HttpCallbackIMipPlugin extends IMipPlugin
 
         if ($this->isNewAttendee($iTipMessage)) {
             $headers[] = 'X-LS-New-Attendee: true';
+        }
+
+        if ('REQUEST' === $iTipMessage->method && isset($this->changedDates[$iTipMessage->uid])) {
+            [$recurrenceId, $previousStart] = $this->changedDates[$iTipMessage->uid];
+            $headers[] = 'X-LS-Recurrence-Id: ' . $this->sanitizeHeaderValue($recurrenceId);
+            $headers[] = 'X-LS-Previous-Start: ' . $previousStart;
         }
 
         // Pass org_id so Django can include it in RSVP tokens.
