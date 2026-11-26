@@ -15,7 +15,7 @@ Frontend (EventModal)
             → RSVP link or iTIP client response
               → RSVPConfirmView (Django) or CalDAV REPLY
                 → PARTSTAT updated in event
-                  → Organizer notified (CalDAV REPLY path only)
+                  → REPLY email to the organizer
 ```
 
 ## Creating an event with attendees
@@ -116,11 +116,16 @@ Attendee clicks Accept / Maybe / Decline link in the email.
 2. `POST /rsvp/` checks the token signature (salt="rsvp")
 3. The view calls `POST /internal-api/rsvp/` on SabreDAV. SabreDAV
    sets the attendee's `PARTSTAT` to ACCEPTED, TENTATIVE or DECLINED
-4. The view renders a confirmation page
+4. If the `PARTSTAT` changes, SabreDAV gives a REPLY to
+   `HttpCallbackIMipPlugin`. The organizer gets the reply email
+5. The view renders a confirmation page
 
 The internal API writes the event directly to the CalDAV backend.
-SabreDAV scheduling does not run. As a result, SabreDAV sends no
-REPLY and the organizer gets no email.
+SabreDAV scheduling does not run for this write. The internal API
+makes the REPLY with the iTIP broker, as scheduling does for a change
+by the attendee. The callback flow and the reply email are the same
+as for an iTIP client response. The same answer twice sends one
+email. A cancelled event gets no change and no REPLY.
 
 ### iTIP client response
 
