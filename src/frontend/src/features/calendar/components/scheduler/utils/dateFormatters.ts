@@ -32,6 +32,27 @@ const localDate = (
 };
 
 /**
+ * Build a "fake UTC" Date from the local components of a Date. Date.UTC
+ * changes the years 0 to 99 to 1900 to 1999. This function keeps the year.
+ */
+export const toFakeUtc = (local: Date): Date => {
+  const date = toFakeUtcDay(local);
+  date.setUTCHours(local.getHours(), local.getMinutes(), local.getSeconds(), 0);
+  return date;
+};
+
+/**
+ * Build a "fake UTC" Date at midnight from the local date of a Date.
+ * `extraDays` adds days to the date. The time is always 00:00, also when a
+ * DST change skips the local midnight.
+ */
+export const toFakeUtcDay = (local: Date, extraDays = 0): Date => {
+  const date = new Date(0);
+  date.setUTCFullYear(local.getFullYear(), local.getMonth(), local.getDate() + extraDays);
+  return date;
+};
+
+/**
  * Format Date to input datetime-local format (YYYY-MM-DDTHH:mm).
  *
  * @param date - The date to format
@@ -96,6 +117,9 @@ export const parseDateLocal = (value: string): Date => {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Give the number of the calendar day of a local date. */
+const dayNumber = (date: Date): number => toFakeUtcDay(date).getTime() / DAY_MS;
+
 const isValid = (date: Date): boolean => !Number.isNaN(date.getTime());
 
 /**
@@ -108,8 +132,8 @@ export const isValidDateInput = (value: string, isAllDay: boolean): boolean =>
 
 /**
  * Move the end so that the event keeps its duration when the start changes.
- * An all-day event keeps its number of calendar days, so a DST change does
- * not add or remove a day.
+ * An all-day event keeps its number of calendar days, so a DST change or a
+ * skipped day does not add or remove a day.
  * Return the previous end unchanged if one of the values is not a valid date,
  * for example a partial value while the user types.
  */
@@ -127,12 +151,10 @@ export const shiftEnd = (
     return prevEnd;
   }
   if (!isAllDay) {
-    return formatDateTimeLocal(
-      new Date(newStart.getTime() + oldEnd.getTime() - oldStart.getTime()),
-    );
+    const duration = oldEnd.getTime() - oldStart.getTime();
+    return formatDateTimeLocal(new Date(newStart.getTime() + duration));
   }
-  // A DST change alters the time between two local midnights.
-  // Rounding gives the number of calendar days.
-  const days = Math.round((oldEnd.getTime() - oldStart.getTime()) / DAY_MS);
-  return formatDateLocal(addDays(newStart, days));
+  // Count calendar days, not elapsed time: a DST change or a skipped day
+  // changes the time between two local midnights.
+  return formatDateLocal(addDays(newStart, dayNumber(oldEnd) - dayNumber(oldStart)));
 };

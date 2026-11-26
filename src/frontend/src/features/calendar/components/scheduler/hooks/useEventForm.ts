@@ -7,6 +7,8 @@ import {
   parseDateTimeLocal,
   parseDateLocal,
   shiftEnd,
+  toFakeUtc,
+  toFakeUtcDay,
 } from "../utils/dateFormatters";
 
 import type {
@@ -228,9 +230,9 @@ export const useEventForm = ({
 
   const handleStartDateChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newStartValue = e.target.value;
-      setStartDateTime(newStartValue);
-      setEndDateTime(shiftEnd(lastValidStartRef.current, endDateTime, newStartValue, isAllDay));
+      const { value } = e.target;
+      setStartDateTime(value);
+      setEndDateTime(shiftEnd(lastValidStartRef.current, endDateTime, value, isAllDay));
     },
     [isAllDay, endDateTime],
   );
@@ -289,12 +291,8 @@ export const useEventForm = ({
     if (isAllDay) {
       const startDate = parseDateLocal(startDateTime);
       const endDate = parseDateLocal(endDateTime);
-      const utcStart = new Date(
-        Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()),
-      );
-      const utcEnd = new Date(
-        Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1),
-      );
+      const utcStart = toFakeUtcDay(startDate);
+      const utcEnd = toFakeUtcDay(endDate, 1);
 
       return {
         ...eventWithoutDuration,
@@ -318,26 +316,8 @@ export const useEventForm = ({
 
     const startDate = parseDateTimeLocal(startDateTime);
     const endDate = parseDateTimeLocal(endDateTime);
-    const fakeUtcStart = new Date(
-      Date.UTC(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate(),
-        startDate.getHours(),
-        startDate.getMinutes(),
-        startDate.getSeconds(),
-      ),
-    );
-    const fakeUtcEnd = new Date(
-      Date.UTC(
-        endDate.getFullYear(),
-        endDate.getMonth(),
-        endDate.getDate(),
-        endDate.getHours(),
-        endDate.getMinutes(),
-        endDate.getSeconds(),
-      ),
-    );
+    const fakeUtcStart = toFakeUtc(startDate);
+    const fakeUtcEnd = toFakeUtc(endDate);
 
     return {
       ...eventWithoutDuration,

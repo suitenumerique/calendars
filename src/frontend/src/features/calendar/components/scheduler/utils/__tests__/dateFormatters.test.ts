@@ -7,6 +7,8 @@ import {
   parseDateLocal,
   parseDateTimeLocal,
   shiftEnd,
+  toFakeUtc,
+  toFakeUtcDay,
 } from "../dateFormatters";
 
 describe("parseDateTimeLocal", () => {
@@ -50,6 +52,33 @@ describe("years below 1000", () => {
 
   it("round-trips a date value", () => {
     expect(formatDateLocal(parseDateLocal("0020-11-26"))).toBe("0020-11-26");
+  });
+});
+
+describe("toFakeUtc", () => {
+  it("keeps a year below 100", () => {
+    const date = toFakeUtc(parseDateTimeLocal("0020-11-26T09:30"));
+    expect(date.toISOString()).toBe("0020-11-26T09:30:00.000Z");
+  });
+});
+
+describe("toFakeUtcDay", () => {
+  const initialTz = process.env.TZ;
+
+  afterEach(() => {
+    process.env.TZ = initialTz;
+  });
+
+  it("adds days after the end of a month", () => {
+    const date = toFakeUtcDay(parseDateLocal("0020-12-31"), 1);
+    expect(date.toISOString()).toBe("0021-01-01T00:00:00.000Z");
+  });
+
+  it("gives midnight when a DST change skips the local midnight", () => {
+    // In Santiago, the clock goes from 00:00 to 01:00 on 2026-09-06.
+    process.env.TZ = "America/Santiago";
+    const date = toFakeUtcDay(parseDateLocal("2026-09-06"));
+    expect(date.toISOString()).toBe("2026-09-06T00:00:00.000Z");
   });
 });
 
@@ -139,6 +168,23 @@ describe("shiftEnd", () => {
           true,
         ),
       ).toBe("2027-03-30");
+    });
+  });
+
+  describe("skipped day", () => {
+    const initialTz = process.env.TZ;
+
+    beforeEach(() => {
+      // Samoa skips 2011-12-30.
+      process.env.TZ = "Pacific/Apia";
+    });
+
+    afterEach(() => {
+      process.env.TZ = initialTz;
+    });
+
+    it("keeps the calendar days of an all-day event", () => {
+      expect(shiftEnd("2011-12-29", "2011-12-31", "2026-01-01", true)).toBe("2026-01-03");
     });
   });
 });
