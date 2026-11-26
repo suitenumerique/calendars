@@ -132,18 +132,12 @@ export const LanguagePickerUserMenu = () => {
   );
   const [selectedLanguage, setSelectedLanguage] = useState(user?.language);
 
-  // Sync the user's backend language into the picker state and into i18next on
-  // load and whenever the user object updates. The backend value is the source
-  // of truth — it's also used server-side for email invitations.
+  // Check the saved language when a refresh changes it. Only the checked
+  // option changes here. AuthProvider sets the UI language when the user
+  // loads, and a language change makes the calendar reload all its events.
   useEffect(() => {
-    if (!user?.language) return;
-    setSelectedLanguage(user.language);
-    if (i18n.language !== user.language) {
-      i18n.changeLanguage(user.language).catch((err) => {
-        console.error("Error changing language", err);
-      });
-    }
-  }, [user?.language, i18n]);
+    if (user?.language) setSelectedLanguage(user.language);
+  }, [user?.language]);
 
   // The UI kit picker reads its first language, so it cannot render without one.
   if (pickerLanguages.length === 0) return null;

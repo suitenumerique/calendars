@@ -18,7 +18,7 @@ import resources from "./translations.json";
  * - When the user logs in, its language attribute is null
  * - Because the user language is null, we use the language detected by LanguageDetector
  * - If the user changes the language via the language picker, we update the language of the user via a request to the backend
- * - When the user object is fetched/refreshed, LanguagePickerUserMenu syncs user.language back into i18next (see Header.tsx)
+ * - When the user object is fetched/refreshed, AuthProvider syncs user.language back into i18next (see Auth.tsx)
  *
  * This way we ensure that we use the most probable language of the user.
  */
@@ -51,6 +51,10 @@ i18n
     interpolation: {
       escapeValue: false,
     },
+    // Write language codes like the backend does ("nl-nl", not "nl-NL").
+    // Otherwise the saved language never equals the UI language, and the
+    // app sets it again on each sync.
+    lowerCaseLng: true,
     showSupportNotice: false,
     preload: LANGUAGES_ALLOWED,
   })
