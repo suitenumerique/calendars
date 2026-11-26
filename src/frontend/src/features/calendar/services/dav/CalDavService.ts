@@ -67,6 +67,7 @@ import {
   toSeriesWallClock,
   withPartstat,
 } from "./helpers/rsvp";
+import { withSeriesAttendeeChange } from "./helpers/series-attendees";
 import { isKnownTimezone, toWallClock } from "./helpers/timezone";
 import { buildFreeBusyRequestIcs } from "./helpers/freebusy-builder";
 
@@ -716,6 +717,7 @@ export class CalDavService {
    *
    * Sets RRULE UNTIL to the day before cutoffDate, removes override VEVENTs
    * with recurrenceId >= cutoffDate, and removes EXDATE entries >= cutoffDate.
+   * Increments the SEQUENCE of the master: the guests get an update.
    */
   async truncateRecurringSeries(
     eventUrl: string,
@@ -757,6 +759,7 @@ export class CalDavService {
         until: { type: "DATE-TIME" as const, date: untilDate },
         count: undefined,
       };
+      sourceEvent.sequence = (sourceEvent.sequence ?? 0) + 1;
 
       // Remove override VEVENTs with recurrenceId >= cutoffDate
       const cutoffMs = cutoffDate.getTime();
@@ -991,7 +994,7 @@ export class CalDavService {
       const icsCalendar: IcsCalendar = {
         prodId: "-//CalDavService//NONSGML v1.0//EN",
         version: "2.0",
-        events: [event],
+        events: [event, ...(params.overrides ?? [])],
       };
 
       this.validateTimezones(icsCalendar);
@@ -1082,6 +1085,14 @@ export class CalDavService {
             e.organizer &&
             e.organizer.email.toLowerCase() !== organizer.email.toLowerCase()
               ? { ...e, organizer }
+              : e,
+          );
+        }
+
+        if (!updatedEvent.recurrenceId) {
+          icsCalendar.events = icsCalendar.events.map((e) =>
+            e.uid === updatedEvent.uid && e.recurrenceId
+              ? withSeriesAttendeeChange(e, oldEvent, updatedEvent)
               : e,
           );
         }

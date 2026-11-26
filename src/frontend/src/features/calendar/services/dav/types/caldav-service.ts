@@ -120,6 +120,8 @@ export type CalDavEvent = {
 export type CalDavEventCreate = {
   calendarUrl: string;
   event: IcsEvent;
+  /** The overrides of a recurring event. They have the UID of the event. */
+  overrides?: IcsEvent[];
 };
 
 export type CalDavEventUpdate = {
