@@ -21,7 +21,6 @@ from caldav.lib.error import NotFoundError
 from core import factories
 from core.entitlements.factory import get_entitlements_backend
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
-from core.tests import one_date_cases
 
 logger = logging.getLogger(__name__)
 
@@ -536,24 +535,24 @@ END:VCALENDAR"""
             server.shutdown()
             server.server_close()
 
-    @pytest.mark.parametrize(
-        "stored, new, sends",
-        list(one_date_cases.ONE_DATE_CASES.values()),
-        ids=list(one_date_cases.ONE_DATE_CASES),
-    )
-    def test_scheduling_callback_skips_answer_for_one_date(self, stored, new, sends):
+    @pytest.mark.parametrize("move", [False, True])
+    def test_scheduling_callback_skips_answer_for_one_date(  # pylint: disable=too-many-locals
+        self, move
+    ):
         """A new entry for a regular date that only records an answer
-        sends no message, also when the client writes the same event in
-        another way. When the write also makes a real change, each
-        attendee gets one update."""
-        organizer = factories.UserFactory(email=one_date_cases.ORGANIZER)
+        sends no message, and the organizer keeps the answer. When the
+        entry also moves the date, each attendee gets one update.
+
+        The PHPUnit tests of AnswerOnlyChange cover the other cases."""
+        organizer = factories.UserFactory(email="organizer-one-date@example.com")
         service = CalendarService()
         caldav_path = service.create_calendar(
             organizer, name="One Date Calendar", color="#0000aa"
         )
 
         server, _port, callback_data = create_test_server()
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
         time.sleep(0.5)
 
         try:
@@ -561,24 +560,53 @@ END:VCALENDAR"""
             calendar_url = service._calendar_url(caldav_path)  # pylint: disable=protected-access
 
             try:
-                uid = f"one-date-{datetime.now().timestamp()}"
-                event_url = f"{str(client.calendar(url=calendar_url).url).rstrip('/')}/{uid}.ics"
+                caldav_calendar = client.calendar(url=calendar_url)
 
-                def put(components):
-                    body = one_date_cases.calendar(components).replace(
-                        f"UID:{one_date_cases.UID}\n", f"UID:{uid}\n"
+                dtstart = (datetime.now() + timedelta(days=3)).replace(microsecond=0)
+                second = dtstart + timedelta(days=7)
+                declining = "declining@external-a.test"
+                other = "other@external-b.test"
+                event_uid = f"one-date-{datetime.now().timestamp()}"
+                fmt = "%Y%m%dT%H%M%SZ"
+
+                def entry(header, start, partstat="RSVP=TRUE"):
+                    end = start + timedelta(hours=1)
+                    return f"""BEGIN:VEVENT
+UID:{event_uid}
+{header}DTSTART:{start.strftime(fmt)}
+DTEND:{end.strftime(fmt)}
+SUMMARY:Weekly event
+ORGANIZER;CN=Organizer:mailto:{organizer.email}
+ATTENDEE;{partstat}:mailto:{declining}
+ATTENDEE;RSVP=TRUE:mailto:{other}
+END:VEVENT"""
+
+                def calendar(*entries):
+                    body = "\n".join(entries)
+                    return (
+                        "BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Test//EN\n"
+                        f"{body}\nEND:VCALENDAR"
                     )
-                    # A raw PUT keeps the order of the parameters.
+
+                event_url = f"{str(caldav_calendar.url).rstrip('/')}/{event_uid}.ics"
+
+                def put(body):
                     response = client.put(
                         event_url, body, {"Content-Type": "text/calendar"}
                     )
                     assert response.status < 300
 
-                put(stored)
+                series = entry("RRULE:FREQ=WEEKLY;COUNT=3\n", dtstart)
+                put(calendar(series))
                 _wait_for_callbacks(callback_data, expected_count=2)
                 callback_data["requests"] = []
 
-                put(new)
+                answer = entry(
+                    f"RECURRENCE-ID:{second.strftime(fmt)}\n",
+                    second + timedelta(hours=1) if move else second,
+                    "PARTSTAT=DECLINED",
+                )
+                put(calendar(series, answer))
                 # Wait for callbacks that are not expected, also duplicates.
                 _wait_for_callbacks(callback_data, expected_count=3, timeout=1.0)
 
@@ -591,18 +619,14 @@ END:VCALENDAR"""
                     )
                     for r in callback_data["requests"]
                 )
-                expected = [
-                    (one_date_cases.DECLINING, "REQUEST"),
-                    (one_date_cases.OTHER, "REQUEST"),
-                ]
-                assert callbacks == (expected if sends else [])
+                expected = [(declining, "REQUEST"), (other, "REQUEST")] if move else []
+                assert callbacks == expected
 
                 # The organizer keeps the answer.
-                stored_event = client.request(event_url).raw
-                lines = re.sub(r"\r?\n[ \t]", "", stored_event).splitlines()
+                stored = client.request(event_url).raw
+                lines = re.sub(r"\r?\n[ \t]", "", stored).splitlines()
                 assert any(
-                    "PARTSTAT=DECLINED" in line and one_date_cases.DECLINING in line
-                    for line in lines
+                    "PARTSTAT=DECLINED" in line and declining in line for line in lines
                 )
 
             except NotFoundError:

@@ -143,6 +143,12 @@ migrate-caldav: ## Initialize CalDAV server database schema
 	@echo "$(GREEN)CalDAV server initialized$(RESET)"
 .PHONY: migrate-caldav
 
+test-caldav: ## run the CalDAV server unit tests
+	@echo "$(BOLD)Running CalDAV tests...$(RESET)"
+	@docker run --rm -u $(DOCKER_USER) -e COMPOSER_HOME=/tmp/composer -v $(PWD)/src/caldav:/app -w /app $(COMPOSER_IMAGE) \
+		sh -c "composer install --no-interaction --no-progress --ignore-platform-reqs && vendor/bin/phpunit"
+.PHONY: test-caldav
+
 # -- Linters
 
 lint: ## run all linters
