@@ -2,10 +2,12 @@
 
 An RSVP must not change an event that the organizer cancelled or
 deleted. It must not add back an attendee that the organizer removed.
+An RSVP that changes the answer sends a REPLY to the organizer.
 """
 
 # pylint: disable=missing-function-docstring,attribute-defined-outside-init
 
+import threading
 from datetime import timedelta
 from uuid import uuid4
 from xml.etree import ElementTree as ET
@@ -20,6 +22,7 @@ import pytest
 from core import factories
 from core.api.viewsets_rsvp import RSVPConfirmView
 from core.services.caldav_service import CalDAVHTTPClient, CalendarService
+from core.tests.test_caldav_scheduling import _wait_for_callbacks, create_test_server
 
 ATTENDEE = "rsvp-attendee@external-domain.com"
 
@@ -75,10 +78,23 @@ def _state(ics, recurrence_id=None):
     raise AssertionError(f"No VEVENT for RECURRENCE-ID {recurrence_id}")
 
 
+@pytest.fixture(name="callbacks")
+def fixture_callbacks():
+    """Capture the scheduling callbacks of the CalDAV server."""
+    server, _port, data = create_test_server()
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield data
+    server.shutdown()
+    server.server_close()
+
+
 @pytest.mark.django_db
 @pytest.mark.xdist_group("caldav")
 class TestRSVPDoesNotRestoreEvents:
-    """RSVP links leave cancelled or removed events untouched."""
+    """RSVP links leave cancelled or removed events untouched.
+
+    An RSVP that changes the answer sends a REPLY to the organizer.
+    """
 
     @pytest.fixture(autouse=True)
     def _setup(self):
@@ -186,7 +202,43 @@ class TestRSVPDoesNotRestoreEvents:
         assert _state(self._caldav("GET", path=path).text) == ("", "ACCEPTED")
         assert _state(self._caldav("GET").text) == ("", "NEEDS-ACTION")
 
-    def test_cancelled_occurrence_stays_cancelled(self):
+    def test_answer_sends_a_reply_to_the_organizer(self, callbacks):
+        assert self._caldav("PUT", _ics(self._vevent(self.start))).status_code == 201
+        callbacks["requests"].clear()
+
+        assert self._rsvp().status_code == 200
+        _wait_for_callbacks(callbacks)
+
+        assert len(callbacks["requests"]) == 1
+        reply = callbacks["requests"][0]
+        assert reply["headers"]["X-LS-Method"] == "REPLY"
+        assert reply["headers"]["X-LS-Sender"] == f"mailto:{ATTENDEE}"
+        assert reply["headers"]["X-LS-Recipient"] == f"mailto:{self.organizer.email}"
+        [vevent] = icalendar.Calendar.from_ical(reply["body"]).walk("VEVENT")
+        assert str(vevent["UID"]) == self.uid
+        assert vevent["ATTENDEE"].params["PARTSTAT"] == "ACCEPTED"
+
+    def test_same_answer_sends_no_second_reply(self, callbacks):
+        assert self._caldav("PUT", _ics(self._vevent(self.start))).status_code == 201
+        assert self._rsvp().status_code == 200
+        _wait_for_callbacks(callbacks)
+        callbacks["requests"].clear()
+
+        assert self._rsvp().status_code == 200
+        _wait_for_callbacks(callbacks, timeout=1.0)
+
+        assert not callbacks["requests"]
+
+    def test_cancelled_event_sends_no_reply(self, callbacks):
+        self._caldav("PUT", _ics(self._vevent(self.start, "STATUS:CANCELLED")))
+        callbacks["requests"].clear()
+
+        assert self._rsvp().status_code == 400
+        _wait_for_callbacks(callbacks, timeout=1.0)
+
+        assert not callbacks["requests"]
+
+    def test_cancelled_occurrence_stays_cancelled(self, callbacks):
         cancelled = self.start + timedelta(days=1)
         # The override comes first. The RSVP must still target the master.
         override = self._vevent(
@@ -194,13 +246,17 @@ class TestRSVPDoesNotRestoreEvents:
         )
         master = self._vevent(self.start, "RRULE:FREQ=DAILY;COUNT=3")
         assert self._caldav("PUT", _ics(override, master)).status_code == 201
+        callbacks["requests"].clear()
 
         response = self._rsvp()
+        _wait_for_callbacks(callbacks)
 
         assert response.status_code == 200
         stored = self._caldav("GET").text
         assert _state(stored) == ("", "ACCEPTED")
         assert _state(stored, cancelled) == ("CANCELLED", "NEEDS-ACTION")
+        assert len(callbacks["requests"]) == 1
+        assert callbacks["requests"][0]["headers"]["X-LS-Method"] == "REPLY"
 
 
 @pytest.mark.django_db

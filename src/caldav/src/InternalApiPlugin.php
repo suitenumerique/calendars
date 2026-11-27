@@ -488,6 +488,7 @@ class InternalApiPlugin extends ServerPlugin
      * Find an event by UID across all calendars owned by a given email
      * (both principals/users/ and principals/mailboxes/) and update an
      * attendee's PARTSTAT. The given email must organize the event.
+     * When the PARTSTAT changes, the organizer gets a REPLY.
      *
      * Body: {
      *   "organizer_email": "contact@company.com",
@@ -547,6 +548,7 @@ class InternalApiPlugin extends ServerPlugin
             // example after a move to a calendar with another identity. Only
             // the event that the principal organizes takes the reply.
             $row = null;
+            $oldIcal = null;
             $vcalendar = null;
             $vevent = null;
             foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $candidate) {
@@ -558,7 +560,7 @@ class InternalApiPlugin extends ServerPlugin
                 $event = $calendar->getBaseComponent('VEVENT') ?? $calendar->VEVENT;
                 $organizer = strtolower(preg_replace('/^mailto:/i', '', trim((string) $event?->ORGANIZER)));
                 if ($organizer === $email) {
-                    [$row, $vcalendar, $vevent] = [$candidate, $calendar, $event];
+                    [$row, $oldIcal, $vcalendar, $vevent] = [$candidate, $ical, $calendar, $event];
                     break;
                 }
             }
@@ -580,17 +582,17 @@ class InternalApiPlugin extends ServerPlugin
                 return false;
             }
 
-            $found = false;
+            $attendeeHref = null;
             foreach ($vevent->ATTENDEE as $attendee) {
                 $mailto = strtolower(preg_replace('/^mailto:/i', '', trim((string) $attendee->getValue())));
                 if ($mailto === $attendeeEmail) {
                     $attendee['PARTSTAT'] = $partstat;
-                    $found = true;
+                    $attendeeHref = $attendee->getNormalizedValue();
                     break;
                 }
             }
 
-            if (!$found) {
+            if (!$attendeeHref) {
                 $this->pdo->rollBack();
                 $response->setStatus(404);
                 $response->setHeader('Content-Type', 'application/json');
@@ -622,6 +624,8 @@ class InternalApiPlugin extends ServerPlugin
             return false;
         }
 
+        $this->sendRsvpReply($vcalendar, $oldIcal, $attendeeHref);
+
         $response->setStatus(200);
         $response->setHeader('Content-Type', 'application/json');
         $response->setBody(json_encode([
@@ -629,6 +633,53 @@ class InternalApiPlugin extends ServerPlugin
             'summary' => $summary,
         ]));
         return false;
+    }
+
+    /**
+     * Send the REPLY of an RSVP to the organizer.
+     *
+     * The RSVP does not go through SabreDAV scheduling. The iMIP plugin
+     * gets the REPLY that scheduling makes for a change by the attendee.
+     * The broker makes no REPLY when the PARTSTAT does not change.
+     */
+    private function sendRsvpReply(VObject\Component\VCalendar $calendar, string $oldIcal, string $attendeeHref)
+    {
+        $imipPlugin = $this->server->getPlugin('imip');
+        if (!$imipPlugin) {
+            return;
+        }
+
+        try {
+            $broker = new VObject\ITip\Broker();
+            $messages = $broker->parseEvent(
+                $this->withoutOverrides($calendar),
+                $attendeeHref,
+                $this->withoutOverrides(VObject\Reader::read($oldIcal))
+            );
+            foreach ($messages as $message) {
+                $imipPlugin->schedule($message);
+            }
+        } catch (\Exception $e) {
+            error_log('[InternalApiPlugin] RSVP reply failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Return a copy of the calendar without the overrides.
+     *
+     * The RSVP changes only the master. The broker takes the STATUS of
+     * any VEVENT for the full event, so a cancelled override stops the
+     * REPLY of the master.
+     */
+    private function withoutOverrides(VObject\Component\VCalendar $calendar): VObject\Component\VCalendar
+    {
+        $copy = clone $calendar;
+        foreach ($copy->select('VEVENT') as $vevent) {
+            if (isset($vevent->{'RECURRENCE-ID'})) {
+                $copy->remove($vevent);
+            }
+        }
+        return $copy;
     }
 
     /**
