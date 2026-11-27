@@ -671,6 +671,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         if is_update is None:
             is_update = event.sequence > 0
         t = TranslationService.t
+        app_name = settings.APP_NAME or t("app_title", lang)
         summary = event.summary or t("email.noTitle", lang)
         start_str, end_str, time_str = self._format_event_dates(event, lang)
 
@@ -703,7 +704,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             "time_str": time_str,
             "is_update": is_update,
             "is_cancel": method == self.METHOD_CANCEL,
-            "app_name": settings.APP_NAME,
+            "app_name": app_name,
             "app_url": settings.APP_URL,
             "logo_img": settings.EMAIL_LOGO_IMG
             or f"{settings.APP_URL}{settings.STATIC_URL}images/logo-calendriers.png",
@@ -739,7 +740,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             "footer": t(
                 f"email.footer.{'invitation' if type_key == 'invitation' else 'notification'}",
                 lang,
-                appName=settings.APP_NAME,
+                appName=app_name,
             ),
         }
 

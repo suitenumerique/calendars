@@ -161,6 +161,7 @@ When an event with attendees is deleted:
 | `CALDAV_CALLBACK_BASE_URL` | **required** | Base URL for CalDAV→Django callbacks (e.g. `http://backend:8000`). Set on the CalDAV container. |
 | `CALENDAR_ITIP_ENABLED` | False | Use iTIP METHOD headers in ICS attachments |
 | `CALENDAR_INVITATION_FROM_EMAIL` | `DEFAULT_FROM_EMAIL` | Sender address for invitation emails |
+| `APP_NAME` | `None` | Product name in emails. Empty: the name in the language of the email ("Calendriers", "Calendars", "Kalenders") |
 | `APP_URL` | `""` | Public URL of the backend. Required: the RSVP links and the images in emails are built from it |
 | `EMAIL_LOGO_IMG` | `None` | URL of the logo in emails. Empty: the Calendriers logo from `APP_URL/static/images/` |
 | `EMAIL_FOOTER_IMG` | `None` | URL of the footer image in emails, shown 160px wide. Empty: no footer |

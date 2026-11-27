@@ -436,6 +436,24 @@ class TestEmailTemplateLayout:
         assert "Quand\u00a0:" in html_fr
         assert "When:" in html_en
 
+    @pytest.mark.parametrize(
+        ("lang", "name"),
+        [("fr", "Calendriers"), ("en", "Calendars"), ("nl", "Kalenders")],
+    )
+    @override_settings(APP_NAME=None)
+    def test_app_name_follows_the_language(self, lang, name):
+        context = self._build_context(lang=lang)
+        assert context["app_name"] == name
+        assert name in context["footer"]
+        html = render_to_string("emails/calendar_invitation.html", context)
+        assert f'alt="{name}"' in html
+
+    @override_settings(APP_NAME="Agenda")
+    def test_app_name_setting_overrides_the_translation(self):
+        context = self._build_context(lang="fr")
+        assert context["app_name"] == "Agenda"
+        assert "Agenda" in context["footer"]
+
 
 # REPLY sent by the attendee (Bob) to the organizer (Alice)
 ICS_REPLY = """BEGIN:VCALENDAR
