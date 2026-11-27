@@ -91,6 +91,8 @@ class EventDetails:  # pylint: disable=too-many-instance-attributes
     organizer_name: Optional[str]
     attendee_email: str
     attendee_name: Optional[str]
+    # PARTSTAT of the attendee in upper case, for example ACCEPTED.
+    attendee_partstat: str
     sequence: int
     is_all_day: bool
     raw_icalendar: str
@@ -230,7 +232,9 @@ class ICalendarParser:
         organizer_email, organizer_name = (
             cls._address(organizer) if organizer is not None else ("", None)
         )
-        attendee, attendee_name = cls._find_attendee(vevent, attendee_email)
+        attendee, attendee_name, attendee_partstat = cls._find_attendee(
+            vevent, attendee_email
+        )
 
         return EventDetails(
             uid=str(uid),
@@ -244,6 +248,7 @@ class ICalendarParser:
             organizer_name=organizer_name,
             attendee_email=attendee,
             attendee_name=attendee_name,
+            attendee_partstat=attendee_partstat,
             sequence=cls._sequence(vevent),
             is_all_day=cls._is_all_day(dtstart_prop.dt),
             raw_icalendar=icalendar_data,
@@ -266,23 +271,25 @@ class ICalendarParser:
         return cls._strip_mailto(str(prop)), str(cn) if cn else None
 
     @classmethod
-    def _find_attendee(cls, vevent, attendee_email: str) -> tuple[str, Optional[str]]:
-        """Return the email and the name of the attendee with this email.
+    def _find_attendee(
+        cls, vevent, attendee_email: str
+    ) -> tuple[str, Optional[str], str]:
+        """Return the email, the name and the PARTSTAT of the attendee with this email.
 
-        The email is in lower case. The name is None when no ATTENDEE
-        matches, or when it has no CN.
+        The email is in lower case. The PARTSTAT is in upper case. The name
+        is None when no ATTENDEE matches, or when it has no CN. The PARTSTAT
+        is NEEDS-ACTION when no ATTENDEE matches, or when it has no PARTSTAT.
         """
         address = cls._strip_mailto(attendee_email).lower()
-        attendees = vevent.get("ATTENDEE")
-        if attendees is None:
-            return address, None
+        attendees = vevent.get("ATTENDEE", [])
         if not isinstance(attendees, list):
             attendees = [attendees]
         for attendee in attendees:
             email, name = cls._address(attendee)
             if email.lower() == address:
-                return address, name
-        return address, None
+                partstat = attendee.params.get("PARTSTAT", "NEEDS-ACTION")
+                return address, name, str(partstat).upper()
+        return address, None, "NEEDS-ACTION"
 
     @staticmethod
     def _sequence(vevent) -> int:
@@ -523,12 +530,19 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
 
             is_update = event.sequence > 0 and not is_new_attendee
 
+            # Build context for templates
+            context = self._build_template_context(
+                event, method, lang, org_id=org_id, is_update=is_update
+            )
+
             # Determine email type and get appropriate subject/content
             if method == self.METHOD_CANCEL:
                 subject = t("email.subject.cancel", lang, summary=summary)
                 template_prefix = "calendar_invitation_cancel"
             elif method == self.METHOD_REPLY:
-                subject = t("email.subject.reply", lang, summary=summary)
+                answer = context["reply_answer"]
+                key = f"reply.{answer}.subject" if answer else "subject.reply"
+                subject = t(f"email.{key}", lang, summary=summary)
                 template_prefix = "calendar_invitation_reply"
             elif is_update:
                 subject = t("email.subject.update", lang, summary=summary)
@@ -536,11 +550,6 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             else:
                 subject = t("email.subject.invitation", lang, summary=summary)
                 template_prefix = "calendar_invitation"
-
-            # Build context for templates
-            context = self._build_template_context(
-                event, method, lang, org_id=org_id, is_update=is_update
-            )
 
             # Render email bodies
             text_body = render_to_string(f"emails/{template_prefix}.txt", context)
@@ -621,13 +630,19 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         return start_str, end_str, time_str
 
     @staticmethod
-    def _resolve_display_name(name: Optional[str], email: Optional[str]) -> str:
+    def _resolve_name(name: Optional[str], email: Optional[str]) -> Optional[str]:
+        """Return the name, or the full name of the user with this email."""
+        if name or not email:
+            return name
+        try:
+            return User.objects.get(email=email).full_name
+        except User.DoesNotExist:
+            return None
+
+    @classmethod
+    def _resolve_display_name(cls, name: Optional[str], email: Optional[str]) -> str:
         """Resolve a display string like 'Name (email)' from name/email."""
-        if not name and email:
-            try:
-                name = User.objects.get(email=email).full_name
-            except User.DoesNotExist:
-                pass
+        name = cls._resolve_name(name, email)
         if name and email:
             return f"{name} ({email})"
         return email or name or ""
@@ -677,19 +692,25 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
         organizer_display = self._resolve_display_name(
             event.organizer_name, event.organizer_email
         )
+        attendee_name = self._resolve_name(event.attendee_name, event.attendee_email)
         attendee_display = self._resolve_display_name(
-            event.attendee_name, event.attendee_email
+            attendee_name, event.attendee_email
         )
 
         # Determine email type key for content lookups
+        reply_answer = None
         if method == self.METHOD_CANCEL:
             type_key = "cancel"
         elif method == self.METHOD_REPLY:
             type_key = "reply"
+            # These answers have their own reply email.
+            if event.attendee_partstat in ("ACCEPTED", "DECLINED", "TENTATIVE"):
+                reply_answer = event.attendee_partstat.lower()
         elif is_update:
             type_key = "update"
         else:
             type_key = "invitation"
+        content_key = f"reply.{reply_answer}" if reply_answer else type_key
 
         context = {
             "event": event,
@@ -703,6 +724,7 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             "time_str": time_str,
             "is_update": is_update,
             "is_cancel": method == self.METHOD_CANCEL,
+            "reply_answer": reply_answer,
             "app_name": settings.APP_NAME,
             "app_url": settings.APP_URL,
             "logo_img": settings.EMAIL_LOGO_IMG
@@ -711,12 +733,13 @@ class CalendarInvitationService:  # pylint: disable=too-many-instance-attributes
             # Translated content blocks
             "content": {
                 "title": t(f"email.{type_key}.title", lang),
-                "heading": t(f"email.{type_key}.heading", lang),
+                "heading": t(f"email.{content_key}.heading", lang),
                 "body": t(
-                    f"email.{type_key}.body",
+                    f"email.{content_key}.body",
                     lang,
                     organizer=organizer_display,
                     attendee=attendee_display,
+                    attendeeName=attendee_name or event.attendee_email,
                 ),
                 "badge": t(f"email.{type_key}.badge", lang),
             },

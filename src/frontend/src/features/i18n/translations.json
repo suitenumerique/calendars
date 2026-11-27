@@ -535,7 +535,22 @@
           "title": "Event reply",
           "heading": "Reply received",
           "badge": "Response",
-          "body": "{{attendee}} has replied to your event"
+          "body": "{{attendee}} has replied to your event",
+          "accepted": {
+            "subject": "Accepted: {{summary}}",
+            "heading": "Invitation accepted",
+            "body": "{{attendee}} accepted your invitation."
+          },
+          "declined": {
+            "subject": "Declined: {{summary}}",
+            "heading": "Invitation declined",
+            "body": "{{attendee}} declined your invitation. {{attendeeName}} will not attend."
+          },
+          "tentative": {
+            "subject": "Maybe: {{summary}}",
+            "heading": "Reply: maybe",
+            "body": "{{attendee}} may attend. Attendance is not confirmed."
+          }
         },
         "labels": {
           "when": "When:",
@@ -1567,7 +1582,22 @@
           "title": "Réponse à l'événement",
           "heading": "Réponse reçue",
           "badge": "Réponse",
-          "body": "{{attendee}} a répondu à votre événement"
+          "body": "{{attendee}} a répondu à votre événement",
+          "accepted": {
+            "subject": "Accepté : {{summary}}",
+            "heading": "Invitation acceptée",
+            "body": "{{attendee}} a accepté votre invitation."
+          },
+          "declined": {
+            "subject": "Refusé : {{summary}}",
+            "heading": "Invitation refusée",
+            "body": "{{attendee}} a refusé votre invitation. {{attendeeName}} ne participera pas."
+          },
+          "tentative": {
+            "subject": "Peut-être : {{summary}}",
+            "heading": "Réponse : peut-être",
+            "body": "{{attendee}} participera peut-être. La présence n'est pas confirmée."
+          }
         },
         "labels": {
           "when": "Quand :",
@@ -2346,7 +2376,22 @@
           "title": "Antwoord op evenement",
           "heading": "Antwoord ontvangen",
           "badge": "Antwoord",
-          "body": "{{attendee}} heeft gereageerd op uw evenement"
+          "body": "{{attendee}} heeft gereageerd op uw evenement",
+          "accepted": {
+            "subject": "Geaccepteerd: {{summary}}",
+            "heading": "Uitnodiging geaccepteerd",
+            "body": "{{attendee}} heeft uw uitnodiging geaccepteerd."
+          },
+          "declined": {
+            "subject": "Afgewezen: {{summary}}",
+            "heading": "Uitnodiging afgewezen",
+            "body": "{{attendee}} heeft uw uitnodiging afgewezen. {{attendeeName}} komt niet."
+          },
+          "tentative": {
+            "subject": "Misschien: {{summary}}",
+            "heading": "Antwoord: misschien",
+            "body": "{{attendee}} komt misschien. De aanwezigheid is niet bevestigd."
+          }
         },
         "labels": {
           "when": "Wanneer:",
