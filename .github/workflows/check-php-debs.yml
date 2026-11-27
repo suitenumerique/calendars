@@ -1,0 +1,35 @@
+name: Check PHP packages
+
+# The Ubuntu archive removes a package version when a security update
+# replaces it. The Scalingo build then gets the old version from Launchpad.
+# This check fails when a pinned version leaves the archive.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - bin/scalingo_postfrontend
+      - .github/workflows/check-php-debs.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check-php-debs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Check that the pinned packages are in the archive
+        run: |
+          status=0
+          for path in $(grep -oE 'pool/[^ ]+\.deb' bin/scalingo_postfrontend); do
+            if curl -fsSI -o /dev/null "https://archive.ubuntu.com/ubuntu/${path}"; then
+              echo "OK: ${path##*/}"
+            else
+              echo "::error::${path##*/} is not in the Ubuntu archive. Update PHP_DEBS in bin/scalingo_postfrontend."
+              status=1
+            fi
+          done
+          exit $status
